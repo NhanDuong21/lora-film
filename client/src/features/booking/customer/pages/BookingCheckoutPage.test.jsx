@@ -514,12 +514,30 @@ describe("BookingCheckoutPage cancellation", () => {
           validTo: "2099-12-31T23:59:59Z",
           usageCount: 0,
           maxUsage: 1,
+          stackable: true,
           conditionsJson: { minimumOrderAmount: 100000 },
           actionsJson: { discountType: "FIXED_AMOUNT", discountValue: 50000 },
         },
+        {
+          publicId: "voucher-public-id-2",
+          walletPublicId: "voucher-public-id-2",
+          promotionPublicId: "promotion-public-id-2",
+          source: "CUSTOMER_WALLET",
+          promotionType: "VOUCHER",
+          code: "STACK20",
+          name: "Voucher cộng dồn",
+          status: "AVAILABLE",
+          validFrom: "2020-01-01T00:00:00Z",
+          validTo: "2099-12-31T23:59:59Z",
+          usageCount: 0,
+          maxUsage: 1,
+          stackable: true,
+          conditionsJson: {},
+          actionsJson: { discountType: "FIXED_AMOUNT", discountValue: 20000 },
+        },
       ],
       page: 0,
-      totalElements: 1,
+      totalElements: 2,
       totalPages: 1,
     });
 
@@ -540,6 +558,15 @@ describe("BookingCheckoutPage cancellation", () => {
           reasonCode: "ELIGIBLE",
           reason: "Có thể sử dụng cho đơn hiện tại",
         },
+        {
+          promotionPublicId: "promotion-public-id-2",
+          userPromotionPublicId: "voucher-public-id-2",
+          promotionType: "VOUCHER",
+          eligible: true,
+          discountAmount: 20000,
+          reasonCode: "ELIGIBLE",
+          reason: "Có thể sử dụng cho đơn hiện tại",
+        },
       ],
       warnings: [],
     });
@@ -557,7 +584,7 @@ describe("BookingCheckoutPage cancellation", () => {
     await waitFor(() => {
       expect(
         screen.getByText((text) =>
-          /^1\s+/.test(text) &&
+          /^2\s+/.test(text) &&
           (text.includes("ưu đãi") || text.includes("Æ°u Ä‘Ã£i")),
         ),
       ).toBeInTheDocument();
@@ -573,11 +600,7 @@ describe("BookingCheckoutPage cancellation", () => {
       size: 100,
       sort: "priority,asc",
     });
-    expect(customerPromotionService.getSystemPromotions).toHaveBeenCalledWith({
-      page: 0,
-      size: 100,
-      sort: "priority,asc",
-    });
+    expect(customerPromotionService.getSystemPromotions).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /chọn ưu đãi/i }));
     const dialog = screen.getByRole("dialog", { name: /chọn ưu đãi/i });
@@ -597,9 +620,32 @@ describe("BookingCheckoutPage cancellation", () => {
           discountAmount: 50000,
         },
       ],
+      promotionEvaluations: [
+        {
+          promotionPublicId: "promotion-public-id",
+          userPromotionPublicId: "voucher-public-id",
+          eligible: true,
+          discountAmount: 50000,
+          reasonCode: "ELIGIBLE",
+          reason: "Có thể sử dụng cho đơn hiện tại",
+        },
+        {
+          promotionPublicId: "promotion-public-id-2",
+          userPromotionPublicId: "voucher-public-id-2",
+          eligible: true,
+          discountAmount: 20000,
+          reasonCode: "ELIGIBLE",
+          reason: "Có thể sử dụng cho đơn hiện tại",
+        },
+      ],
       warnings: [],
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^chọn$/i }));
+    const firstVoucher = within(dialog)
+      .getByText("Voucher chào mừng")
+      .closest("article");
+    fireEvent.click(
+      within(firstVoucher).getByRole("button", { name: /^chọn$/i }),
+    );
 
     expect(
       await screen.findByText(/engine xác nhận giảm/i),
@@ -609,11 +655,70 @@ describe("BookingCheckoutPage cancellation", () => {
       {
         selectedUserPromotionPublicIds: ["voucher-public-id"],
         selectedPromotionPublicIds: [],
-        evaluationUserPromotionPublicIds: ["voucher-public-id"],
+        evaluationUserPromotionPublicIds: [
+          "voucher-public-id",
+          "voucher-public-id-2",
+        ],
         evaluationPromotionPublicIds: [],
         paymentMethod: "VNPAY",
       },
     );
+
+    previewBookingPromotions.mockResolvedValueOnce({
+      eligible: true,
+      originalAmount: 335000,
+      discountAmount: 70000,
+      finalAmount: 265000,
+      currency: "VND",
+      appliedPromotions: [
+        {
+          promotionPublicId: "promotion-public-id",
+          userPromotionPublicId: "voucher-public-id",
+          promotionType: "VOUCHER",
+          name: "Voucher chào mừng",
+          discountAmount: 50000,
+        },
+        {
+          promotionPublicId: "promotion-public-id-2",
+          userPromotionPublicId: "voucher-public-id-2",
+          promotionType: "VOUCHER",
+          name: "Voucher cộng dồn",
+          discountAmount: 20000,
+        },
+      ],
+      promotionEvaluations: [],
+      warnings: [],
+    });
+    const secondVoucher = within(dialog)
+      .getByText("Voucher cộng dồn")
+      .closest("article");
+    fireEvent.click(
+      within(secondVoucher).getByRole("button", { name: /^chọn$/i }),
+    );
+
+    await waitFor(() => {
+      expect(previewBookingPromotions).toHaveBeenLastCalledWith(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          selectedUserPromotionPublicIds: [
+            "voucher-public-id",
+            "voucher-public-id-2",
+          ],
+          selectedPromotionPublicIds: [],
+          evaluationUserPromotionPublicIds: [
+            "voucher-public-id",
+            "voucher-public-id-2",
+          ],
+          evaluationPromotionPublicIds: [],
+          paymentMethod: "VNPAY",
+        },
+      );
+    });
+    expect(
+      await within(dialog).findByText(/2 voucher đã chọn/i),
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Xong" }));
+    expect(screen.getByText("Voucher cộng dồn")).toBeInTheDocument();
     expect(finalizeCheckout).not.toHaveBeenCalled();
   });
 

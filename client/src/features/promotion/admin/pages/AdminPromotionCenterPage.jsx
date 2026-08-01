@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
   BadgePercent,
+  Banknote,
   CalendarClock,
   Check,
   CheckCircle2,
@@ -11,6 +13,7 @@ import {
   ChevronRight,
   Building2,
   CirclePause,
+  Clock3,
   Copy,
   Edit3,
   Eye,
@@ -30,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import adminPromotionService from "../services/adminPromotionService";
+import { useAuth } from "@/contexts/AuthContext";
 import { getCustomers } from "@/features/internal-staff/admin/services/userAdminService";
 import adminMovieService from "@/features/catalog/admin/services/adminMovieService";
 import adminCinemaService from "@/features/facilities/admin/services/adminCinemaService";
@@ -163,11 +167,22 @@ const campaignActionDescription = (campaign, action) => {
 };
 
 export default function AdminPromotionCenterPage() {
+  const { userRole } = useAuth();
+  const normalizedRole = String(userRole || "").replace(/^ROLE_/, "");
+  const canViewOperations = [
+    "ADMIN",
+    "OPERATIONS_MANAGER",
+    "FINANCE_DIRECTOR",
+  ].includes(normalizedRole);
   const [view, setView] = useState("promotions");
   const [tab, setTab] = useState("system");
   const [campaigns, setCampaigns] = useState(emptyPage);
   const [campaignOptions, setCampaignOptions] = useState([]);
   const [promotions, setPromotions] = useState(emptyPage);
+  const [operations, setOperations] = useState({
+    promotion: null,
+    booking: null,
+  });
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [campaignFilter, setCampaignFilter] = useState("");
@@ -202,7 +217,13 @@ export default function AdminPromotionCenterPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (view === "campaigns") {
+      if (view === "operations") {
+        const [promotion, booking] = await Promise.all([
+          adminPromotionService.getPromotionMonitoring(),
+          adminPromotionService.getBookingMonitoring(),
+        ]);
+        setOperations({ promotion, booking });
+      } else if (view === "campaigns") {
         setCampaigns(
           pageData(
             await adminPromotionService.searchCampaigns({
@@ -378,31 +399,54 @@ export default function AdminPromotionCenterPage() {
           <div>
             <h1 className="text-xl font-black text-white">Promotion Center</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {view === "campaigns"
+              {view === "operations"
+                ? "Giám sát sức khỏe ưu đãi và đối soát phân tán"
+                : view === "campaigns"
                 ? "Quản trị vòng đời chiến dịch"
                 : promotionModelFor(selectedTab.type).description}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setView((value) =>
-                  value === "campaigns" ? "promotions" : "campaigns",
-                );
-                setQuery("");
-                setStatus("");
-                setPage(0);
-              }}
-              className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:bg-zinc-800`}
-            >
-              {view === "campaigns" ? (
-                <ArrowLeft className="h-4 w-4" />
-              ) : (
-                <CalendarClock className="h-4 w-4" />
-              )}
-              {view === "campaigns" ? "Promotion Center" : "Chiến dịch"}
-            </button>
+            {view !== "operations" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setView((value) =>
+                    value === "promotions" ? "campaigns" : "promotions",
+                  );
+                  setQuery("");
+                  setStatus("");
+                  setPage(0);
+                }}
+                className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:bg-zinc-800`}
+              >
+                {view !== "promotions" ? (
+                  <ArrowLeft className="h-4 w-4" />
+                ) : (
+                  <CalendarClock className="h-4 w-4" />
+                )}
+                {view !== "promotions" ? "Promotion Center" : "Chiến dịch"}
+              </button>
+            )}
+            {canViewOperations && (
+              <button
+                type="button"
+                onClick={() => {
+                  setView((value) =>
+                    value === "operations" ? "promotions" : "operations",
+                  );
+                  setPage(0);
+                }}
+                className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:bg-zinc-800`}
+              >
+                {view === "operations" ? (
+                  <ArrowLeft className="h-4 w-4" />
+                ) : (
+                  <Activity className="h-4 w-4" />
+                )}
+                {view === "operations" ? "Promotion Center" : "Vận hành"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void load()}
@@ -413,22 +457,24 @@ export default function AdminPromotionCenterPage() {
               />{" "}
               Làm mới
             </button>
-            <button
-              type="button"
-              onClick={() =>
-                setModal({
-                  type: view === "campaigns" ? "campaign" : "promotion",
-                  promotionType: selectedTab.type,
-                  mode: view === "campaigns" ? undefined : "create",
-                })
-              }
-              className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
-            >
-              <Plus className="h-4 w-4" />{" "}
-              {view === "campaigns"
-                ? "Chiến dịch"
-                : promotionModelFor(selectedTab.type).shortLabel}
-            </button>
+            {view !== "operations" && (
+              <button
+                type="button"
+                onClick={() =>
+                  setModal({
+                    type: view === "campaigns" ? "campaign" : "promotion",
+                    promotionType: selectedTab.type,
+                    mode: view === "campaigns" ? undefined : "create",
+                  })
+                }
+                className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
+              >
+                <Plus className="h-4 w-4" />{" "}
+                {view === "campaigns"
+                  ? "Chiến dịch"
+                  : promotionModelFor(selectedTab.type).shortLabel}
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -470,9 +516,10 @@ export default function AdminPromotionCenterPage() {
           </div>
         )}
 
-        <div
-          className={`mb-4 grid gap-3 ${view === "campaigns" ? "md:grid-cols-[minmax(240px,1fr)_180px_180px]" : "md:grid-cols-[minmax(220px,1fr)_200px_180px_180px]"}`}
-        >
+        {view !== "operations" && (
+          <div
+            className={`mb-4 grid gap-3 ${view === "campaigns" ? "md:grid-cols-[minmax(240px,1fr)_180px_180px]" : "md:grid-cols-[minmax(220px,1fr)_200px_180px_180px]"}`}
+          >
           <label className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-600" />
             <input
@@ -540,7 +587,8 @@ export default function AdminPromotionCenterPage() {
             <option value="priority,asc">Ưu tiên cao</option>
             <option value="name,asc">Tên A-Z</option>
           </select>
-        </div>
+          </div>
+        )}
 
         {view === "promotions" && selectedTab.type === "AUTO" && (
           <div className="mb-4 flex items-start gap-2 border-l-2 border-sky-500 bg-sky-500/[0.06] px-3 py-2 text-xs leading-5 text-sky-200">
@@ -553,7 +601,11 @@ export default function AdminPromotionCenterPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950/20">
+        {view === "operations" ? (
+          <OperationsDashboard data={operations} loading={loading} />
+        ) : (
+          <>
+            <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950/20">
           {loading ? (
             <div className="flex h-48 items-center justify-center gap-2 text-sm text-zinc-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Đang tải
@@ -620,9 +672,9 @@ export default function AdminPromotionCenterPage() {
               }
             />
           )}
-        </div>
+            </div>
 
-        <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+            <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
           <span>
             Trang {current.totalPages ? page + 1 : 0} /{" "}
             {current.totalPages || 0}
@@ -643,7 +695,9 @@ export default function AdminPromotionCenterPage() {
               <ChevronRight className="h-4 w-4" />
             </IconButton>
           </div>
-        </div>
+            </div>
+          </>
+        )}
       </main>
 
       {modal?.type === "campaign" && (
@@ -752,6 +806,110 @@ function EmptyPromotions({ type }) {
         {model.description}
       </p>
     </div>
+  );
+}
+
+const alertLabels = {
+  EXPIRATION_BACKLOG_HIGH: "Tồn đọng reservation quá hạn vượt ngưỡng",
+  EXPIRATION_OLDEST_AGE_HIGH: "Reservation quá hạn lâu nhất vượt SLA",
+  REVERSAL_RATE_HIGH: "Tần suất reversal trong một giờ tăng cao",
+  CAMPAIGN_BUDGET_EXPOSURE_HIGH: "Campaign chạm ngưỡng exposure ngân sách",
+};
+
+const durationText = (seconds) => {
+  const value = Number(seconds || 0);
+  if (value < 60) return `${value} giây`;
+  if (value < 3600) return `${Math.floor(value / 60)} phút`;
+  return `${Math.floor(value / 3600)} giờ`;
+};
+
+function OperationsDashboard({ data, loading }) {
+  if (loading || !data.promotion || !data.booking) {
+    return (
+      <div className="flex h-48 items-center justify-center gap-2 text-sm text-zinc-500">
+        <Loader2 className="h-4 w-4 animate-spin" /> Đang tải
+      </div>
+    );
+  }
+  const promotion = data.promotion;
+  const mismatch = Number(data.booking.promotionReconciliationMismatch || 0);
+  const alerts = [...(promotion.activeAlerts || [])];
+  if (mismatch > 0) alerts.push("RECONCILIATION_MISMATCH");
+  const metrics = [
+    {
+      label: "Reservation quá hạn",
+      value: Number(promotion.expirationBacklog || 0).toLocaleString("vi-VN"),
+      detail: `Lâu nhất ${durationText(promotion.oldestExpiredAgeSeconds)}`,
+      icon: Clock3,
+      tone: "text-amber-300 border-amber-500/30",
+    },
+    {
+      label: "Reversal",
+      value: Number(promotion.reversalCount || 0).toLocaleString("vi-VN"),
+      detail: `${Number(promotion.reversalsLastHour || 0).toLocaleString("vi-VN")} trong 1 giờ`,
+      icon: RotateCw,
+      tone: "text-sky-300 border-sky-500/30",
+    },
+    {
+      label: "Ngân sách giữ chỗ",
+      value: money(promotion.activeBudgetReserved),
+      detail: "Campaign đang hoạt động",
+      icon: Banknote,
+      tone: "text-emerald-300 border-emerald-500/30",
+    },
+    {
+      label: "Budget exposure",
+      value: money(promotion.activeBudgetExposure),
+      detail: `${Number(promotion.campaignsAtExposureThreshold || 0)} campaign chạm ngưỡng`,
+      icon: Activity,
+      tone: "text-orange-300 border-orange-500/30",
+    },
+    {
+      label: "Lệch đối soát",
+      value: mismatch.toLocaleString("vi-VN"),
+      detail: mismatch ? "Cần xử lý" : "Đồng bộ",
+      icon: AlertTriangle,
+      tone: mismatch
+        ? "text-red-300 border-red-500/30"
+        : "text-zinc-300 border-zinc-700",
+    },
+  ];
+
+  return (
+    <section aria-label="Giám sát vận hành promotion">
+      {alerts.length > 0 && (
+        <div className="mb-4 border-l-2 border-red-500 bg-red-500/[0.07] px-4 py-3 text-sm text-red-200">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertTriangle className="h-4 w-4" />
+            {alerts.length} cảnh báo đang hoạt động
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-red-300">
+            {alerts.map((item) => (
+              <span key={item}>
+                {item === "RECONCILIATION_MISMATCH"
+                  ? `${mismatch} booking lệch promotion`
+                  : alertLabels[item] || item}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {metrics.map(({ label, value, detail, icon: Icon, tone }) => (
+          <article key={label} className={`min-w-0 rounded-lg border bg-zinc-950 p-4 ${tone}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-bold text-zinc-400">{label}</span>
+              <Icon className="h-4 w-4 shrink-0" />
+            </div>
+            <div className="mt-4 break-words text-xl font-black text-white">{value}</div>
+            <div className="mt-1 text-[11px] text-zinc-500">{detail}</div>
+          </article>
+        ))}
+      </div>
+      <div className="mt-4 text-right text-[11px] text-zinc-600">
+        Cập nhật {dateTime(promotion.observedAt)}
+      </div>
+    </section>
   );
 }
 

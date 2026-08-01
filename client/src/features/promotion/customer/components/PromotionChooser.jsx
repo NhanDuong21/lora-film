@@ -289,7 +289,7 @@ export default function PromotionChooser({
   vouchers = [],
   loading = false,
   error = "",
-  selectedPromotionId = "",
+  selectedPromotionIds = [],
   backendAppliedIds = [],
   promotionEvaluations = [],
   bookingContext = {},
@@ -371,6 +371,10 @@ export default function PromotionChooser({
     () => new Set(backendAppliedIds.map(String)),
     [backendAppliedIds],
   );
+  const selectedIds = useMemo(
+    () => new Set(selectedPromotionIds.map(String)),
+    [selectedPromotionIds],
+  );
   const evaluationMap = useMemo(() => {
     const result = new Map();
     promotionEvaluations.forEach((evaluation) => {
@@ -445,6 +449,14 @@ export default function PromotionChooser({
     }),
     [catalog],
   );
+  const hasExclusiveSelection = useMemo(
+    () =>
+      catalog.some(
+        ({ promotion, id }) =>
+          selectedIds.has(String(id)) && !promotion?.stackable,
+      ),
+    [catalog, selectedIds],
+  );
 
   const grouped = useMemo(() => {
     const visible = catalog
@@ -510,7 +522,7 @@ export default function PromotionChooser({
         role="dialog"
         aria-modal="true"
         aria-labelledby="promotion-chooser-title"
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-2xl shadow-black/70"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-2xl shadow-black/70"
       >
         <header className="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4">
           <div className="flex min-w-0 items-start gap-3">
@@ -630,11 +642,10 @@ export default function PromotionChooser({
                       <GroupIcon className="h-3.5 w-3.5" /> {group.label} (
                       {group.items.length})
                     </h3>
-                    <div className="divide-y divide-zinc-800 border-y border-zinc-800">
+                    <div className="space-y-2">
                       {group.items.map(
                         ({ promotion, id, evaluation }, itemIndex) => {
-                          const selected =
-                            String(id) === String(selectedPromotionId);
+                          const selected = selectedIds.has(String(id));
                           const applied = [
                             promotion.walletPublicId,
                             promotion.publicId,
@@ -643,6 +654,10 @@ export default function PromotionChooser({
                             .filter(Boolean)
                             .some((value) => appliedIds.has(String(value)));
                           const active = selected || applied;
+                          const blockedBySelection =
+                            !selected &&
+                            selectedIds.size > 0 &&
+                            (hasExclusiveSelection || !promotion?.stackable);
                           const claimable = group.key === "claimable";
                           const recommended =
                             ["wallet", "system"].includes(group.key) &&
@@ -651,8 +666,18 @@ export default function PromotionChooser({
                           return (
                             <article
                               key={id}
-                              aria-disabled={!evaluation.eligible}
-                              className={`py-4 ${evaluation.eligible ? "" : "opacity-60"}`}
+                              aria-disabled={
+                                !evaluation.eligible || blockedBySelection
+                              }
+                              className={`rounded-xl border px-4 py-4 transition-opacity ${
+                                active
+                                  ? "border-emerald-500/35 bg-emerald-500/[0.06]"
+                                  : "border-zinc-800 bg-zinc-950/25"
+                              } ${
+                                evaluation.eligible && !blockedBySelection
+                                  ? ""
+                                  : "opacity-40"
+                              }`}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
@@ -663,6 +688,11 @@ export default function PromotionChooser({
                                     {recommended && (
                                       <span className="rounded border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9px] font-black text-amber-200">
                                         Đề xuất
+                                      </span>
+                                    )}
+                                    {promotion?.stackable && (
+                                      <span className="rounded border border-sky-400/25 bg-sky-400/10 px-2 py-0.5 text-[9px] font-black text-sky-200">
+                                        Cộng dồn
                                       </span>
                                     )}
                                     {applied && (
@@ -680,7 +710,7 @@ export default function PromotionChooser({
                                 </div>
                                 <span
                                   className={`shrink-0 rounded border px-2 py-1 text-[9px] font-black ${
-                                    evaluation.eligible
+                                    evaluation.eligible && !blockedBySelection
                                       ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                                       : "border-zinc-700 bg-zinc-800 text-zinc-400"
                                   }`}
@@ -688,7 +718,9 @@ export default function PromotionChooser({
                                   {evaluation.reasonCode === "NOT_EVALUATED" &&
                                   loading
                                     ? "Đang kiểm tra"
-                                    : evaluation.eligible
+                                    : blockedBySelection
+                                      ? "Không cộng dồn"
+                                      : evaluation.eligible
                                       ? "Có thể sử dụng"
                                       : "Không khả dụng"}
                                 </span>
@@ -733,15 +765,14 @@ export default function PromotionChooser({
                                   disabled={
                                     !evaluation.eligible ||
                                     claimingId === String(id) ||
-                                    applied
+                                    (applied && !selected) ||
+                                    blockedBySelection ||
+                                    loading
                                   }
                                   onClick={() => {
                                     if (claimable)
                                       void claimAndSelect(promotion);
-                                    else {
-                                      onSelect(promotion);
-                                      onClose();
-                                    }
+                                    else onSelect(promotion);
                                   }}
                                   className={`h-9 min-w-28 rounded-lg px-3 text-[10px] font-black uppercase transition-colors ${
                                     active
@@ -753,8 +784,12 @@ export default function PromotionChooser({
                                     <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                                   ) : !evaluation.eligible ? (
                                     "Không khả dụng"
-                                  ) : active ? (
-                                    "Đang áp dụng"
+                                  ) : blockedBySelection ? (
+                                    "Không cộng dồn"
+                                  ) : selected ? (
+                                    "Bỏ chọn"
+                                  ) : applied ? (
+                                    "Tự động áp dụng"
                                   ) : claimable ? (
                                     "Nhận & dùng"
                                   ) : (
@@ -775,24 +810,33 @@ export default function PromotionChooser({
         </div>
 
         <footer className="border-t border-zinc-800 bg-zinc-950/40 px-5 py-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex min-w-0 gap-2 text-[10px] leading-4 text-zinc-500">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
-                Trạng thái và mức giảm được Promotion Engine kiểm tra theo đơn
-                hàng hiện tại. Điều kiện có thể thay đổi khi nội dung đơn thay
-                đổi.
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} voucher đã chọn`
+                  : "Chưa chọn voucher thủ công"}
               </span>
             </p>
-            {selectedPromotionId && (
+            <div className="flex shrink-0 items-center justify-end gap-2">
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={onClear}
+                  className="h-9 rounded-lg px-3 text-[10px] font-black uppercase text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                >
+                  Bỏ chọn tất cả
+                </button>
+              )}
               <button
                 type="button"
-                onClick={onClear}
-                className="shrink-0 text-[10px] font-black uppercase text-zinc-400 hover:text-white"
+                onClick={onClose}
+                className="h-9 rounded-lg bg-emerald-500 px-5 text-[10px] font-black uppercase text-zinc-950 transition-colors hover:bg-emerald-400"
               >
-                Bỏ chọn
+                Xong
               </button>
-            )}
+            </div>
           </div>
         </footer>
       </section>

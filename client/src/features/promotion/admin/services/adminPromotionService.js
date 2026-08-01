@@ -38,6 +38,10 @@ const adminPromotionService = {
 
   searchReservations: async (params = {}) =>
     unwrap(await apiClient.get('/api/admin/reservations', { params: cleanParams(params) })),
+  getPromotionMonitoring: async () =>
+    unwrap(await apiClient.get('/api/admin/promotion-monitoring/summary')),
+  getBookingMonitoring: async () =>
+    unwrap(await apiClient.get('/api/admin/monitoring/summary')),
 };
 
 export default adminPromotionService;

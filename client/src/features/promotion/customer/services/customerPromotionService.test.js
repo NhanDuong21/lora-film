@@ -91,11 +91,23 @@ describe("customerPromotionService", () => {
     });
   });
 
-  it("marks public event vouchers as claimable instead of owned", async () => {
+  it("keeps cloned public event vouchers as distinct claimable promotions", async () => {
     apiClient.get.mockResolvedValue({
       data: {
         data: {
-          content: [{ publicId: "promotion-1", promotionType: "VOUCHER" }],
+          content: [
+            { publicId: "promotion-1", promotionType: "VOUCHER" },
+            {
+              publicId: "promotion-2",
+              clonedFromPublicId: "promotion-1",
+              promotionType: "VOUCHER",
+            },
+            {
+              publicId: "promotion-3",
+              clonedFromPublicId: "promotion-1",
+              promotionType: "VOUCHER",
+            },
+          ],
         },
       },
     });
@@ -104,12 +116,24 @@ describe("customerPromotionService", () => {
       page: 0,
     });
 
+    expect(result.content).toHaveLength(3);
+    expect(result.content.map((item) => item.promotionPublicId)).toEqual([
+      "promotion-1",
+      "promotion-2",
+      "promotion-3",
+    ]);
     expect(result.content[0]).toMatchObject({
       publicId: "promotion-1",
       promotionPublicId: "promotion-1",
       source: "PUBLIC_EVENT",
       ownershipType: "CLAIMABLE",
       walletPublicId: null,
+    });
+    expect(result.content[1]).toMatchObject({
+      publicId: "promotion-2",
+      promotionPublicId: "promotion-2",
+      clonedFromPublicId: "promotion-1",
+      ownershipType: "CLAIMABLE",
     });
   });
 

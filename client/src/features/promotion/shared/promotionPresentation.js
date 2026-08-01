@@ -374,6 +374,7 @@ export const isWalletPromotion = (promotion) =>
 
 export const isWalletPromotionUsable = (promotion, now = Date.now()) => {
   if (!isWalletPromotion(promotion)) return true;
+  if (promotion?.runtimeAvailable === false) return false;
 
   const status = String(promotion?.status || "").toUpperCase();
   if (UNUSABLE_WALLET_STATUSES.has(status)) return false;
@@ -395,6 +396,7 @@ export const isWalletPromotionUsable = (promotion, now = Date.now()) => {
 };
 
 export const walletPromotionUnavailableReason = (promotion) => {
+  if (promotion?.unavailableReason) return promotion.unavailableReason;
   const status = String(promotion?.status || "").toUpperCase();
   if (["USED", "REDEEMED"].includes(status)) {
     return "Voucher đã được sử dụng hết lượt.";

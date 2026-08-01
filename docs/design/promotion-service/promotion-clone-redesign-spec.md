@@ -77,7 +77,7 @@ public record PromotionCloneDraftResponse(
         String suggestedCode,               // null cho AUTO; gợi ý mới cho VOUCHER/COUPON, CHƯA persist
         String suggestedName,               // "{name} (Copy)", đã check & tăng số nếu trùng — xem 2.3
         String description,
-        Boolean publicVisible,              // luôn ép về false cho bản clone
+        Boolean publicVisible,              // kế thừa nguồn; admin có thể tắt trước khi lưu
         Integer priority,
         Boolean stackable,
         JsonNode conditionsJson,
@@ -185,7 +185,7 @@ public PromotionCloneDraftResponse buildCloneDraft(String publicId) {
         source.getPromotionType(),
         source.getPromotionType() == PromotionType.COUPON ? generatedCouponCode() : null,
         suggestName(source, source.getCampaignPublicId()),
-        source.getDescription(), false, source.getPriority(), source.getStackable(),
+        source.getDescription(), source.getPublicVisible(), source.getPriority(), source.getStackable(),
         parseJson(source.getConditionsJson()), parseJson(source.getActionsJson()),
         parseJson(source.getMetadataJson()), source.getMaxRedemptions(),
         source.getMaxRedemptionsPerUser(),
@@ -258,8 +258,8 @@ Trong `PromotionTable` (dòng ~973), nút "Clone" ở menu hành động từng 
 │               VOUCHER để trống, bắt nhập)  │
 │ [Mô tả] [Điều kiện] [Hành động] ...        │
 │   → tất cả prefill, editable như form thường│
-│ [Public visible] → mặc định OFF, có thể bật │
-│                     nếu loại = VOUCHER      │
+│ [Public visible] → kế thừa voucher nguồn,   │
+│                     có thể đổi trước khi lưu│
 │ [Ngày hiệu lực từ - đến] (prefill 2.4)     │
 │                                             │
 │  [Hủy]              [Tạo bản sao] ─────────┼──► POST /promotions (create bình thường)

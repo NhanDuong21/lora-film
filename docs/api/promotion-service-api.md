@@ -770,9 +770,10 @@ Preview điều kiện benefit, campaign, quota, active hold và ngân sách t�
   `orderType(s)`, `seatType(s)`, `allowedUserIds`, `dayOfWeek`,
   `excludeRoomType(s)`, `excludeDates`, `requiredTierCode`,
   `requiresVerification`, `minimumOrderAmount/minOrderAmount`.
-- `allowMultipleVoucherPerOrder`, `stackableWith` và `notStackableWith` là metadata
-  policy được validate kiểu dữ liệu; chúng không mở khóa stacking trong Reservation
-  Runtime một-benefit-per-checkout.
+- `allowMultipleVoucherPerOrder` được giữ để đọc payload cũ nhưng không còn là điều
+  kiện mở khóa stacking. Runtime dùng `Promotion.stackable` cùng
+  `PromotionCampaign.stackable`; `stackableWith` và `notStackableWith` tiếp tục lọc
+  compatibility cụ thể giữa các promotion.
 
 #### 7.1.2. Create Reservation
 

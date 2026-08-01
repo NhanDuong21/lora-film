@@ -107,6 +107,39 @@ const promotionPreviewSelection = (
   ...overrides,
 });
 
+const isSystemPromotion = (promotion) =>
+  promotion?.promotionType === "AUTO" ||
+  promotion?.source === "SYSTEM_AUTO";
+
+const walletPromotionId = (promotion) =>
+  promotion?.walletPublicId ||
+  promotion?.selectionPublicId ||
+  (promotion?.source === "CUSTOMER_WALLET" ? promotion?.publicId : null) ||
+  "";
+
+const systemPromotionId = (promotion) =>
+  isSystemPromotion(promotion)
+    ? promotion?.promotionPublicId || promotion?.publicId || ""
+    : "";
+
+const promotionSelectionId = (promotion) =>
+  walletPromotionId(promotion) ||
+  systemPromotionId(promotion) ||
+  promotion?.publicId ||
+  promotion?.voucherPublicId ||
+  promotion?.id ||
+  promotion?.code ||
+  "";
+
+const promotionRequestSelection = (promotions = []) => ({
+  selectedUserPromotionPublicIds: promotions
+    .map(walletPromotionId)
+    .filter(Boolean),
+  selectedPromotionPublicIds: promotions
+    .map(systemPromotionId)
+    .filter(Boolean),
+});
+
 const secondsUntil = (expiresAt) => {
   const deadline = new Date(expiresAt).getTime();
   if (!Number.isFinite(deadline)) return 0;
@@ -342,7 +375,7 @@ export default function BookingCheckoutPage() {
   const [promotionLoading, setPromotionLoading] = useState(false);
   const [promotionError, setPromotionError] = useState("");
   const [promotionChooserOpen, setPromotionChooserOpen] = useState(false);
-  const [selectedPromotion, setSelectedPromotion] = useState(null);
+  const [selectedPromotions, setSelectedPromotions] = useState([]);
   const [promotionPreview, setPromotionPreview] = useState(null);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCouponCode, setAppliedCouponCode] = useState("");
@@ -356,8 +389,7 @@ export default function BookingCheckoutPage() {
     setPromotionLoading(true);
     setPromotionError("");
     try {
-      const [walletResult, publicResult, systemResult] =
-        await Promise.allSettled([
+      const [walletResult, publicResult] = await Promise.allSettled([
           customerPromotionService.getMyVouchers({
             page: 0,
             size: 100,
@@ -369,14 +401,9 @@ export default function BookingCheckoutPage() {
             size: 100,
             sort: "priority,asc",
           }),
-          customerPromotionService.getSystemPromotions({
-            page: 0,
-            size: 100,
-            sort: "priority,asc",
-          }),
         ]);
       if (
-        [walletResult, publicResult, systemResult].every(
+        [walletResult, publicResult].every(
           (result) => result.status === "rejected",
         )
       ) {
@@ -390,10 +417,6 @@ export default function BookingCheckoutPage() {
         publicResult.status === "fulfilled"
           ? (publicResult.value?.data ?? publicResult.value)
           : null;
-      const systemPayload =
-        systemResult.status === "fulfilled"
-          ? (systemResult.value?.data ?? systemResult.value)
-          : null;
       const walletItems = Array.isArray(walletPayload)
         ? walletPayload
         : walletPayload?.content || [];
@@ -403,15 +426,11 @@ export default function BookingCheckoutPage() {
       const publicItems = Array.isArray(publicPayload)
         ? publicPayload
         : publicPayload?.content || [];
-      const systemItems = Array.isArray(systemPayload)
-        ? systemPayload
-        : systemPayload?.content || [];
       const ownedPromotionIds = new Set(
         walletItems.map((item) => item.promotionPublicId).filter(Boolean),
       );
       const inventory = [
         ...selectableWalletItems,
-        ...systemItems,
         ...publicItems.filter(
           (item) =>
             !ownedPromotionIds.has(item.promotionPublicId || item.publicId),
@@ -419,7 +438,7 @@ export default function BookingCheckoutPage() {
       ];
       setPromotionWallet(inventory);
       if (
-        [walletResult, publicResult, systemResult].some(
+        [walletResult, publicResult].some(
           (result) => result.status === "rejected",
         )
       ) {
@@ -713,7 +732,7 @@ export default function BookingCheckoutPage() {
           }));
           setScorePreview(null);
           setScorePreviewError("");
-          setSelectedPromotion(null);
+          setSelectedPromotions([]);
           setAppliedCouponCode("");
           try {
             setPromotionPreview(
@@ -745,7 +764,7 @@ export default function BookingCheckoutPage() {
         }));
         setScorePreview(null);
         setScorePreviewError("");
-        setSelectedPromotion(null);
+        setSelectedPromotions([]);
         setAppliedCouponCode("");
         try {
           setPromotionPreview(
@@ -820,34 +839,50 @@ export default function BookingCheckoutPage() {
     promotion,
     inventory = promotionWallet,
   ) => {
+    const id = promotionSelectionId(promotion);
+    const alreadySelected = selectedPromotions.some(
+      (selected) => String(promotionSelectionId(selected)) === String(id),
+    );
+    const nextSelections = alreadySelected
+      ? selectedPromotions.filter(
+          (selected) =>
+            String(promotionSelectionId(selected)) !== String(id),
+        )
+      : [...selectedPromotions, promotion];
+
+    if (
+      !alreadySelected &&
+      selectedPromotions.length > 0 &&
+      (!promotion?.stackable ||
+        selectedPromotions.some((selected) => !selected?.stackable))
+    ) {
+      setPromotionError(
+        "Voucher này không thể cộng dồn với lựa chọn hiện tại.",
+      );
+      return;
+    }
+
+    const requestSelection = promotionRequestSelection(nextSelections);
+    if (
+      nextSelections.length > 0 &&
+      requestSelection.selectedUserPromotionPublicIds.length === 0 &&
+      requestSelection.selectedPromotionPublicIds.length === 0
+    ) {
+      setPromotionError(
+        "Voucher sự kiện cần được nhận vào ví trước khi sử dụng.",
+      );
+      return;
+    }
+
     setPromotionLoading(true);
     setPromotionError("");
     try {
-      const systemPromotionId =
-        promotion?.promotionType === "AUTO" ||
-        promotion?.source === "SYSTEM_AUTO"
-          ? promotion?.promotionPublicId || promotion?.publicId
-          : null;
-      const walletPublicId =
-        promotion?.walletPublicId ||
-        promotion?.selectionPublicId ||
-        (promotion?.source === "CUSTOMER_WALLET" ? promotion?.publicId : null);
-      if (!walletPublicId && !systemPromotionId) {
-        throw new Error(
-          "Voucher sự kiện cần được nhận vào ví trước khi sử dụng.",
-        );
-      }
       const quote = await previewBookingPromotions(bookingId, {
         ...promotionPreviewSelection(inventory, selectedPaymentMethod, {
-          selectedUserPromotionPublicIds: walletPublicId
-            ? [walletPublicId]
-            : [],
-          selectedPromotionPublicIds: systemPromotionId
-            ? [systemPromotionId]
-            : [],
+          ...requestSelection,
         }),
       });
-      setSelectedPromotion(promotion);
+      setSelectedPromotions(nextSelections);
       setAppliedCouponCode("");
       setCouponInput("");
       setPromotionPreview(quote);
@@ -874,7 +909,6 @@ export default function BookingCheckoutPage() {
         await customerPromotionService.claimVoucher(promotionPublicId);
       const inventory = await loadPromotionWallet();
       await handlePromotionSelect(claimed, inventory);
-      setPromotionChooserOpen(false);
     } catch (requestError) {
       setPromotionError(
         getBookingErrorMessage(
@@ -889,7 +923,7 @@ export default function BookingCheckoutPage() {
   };
 
   const clearPromotionSelection = async () => {
-    setSelectedPromotion(null);
+    setSelectedPromotions([]);
     setAppliedCouponCode("");
     setCouponInput("");
     clearScoreSelection();
@@ -913,7 +947,10 @@ export default function BookingCheckoutPage() {
       setPromotionPreview(
         await previewBookingPromotions(
           bookingId,
-          promotionPreviewSelection(inventory, selectedPaymentMethod),
+          promotionPreviewSelection(inventory, selectedPaymentMethod, {
+            ...promotionRequestSelection(selectedPromotions),
+            couponCode: appliedCouponCode || null,
+          }),
         ),
       );
       setPromotionError("");
@@ -933,7 +970,7 @@ export default function BookingCheckoutPage() {
           couponCode: code,
         }),
       });
-      setSelectedPromotion(null);
+      setSelectedPromotions([]);
       setAppliedCouponCode(code);
       setPromotionPreview(quote);
       clearScoreSelection();
@@ -993,20 +1030,16 @@ export default function BookingCheckoutPage() {
           selectedScorePoints > 0
             ? getOrCreateScoreRedemptionKey(bookingId, selectedScorePoints)
             : null,
-        selectedUserPromotionPublicIds: selectedWalletPromotionId
-          ? [selectedWalletPromotionId]
-          : [],
-        selectedPromotionPublicIds: selectedSystemPromotionId
-          ? [selectedSystemPromotionId]
-          : [],
+        selectedUserPromotionPublicIds: selectedWalletPromotionIds,
+        selectedPromotionPublicIds: selectedSystemPromotionIds,
         couponCode: appliedCouponCode || null,
         paymentMethod: selectedPaymentMethod,
       });
       setBooking((prev) => ({ ...prev, ...finalized }));
       if (["CONFIRMED", "COMPLETED"].includes(finalized?.status)) {
-        if (selectedWalletPromotionId || appliedCouponCode) {
+        if (selectedWalletPromotionIds.length > 0 || appliedCouponCode) {
           await loadPromotionWallet();
-          setSelectedPromotion(null);
+          setSelectedPromotions([]);
           setAppliedCouponCode("");
           setCouponInput("");
         }
@@ -1189,28 +1222,13 @@ export default function BookingCheckoutPage() {
   const promotionDiscountTotal =
     Number(booking.promotionDiscount || 0) +
     Number(promotionPreview?.discountAmount ?? booking.voucherDiscount ?? 0);
-  const selectedWalletPromotionId =
-    selectedPromotion?.walletPublicId ||
-    selectedPromotion?.selectionPublicId ||
-    (selectedPromotion?.source === "CUSTOMER_WALLET"
-      ? selectedPromotion?.publicId
-      : null) ||
-    "";
-  const selectedSystemPromotionId =
-    selectedPromotion?.promotionType === "AUTO" ||
-    selectedPromotion?.source === "SYSTEM_AUTO"
-      ? selectedPromotion?.promotionPublicId ||
-        selectedPromotion?.publicId ||
-        ""
-      : "";
-  const selectedPromotionId =
-    selectedWalletPromotionId ||
-    selectedSystemPromotionId ||
-    selectedPromotion?.publicId ||
-    selectedPromotion?.voucherPublicId ||
-    selectedPromotion?.id ||
-    selectedPromotion?.code ||
-    "";
+  const {
+    selectedUserPromotionPublicIds: selectedWalletPromotionIds,
+    selectedPromotionPublicIds: selectedSystemPromotionIds,
+  } = promotionRequestSelection(selectedPromotions);
+  const selectedPromotionIds = selectedPromotions
+    .map(promotionSelectionId)
+    .filter(Boolean);
   const refreshPromotionPreviewForPaymentMethod = async (nextPaymentMethod) => {
     if (booking?.amountLockedAt) {
       return;
@@ -1219,19 +1237,15 @@ export default function BookingCheckoutPage() {
       const quote = await previewBookingPromotions(
         bookingId,
         promotionPreviewSelection(promotionWallet, nextPaymentMethod, {
-          selectedUserPromotionPublicIds: selectedWalletPromotionId
-            ? [selectedWalletPromotionId]
-            : [],
-          selectedPromotionPublicIds: selectedSystemPromotionId
-            ? [selectedSystemPromotionId]
-            : [],
+          selectedUserPromotionPublicIds: selectedWalletPromotionIds,
+          selectedPromotionPublicIds: selectedSystemPromotionIds,
           couponCode: appliedCouponCode || null,
         }),
       );
       setPromotionPreview(quote);
       setPromotionError("");
     } catch (requestError) {
-      setSelectedPromotion(null);
+      setSelectedPromotions([]);
       setAppliedCouponCode("");
       setCouponInput("");
       clearScoreSelection();
@@ -1319,7 +1333,7 @@ export default function BookingCheckoutPage() {
         vouchers={promotionWallet}
         loading={promotionLoading}
         error={promotionError}
-        selectedPromotionId={selectedPromotionId}
+        selectedPromotionIds={selectedPromotionIds}
         backendAppliedIds={(promotionPreview?.appliedPromotions || [])
           .flatMap((item) => [
             item.userPromotionPublicId,
@@ -1331,10 +1345,7 @@ export default function BookingCheckoutPage() {
         bookingContext={promotionContext}
         onSelect={handlePromotionSelect}
         onClaim={handleClaimPromotion}
-        onClear={() => {
-          void clearPromotionSelection();
-          setPromotionChooserOpen(false);
-        }}
+        onClear={() => void clearPromotionSelection()}
         onClose={() => setPromotionChooserOpen(false)}
         onRefresh={refreshPromotionOptions}
       />
@@ -1790,7 +1801,7 @@ export default function BookingCheckoutPage() {
               </div>
             </div>
 
-            <div className="space-y-3 border-y border-emerald-500/25 bg-emerald-500/[0.04] py-4">
+            <div className="min-w-0 space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <Gift className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -1805,50 +1816,63 @@ export default function BookingCheckoutPage() {
                 </span>
               </div>
 
-              {selectedPromotion ? (
-                <div className="border-l-2 border-emerald-500 pl-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="break-words text-xs font-black text-white">
-                        {selectedPromotion.name || "Voucher LoraFilm"}
-                      </p>
-                      <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
-                        {selectedPromotion.code}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-xs font-black text-emerald-400">
-                      {voucherDiscountSummary(selectedPromotion)}
-                    </span>
+              {selectedPromotions.length > 0 ? (
+                <div className="min-w-0 space-y-3">
+                  <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                    {selectedPromotions.map((promotion) => (
+                      <div
+                        key={promotionSelectionId(promotion)}
+                        className="flex min-w-0 items-start gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                            <p className="min-w-0 break-words text-xs font-black text-white">
+                              {promotion.name || "Voucher LoraFilm"}
+                            </p>
+                            <span className="shrink-0 text-xs font-black text-emerald-400">
+                              {voucherDiscountSummary(promotion)}
+                            </span>
+                          </div>
+                          {promotion.code && (
+                            <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
+                              {promotion.code}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handlePromotionSelect(promotion)}
+                          disabled={promotionLoading}
+                          aria-label={`Bỏ ${promotion.name || "voucher"}`}
+                          className="-mr-1 -mt-1 shrink-0 rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  {promotionPreview?.discountAmount > 0 && (
-                    <p className="mt-2 text-[10px] font-bold text-emerald-300">
-                      Engine xác nhận giảm{" "}
-                      {formatCurrency(promotionPreview.discountAmount)}
-                    </p>
-                  )}
-                  <div className="mt-3 flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    {promotionPreview?.discountAmount > 0 && (
+                      <p className="text-[10px] font-bold text-emerald-300">
+                        Engine xác nhận giảm{" "}
+                        {formatCurrency(promotionPreview.discountAmount)}
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={() => setPromotionChooserOpen(true)}
-                      className="flex-1 rounded border border-zinc-700 py-2 text-[10px] font-black uppercase text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white"
+                      disabled={isExpired || promotionLoading}
+                      className="h-9 rounded-lg border border-zinc-700 px-3 text-[10px] font-black uppercase text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
                     >
-                      Đổi voucher
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void clearPromotionSelection()}
-                      aria-label="Bỏ chọn voucher"
-                      className="rounded border border-zinc-700 px-3 py-2 text-zinc-500 transition-colors hover:border-zinc-500 hover:text-white"
-                    >
-                      <X className="h-4 w-4" />
+                      Chỉnh voucher
                     </button>
                   </div>
                 </div>
               ) : (
                 <>
                   {appliedCouponCode ? (
-                    <div className="flex items-center justify-between border-l-2 border-emerald-500 pl-3">
-                      <div>
+                    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                      <div className="min-w-0">
                         <p className="font-mono text-xs font-black text-white">
                           {appliedCouponCode}
                         </p>
@@ -1869,8 +1893,8 @@ export default function BookingCheckoutPage() {
                       </button>
                     </div>
                   ) : promotionPreview?.appliedPromotions?.length > 0 ? (
-                    <div className="border-l-2 border-emerald-500 pl-3">
-                      <p className="text-xs font-black text-white">
+                    <div className="min-w-0 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                      <p className="break-words text-xs font-black text-white">
                         {promotionPreview.appliedPromotions
                           .map((item) => item.name)
                           .join(", ")}
@@ -1885,14 +1909,14 @@ export default function BookingCheckoutPage() {
                     type="button"
                     onClick={() => setPromotionChooserOpen(true)}
                     disabled={isExpired}
-                    className="w-full rounded bg-emerald-500 py-2.5 text-[10px] font-black uppercase tracking-wider text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                    className="w-full rounded-lg bg-emerald-500 py-2.5 text-[10px] font-black uppercase tracking-wider text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
                   >
                     Chọn ưu đãi
                   </button>
                 </>
               )}
 
-              <div className="flex gap-2">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
                 <input
                   value={couponInput}
                   onChange={(event) =>
@@ -1907,7 +1931,7 @@ export default function BookingCheckoutPage() {
                   disabled={isExpired || promotionLoading}
                   placeholder="Mã coupon"
                   aria-label="Mã coupon"
-                  className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-950 px-3 py-2.5 font-mono text-xs font-bold text-white outline-none focus:border-emerald-500"
+                  className="min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 font-mono text-xs font-bold text-white outline-none focus:border-emerald-500"
                 />
                 <button
                   type="button"
@@ -1915,7 +1939,7 @@ export default function BookingCheckoutPage() {
                   disabled={
                     !couponInput.trim() || isExpired || promotionLoading
                   }
-                  className="rounded bg-zinc-100 px-3 text-[10px] font-black uppercase text-zinc-950 disabled:opacity-40"
+                  className="rounded-lg bg-zinc-100 px-3 text-[10px] font-black uppercase text-zinc-950 disabled:opacity-40"
                 >
                   Áp dụng
                 </button>

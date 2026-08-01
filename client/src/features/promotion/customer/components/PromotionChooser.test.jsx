@@ -16,6 +16,7 @@ vi.mock("@/features/catalog/customer/services/movieService", () => ({
 const defaultProps = {
   open: true,
   bookingAmount: 200000,
+  selectedPromotionIds: [],
   onSelect: vi.fn(),
   onClear: vi.fn(),
   onClose: vi.fn(),
@@ -136,7 +137,98 @@ describe("PromotionChooser", () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ publicId: "system-voucher" }),
     );
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keeps stackable vouchers selectable and dims non-stackable vouchers", () => {
+    const onSelect = vi.fn();
+    const promotions = [
+      voucher({
+        publicId: "stackable-1",
+        name: "Cộng dồn một",
+        stackable: true,
+      }),
+      voucher({
+        publicId: "stackable-2",
+        name: "Cộng dồn hai",
+        stackable: true,
+      }),
+      voucher({
+        publicId: "exclusive-1",
+        name: "Dùng riêng",
+        stackable: false,
+      }),
+    ];
+    render(
+      <PromotionChooser
+        {...defaultProps}
+        onSelect={onSelect}
+        selectedPromotionIds={["stackable-1"]}
+        vouchers={promotions}
+        promotionEvaluations={promotions.map((promotion) => ({
+          promotionPublicId: promotion.publicId,
+          eligible: true,
+          discountAmount: 20000,
+          reasonCode: "ELIGIBLE",
+          reason: "Có thể sử dụng cho đơn hiện tại",
+        }))}
+      />,
+    );
+
+    const nextStackable = screen.getByText("Cộng dồn hai").closest("article");
+    const exclusive = screen.getByText("Dùng riêng").closest("article");
+    expect(within(nextStackable).getByRole("button", { name: "Chọn" }))
+      .toBeEnabled();
+    expect(exclusive).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(exclusive).getByRole("button", { name: "Không cộng dồn" }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      within(nextStackable).getByRole("button", { name: "Chọn" }),
+    );
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ publicId: "stackable-2" }),
+    );
+  });
+
+  it("dims every other voucher when a non-stackable voucher is selected", () => {
+    const promotions = [
+      voucher({
+        publicId: "exclusive-1",
+        name: "Dùng riêng",
+        stackable: false,
+      }),
+      voucher({
+        publicId: "stackable-1",
+        name: "Có thể cộng dồn",
+        stackable: true,
+      }),
+    ];
+    render(
+      <PromotionChooser
+        {...defaultProps}
+        selectedPromotionIds={["exclusive-1"]}
+        vouchers={promotions}
+        promotionEvaluations={promotions.map((promotion) => ({
+          promotionPublicId: promotion.publicId,
+          eligible: true,
+          discountAmount: 20000,
+          reasonCode: "ELIGIBLE",
+          reason: "Có thể sử dụng cho đơn hiện tại",
+        }))}
+      />,
+    );
+
+    const selected = screen.getByText("Dùng riêng").closest("article");
+    const blocked = screen.getByText("Có thể cộng dồn").closest("article");
+    expect(
+      within(selected).getByRole("button", { name: "Bỏ chọn" }),
+    ).toBeEnabled();
+    expect(blocked).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(blocked).getByRole("button", { name: "Không cộng dồn" }),
+    ).toBeDisabled();
   });
 
   it("dims condition-mismatched vouchers and explains the mismatch", () => {
@@ -307,7 +399,7 @@ describe("PromotionChooser", () => {
     const lowerVoucher = screen.getByText("Voucher 20K").closest("article");
 
     expect(
-      within(bestVoucher).getByRole("button", { name: "Đang áp dụng" }),
+      within(bestVoucher).getByRole("button", { name: "Tự động áp dụng" }),
     ).toBeInTheDocument();
     expect(
       within(lowerVoucher).queryByText("Đang áp dụng"),

@@ -74,4 +74,14 @@ describe('adminPromotionService', () => {
       params: { status: 'ACTIVE' },
     });
   });
+
+  it('loads promotion and booking operations summaries', async () => {
+    await adminPromotionService.getPromotionMonitoring();
+    await adminPromotionService.getBookingMonitoring();
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/api/admin/promotion-monitoring/summary'
+    );
+    expect(apiClient.get).toHaveBeenCalledWith('/api/admin/monitoring/summary');
+  });
 });

@@ -96,7 +96,7 @@
 |---|---|
 | BR-VOU-01 | Vé tặng (voucher 0đ, nguồn `BIRTHDAY`/`TIER_UPGRADE`) **không áp dụng** cho: suất chiếu sớm (trước ngày công chiếu chính thức), suất chiếu đặc biệt (IMAX/4DX/ScreenX/Gold Class), ngày Lễ/Tết, và các phim thuộc diện `isPremiere = true` từ movie-service. |
 | BR-VOU-02 | Voucher sinh nhật có hạn sử dụng **4 tháng** 🟡*theo thực tế Galaxy* kể từ ngày phát hành (`issued_at + 120 ngày`), tự động chuyển `EXPIRED` sau đó, không gia hạn. |
-| BR-VOU-03 | Mỗi giao dịch tại quầy chỉ được áp dụng **tối đa 1 voucher** trừ khi campaign đánh dấu `allowMultipleVoucherPerOrder = true` tường minh. |
+| BR-VOU-03 | Một giao dịch được áp dụng nhiều voucher khi **mọi voucher được ghép** có `Promotion.stackable = true` và campaign tương ứng có `stackable = true`. Chọn voucher không bật cộng dồn làm voucher đó trở thành lựa chọn độc quyền; `allowMultipleVoucherPerOrder` chỉ còn là metadata tương thích dữ liệu cũ. |
 | BR-VOU-04 | Voucher **không được quy đổi thành tiền mặt** dưới bất kỳ hình thức nào (không hoàn tiền chênh lệch nếu giá trị voucher lớn hơn giá vé). |
 | BR-VOU-05 | Voucher không áp dụng đồng thời với các chương trình giảm giá cố định khác (Happy Day, Culture Day) trừ khi rule tường minh cho phép `stackableWith` — mặc định là **loại trừ lẫn nhau**. |
 | BR-VOU-06 | Voucher chính sách thành viên **không áp dụng cho giao dịch vé nhóm/vé đoàn B2B** (Co-Sales) — Eligibility Engine phải kiểm tra `orderType != GROUP_BOOKING` trước khi cho áp dụng voucher cá nhân. |
