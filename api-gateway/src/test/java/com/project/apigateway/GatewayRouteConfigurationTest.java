@@ -35,7 +35,10 @@ class GatewayRouteConfigurationTest {
         assertThat(properties.getProperty("spring.cloud.gateway.routes[2].predicates[0]"))
                 .contains("/api/admin/locations/**");
         assertThat(properties.getProperty("spring.cloud.gateway.routes[3].predicates[0]"))
-                .contains("/api/admin/coupons/**", "/api/admin/configurations/**");
+                .contains("/api/promotions/**", "/api/customers/me/promotions/**",
+                        "/api/admin/promotions/**", "/api/admin/configurations/**")
+                .doesNotContain("/api/admin/coupons/**", "/api/admin/vouchers/**",
+                        "/api/admin/compensation-vouchers/**", "/api/admin/promotion-rules/**");
         assertThat(properties.getProperty("spring.cloud.gateway.routes[6].predicates[0]"))
                 .contains("/api/employee/payments/**", "/api/admin/payments/**");
         assertThat(properties.getProperty("spring.cloud.gateway.routes[10].uri"))

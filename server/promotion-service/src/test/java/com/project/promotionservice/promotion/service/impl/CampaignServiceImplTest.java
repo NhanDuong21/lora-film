@@ -1,8 +1,6 @@
 package com.project.promotionservice.promotion.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.promotionservice.benefit.repository.CouponRepository;
-import com.project.promotionservice.benefit.repository.VoucherRepository;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEventRepository;
 import com.project.promotionservice.integration.outbox.PromotionOutboxEnvelopeFactory;
@@ -13,13 +11,12 @@ import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
-import com.project.promotionservice.promotion.enums.CampaignType;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
-import com.project.promotionservice.promotion.repository.PromotionRuleRepository;
+import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 
@@ -44,11 +41,7 @@ class CampaignServiceImplTest {
     @Mock
     private PromotionCampaignRepository campaignRepository;
     @Mock
-    private PromotionRuleRepository ruleRepository;
-    @Mock
-    private CouponRepository couponRepository;
-    @Mock
-    private VoucherRepository voucherRepository;
+    private PromotionRepository promotionRepository;
     @Mock
     private ApprovalHistoryRepository approvalHistoryRepository;
     @Mock
@@ -78,7 +71,6 @@ class CampaignServiceImplTest {
         CampaignCreateRequest request = new CampaignCreateRequest();
         request.setCode("SUMMER2026");
         request.setName("Summer 2026 Campaign");
-        request.setCampaignType(CampaignType.COUPON);
         request.setStartAt(Instant.now().plusSeconds(3600));
         request.setEndAt(Instant.now().plusSeconds(7200));
         request.setBudgetAmount(new BigDecimal("1000000.00"));
@@ -116,20 +108,6 @@ class CampaignServiceImplTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
         assertEquals("End date must be after start date", exception.getMessage());
-    }
-
-    @Test
-    void createCampaign_automaticDiscountIsRejectedUntilRuntimeSupportsIt() {
-        CampaignCreateRequest request = new CampaignCreateRequest();
-        request.setCampaignType(CampaignType.AUTOMATIC_DISCOUNT);
-
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> campaignService.createCampaign(request, "1"));
-
-        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
-        assertTrue(exception.getMessage().contains("not supported"));
-        verify(campaignRepository, never()).save(any());
     }
 
     @Test
@@ -181,7 +159,7 @@ class CampaignServiceImplTest {
         PromotionCampaign campaign = draftCouponCampaign();
         when(campaignRepository.findByPublicId(campaign.getPublicId()))
                 .thenReturn(Optional.of(campaign));
-        when(couponRepository.existsConfiguredForCampaign(
+        when(promotionRepository.existsConfiguredForCampaign(
                 eq(campaign.getPublicId()), any(), eq(campaign.getStartAt()), eq(campaign.getEndAt())))
                 .thenReturn(false);
 
@@ -190,9 +168,7 @@ class CampaignServiceImplTest {
                 () -> campaignService.submitCampaign(campaign.getPublicId(), "Ready", "marketing"));
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatus());
-        assertTrue(exception.getMessage().contains("configured coupon"));
-        verify(ruleRepository, never())
-                .findByCampaignPublicIdAndDeletedAtIsNull(campaign.getPublicId());
+        assertTrue(exception.getMessage().contains("configured promotion"));
     }
 
     @Test
@@ -202,7 +178,7 @@ class CampaignServiceImplTest {
         response.setApprovalStatus(CampaignApprovalStatus.PENDING);
         when(campaignRepository.findByPublicId(campaign.getPublicId()))
                 .thenReturn(Optional.of(campaign));
-        when(couponRepository.existsConfiguredForCampaign(
+        when(promotionRepository.existsConfiguredForCampaign(
                 eq(campaign.getPublicId()), any(), eq(campaign.getStartAt()), eq(campaign.getEndAt())))
                 .thenReturn(true);
         when(campaignRepository.save(campaign)).thenReturn(campaign);
@@ -258,7 +234,7 @@ class CampaignServiceImplTest {
         campaign.setPublicId("550e8400-e29b-41d4-a716-446655440002");
         when(campaignRepository.findByPublicId(campaign.getPublicId()))
                 .thenReturn(Optional.of(campaign));
-        when(reservationRepository.countByCampaignPublicIdAndStatusAndDeletedAtIsNull(
+        when(reservationRepository.countByCampaignAndStatus(
                 campaign.getPublicId(), ReservationStatus.ACTIVE))
                 .thenReturn(1L);
 
@@ -273,7 +249,6 @@ class CampaignServiceImplTest {
     private PromotionCampaign draftCouponCampaign() {
         PromotionCampaign campaign = new PromotionCampaign();
         campaign.setPublicId("550e8400-e29b-41d4-a716-446655440099");
-        campaign.setCampaignType(CampaignType.COUPON);
         campaign.setStatus(CampaignStatus.DRAFT);
         campaign.setApprovalStatus(CampaignApprovalStatus.DRAFT);
         campaign.setLegalStatus(LegalStatus.PENDING);

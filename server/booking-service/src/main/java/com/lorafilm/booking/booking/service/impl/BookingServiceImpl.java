@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
 import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
+import com.lorafilm.booking.booking.client.PromotionReservationClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
+import com.lorafilm.booking.booking.dto.request.PromotionSelectionRequest;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingFoodResponse;
@@ -15,6 +17,7 @@ import com.lorafilm.booking.booking.dto.response.BookingPresentationResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
+import com.lorafilm.booking.booking.dto.response.PromotionQuoteResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
@@ -112,6 +115,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingLifecycleService lifecycleService;
     private SeatAvailabilityEventService seatAvailabilityEventService;
     private ScoreRedemptionClient scoreRedemptionClient;
+    private PromotionReservationClient promotionReservationClient;
 
     @Autowired
     public BookingServiceImpl(
@@ -165,6 +169,11 @@ public class BookingServiceImpl implements BookingService {
     @Autowired(required = false)
     public void setScoreRedemptionClient(ScoreRedemptionClient service) {
         this.scoreRedemptionClient = service;
+    }
+
+    @Autowired(required = false)
+    public void setPromotionReservationClient(PromotionReservationClient service) {
+        this.promotionReservationClient = service;
     }
 
     /** Backwards-compatible constructor for existing unit/integration callers. */
@@ -1206,6 +1215,10 @@ public class BookingServiceImpl implements BookingService {
         }
         int requestedPoints = request == null ? 0 : request.normalizedScorePoints();
         String scoreIdempotencyKey = request == null ? null : request.scoreIdempotencyKey();
+        PromotionSelectionRequest promotionSelection = request == null
+                ? new PromotionSelectionRequest(List.of(), null)
+                : request.promotionSelection();
+        String promotionFingerprint = promotionSelectionFingerprint(promotionSelection);
 
         if (booking.getAmountLockedAt() != null) {
             if (!Objects.equals(booking.getScorePointsUsed(), requestedPoints)) {
@@ -1214,60 +1227,205 @@ public class BookingServiceImpl implements BookingService {
                         "Checkout amount was already locked with another score selection",
                         HttpStatus.CONFLICT);
             }
+            if (!Objects.equals(booking.getPromotionSelectionFingerprint(), promotionFingerprint)) {
+                throw new BusinessException(
+                        "BOOKING_AMOUNT_ALREADY_LOCKED",
+                        "Checkout amount was already locked with another promotion selection",
+                        HttpStatus.CONFLICT);
+            }
             return bookingMapper.toResponse(booking);
         }
-        if (requestedPoints == 0) {
-            booking.lockAmount(now);
-            return bookingMapper.toResponse(bookingRepository.saveAndFlush(booking));
-        }
-        if (scoreIdempotencyKey == null || scoreIdempotencyKey.isBlank()) {
-            throw new BusinessException(
-                    "SCORE_IDEMPOTENCY_KEY_REQUIRED",
-                    "scoreIdempotencyKey is required when scorePoints is greater than zero",
-                    HttpStatus.BAD_REQUEST);
-        }
-        if (scoreRedemptionClient == null) {
-            throw new IntegrationException("Score Service integration is unavailable");
-        }
 
-        long ttlWithSettlementGrace = Duration.between(now, booking.getExpiresAt()).getSeconds() + 300;
-        int ttlSeconds = (int) Math.min(Integer.MAX_VALUE, Math.max(60, ttlWithSettlementGrace));
-        String holdEventId = stableScoreKey("hold-event", scoreIdempotencyKey);
-        ScoreRedemptionClient.ScoreHoldResult hold = scoreRedemptionClient.hold(
-                booking.getUserId(),
-                booking.getId(),
-                requestedPoints,
-                ttlSeconds,
-                booking.getFinalAmount(),
-                holdEventId,
-                scoreIdempotencyKey.trim());
+        PromotionReservationClient.ReservationResult promotionReservation = null;
+        ScoreRedemptionClient.ScoreHoldResult hold = null;
         try {
-            if (hold == null
-                    || !"ACTIVE".equalsIgnoreCase(hold.status())
-                    || hold.pointsHeld() != requestedPoints
-                    || hold.discountAmount() == null
-                    || hold.discountAmount().signum() <= 0) {
-                throw new IntegrationException("Score Service did not create a valid active hold");
+            PromotionQuoteResponse promotionQuote = previewPromotions(booking, promotionSelection);
+            if (promotionQuote.eligible()) {
+                promotionReservation = requirePromotionClient().reserve(
+                        promotionCommand(booking, promotionSelection),
+                        stablePromotionKey("reserve", booking.getPublicId() + ":" + promotionFingerprint));
+                if (promotionReservation.discountAmount() == null
+                        || promotionReservation.discountAmount().signum() <= 0
+                        || !"ACTIVE".equalsIgnoreCase(promotionReservation.status())) {
+                    throw new IntegrationException("Promotion Service did not create a valid active reservation");
+                }
+                booking.applyPromotionReservation(
+                        promotionReservation.publicId(),
+                        promotionReservation.discountAmount(),
+                        promotionFingerprint,
+                        writeAppliedPromotions(promotionReservation.appliedPromotions()));
+            } else {
+                booking.recordPromotionSelection(promotionFingerprint);
             }
-            booking.applyScoreRedemption(
-                    requestedPoints,
-                    hold.discountAmount(),
-                    hold.holdCode());
+
+            if (requestedPoints > 0) {
+                if (booking.getFinalAmount().signum() == 0) {
+                    throw new BusinessException(
+                            "SCORE_NOT_NEEDED",
+                            "The selected promotions already make this Booking free",
+                            HttpStatus.CONFLICT);
+                }
+                if (scoreIdempotencyKey == null || scoreIdempotencyKey.isBlank()) {
+                    throw new BusinessException(
+                            "SCORE_IDEMPOTENCY_KEY_REQUIRED",
+                            "scoreIdempotencyKey is required when scorePoints is greater than zero",
+                            HttpStatus.BAD_REQUEST);
+                }
+                if (scoreRedemptionClient == null) {
+                    throw new IntegrationException("Score Service integration is unavailable");
+                }
+                long ttlWithSettlementGrace = Duration.between(now, booking.getExpiresAt()).getSeconds() + 300;
+                int ttlSeconds = (int) Math.min(Integer.MAX_VALUE, Math.max(60, ttlWithSettlementGrace));
+                String holdEventId = stableScoreKey("hold-event", scoreIdempotencyKey);
+                hold = scoreRedemptionClient.hold(
+                        booking.getUserId(), booking.getId(), requestedPoints, ttlSeconds,
+                        booking.getFinalAmount(), holdEventId, scoreIdempotencyKey.trim());
+                if (hold == null
+                        || !"ACTIVE".equalsIgnoreCase(hold.status())
+                        || hold.pointsHeld() != requestedPoints
+                        || hold.discountAmount() == null
+                        || hold.discountAmount().signum() <= 0) {
+                    throw new IntegrationException("Score Service did not create a valid active hold");
+                }
+                booking.applyScoreRedemption(
+                        requestedPoints, hold.discountAmount(), hold.holdCode());
+            }
+
             booking.lockAmount(now);
-            return bookingMapper.toResponse(bookingRepository.saveAndFlush(booking));
+            Booking saved = bookingRepository.saveAndFlush(booking);
+            if (saved.getFinalAmount().signum() == 0) {
+                confirmFreeCheckout(saved, now);
+            }
+            return bookingMapper.toResponse(saved);
         } catch (RuntimeException exception) {
-            try {
-                scoreRedemptionClient.release(
-                        booking.getId(),
-                        hold == null ? null : hold.holdCode(),
-                        "Booking checkout finalization failed",
-                        stableScoreKey("release-event", scoreIdempotencyKey),
-                        stableScoreKey("release", scoreIdempotencyKey));
-            } catch (RuntimeException releaseException) {
-                log.error("Failed to compensate Score hold for Booking {}", publicId, releaseException);
+            if (hold != null && scoreRedemptionClient != null) {
+                try {
+                    scoreRedemptionClient.release(
+                            booking.getId(), hold.holdCode(),
+                            "Booking checkout finalization failed",
+                            stableScoreKey("release-event", scoreIdempotencyKey),
+                            stableScoreKey("release", scoreIdempotencyKey));
+                } catch (RuntimeException releaseException) {
+                    log.error("Failed to compensate Score hold for Booking {}", publicId, releaseException);
+                }
+            }
+            if (promotionReservation != null && promotionReservationClient != null) {
+                try {
+                    promotionReservationClient.release(
+                            promotionReservation.publicId(),
+                            "Booking checkout finalization failed",
+                            stablePromotionKey("release", publicId + ":finalize-failed"));
+                } catch (RuntimeException releaseException) {
+                    log.error("Failed to compensate Promotion reservation for Booking {}", publicId, releaseException);
+                }
             }
             throw exception;
         }
+    }
+
+    @Override
+    public PromotionQuoteResponse previewPromotions(
+            String publicId, PromotionSelectionRequest request) {
+        Long currentUserId = requireAuthenticatedUser();
+        Booking booking = getBooking(publicId);
+        requireOwnerOrAdmin(booking, currentUserId);
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT
+                || booking.getExpiresAt() == null
+                || !Instant.now().isBefore(booking.getExpiresAt())) {
+            throw new BusinessException(
+                    "BOOKING_NOT_PROMOTION_ELIGIBLE",
+                    "Only an unexpired pending Booking can preview promotions",
+                    HttpStatus.CONFLICT);
+        }
+        if (booking.getAmountLockedAt() != null) {
+            throw new BusinessException(
+                    "BOOKING_AMOUNT_ALREADY_LOCKED",
+                    "Promotions cannot change after checkout amount lock",
+                    HttpStatus.CONFLICT);
+        }
+        return previewPromotions(
+                booking,
+                request == null ? new PromotionSelectionRequest(List.of(), null) : request);
+    }
+
+    private PromotionQuoteResponse previewPromotions(
+            Booking booking, PromotionSelectionRequest selection) {
+        if (booking.promotionEligibleAmount().signum() == 0) {
+            return new PromotionQuoteResponse(
+                    false, BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2),
+                    BigDecimal.ZERO.setScale(2), booking.getCurrency(), List.of(), List.of());
+        }
+        return requirePromotionClient().preview(promotionCommand(booking, selection));
+    }
+
+    private PromotionReservationClient.CheckoutCommand promotionCommand(
+            Booking booking, PromotionSelectionRequest selection) {
+        var context = objectMapper.createObjectNode();
+        context.put("showtimeId", booking.getShowtimeId());
+        context.put("movieId", booking.getMovieId());
+        context.put("cinemaId", booking.getCinemaId());
+        context.put("auditoriumId", booking.getAuditoriumId());
+        context.put("ticketCount", reservationRepository.findAllByBookingId(booking.getId()).size());
+        context.put("channel", "WEB");
+        long remaining = Math.max(60, Duration.between(Instant.now(), booking.getExpiresAt()).getSeconds());
+        int holdSeconds = (int) Math.min(1800, remaining);
+        return new PromotionReservationClient.CheckoutCommand(
+                String.valueOf(booking.getUserId()),
+                booking.promotionEligibleAmount(),
+                selection.normalizedWalletIds(),
+                selection.normalizedCouponCode(),
+                booking.getPublicId(),
+                booking.getCurrency(),
+                context,
+                holdSeconds);
+    }
+
+    private PromotionReservationClient requirePromotionClient() {
+        if (promotionReservationClient == null) {
+            throw new IntegrationException("Promotion Service integration is unavailable");
+        }
+        return promotionReservationClient;
+    }
+
+    private void confirmFreeCheckout(Booking booking, Instant confirmedAt) {
+        String settlementId = UUID.nameUUIDFromBytes(
+                ("FREE_PROMOTION:" + booking.getPublicId()).getBytes(StandardCharsets.UTF_8)).toString();
+        if (booking.getPromotionReservationPublicId() != null) {
+            requirePromotionClient().confirm(
+                    booking.getPromotionReservationPublicId(), settlementId,
+                    stablePromotionKey("confirm", settlementId));
+        }
+        booking.setPaymentStatus(PaymentStatus.SUCCESS);
+        booking.setPaymentProvider("PROMOTION_SERVICE");
+        booking.setPaymentMethodSnapshot("FULL_DISCOUNT");
+        booking.setPaymentReference(settlementId);
+        if (lifecycleService == null) {
+            throw new IntegrationException("Booking lifecycle integration is unavailable");
+        }
+        lifecycleService.confirmPayment(booking, confirmedAt, "PROMOTION_SERVICE");
+    }
+
+    private String writeAppliedPromotions(
+            List<PromotionQuoteResponse.AppliedPromotion> appliedPromotions) {
+        try {
+            return objectMapper.writeValueAsString(
+                    appliedPromotions == null ? List.of() : appliedPromotions);
+        } catch (JsonProcessingException exception) {
+            throw new IntegrationException("Cannot persist the applied promotion snapshot", exception);
+        }
+    }
+
+    private String promotionSelectionFingerprint(PromotionSelectionRequest selection) {
+        List<String> walletIds = new ArrayList<>(selection.normalizedWalletIds());
+        walletIds.sort(String::compareTo);
+        String canonical = String.join(",", walletIds) + "|"
+                + Objects.toString(selection.normalizedCouponCode(), "");
+        return UUID.nameUUIDFromBytes(canonical.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private String stablePromotionKey(String purpose, String source) {
+        return purpose + "-" + UUID.nameUUIDFromBytes(
+                (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
     }
 
     private String stableScoreKey(String purpose, String source) {

@@ -6,7 +6,8 @@ import {
   cancelBooking,
   finalizeCheckout,
   getOrCreateScoreRedemptionKey,
-  getBookingDetails
+  getBookingDetails,
+  previewBookingPromotions
 } from '../services/bookingService';
 import {
   getBookingFoodOrder,
@@ -24,7 +25,8 @@ vi.mock('../services/bookingService', () => ({
   cancelBooking: vi.fn(),
   finalizeCheckout: vi.fn(),
   getOrCreateScoreRedemptionKey: vi.fn(),
-  getBookingDetails: vi.fn()
+  getBookingDetails: vi.fn(),
+  previewBookingPromotions: vi.fn()
 }));
 
 vi.mock('../services/foodService', () => ({
@@ -104,6 +106,15 @@ describe('BookingCheckoutPage cancellation', () => {
       totalElements: 0,
       totalPages: 0
     });
+    previewBookingPromotions.mockResolvedValue({
+      eligible: false,
+      originalAmount: 335000,
+      discountAmount: 0,
+      finalAmount: 335000,
+      currency: 'VND',
+      appliedPromotions: [],
+      warnings: []
+    });
     finalizeCheckout.mockResolvedValue({});
     getOrCreateScoreRedemptionKey.mockReturnValue('score-redemption-key');
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
@@ -172,7 +183,9 @@ describe('BookingCheckoutPage cancellation', () => {
         '11111111-1111-4111-8111-111111111111',
         {
           scorePoints: 0,
-          scoreIdempotencyKey: null
+          scoreIdempotencyKey: null,
+          selectedUserPromotionPublicIds: [],
+          couponCode: null
         }
       );
       expect(createPaymentHandoff).toHaveBeenCalledWith({
@@ -228,7 +241,9 @@ describe('BookingCheckoutPage cancellation', () => {
         '11111111-1111-4111-8111-111111111111',
         {
           scorePoints: 50,
-          scoreIdempotencyKey: 'score-redemption-key'
+          scoreIdempotencyKey: 'score-redemption-key',
+          selectedUserPromotionPublicIds: [],
+          couponCode: null
         }
       );
     });
@@ -427,9 +442,28 @@ describe('BookingCheckoutPage cancellation', () => {
     fireEvent.click(screen.getByRole('button', { name: /chọn ưu đãi/i }));
     const dialog = screen.getByRole('dialog', { name: /ví voucher/i });
     expect(within(dialog).getByText('Voucher chào mừng')).toBeInTheDocument();
+    previewBookingPromotions.mockResolvedValueOnce({
+      eligible: true,
+      originalAmount: 335000,
+      discountAmount: 50000,
+      finalAmount: 285000,
+      currency: 'VND',
+      appliedPromotions: [{
+        promotionPublicId: 'promotion-public-id',
+        userPromotionPublicId: 'voucher-public-id',
+        promotionType: 'VOUCHER',
+        name: 'Voucher chào mừng',
+        discountAmount: 50000
+      }],
+      warnings: []
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: /chọn voucher/i }));
 
-    expect(await screen.findByText(/đã chọn để đối chiếu/i)).toBeInTheDocument();
+    expect(await screen.findByText(/engine xác nhận giảm/i)).toBeInTheDocument();
+    expect(previewBookingPromotions).toHaveBeenLastCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      { selectedUserPromotionPublicIds: ['voucher-public-id'] }
+    );
     expect(finalizeCheckout).not.toHaveBeenCalled();
   });
 

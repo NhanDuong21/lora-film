@@ -54,25 +54,24 @@ public class IntegrationEventProcessor {
         String paymentId = text(data, "paymentPublicId", "paymentId");
         require(reservationId, "reservationPublicId");
         require(paymentId, "paymentPublicId");
-        ConfirmRequest request = new ConfirmRequest();
-        request.setPaymentPublicId(paymentId);
+        ConfirmRequest request = new ConfirmRequest(paymentId);
         reservationService.confirm(reservationId, request, event.getEventId(), "PAYMENT_SERVICE");
     }
 
     private void release(PromotionIntegrationEvent event, JsonNode data) {
         String reservationId = text(data, "reservationPublicId", "reservationId");
         require(reservationId, "reservationPublicId");
-        TransitionRequest request = new TransitionRequest();
-        request.setReason("Payment failed event " + event.getEventId());
+        TransitionRequest request = new TransitionRequest(
+                "Payment failed event " + event.getEventId());
         reservationService.release(reservationId, request, event.getEventId(), "PAYMENT_SERVICE");
     }
 
     private void cancel(PromotionIntegrationEvent event, JsonNode data) {
         String reservationId = text(data, "reservationPublicId", "reservationId");
         require(reservationId, "reservationPublicId");
-        TransitionRequest request = new TransitionRequest();
-        request.setReason("Booking cancelled event " + event.getEventId());
-        reservationService.cancel(reservationId, request, event.getEventId(), "BOOKING_SERVICE");
+        TransitionRequest request = new TransitionRequest(
+                "Booking cancelled event " + event.getEventId());
+        reservationService.release(reservationId, request, event.getEventId(), "BOOKING_SERVICE");
     }
 
     private void invalidateRuntimeCaches() {

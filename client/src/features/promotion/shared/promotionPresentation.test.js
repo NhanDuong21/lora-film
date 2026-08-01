@@ -1,26 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CREATABLE_CAMPAIGN_TYPES,
+  ACTION_TYPES,
   friendlyPromotionError,
+  PROMOTION_TYPES,
 } from './promotionPresentation';
 
 describe('promotionPresentation', () => {
-  it('offers only campaign types supported by the checkout runtime', () => {
-    expect(CREATABLE_CAMPAIGN_TYPES).toEqual(['COUPON', 'VOUCHER']);
-    expect(CREATABLE_CAMPAIGN_TYPES).not.toContain('AUTOMATIC_DISCOUNT');
+  it('exposes the unified promotion and action types', () => {
+    expect(PROMOTION_TYPES).toEqual(['AUTO', 'VOUCHER', 'COUPON']);
+    expect(ACTION_TYPES).toContain('FULL_DISCOUNT');
   });
 
-  it('explains the unsupported automatic discount response in business language', () => {
+  it('explains an unavailable coupon in business language', () => {
     const error = {
       response: {
         data: {
-          message: 'AUTOMATIC_DISCOUNT is not supported by the current checkout runtime',
+          message: 'Coupon is invalid or unavailable',
         },
       },
     };
 
-    expect(friendlyPromotionError(error)).toBe(
-      'Checkout hiện chưa hỗ trợ chiến dịch giảm giá tự động. Hãy dùng chiến dịch Coupon hoặc Voucher.'
-    );
+    expect(friendlyPromotionError(error)).toBe('Coupon không hợp lệ hoặc đã hết hiệu lực');
   });
 });

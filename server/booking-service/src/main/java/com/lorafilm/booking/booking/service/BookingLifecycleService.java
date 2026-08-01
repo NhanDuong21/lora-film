@@ -4,6 +4,7 @@ import com.lorafilm.booking.audit.service.BookingAuditService;
 import com.lorafilm.booking.audit.service.BookingOperationLogService;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
+import com.lorafilm.booking.booking.client.PromotionReservationClient;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.reservation.entity.SeatReservation;
@@ -47,6 +48,7 @@ public class BookingLifecycleService {
     private final BookingMetricsManager metricsManager;
     private SeatAvailabilityEventService seatAvailabilityEventService;
     private ScoreRedemptionClient scoreRedemptionClient;
+    private PromotionReservationClient promotionReservationClient;
 
     public BookingLifecycleService(
             BookingRepository bookingRepository,
@@ -79,6 +81,11 @@ public class BookingLifecycleService {
     @Autowired(required = false)
     public void setScoreRedemptionClient(ScoreRedemptionClient service) {
         this.scoreRedemptionClient = service;
+    }
+
+    @Autowired(required = false)
+    public void setPromotionReservationClient(PromotionReservationClient service) {
+        this.promotionReservationClient = service;
     }
 
     @Transactional
@@ -225,6 +232,26 @@ public class BookingLifecycleService {
             }
         }
 
+        if ((targetStatus == BookingStatus.CANCELLED || targetStatus == BookingStatus.EXPIRED)
+                && saved.getPromotionReservationPublicId() != null
+                && promotionReservationClient != null) {
+            String settlementSource = targetStatus.name() + ":" + saved.getPublicId();
+            try {
+                promotionReservationClient.release(
+                        saved.getPromotionReservationPublicId(),
+                        reason == null ? targetStatus.name() : reason,
+                        stablePromotionKey("release", settlementSource));
+            } catch (RuntimeException exception) {
+                // Promotion reservations also expire independently, so Booking
+                // cancellation must not be rolled back by a transient outage.
+                log.warn(
+                        "Could not immediately release Promotion reservation for {} Booking {}",
+                        targetStatus,
+                        saved.getPublicId(),
+                        exception);
+            }
+        }
+
         if (targetStatus == BookingStatus.CANCELLED
                 || targetStatus == BookingStatus.EXPIRED) {
             ticketService.deleteTickets(saved.getId());
@@ -241,6 +268,11 @@ public class BookingLifecycleService {
     }
 
     private String stableScoreKey(String purpose, String source) {
+        return purpose + "-" + UUID.nameUUIDFromBytes(
+                (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String stablePromotionKey(String purpose, String source) {
         return purpose + "-" + UUID.nameUUIDFromBytes(
                 (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
     }

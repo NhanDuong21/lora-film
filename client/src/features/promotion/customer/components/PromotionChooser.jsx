@@ -71,7 +71,7 @@ const evaluateVoucher = (voucher, bookingAmount) => {
     Number(conditions?.minimumOrderAmount ?? conditions?.minOrderAmount ?? 0)
   );
 
-  if (!['ACTIVE', 'ISSUED'].includes(status)) {
+  if (!['ACTIVE', 'ISSUED', 'AVAILABLE'].includes(status)) {
     return { eligible: false, reason: labelFor(status), estimate: 0 };
   }
   if (Number.isFinite(validFrom) && validFrom > now) {

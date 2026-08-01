@@ -1,10 +1,6 @@
 package com.project.promotionservice.promotion.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.promotionservice.benefit.enums.BenefitEnums.CouponStatus;
-import com.project.promotionservice.benefit.enums.BenefitEnums.VoucherStatus;
-import com.project.promotionservice.benefit.repository.CouponRepository;
-import com.project.promotionservice.benefit.repository.VoucherRepository;
 import com.project.promotionservice.common.exception.ErrorCode;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
@@ -19,17 +15,17 @@ import com.project.promotionservice.promotion.dto.response.CampaignDetailRespons
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.entity.ApprovalHistory;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
-import com.project.promotionservice.promotion.entity.PromotionRule;
+import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.enums.ApprovalAction;
 import com.project.promotionservice.promotion.enums.ApprovalTargetType;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
-import com.project.promotionservice.promotion.enums.CampaignType;
+import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
 import com.project.promotionservice.promotion.repository.CampaignSpecification;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
-import com.project.promotionservice.promotion.repository.PromotionRuleRepository;
+import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 import com.project.promotionservice.promotion.enums.LegalStatus;
@@ -56,9 +52,7 @@ import java.util.regex.Pattern;
 public class CampaignServiceImpl implements CampaignService {
 
     private final PromotionCampaignRepository campaignRepository;
-    private final PromotionRuleRepository ruleRepository;
-    private final CouponRepository couponRepository;
-    private final VoucherRepository voucherRepository;
+    private final PromotionRepository promotionRepository;
     private final ApprovalHistoryRepository approvalHistoryRepository;
     private final PromotionOutboxEventRepository outboxEventRepository;
     private final CampaignMapper campaignMapper;
@@ -68,9 +62,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignConfigurationPolicy configurationPolicy;
 
     public CampaignServiceImpl(PromotionCampaignRepository campaignRepository,
-                               PromotionRuleRepository ruleRepository,
-                               CouponRepository couponRepository,
-                               VoucherRepository voucherRepository,
+                               PromotionRepository promotionRepository,
                                ApprovalHistoryRepository approvalHistoryRepository,
                                PromotionOutboxEventRepository outboxEventRepository,
                                CampaignMapper campaignMapper,
@@ -79,9 +71,7 @@ public class CampaignServiceImpl implements CampaignService {
                                PromotionOutboxEnvelopeFactory envelopeFactory,
                                CampaignConfigurationPolicy configurationPolicy) {
         this.campaignRepository = campaignRepository;
-        this.ruleRepository = ruleRepository;
-        this.couponRepository = couponRepository;
-        this.voucherRepository = voucherRepository;
+        this.promotionRepository = promotionRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.campaignMapper = campaignMapper;
@@ -94,12 +84,6 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional
     public CampaignResponse createCampaign(CampaignCreateRequest request, String creator) {
-        if (request.getCampaignType() == CampaignType.AUTOMATIC_DISCOUNT) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "AUTOMATIC_DISCOUNT is not supported by the current checkout runtime",
-                    HttpStatus.CONFLICT);
-        }
         if (request.getEndAt().isBefore(request.getStartAt())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "End date must be after start date", HttpStatus.BAD_REQUEST);
         }
@@ -182,7 +166,7 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaign.getDeletedAt() != null) {
             return;
         }
-        if (reservationRepository.countByCampaignPublicIdAndStatusAndDeletedAtIsNull(
+        if (reservationRepository.countByCampaignAndStatus(
                 publicId, ReservationStatus.ACTIVE) > 0) {
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST_PARAMETER,
@@ -208,9 +192,10 @@ public class CampaignServiceImpl implements CampaignService {
             throw new BusinessException(ErrorCode.NOT_FOUND, "Campaign has been deleted", HttpStatus.NOT_FOUND);
         }
 
-        List<PromotionRule> rules = ruleRepository.findByCampaignPublicIdAndDeletedAtIsNull(publicId);
+        List<Promotion> promotions = promotionRepository
+                .findByCampaignPublicIdAndDeletedAtIsNullOrderByPriorityAsc(publicId);
 
-        return campaignMapper.toDetailResponse(campaign, rules);
+        return campaignMapper.toDetailResponse(campaign, promotions);
     }
 
     @Override
@@ -318,9 +303,9 @@ public class CampaignServiceImpl implements CampaignService {
 
         campaign.setPublishedAt(now);
         campaign.setUpdatedBy(user);
-        PromotionCampaign saved = campaignRepository.save(campaign);
+        PromotionCampaign saved = campaignRepository.saveAndFlush(campaign);
         if (saved.getStatus() == CampaignStatus.ACTIVE) {
-            activateDraftCoupons(saved.getPublicId(), now, user);
+            activateDraftPromotions(saved.getPublicId(), now, user);
         }
 
         recordOutboxEvent("CAMPAIGN", saved.getPublicId(), "CAMPAIGN_PUBLISHED", campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
@@ -361,8 +346,8 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setStatus(CampaignStatus.ACTIVE);
 
         campaign.setUpdatedBy(user);
-        PromotionCampaign saved = campaignRepository.save(campaign);
-        activateDraftCoupons(saved.getPublicId(), now, user);
+        PromotionCampaign saved = campaignRepository.saveAndFlush(campaign);
+        activateDraftPromotions(saved.getPublicId(), now, user);
 
         recordOutboxEvent("CAMPAIGN", saved.getPublicId(), "CAMPAIGN_ACTIVATED", campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
 
@@ -527,36 +512,25 @@ public class CampaignServiceImpl implements CampaignService {
     }
 
     private void requireConfiguredBenefit(PromotionCampaign campaign) {
-        boolean configured = switch (campaign.getCampaignType()) {
-            case COUPON -> couponRepository.existsConfiguredForCampaign(
-                    campaign.getPublicId(),
-                    EnumSet.of(CouponStatus.DRAFT, CouponStatus.ACTIVE),
-                    campaign.getStartAt(),
-                    campaign.getEndAt());
-            case VOUCHER -> voucherRepository.existsConfiguredForCampaign(
-                    campaign.getPublicId(),
-                    EnumSet.of(VoucherStatus.ISSUED, VoucherStatus.ACTIVE),
-                    campaign.getStartAt(),
-                    campaign.getEndAt());
-            case AUTOMATIC_DISCOUNT -> throw new BusinessException(
-                    ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "AUTOMATIC_DISCOUNT is not supported by the current checkout runtime",
-                    HttpStatus.CONFLICT);
-        };
+        boolean configured = promotionRepository.existsConfiguredForCampaign(
+                campaign.getPublicId(),
+                EnumSet.of(PromotionStatus.DRAFT, PromotionStatus.ACTIVE,
+                        PromotionStatus.PAUSED),
+                campaign.getStartAt(),
+                campaign.getEndAt());
         if (!configured) {
-            String benefit = campaign.getCampaignType() == CampaignType.COUPON
-                    ? "coupon" : "voucher";
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "Campaign must have at least one configured " + benefit
-                            + " whose validity overlaps the campaign period",
+                    "Campaign must have at least one configured promotion whose validity overlaps the campaign period",
                     HttpStatus.CONFLICT);
         }
     }
 
-    private void activateDraftCoupons(String campaignPublicId, Instant now, String actor) {
-        couponRepository.activateDraftCoupons(
-                campaignPublicId, CouponStatus.DRAFT, CouponStatus.ACTIVE, now, actor);
+    private void activateDraftPromotions(
+            String campaignPublicId, Instant now, String actor) {
+        promotionRepository.activateDraftPromotions(
+                campaignPublicId, PromotionStatus.DRAFT,
+                PromotionStatus.ACTIVE, now, actor);
     }
 
     private String slugify(String text) {

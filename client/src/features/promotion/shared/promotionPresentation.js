@@ -1,27 +1,19 @@
-export const CAMPAIGN_TYPES = ['COUPON', 'VOUCHER', 'AUTOMATIC_DISCOUNT'];
-export const CREATABLE_CAMPAIGN_TYPES = ['COUPON', 'VOUCHER'];
 export const CAMPAIGN_STATUSES = ['DRAFT', 'SCHEDULED', 'ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
 export const CAMPAIGN_APPROVAL_STATUSES = ['DRAFT', 'PENDING', 'APPROVED', 'REJECTED'];
 export const CAMPAIGN_TRANSITIONS = ['SUBMIT', 'PUBLISH', 'ACTIVATE', 'PAUSE', 'KILL_SWITCH', 'CANCEL'];
 export const LEGAL_STATUSES = ['PENDING', 'PASSED', 'FAILED'];
-export const RULE_TYPES = ['DISCOUNT_TICKET', 'DISCOUNT_COMBO', 'TIER_BENEFIT', 'HAPPY_WEDNESDAY'];
-export const COUPON_TYPES = ['PUBLIC', 'PRIVATE', 'SYSTEM', 'COMPENSATION', 'SINGLE_USE'];
-export const COUPON_STATUSES = ['DRAFT', 'ACTIVE', 'DISABLED', 'USED', 'LOCKED', 'EXPIRED', 'CANCELLED'];
-export const DISTRIBUTION_TYPES = ['PUBLIC', 'PRIVATE', 'TARGETED', 'AUTO'];
-export const VOUCHER_TYPES = ['FIXED_AMOUNT', 'PERCENTAGE', 'FREE_TICKET', 'FREE_COMBO', 'CASHBACK', 'REWARD', 'MEMBERSHIP', 'COMPENSATION'];
-export const VOUCHER_SOURCES = ['CAMPAIGN', 'MANUAL', 'BIRTHDAY', 'TIER_UPGRADE', 'POINT_REDEEM', 'COMPENSATION', 'SYSTEM'];
-export const VOUCHER_STATUSES = ['ISSUED', 'ACTIVE', 'USED', 'REVOKED', 'EXPIRED', 'CANCELLED', 'LOCKED'];
-export const REDEMPTION_TYPES = ['COUPON', 'VOUCHER'];
-export const REDEMPTION_STATUSES = ['SUCCESS', 'CONFIRMED', 'ROLLED_BACK', 'REFUNDED', 'CANCELLED'];
-export const RESERVATION_STATUSES = ['ACTIVE', 'COMPLETED', 'RELEASED', 'EXPIRED', 'CANCELLED'];
-export const COMPENSATION_TYPES = ['PAYMENT_FAILURE', 'BOOKING_FAILURE', 'SHOW_CANCELLED', 'SYSTEM_ERROR', 'CUSTOMER_SERVICE', 'MANUAL'];
-export const COMPENSATION_STATUSES = ['ISSUED', 'CANCELLED'];
-export const ACTION_TYPES = ['PERCENTAGE', 'FIXED_AMOUNT', 'FREE_TICKET', 'FREE_COMBO', 'FREE', 'CASHBACK'];
+export const PROMOTION_TYPES = ['AUTO', 'VOUCHER', 'COUPON'];
+export const PROMOTION_STATUSES = ['DRAFT', 'ACTIVE', 'PAUSED', 'DISABLED', 'EXPIRED'];
+export const WALLET_STATUSES = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'];
+export const RESERVATION_STATUSES = ['ACTIVE', 'CONFIRMED', 'RELEASED', 'EXPIRED'];
+export const ACTION_TYPES = ['PERCENTAGE', 'FIXED_AMOUNT', 'FULL_DISCOUNT'];
 
 export const promotionLabels = {
   COUPON: 'Coupon',
   VOUCHER: 'Voucher',
-  AUTOMATIC_DISCOUNT: 'Tự động giảm giá',
+  AUTO: 'Tự động',
+  VOUCHER: 'Voucher',
+  COUPON: 'Coupon',
   DRAFT: 'Đang soạn',
   SCHEDULED: 'Đã lên lịch',
   ACTIVE: 'Đang áp dụng',
@@ -33,51 +25,26 @@ export const promotionLabels = {
   REJECTED: 'Từ chối',
   PASSED: 'Đạt pháp lý',
   FAILED: 'Không đạt',
-  DISCOUNT_TICKET: 'Giảm tiền vé',
-  DISCOUNT_COMBO: 'Giảm combo',
-  TIER_BENEFIT: 'Ưu đãi hạng thẻ',
-  HAPPY_WEDNESDAY: 'Happy Wednesday',
-  PUBLIC: 'Công khai',
-  PRIVATE: 'Riêng tư',
-  SYSTEM: 'Hệ thống',
-  COMPENSATION: 'Bồi thường',
-  SINGLE_USE: 'Dùng một lần',
-  TARGETED: 'Theo nhóm khách',
-  AUTO: 'Tự động',
   DISABLED: 'Vô hiệu hóa',
+  AVAILABLE: 'Có thể sử dụng',
   USED: 'Đã dùng',
   LOCKED: 'Đang khóa',
   EXPIRED: 'Hết hạn',
-  ISSUED: 'Đã phát hành',
   REVOKED: 'Đã thu hồi',
   FIXED_AMOUNT: 'Giảm tiền cố định',
   PERCENTAGE: 'Giảm phần trăm',
-  FREE_TICKET: 'Miễn phí vé',
-  FREE_COMBO: 'Miễn phí combo',
-  CASHBACK: 'Hoàn tiền',
-  REWARD: 'Phần thưởng',
-  MEMBERSHIP: 'Thành viên',
-  MANUAL: 'Thủ công',
-  BIRTHDAY: 'Sinh nhật',
-  TIER_UPGRADE: 'Nâng hạng',
-  POINT_REDEEM: 'Đổi điểm',
+  FULL_DISCOUNT: 'Miễn phí toàn bộ',
   SUCCESS: 'Thành công',
   CONFIRMED: 'Đã xác nhận',
   ROLLED_BACK: 'Đã hoàn tác',
   REFUNDED: 'Đã hoàn tiền',
   RELEASED: 'Đã giải phóng',
-  PAYMENT_FAILURE: 'Lỗi thanh toán',
-  BOOKING_FAILURE: 'Lỗi đặt vé',
-  SHOW_CANCELLED: 'Hủy suất chiếu',
-  SYSTEM_ERROR: 'Lỗi hệ thống',
-  CUSTOMER_SERVICE: 'CSKH',
   SUBMIT: 'Gửi duyệt',
   PUBLISH: 'Công bố',
   ACTIVATE: 'Kích hoạt',
   PAUSE: 'Tạm dừng',
   KILL_SWITCH: 'Dừng khẩn cấp',
   CANCEL: 'Hủy',
-  FREE: 'Miễn phí toàn bộ',
 };
 
 export const labelFor = value => promotionLabels[value] || value || 'Chưa xác định';
@@ -121,7 +88,7 @@ export const normalizePage = (page, fallbackSize = 20) => ({
 
 export const badgeClass = status => {
   const normalized = String(status || '').toUpperCase();
-  if (['ACTIVE', 'APPROVED', 'PASSED', 'SUCCESS', 'CONFIRMED', 'COMPLETED', 'ISSUED'].includes(normalized)) {
+  if (['ACTIVE', 'AVAILABLE', 'APPROVED', 'PASSED', 'SUCCESS', 'CONFIRMED', 'COMPLETED'].includes(normalized)) {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
   }
   if (['DRAFT', 'PENDING', 'SCHEDULED', 'LOCKED'].includes(normalized)) {
@@ -177,10 +144,8 @@ export const friendlyPromotionError = error => {
   return message
     .replace('Invalid request parameters', 'Thông tin nhập chưa hợp lệ')
     .replace('Access denied', 'Bạn chưa có quyền thực hiện thao tác này')
-    .replace(
-      'AUTOMATIC_DISCOUNT is not supported by the current checkout runtime',
-      'Checkout hiện chưa hỗ trợ chiến dịch giảm giá tự động. Hãy dùng chiến dịch Coupon hoặc Voucher.'
-    );
+    .replace('Promotion is not claimable', 'Voucher này hiện không thể nhận')
+    .replace('Coupon is invalid or unavailable', 'Coupon không hợp lệ hoặc đã hết hiệu lực');
 };
 
 export const fieldErrors = error => {

@@ -81,18 +81,36 @@ export const getOrCreateScoreRedemptionKey = (bookingId, points) => {
 
 export const finalizeCheckout = async (bookingId, {
   scorePoints = 0,
-  scoreIdempotencyKey = null
+  scoreIdempotencyKey = null,
+  selectedUserPromotionPublicIds = [],
+  couponCode = null
 } = {}) => {
   const response = await apiClient.post(
     `/api/bookings/${bookingId}/finalize-checkout`,
     {
       scorePoints,
-      ...(scorePoints > 0 && scoreIdempotencyKey ? { scoreIdempotencyKey } : {})
+      ...(scorePoints > 0 && scoreIdempotencyKey ? { scoreIdempotencyKey } : {}),
+      selectedUserPromotionPublicIds,
+      ...(couponCode ? { couponCode } : {})
     }
   );
   const booking = response.data.data;
   emitBookingChanged({ action: "FINALIZED", publicId: booking?.publicId || bookingId });
   return booking;
+};
+
+export const previewBookingPromotions = async (bookingId, {
+  selectedUserPromotionPublicIds = [],
+  couponCode = null
+} = {}) => {
+  const response = await apiClient.post(
+    `/api/bookings/${bookingId}/promotions/preview`,
+    {
+      selectedUserPromotionPublicIds,
+      ...(couponCode ? { couponCode } : {})
+    }
+  );
+  return response.data.data;
 };
 
 /**

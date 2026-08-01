@@ -2,7 +2,6 @@ package com.project.promotionservice.promotion.dto.response;
 
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
-import com.project.promotionservice.promotion.enums.CampaignType;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 
 import java.math.BigDecimal;
@@ -15,7 +14,6 @@ public class CampaignResponse {
     private String name;
     private String slug;
     private String description;
-    private CampaignType campaignType;
     private CampaignStatus status;
     private CampaignApprovalStatus approvalStatus;
     private LegalStatus legalStatus;
@@ -87,14 +85,6 @@ public class CampaignResponse {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public CampaignType getCampaignType() {
-        return campaignType;
-    }
-
-    public void setCampaignType(CampaignType campaignType) {
-        this.campaignType = campaignType;
     }
 
     public CampaignStatus getStatus() {

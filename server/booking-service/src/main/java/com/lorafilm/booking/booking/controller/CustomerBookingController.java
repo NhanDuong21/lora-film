@@ -2,9 +2,11 @@ package com.lorafilm.booking.booking.controller;
 
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
+import com.lorafilm.booking.booking.dto.request.PromotionSelectionRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
+import com.lorafilm.booking.booking.dto.response.PromotionQuoteResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSummaryResponse;
 import com.lorafilm.booking.booking.enums.BookingStatus;
@@ -192,6 +194,18 @@ public class CustomerBookingController {
             @Valid @RequestBody(required = false) FinalizeCheckoutRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Checkout finalized successfully", bookingService.finalizeCheckout(publicId, request)));
+    }
+
+    @PostMapping("/{publicId}/promotions/preview")
+    @Operation(summary = "Preview the best promotion set for this Booking")
+    public ResponseEntity<ApiResponse<PromotionQuoteResponse>> previewPromotions(
+            @PathVariable
+            @Pattern(regexp = ValidationConstants.UUID_PATTERN, message = "publicId must be a valid UUID")
+            String publicId,
+            @Valid @RequestBody(required = false) PromotionSelectionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Promotion preview calculated",
+                bookingService.previewPromotions(publicId, request)));
     }
 
     @PostMapping("/{publicId}/payment")

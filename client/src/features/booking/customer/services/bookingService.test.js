@@ -153,7 +153,8 @@ describe('bookingService customer history normalization', () => {
       '/api/bookings/booking-1/finalize-checkout',
       {
         scorePoints: 50,
-        scoreIdempotencyKey: 'score-key-1'
+        scoreIdempotencyKey: 'score-key-1',
+        selectedUserPromotionPublicIds: []
       }
     );
   });

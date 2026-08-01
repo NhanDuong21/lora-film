@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
+import com.lorafilm.booking.booking.client.PromotionReservationClient;
 import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
@@ -67,6 +68,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     private final BookingRefundRepository refundRepository;
     private final BookingLifecycleService lifecycleService;
     private ScoreRedemptionClient scoreRedemptionClient;
+    private PromotionReservationClient promotionReservationClient;
 
     @Autowired
     public InternalBookingPaymentServiceImpl(
@@ -130,6 +132,11 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     @Autowired(required = false)
     public void setScoreRedemptionClient(ScoreRedemptionClient service) {
         this.scoreRedemptionClient = service;
+    }
+
+    @Autowired(required = false)
+    public void setPromotionReservationClient(PromotionReservationClient service) {
+        this.promotionReservationClient = service;
     }
 
     @Override
@@ -438,6 +445,24 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                     "LATE_OR_NON_PENDING_SUCCESS");
         }
 
+        if (booking.getPromotionReservationPublicId() != null) {
+            if (promotionReservationClient == null) {
+                throw new BusinessException(
+                        "PROMOTION_SERVICE_UNAVAILABLE",
+                        "Promotion reservation cannot be confirmed",
+                        HttpStatus.BAD_GATEWAY);
+            }
+            String paymentPublicId = blankToNull(request.paymentPublicId());
+            if (paymentPublicId == null) {
+                paymentPublicId = UUID.nameUUIDFromBytes(
+                        ("PAYMENT:" + request.paymentId()).getBytes(StandardCharsets.UTF_8)).toString();
+            }
+            promotionReservationClient.confirm(
+                    booking.getPromotionReservationPublicId(),
+                    paymentPublicId,
+                    stablePromotionKey("confirm", request.eventId()));
+        }
+
         booking.setPaymentStatus(PaymentStatus.SUCCESS);
         booking.setPaymentReference(reference(request));
         booking.setPaymentMethodSnapshot(preferredPaymentLabel(request));
@@ -477,6 +502,11 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
         if ("TIMEOUT".equals(result)) {
             metricsManager.incrementPaymentFailed();
         }
+    }
+
+    private String stablePromotionKey(String purpose, String source) {
+        return purpose + "-" + UUID.nameUUIDFromBytes(
+                (purpose + ":" + source).getBytes(StandardCharsets.UTF_8));
     }
 
     private void applyRefundSuccess(

@@ -160,6 +160,10 @@ export default function Header() {
       navigate('/movies');
       return;
     }
+    if (optionName === 'Khuyến mãi và Sự kiện') {
+      navigate('/promotions');
+      return;
+    }
     setInfoModalContent(optionName);
   };
 
@@ -287,7 +291,7 @@ export default function Header() {
               onClick={() => handleInfoOptionClick('Khuyến mãi và Sự kiện')}
               className={`min-h-11 rounded-lg px-1 text-[13px] font-bold whitespace-nowrap text-zinc-300 transition-colors hover:text-brand-orange ${focusRingClass}`}
             >
-              Sự Kiện
+              Khuyến Mãi
             </button>
 
             <NavDropdown
@@ -646,7 +650,7 @@ export default function Header() {
                     onClick={() => handleInfoOptionClick('Khuyến mãi và Sự kiện')}
                     className={dropdownItemClass}
                   >
-                    Sự kiện
+                    Khuyến mãi
                   </button>
                   <button
                     type="button"

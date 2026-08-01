@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
 import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
+import com.lorafilm.booking.booking.client.PromotionReservationClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
+import com.lorafilm.booking.booking.dto.response.PromotionQuoteResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.entity.BookingSnapshot;
@@ -94,6 +96,8 @@ class BookingServiceTest {
     private com.lorafilm.booking.booking.service.BookingSnapshotService bookingSnapshotService;
     @Mock
     private ScoreRedemptionClient scoreRedemptionClient;
+    @Mock
+    private PromotionReservationClient promotionReservationClient;
 
         @Spy
         private BookingMapper bookingMapper = new BookingMapper();
@@ -123,6 +127,19 @@ class BookingServiceTest {
                 bookingTicketService,
                 bookingSnapshotService);
         bookingService.setScoreRedemptionClient(scoreRedemptionClient);
+        bookingService.setPromotionReservationClient(promotionReservationClient);
+        lenient().when(promotionReservationClient.preview(any()))
+                .thenAnswer(invocation -> {
+                    PromotionReservationClient.CheckoutCommand command = invocation.getArgument(0);
+                    return new PromotionQuoteResponse(
+                            false,
+                            command.originalAmount(),
+                            BigDecimal.ZERO.setScale(2),
+                            command.originalAmount(),
+                            command.currency(),
+                            List.of(),
+                            List.of());
+                });
         lenient().when(showtimeClient.getSeatLayout(anyLong()))
                 .thenReturn(nonAdjacentDefaultSeatLayout());
     }

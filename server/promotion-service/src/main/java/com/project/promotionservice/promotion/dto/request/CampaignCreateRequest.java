@@ -1,7 +1,5 @@
 package com.project.promotionservice.promotion.dto.request;
 
-import com.project.promotionservice.promotion.enums.CampaignType;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -26,9 +24,6 @@ public class CampaignCreateRequest {
     private String name;
 
     private String description;
-
-    @NotNull(message = "campaignType is required")
-    private CampaignType campaignType;
 
     @NotNull(message = "priority is required")
     @Min(value = 0, message = "priority must be >= 0")
@@ -100,14 +95,6 @@ public class CampaignCreateRequest {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public CampaignType getCampaignType() {
-        return campaignType;
-    }
-
-    public void setCampaignType(CampaignType campaignType) {
-        this.campaignType = campaignType;
     }
 
     public Integer getPriority() {

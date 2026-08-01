@@ -22,6 +22,7 @@ import { customerScoreRoutes } from "@/features/score/customer/routes";
 import { adminScoreRoutes } from "@/features/score/admin/routes";
 import { adminNotificationRoutes } from "@/features/notifications/admin/routes";
 import { adminPromotionRoutes } from "@/features/promotion/admin/routes";
+import { customerPromotionRoutes } from "@/features/promotion/customer/routes";
 import {
     adminPaymentRoutes,
     customerPaymentRoutes,
@@ -63,6 +64,9 @@ function AppRoutes() {
                     ))}
                     {customerScoreRoutes.map((route, index) => (
                         <Route key={`score-cust-${index}`} path={route.path} element={route.element} />
+                    ))}
+                    {customerPromotionRoutes.map((route, index) => (
+                        <Route key={`promo-cust-${index}`} path={route.path} element={route.element} />
                     ))}
                     {customerPaymentRoutes.map((route, index) => (
                         <Route key={`payment-cust-${index}`} path={route.path} element={route.element} />
