@@ -28,5 +28,6 @@ public record PromotionUpsertRequest(
         @Min(1) Integer maxRedemptions,
         @NotNull @Min(1) Integer maxRedemptionsPerUser,
         @NotNull Instant validFrom,
-        @NotNull Instant validTo) {
+        @NotNull Instant validTo,
+        @Size(max = 36) String clonedFromPublicId) {
 }

@@ -30,7 +30,8 @@ const adminPromotionService = {
   deletePromotion: async id => unwrap(await apiClient.delete(`/api/admin/promotions/${id}`)),
   activatePromotion: async id => unwrap(await apiClient.post(`/api/admin/promotions/${id}/activate`)),
   pausePromotion: async id => unwrap(await apiClient.post(`/api/admin/promotions/${id}/pause`)),
-  clonePromotion: async id => unwrap(await apiClient.post(`/api/admin/promotions/${id}/clone`)),
+  getCloneDraft: async id =>
+    unwrap(await apiClient.get(`/api/admin/promotions/${id}/clone-draft`)),
   issuePromotion: async (id, userPublicIds) => unwrap(await apiClient.post(
     `/api/admin/promotions/${id}/issue`, { userPublicIds }
   )),

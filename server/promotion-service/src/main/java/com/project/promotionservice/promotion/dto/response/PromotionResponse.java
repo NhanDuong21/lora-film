@@ -9,6 +9,7 @@ import java.time.Instant;
 public record PromotionResponse(
         String publicId,
         String campaignPublicId,
+        String clonedFromPublicId,
         PromotionType promotionType,
         String code,
         String name,

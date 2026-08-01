@@ -18,6 +18,9 @@ public class Promotion extends BaseAuditableEntity {
     @Column(name = "campaign_public_id", length = 36)
     private String campaignPublicId;
 
+    @Column(name = "cloned_from_public_id", length = 36)
+    private String clonedFromPublicId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "promotion_type", length = 30, nullable = false)
     private PromotionType promotionType;
@@ -74,6 +77,14 @@ public class Promotion extends BaseAuditableEntity {
 
     public void setCampaignPublicId(String campaignPublicId) {
         this.campaignPublicId = campaignPublicId;
+    }
+
+    public String getClonedFromPublicId() {
+        return clonedFromPublicId;
+    }
+
+    public void setClonedFromPublicId(String clonedFromPublicId) {
+        this.clonedFromPublicId = clonedFromPublicId;
     }
 
     public PromotionType getPromotionType() {

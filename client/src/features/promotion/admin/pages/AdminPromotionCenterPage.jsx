@@ -177,6 +177,7 @@ export default function AdminPromotionCenterPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [modal, setModal] = useState(null);
+  const [highlightedPromotionId, setHighlightedPromotionId] = useState(null);
 
   const selectedTab =
     promotionTabs.find((item) => item.key === tab) || promotionTabs[0];
@@ -219,7 +220,6 @@ export default function AdminPromotionCenterPage() {
             keyword: query || undefined,
             status: status || undefined,
             type: selectedTab.type,
-            publicVisible: selectedTab.type === "VOUCHER" ? true : undefined,
             campaignPublicId: campaignFilter || undefined,
             page,
             size: 12,
@@ -251,16 +251,60 @@ export default function AdminPromotionCenterPage() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    if (!highlightedPromotionId) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-promotion-id="${highlightedPromotionId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const timer = window.setTimeout(
+      () => setHighlightedPromotionId(null),
+      2000,
+    );
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [highlightedPromotionId]);
+
   const current = view === "campaigns" ? campaigns : promotions;
 
-  const run = async (action, success, refreshCampaigns = false) => {
+  const run = async (
+    action,
+    success,
+    refreshCampaigns = false,
+    rethrow = false,
+  ) => {
     setBusy(true);
     try {
-      await action();
+      const result = await action();
       setModal(null);
       setMessage({ kind: "success", text: success });
       if (refreshCampaigns) await loadCampaignOptions();
       await load();
+      return result;
+    } catch (error) {
+      setMessage({ kind: "error", text: errorText(error) });
+      if (rethrow) throw error;
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openCloneModal = async (item) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const draft = await adminPromotionService.getCloneDraft(item.publicId);
+      setModal({
+        type: "promotion",
+        mode: "clone",
+        record: draft,
+        promotionType: draft.promotionType,
+        cloneWarning: !draft.sourceCampaignEditable,
+      });
     } catch (error) {
       setMessage({ kind: "error", text: errorText(error) });
     } finally {
@@ -375,6 +419,7 @@ export default function AdminPromotionCenterPage() {
                 setModal({
                   type: view === "campaigns" ? "campaign" : "promotion",
                   promotionType: selectedTab.type,
+                  mode: view === "campaigns" ? undefined : "create",
                 })
               }
               className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
@@ -546,6 +591,7 @@ export default function AdminPromotionCenterPage() {
               rows={promotions.content}
               campaigns={campaignOptions}
               busy={busy}
+              highlightedPromotionId={highlightedPromotionId}
               onDetail={(item) =>
                 setModal({
                   type: "promotion-detail",
@@ -555,17 +601,13 @@ export default function AdminPromotionCenterPage() {
               onEdit={(item) =>
                 setModal({
                   type: "promotion",
+                  mode: "edit",
                   record: item,
                   promotionType: item.promotionType,
                 })
               }
               onIssue={(item) => setModal({ type: "issue", record: item })}
-              onClone={(item) =>
-                run(
-                  () => adminPromotionService.clonePromotion(item.publicId),
-                  "Đã nhân bản promotion.",
-                )
-              }
+              onClone={openCloneModal}
               onDelete={(item) =>
                 runConfirmed({
                   title: "Xóa ưu đãi?",
@@ -627,22 +669,36 @@ export default function AdminPromotionCenterPage() {
       {modal?.type === "promotion" && (
         <PromotionModal
           record={modal.record}
+          mode={modal.mode}
+          cloneWarning={modal.cloneWarning}
           promotionType={modal.promotionType}
           campaigns={campaignOptions}
           busy={busy}
           onClose={() => setModal(null)}
-          onRefreshCampaigns={() => void loadCampaignOptions()}
-          onSave={(payload, editing) =>
+          onRefreshCampaigns={loadCampaignOptions}
+          onCreateCampaign={() => setModal({ type: "campaign" })}
+          onSave={(payload, mode) =>
             run(
               () =>
-                editing
+                mode === "edit"
                   ? adminPromotionService.updatePromotion(
                       modal.record.publicId,
                       payload,
                     )
                   : adminPromotionService.createPromotion(payload),
-              editing ? "Đã cập nhật promotion." : "Đã tạo promotion.",
-            )
+              mode === "edit"
+                ? "Đã cập nhật promotion."
+                : mode === "clone"
+                  ? "Đã tạo bản sao promotion."
+                  : "Đã tạo promotion.",
+              false,
+              true,
+            ).then((result) => {
+              if (mode === "clone" && result?.publicId) {
+                setHighlightedPromotionId(result.publicId);
+              }
+              return result;
+            })
           }
         />
       )}
@@ -654,6 +710,7 @@ export default function AdminPromotionCenterPage() {
           onEdit={(item) =>
             setModal({
               type: "promotion",
+              mode: "edit",
               record: item,
               promotionType: item.promotionType,
             })
@@ -848,6 +905,7 @@ function PromotionTable({
   rows,
   campaigns,
   busy,
+  highlightedPromotionId,
   onDetail,
   onEdit,
   onIssue,
@@ -879,6 +937,7 @@ function PromotionTable({
         {rows.map((row) => (
           <tr
             key={row.publicId}
+            data-promotion-id={row.publicId}
             tabIndex={0}
             role="button"
             aria-label={`Xem chi tiết ${row.name}`}
@@ -890,7 +949,7 @@ function PromotionTable({
                 onDetail(row);
               }
             }}
-            className="cursor-pointer hover:bg-zinc-900/70 focus:outline-none focus:ring-1 focus:ring-orange-500/60"
+            className={`cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-orange-500/60 ${row.publicId === highlightedPromotionId ? "bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/50" : "hover:bg-zinc-900/70"}`}
           >
             <td className="max-w-xs px-4 py-4">
               <p className="font-bold text-white">{row.name}</p>
@@ -1768,11 +1827,15 @@ const generatedCode = (type) => {
   return `${prefix}-${date}-${token}`;
 };
 
+const isEditableCampaignOption = (item) =>
+  item.item?.status === "DRAFT" &&
+  ["DRAFT", "REJECTED"].includes(item.item?.approvalStatus);
+
 function CampaignPicker({ value, campaigns, onChange, onRefresh }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const eligible = campaigns.filter(
-    (item) => item.item?.status === "DRAFT" || item.value === value,
+    (item) => isEditableCampaignOption(item) || item.value === value,
   );
   const matches = eligible.filter((item) =>
     item.label.toLowerCase().includes(query.trim().toLowerCase()),
@@ -1970,18 +2033,32 @@ function EntityScopePicker({
 
 function PromotionModal({
   record,
+  mode = "create",
+  cloneWarning = false,
   promotionType,
   campaigns,
   busy,
   onClose,
   onSave,
   onRefreshCampaigns,
+  onCreateCampaign,
 }) {
-  const editing = Boolean(record);
+  const editing = mode === "edit";
+  const cloning = mode === "clone";
   const type = record?.promotionType || promotionType || "AUTO";
-  const rawConditions = parseJsonObject(record?.conditionsJson);
-  const rawActions = parseJsonObject(record?.actionsJson);
-  const rawMetadata = parseJsonObject(record?.metadataJson);
+  const initialRecord = cloning
+    ? {
+        ...record,
+        campaignPublicId: record?.suggestedCampaignPublicId || "",
+        code: record?.suggestedCode || "",
+        name: record?.suggestedName || "",
+        validFrom: record?.suggestedValidFrom,
+        validTo: record?.suggestedValidTo,
+      }
+    : record;
+  const rawConditions = parseJsonObject(initialRecord?.conditionsJson);
+  const rawActions = parseJsonObject(initialRecord?.actionsJson);
+  const rawMetadata = parseJsonObject(initialRecord?.metadataJson);
   const existingAction = Array.isArray(rawActions)
     ? rawActions[0] || {}
     : rawActions;
@@ -2006,26 +2083,35 @@ function PromotionModal({
     ),
   );
   const defaultCampaign =
-    campaigns.find((item) => item.value === record?.campaignPublicId) ||
-    campaigns.find((item) => item.item?.status === "DRAFT");
+    campaigns.find((item) => item.value === initialRecord?.campaignPublicId) ||
+    (!cloning && !editing
+      ? campaigns.find(isEditableCampaignOption)
+      : undefined);
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(() => ({
-    campaignPublicId: record?.campaignPublicId || defaultCampaign?.value || "",
+    campaignPublicId:
+      initialRecord?.campaignPublicId || defaultCampaign?.value || "",
     code:
       type === "VOUCHER"
-        ? record?.code || generatedCode(type)
-        : record?.code || "",
-    name: record?.name || "",
-    description: record?.description || "",
-    priority: record?.priority ?? 100,
-    stackable: record?.stackable ?? false,
-    maxRedemptions: record?.maxRedemptions ?? "",
-    maxRedemptionsPerUser: record?.maxRedemptionsPerUser ?? 1,
+        ? cloning
+          ? initialRecord?.code || ""
+          : initialRecord?.code || generatedCode(type)
+        : initialRecord?.code || "",
+    name: initialRecord?.name || "",
+    description: initialRecord?.description || "",
+    publicVisible:
+      type === "VOUCHER"
+        ? (initialRecord?.publicVisible ?? !cloning)
+        : false,
+    priority: initialRecord?.priority ?? 100,
+    stackable: initialRecord?.stackable ?? false,
+    maxRedemptions: initialRecord?.maxRedemptions ?? "",
+    maxRedemptionsPerUser: initialRecord?.maxRedemptionsPerUser ?? 1,
     validFrom: toLocalInput(
-      record?.validFrom || defaultCampaign?.item?.startAt,
+      initialRecord?.validFrom || defaultCampaign?.item?.startAt,
     ),
     validTo: toLocalInput(
-      record?.validTo ||
+      initialRecord?.validTo ||
         defaultCampaign?.item?.endAt ||
         Date.now() + 30 * 86400_000,
     ),
@@ -2061,14 +2147,27 @@ function PromotionModal({
     maxDiscountAmount: existingAction.maxDiscountAmount ?? "",
   }));
   const [formError, setFormError] = useState("");
+  const [serverFieldErrors, setServerFieldErrors] = useState({});
   const [saveConfirm, setSaveConfirm] = useState(null);
   const model = promotionModelFor(type);
   const update = (key, value) => {
     setSaveConfirm(null);
+    setServerFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
     setForm((current) => ({ ...current, [key]: value }));
   };
   const updateScope = (idsKey, optionsKey, values, selectedOptions = []) => {
     setSaveConfirm(null);
+    setServerFieldErrors((current) => {
+      if (!current.campaignPublicId) return current;
+      const next = { ...current };
+      delete next.campaignPublicId;
+      return next;
+    });
     setForm((current) => ({
       ...current,
       [idsKey]: values,
@@ -2078,6 +2177,7 @@ function PromotionModal({
   const currentCampaign = campaigns.find(
     (item) => item.value === form.campaignPublicId,
   )?.item;
+  const hasEditableCampaign = campaigns.some(isEditableCampaignOption);
   const steps = ["Thông tin", "Quyền lợi", "Phạm vi", "Hạn mức"];
   const chooseCampaign = (campaignPublicId) => {
     const campaign = campaigns.find(
@@ -2238,10 +2338,13 @@ function PromotionModal({
     return {
       campaignPublicId: form.campaignPublicId,
       promotionType: type,
-      code: type === "VOUCHER" ? form.code.trim() : null,
+      code:
+        type === "VOUCHER" || (cloning && type === "COUPON")
+          ? form.code.trim() || null
+          : null,
       name: form.name.trim(),
       description: form.description.trim(),
-      publicVisible: type === "VOUCHER",
+      publicVisible: type === "VOUCHER" ? form.publicVisible : false,
       priority: Number(form.priority),
       stackable: form.stackable,
       conditionsJson,
@@ -2252,6 +2355,7 @@ function PromotionModal({
         type === "AUTO" ? 1 : Number(form.maxRedemptionsPerUser),
       validFrom: fromLocalInput(form.validFrom),
       validTo: fromLocalInput(form.validTo),
+      ...(cloning ? { clonedFromPublicId: record.sourcePublicId } : {}),
     };
   };
   const goNext = () => {
@@ -2264,6 +2368,39 @@ function PromotionModal({
     setSaveConfirm(null);
     if (!validateStep(0) || !validateStep(1) || !validateStep(3)) return;
     setSaveConfirm(buildPayload());
+  };
+  const confirmSave = async () => {
+    try {
+      await onSave(saveConfirm, mode);
+    } catch (error) {
+      setSaveConfirm(null);
+      const friendlyError = errorText(error);
+      const backendMessage = String(
+        error?.response?.data?.message ||
+          error?.response?.data?.error?.message ||
+          "",
+      );
+      const campaignLocked =
+        cloning &&
+        error?.response?.status === 409 &&
+        /campaign.*locked|campaign configuration/i.test(backendMessage);
+      const duplicateCode =
+        error?.response?.status === 409 && /code/i.test(backendMessage);
+      if (campaignLocked || duplicateCode) {
+        setStep(0);
+        setServerFieldErrors((current) => ({
+          ...current,
+          ...(campaignLocked ? { campaignPublicId: friendlyError } : {}),
+          ...(duplicateCode ? { code: friendlyError } : {}),
+        }));
+      } else {
+        setFormError(friendlyError);
+      }
+      if (campaignLocked) {
+        setForm((current) => ({ ...current, campaignPublicId: "" }));
+        await onRefreshCampaigns();
+      }
+    }
   };
   const submit = (event) => {
     event.preventDefault();
@@ -2292,9 +2429,10 @@ function PromotionModal({
             maxDiscountAmount: form.maxDiscountAmount,
           },
   };
+  const modalAction = editing ? "Sửa" : cloning ? "Nhân bản" : "Tạo";
   return (
     <ModalShell
-      title={`${editing ? "Sửa" : "Tạo"} ${model.label.toLowerCase()}`}
+      title={`${modalAction} ${model.label.toLowerCase()}`}
       icon={BadgePercent}
       onClose={onClose}
     >
@@ -2314,6 +2452,23 @@ function PromotionModal({
             </p>
           </div>
         </div>
+        {cloning && (
+          <div
+            className={`mt-3 flex items-start gap-2 border-l-2 px-3 py-2 text-xs leading-5 ${cloneWarning ? "border-amber-500 bg-amber-500/[0.07] text-amber-200" : "border-sky-500 bg-sky-500/[0.07] text-sky-200"}`}
+          >
+            {cloneWarning ? (
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <Copy className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
+            <span>
+              <strong>Nhân bản từ: {record.sourceName}.</strong>{" "}
+              {cloneWarning
+                ? "Chiến dịch gốc đã khóa cấu hình. Vui lòng chọn một chiến dịch khác."
+                : "Hãy kiểm tra lại dữ liệu trước khi tạo bản sao."}
+            </span>
+          </div>
+        )}
         <div className="mt-5 grid grid-cols-4 gap-1 rounded-lg bg-zinc-950 p-1">
           {steps.map((label, index) => (
             <button
@@ -2351,7 +2506,27 @@ function PromotionModal({
                   onChange={chooseCampaign}
                   onRefresh={onRefreshCampaigns}
                 />
+                {serverFieldErrors.campaignPublicId && (
+                  <p role="alert" className="mt-1 text-[11px] text-red-400">
+                    {serverFieldErrors.campaignPublicId}
+                  </p>
+                )}
               </Field>
+              {cloning && !form.campaignPublicId && !hasEditableCampaign && (
+                <div className="border-l-2 border-amber-500 bg-amber-500/[0.05] px-3 py-3 text-xs leading-5 text-amber-200 md:col-span-2">
+                  <p>
+                    Không có chiến dịch nào đang ở trạng thái nháp để nhận bản
+                    sao này.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onCreateCampaign}
+                    className="mt-2 font-black text-orange-300 hover:text-orange-200"
+                  >
+                    Tạo chiến dịch mới
+                  </button>
+                </div>
+              )}
               <Field label="Tên hiển thị" required>
                 <input
                   required
@@ -2396,7 +2571,21 @@ function PromotionModal({
                     </IconButton>
                   </div>
                 )}
+                {serverFieldErrors.code && (
+                  <p role="alert" className="mt-1 text-[11px] text-red-400">
+                    {serverFieldErrors.code}
+                  </p>
+                )}
               </Field>
+              {type === "VOUCHER" && (
+                <div className="flex items-center pt-5">
+                  <Toggle
+                    checked={form.publicVisible}
+                    onChange={(value) => update("publicVisible", value)}
+                    label="Cho phép khách hàng tự nhận vào ví"
+                  />
+                </div>
+              )}
               <Field label="Mô tả cho khách hàng" wide>
                 <textarea
                   value={form.description}
@@ -2594,6 +2783,15 @@ function PromotionModal({
                   className={fieldClass}
                 />
               </Field>
+              {cloning && record.validityWindowShifted && (
+                <div className="flex items-start gap-2 border-l-2 border-sky-500 bg-sky-500/[0.05] px-3 py-2 text-[11px] leading-5 text-sky-200 md:col-span-2">
+                  <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Khoảng thời gian gốc đã hết hạn, hệ thống đã tự đề xuất
+                    khoảng mới.
+                  </span>
+                </div>
+              )}
               <Field label="Tổng lượt tối đa">
                 <input
                   min="1"
@@ -2670,7 +2868,9 @@ function PromotionModal({
                   <p className="text-base font-black text-white">
                     {editing
                       ? "Xác nhận lưu thay đổi promotion?"
-                      : "Xác nhận tạo promotion mới?"}
+                      : cloning
+                        ? "Xác nhận tạo bản sao promotion?"
+                        : "Xác nhận tạo promotion mới?"}
                   </p>
                   <p className="mt-2 text-xs leading-5 text-zinc-400">
                     Promotion “{saveConfirm.name}” sẽ được lưu ở trạng thái bản
@@ -2704,11 +2904,15 @@ function PromotionModal({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => onSave(saveConfirm, editing)}
+                  onClick={() => void confirmSave()}
                   className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
                 >
                   {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {editing ? "Xác nhận lưu" : "Xác nhận tạo"}
+                  {editing
+                    ? "Xác nhận lưu"
+                    : cloning
+                      ? "Tạo bản sao"
+                      : "Xác nhận tạo"}
                 </button>
               </div>
             </section>
@@ -2747,11 +2951,15 @@ function PromotionModal({
             ) : (
               <button
                 type="submit"
-                disabled={busy || campaigns.length === 0}
+                disabled={busy || !form.campaignPublicId}
                 className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
               >
                 {busy && <Loader2 className="h-4 w-4 animate-spin" />}{" "}
-                {editing ? "Lưu thay đổi" : "Tạo promotion"}
+                {editing
+                  ? "Lưu thay đổi"
+                  : cloning
+                    ? "Tạo bản sao"
+                    : "Tạo promotion"}
               </button>
             )}
           </div>

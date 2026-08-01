@@ -48,6 +48,7 @@ public class PromotionMapper {
     public PromotionResponse response(Promotion promotion) {
         return new PromotionResponse(
                 promotion.getPublicId(), promotion.getCampaignPublicId(),
+                promotion.getClonedFromPublicId(),
                 promotion.getPromotionType(), promotion.getCode(), promotion.getName(),
                 promotion.getDescription(), promotion.getStatus(),
                 Boolean.TRUE.equals(promotion.getPublicVisible()), promotion.getPriority(),

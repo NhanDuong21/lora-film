@@ -5,6 +5,7 @@ import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.common.web.SecurityActor;
 import com.project.promotionservice.promotion.dto.request.PromotionIssueRequest;
 import com.project.promotionservice.promotion.dto.request.PromotionUpsertRequest;
+import com.project.promotionservice.promotion.dto.response.PromotionCloneDraftResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionIssueResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionResponse;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
@@ -106,6 +107,14 @@ public class AdminPromotionController {
                 service.pause(publicId, SecurityActor.current())));
     }
 
+    @GetMapping("/{id}/clone-draft")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    public ResponseEntity<ApiResponse<PromotionCloneDraftResponse>> cloneDraft(
+            @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
+        return ResponseEntity.ok(ApiResponse.success(service.buildCloneDraft(publicId)));
+    }
+
+    @Deprecated(forRemoval = true)
     @PostMapping("/{id}/clone")
     @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
     public ResponseEntity<ApiResponse<PromotionResponse>> clonePromotion(

@@ -49,16 +49,23 @@ describe('adminPromotionService', () => {
     const payload = { promotionType: 'AUTO', actionsJson: { discountType: 'FULL_DISCOUNT' } };
     await adminPromotionService.createPromotion(payload);
     await adminPromotionService.activatePromotion('promotion-1');
-    await adminPromotionService.clonePromotion('promotion-1');
     await adminPromotionService.issuePromotion('promotion-1', ['user-1', 'user-2']);
 
     expect(apiClient.post).toHaveBeenCalledWith('/api/admin/promotions', payload);
     expect(apiClient.post).toHaveBeenCalledWith('/api/admin/promotions/promotion-1/activate');
-    expect(apiClient.post).toHaveBeenCalledWith('/api/admin/promotions/promotion-1/clone');
     expect(apiClient.post).toHaveBeenCalledWith(
       '/api/admin/promotions/promotion-1/issue',
       { userPublicIds: ['user-1', 'user-2'] }
     );
+  });
+
+  it('loads a clone draft without calling a mutating endpoint', async () => {
+    await adminPromotionService.getCloneDraft('promotion-1');
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/api/admin/promotions/promotion-1/clone-draft'
+    );
+    expect(apiClient.post).not.toHaveBeenCalled();
   });
 
   it('loads reservations through the unified admin route', async () => {

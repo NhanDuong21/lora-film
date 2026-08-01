@@ -31,15 +31,17 @@ class PromotionFlywayMigrationTest {
                 .baselineVersion("1")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(9);
         assertColumnDoesNotExist("promotion_campaigns", "campaign_type");
         assertColumnExists("promotions", "promotion_type");
+        assertColumnExists("promotions", "cloned_from_public_id");
         assertColumnExists("user_promotions", "promotion_public_id");
         assertColumnExists("promotion_redemptions", "user_promotion_public_id");
         assertColumnDoesNotExist("promotion_reservations", "reservation_type");
         assertColumnDoesNotExist("promotion_reservations", "coupon_public_id");
         assertColumnDoesNotExist("promotion_reservations", "voucher_public_id");
         assertIndexExists("promotions", "idx_promotion_discovery");
+        assertIndexExists("promotions", "idx_promotions_cloned_from");
         assertIndexExists("user_promotions", "uk_user_promotion_owner_template");
         assertIndexExists("promotion_reservations", "idx_reservation_history_v2");
         assertColumnExists("promotion_reservations", "reservation_scope_key");

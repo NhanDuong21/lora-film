@@ -37,6 +37,8 @@ public interface PromotionRepository
     boolean existsByPromotionTypeAndCodeIgnoreCaseAndDeletedAtIsNull(
             PromotionType promotionType, String code);
 
+    boolean existsByNameIgnoreCaseAndDeletedAtIsNull(String name);
+
     boolean existsByCampaignPublicIdAndDeletedAtIsNull(String campaignPublicId);
 
     List<Promotion> findByPublicIdInAndDeletedAtIsNull(Collection<String> publicIds);

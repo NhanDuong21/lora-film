@@ -3,6 +3,7 @@ package com.project.promotionservice.promotion.service;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.promotion.dto.request.PromotionUpsertRequest;
+import com.project.promotionservice.promotion.dto.response.PromotionCloneDraftResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionIssueResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionResponse;
 import com.project.promotionservice.promotion.dto.response.WalletPromotionResponse;
@@ -25,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -70,12 +72,19 @@ public class PromotionCatalogService {
         campaignPolicy.requireEditable(campaign);
         validate(request, campaign, null);
         Promotion promotion = mapper.create(request);
+        promotion.setClonedFromPublicId(request.clonedFromPublicId());
         promotion.setCreatedBy(actor);
         promotion.setUpdatedBy(actor);
         Promotion saved = promotionRepository.save(promotion);
         PromotionResponse response = mapper.response(saved);
         eventService.record("PROMOTION", saved.getPublicId(),
                 "PROMOTION_CREATED", response, actor);
+        if (request.clonedFromPublicId() != null
+                && !request.clonedFromPublicId().isBlank()) {
+            eventService.record("PROMOTION", saved.getPublicId(),
+                    "PROMOTION_CLONED_FROM",
+                    Map.of("sourcePublicId", request.clonedFromPublicId()), actor);
+        }
         return response;
     }
 
@@ -131,34 +140,46 @@ public class PromotionCatalogService {
         throw conflict("Promotion lifecycle is controlled by its campaign and scheduler; pause the campaign instead");
     }
 
+    @Transactional(readOnly = true)
+    public PromotionCloneDraftResponse buildCloneDraft(String publicId) {
+        Promotion source = requirePromotion(publicId);
+        PromotionCampaign sourceCampaign = requireCampaign(source.getCampaignPublicId());
+        boolean editable = campaignPolicy.isEditable(sourceCampaign);
+        ValidityWindow window = suggestValidity(
+                source, editable ? sourceCampaign : null);
+        PromotionResponse sourceData = mapper.response(source);
+        String suggestedCode = source.getPromotionType() == PromotionType.COUPON
+                ? generatedCouponCode() : null;
+        return new PromotionCloneDraftResponse(
+                source.getPublicId(), source.getName(),
+                editable ? sourceCampaign.getPublicId() : null, editable,
+                source.getPromotionType(), suggestedCode, suggestName(source),
+                source.getDescription(), false, source.getPriority(),
+                source.getStackable(), sourceData.conditionsJson(),
+                sourceData.actionsJson(), sourceData.metadataJson(),
+                source.getMaxRedemptions(), source.getMaxRedemptionsPerUser(),
+                window.from(), window.to(), window.shifted());
+    }
+
+    @Deprecated(forRemoval = true)
     @Transactional
     public PromotionResponse clonePromotion(String publicId, String actor) {
         Promotion source = requirePromotion(publicId);
-        Promotion clone = new Promotion();
-        clone.setCampaignPublicId(source.getCampaignPublicId());
-        clone.setPromotionType(source.getPromotionType());
-        clone.setCode(source.getPromotionType() == PromotionType.COUPON
-                ? generatedCouponCode() : cloneCode(source));
-        clone.setName(source.getName() + " (Copy)");
-        clone.setDescription(source.getDescription());
-        clone.setStatus(PromotionStatus.DRAFT);
-        clone.setPublicVisible(false);
-        clone.setPriority(source.getPriority());
-        clone.setStackable(source.getStackable());
-        clone.setConditionsJson(source.getConditionsJson());
-        clone.setActionsJson(source.getActionsJson());
-        clone.setMetadataJson(source.getMetadataJson());
-        clone.setMaxRedemptions(source.getMaxRedemptions());
-        clone.setMaxRedemptionsPerUser(source.getMaxRedemptionsPerUser());
-        clone.setValidFrom(source.getValidFrom());
-        clone.setValidTo(source.getValidTo());
-        clone.setCreatedBy(actor);
-        clone.setUpdatedBy(actor);
-        Promotion saved = promotionRepository.save(clone);
-        PromotionResponse response = mapper.response(saved);
-        eventService.record("PROMOTION", saved.getPublicId(),
-                "PROMOTION_CLONED", response, actor);
-        return response;
+        PromotionCloneDraftResponse draft = buildCloneDraft(publicId);
+        if (!draft.sourceCampaignEditable()) {
+            throw conflict("Source campaign is locked; choose an editable target campaign");
+        }
+        String code = draft.suggestedCode();
+        if (source.getPromotionType() == PromotionType.VOUCHER) {
+            code = cloneCode(source);
+        }
+        return create(new PromotionUpsertRequest(
+                draft.suggestedCampaignPublicId(), draft.promotionType(), code,
+                draft.suggestedName(), draft.description(), draft.publicVisible(),
+                draft.priority(), draft.stackable(), draft.conditionsJson(),
+                draft.actionsJson(), draft.metadataJson(), draft.maxRedemptions(),
+                draft.maxRedemptionsPerUser(), draft.suggestedValidFrom(),
+                draft.suggestedValidTo(), draft.sourcePublicId()), actor);
     }
 
     @Transactional
@@ -356,15 +377,20 @@ public class PromotionCatalogService {
         if (request.promotionType() != PromotionType.COUPON) {
             return request;
         }
-        String code = existing == null || existing.getCode() == null
-                || existing.getCode().isBlank()
-                ? generatedCouponCode() : existing.getCode();
+        String requestedCode = request.code() == null ? null : request.code().trim();
+        String code = existing != null && existing.getCode() != null
+                && !existing.getCode().isBlank()
+                ? existing.getCode()
+                : request.clonedFromPublicId() != null
+                && requestedCode != null && !requestedCode.isBlank()
+                ? requestedCode : generatedCouponCode();
         return new PromotionUpsertRequest(
                 request.campaignPublicId(), request.promotionType(), code,
                 request.name(), request.description(), request.publicVisible(),
                 request.priority(), request.stackable(), request.conditionsJson(),
                 request.actionsJson(), request.metadataJson(), request.maxRedemptions(),
-                request.maxRedemptionsPerUser(), request.validFrom(), request.validTo());
+                request.maxRedemptionsPerUser(), request.validFrom(), request.validTo(),
+                request.clonedFromPublicId());
     }
 
     private UserPromotion issueOne(
@@ -492,6 +518,39 @@ public class PromotionCatalogService {
                 .toUpperCase(Locale.ROOT);
     }
 
+    private String suggestName(Promotion source) {
+        String base = source.getName() + " (Copy)";
+        if (!promotionRepository.existsByNameIgnoreCaseAndDeletedAtIsNull(base)) {
+            return base;
+        }
+        int sequence = 2;
+        String candidate;
+        do {
+            candidate = source.getName() + " (Copy " + sequence + ")";
+            sequence++;
+        } while (promotionRepository.existsByNameIgnoreCaseAndDeletedAtIsNull(
+                candidate));
+        return candidate;
+    }
+
+    private ValidityWindow suggestValidity(
+            Promotion source, PromotionCampaign targetCampaign) {
+        Duration length = Duration.between(source.getValidFrom(), source.getValidTo());
+        Instant now = Instant.now();
+        boolean expired = !source.getValidTo().isAfter(now);
+        Instant from = expired ? now : source.getValidFrom();
+        Instant to = from.plus(length);
+        if (targetCampaign != null) {
+            if (from.isBefore(targetCampaign.getStartAt())) {
+                from = targetCampaign.getStartAt();
+            }
+            if (to.isAfter(targetCampaign.getEndAt())) {
+                to = targetCampaign.getEndAt();
+            }
+        }
+        return new ValidityWindow(from, to, expired);
+    }
+
     private String generatedCouponCode() {
         String code;
         do {
@@ -501,6 +560,9 @@ public class PromotionCatalogService {
                 .existsByPromotionTypeAndCodeIgnoreCaseAndDeletedAtIsNull(
                         PromotionType.COUPON, code));
         return code;
+    }
+
+    private record ValidityWindow(Instant from, Instant to, boolean shifted) {
     }
 
     private <T> PagedResponse<T> page(Page<T> result) {

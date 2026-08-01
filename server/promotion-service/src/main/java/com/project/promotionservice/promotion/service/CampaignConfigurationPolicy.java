@@ -13,14 +13,18 @@ import org.springframework.stereotype.Component;
 public class CampaignConfigurationPolicy {
 
     public void requireEditable(PromotionCampaign campaign) {
-        boolean editableApproval = campaign.getApprovalStatus() == CampaignApprovalStatus.DRAFT
-                || campaign.getApprovalStatus() == CampaignApprovalStatus.REJECTED;
-        if (campaign.getStatus() != CampaignStatus.DRAFT || !editableApproval) {
+        if (!isEditable(campaign)) {
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST_PARAMETER,
                     "Campaign configuration is locked after submission; reject it before editing",
                     HttpStatus.CONFLICT);
         }
+    }
+
+    public boolean isEditable(PromotionCampaign campaign) {
+        boolean editableApproval = campaign.getApprovalStatus() == CampaignApprovalStatus.DRAFT
+                || campaign.getApprovalStatus() == CampaignApprovalStatus.REJECTED;
+        return campaign.getStatus() == CampaignStatus.DRAFT && editableApproval;
     }
 
     public void markConfigurationChanged(PromotionCampaign campaign, String actor) {
