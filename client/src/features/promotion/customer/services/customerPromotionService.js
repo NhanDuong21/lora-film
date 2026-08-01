@@ -55,15 +55,36 @@ const normalizeSystemPage = (response) => {
     : { ...page, content: content.map(normalizeSystemItem) };
 };
 
+const walletParams = (params = {}) => {
+  const resolved = { status: "AVAILABLE", ...params };
+  if (resolved.status === "ALL" || resolved.status === null) {
+    delete resolved.status;
+  }
+  return resolved;
+};
+
 const customerPromotionService = {
   getMyPromotions: async (params = {}) =>
     normalizeWalletPage(
-      await apiClient.get("/api/customers/me/promotions", { params }),
+      await apiClient.get("/api/customers/me/promotions", {
+        params: walletParams(params),
+      }),
     ),
 
   getMyVouchers: async (params = {}) =>
     normalizeWalletPage(
-      await apiClient.get("/api/customers/me/promotions", { params }),
+      await apiClient.get("/api/customers/me/promotions", {
+        params: walletParams(params),
+      }),
+    ),
+
+  getMyPromotionDetail: async (walletPublicId) =>
+    flattenWalletItem(
+      unwrap(
+        await apiClient.get(
+          `/api/customers/me/promotions/${walletPublicId}`,
+        ),
+      ),
     ),
 
   getPublicPromotions: async (params = {}) =>

@@ -89,6 +89,15 @@ public class CustomerPromotionController {
                 pageable(page, size, sort, WALLET_SORT_FIELDS, "validTo"))));
     }
 
+    @GetMapping("/customers/me/promotions/{id}")
+    public ResponseEntity<ApiResponse<WalletPromotionResponse>> walletDetail(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
+        String user = currentUser(principal);
+        return ResponseEntity.ok(ApiResponse.success(
+                service.walletDetail(user, publicId)));
+    }
+
     private String currentUser(UserPrincipal principal) {
         if (principal == null) {
             throw new BusinessException(

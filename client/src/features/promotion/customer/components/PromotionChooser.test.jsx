@@ -359,4 +359,55 @@ describe("PromotionChooser", () => {
     expect(within(highestVoucher).getByText("Đề xuất")).toBeInTheDocument();
     expect(screen.queryByText("Private coupon")).not.toBeInTheDocument();
   });
+
+  it("hides used and exhausted wallet promotions", () => {
+    render(
+      <PromotionChooser
+        {...defaultProps}
+        vouchers={[
+          voucher({
+            publicId: "used-wallet",
+            name: "Voucher da dung",
+            source: "CUSTOMER_WALLET",
+            walletPublicId: "used-wallet",
+            status: "USED",
+            usageCount: 1,
+            maxUsage: 1,
+          }),
+          voucher({
+            publicId: "exhausted-wallet",
+            name: "Voucher het luot",
+            source: "CUSTOMER_WALLET",
+            walletPublicId: "exhausted-wallet",
+            status: "AVAILABLE",
+            usageCount: 2,
+            maxUsage: 2,
+          }),
+          voucher({
+            publicId: "available-wallet",
+            name: "Voucher con luot",
+            source: "CUSTOMER_WALLET",
+            walletPublicId: "available-wallet",
+            status: "AVAILABLE",
+            usageCount: 1,
+            maxUsage: 3,
+          }),
+        ]}
+        promotionEvaluations={[
+          {
+            promotionPublicId: "available-wallet",
+            userPromotionPublicId: "available-wallet",
+            eligible: true,
+            discountAmount: 20000,
+            reasonCode: "ELIGIBLE",
+            reason: "Co the su dung cho don hien tai",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Voucher con luot")).toBeInTheDocument();
+    expect(screen.queryByText("Voucher da dung")).not.toBeInTheDocument();
+    expect(screen.queryByText("Voucher het luot")).not.toBeInTheDocument();
+  });
 });

@@ -15,6 +15,7 @@ import {
   conditionSummary,
   currency,
   formatDateTime,
+  isWalletPromotionUsable,
   promotionSourceLabel,
   safeJsonParse,
   voucherDiscountSummary,
@@ -385,6 +386,7 @@ export default function PromotionChooser({
   const catalog = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("vi-VN");
     return vouchers
+      .filter((promotion) => isWalletPromotionUsable(promotion))
       .map((promotion) => {
         const id = promotionId(promotion);
         const walletId =

@@ -341,6 +341,88 @@ export const estimatedDiscountAmount = (promotion, bookingAmount = 0) => {
   return 0;
 };
 
+const UNUSABLE_WALLET_STATUSES = new Set([
+  "USED",
+  "REDEEMED",
+  "EXPIRED",
+  "REVOKED",
+  "DISABLED",
+  "CANCELLED",
+]);
+
+export const walletUsageRemaining = (promotion) => {
+  if (promotion?.remainingUsage !== undefined && promotion?.remainingUsage !== null) {
+    const remaining = Number(promotion.remainingUsage);
+    return Number.isFinite(remaining) ? Math.max(0, remaining) : null;
+  }
+  if (promotion?.remainingUses !== undefined && promotion?.remainingUses !== null) {
+    const remaining = Number(promotion.remainingUses);
+    return Number.isFinite(remaining) ? Math.max(0, remaining) : null;
+  }
+  if (promotion?.maxUsage === undefined || promotion?.maxUsage === null) {
+    return null;
+  }
+  const maxUsage = Number(promotion.maxUsage);
+  const usageCount = Number(promotion.usageCount || 0);
+  if (!Number.isFinite(maxUsage)) return null;
+  return Math.max(0, maxUsage - (Number.isFinite(usageCount) ? usageCount : 0));
+};
+
+export const isWalletPromotion = (promotion) =>
+  promotion?.source === "CUSTOMER_WALLET" ||
+  Boolean(promotion?.walletPublicId || promotion?.selectionPublicId);
+
+export const isWalletPromotionUsable = (promotion, now = Date.now()) => {
+  if (!isWalletPromotion(promotion)) return true;
+
+  const status = String(promotion?.status || "").toUpperCase();
+  if (UNUSABLE_WALLET_STATUSES.has(status)) return false;
+
+  const remaining = walletUsageRemaining(promotion);
+  if (remaining !== null && remaining <= 0) return false;
+
+  if (promotion?.validFrom) {
+    const validFrom = new Date(promotion.validFrom).getTime();
+    if (Number.isFinite(validFrom) && validFrom > now) return false;
+  }
+
+  if (promotion?.validTo) {
+    const validTo = new Date(promotion.validTo).getTime();
+    if (Number.isFinite(validTo) && validTo <= now) return false;
+  }
+
+  return true;
+};
+
+export const walletPromotionUnavailableReason = (promotion) => {
+  const status = String(promotion?.status || "").toUpperCase();
+  if (["USED", "REDEEMED"].includes(status)) {
+    return "Voucher đã được sử dụng hết lượt.";
+  }
+  if (status === "EXPIRED") return "Voucher đã hết hạn.";
+  if (status === "REVOKED") return "Voucher đã được thu hồi.";
+  if (["DISABLED", "CANCELLED"].includes(status)) {
+    return "Voucher hiện không còn khả dụng.";
+  }
+  const remaining = walletUsageRemaining(promotion);
+  if (remaining !== null && remaining <= 0) {
+    return "Voucher đã hết số lượt sử dụng.";
+  }
+  if (promotion?.validFrom) {
+    const validFrom = new Date(promotion.validFrom).getTime();
+    if (Number.isFinite(validFrom) && validFrom > Date.now()) {
+      return "Voucher chưa đến thời gian sử dụng.";
+    }
+  }
+  if (promotion?.validTo) {
+    const validTo = new Date(promotion.validTo).getTime();
+    if (Number.isFinite(validTo) && validTo <= Date.now()) {
+      return "Voucher đã hết hạn.";
+    }
+  }
+  return "";
+};
+
 export const conditionSummary = (conditionsJson) => {
   const conditions =
     typeof conditionsJson === "string"

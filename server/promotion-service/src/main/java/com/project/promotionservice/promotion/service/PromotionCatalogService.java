@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -264,26 +265,53 @@ public class PromotionCatalogService {
     public PagedResponse<WalletPromotionResponse> wallet(
             String userPublicId, UserPromotionStatus status, Pageable pageable) {
         Instant now = Instant.now();
-        Page<UserPromotion> result = walletRepository.findWallet(
+        Page<UserPromotion> result = status == UserPromotionStatus.AVAILABLE
+                ? walletRepository.findUsableWallet(
+                userPublicId, UserPromotionStatus.AVAILABLE,
+                PromotionType.COUPON, now, pageable)
+                : walletRepository.findWallet(
                 userPublicId, status, PromotionType.COUPON, pageable);
         List<UserPromotion> changed = new ArrayList<>();
         for (UserPromotion item : result.getContent()) {
-            if (item.getStatus() == UserPromotionStatus.AVAILABLE
-                    && !now.isBefore(item.getValidTo())) {
-                item.setStatus(UserPromotionStatus.EXPIRED);
+            if (refreshWalletStatus(item, now)) {
                 changed.add(item);
             }
         }
         if (!changed.isEmpty()) {
             walletRepository.saveAll(changed);
         }
-        Map<String, Promotion> promotions = promotionMap(result.getContent());
-        List<WalletPromotionResponse> content = result.getContent().stream()
+        List<UserPromotion> visibleItems = result.getContent().stream()
+                .filter(item -> status != UserPromotionStatus.AVAILABLE
+                        || isUsableWalletItem(item, now))
+                .toList();
+        Map<String, Promotion> promotions = promotionMap(visibleItems);
+        List<WalletPromotionResponse> content = visibleItems.stream()
                 .map(item -> mapper.wallet(item,
                         requireMappedPromotion(promotions, item.getPromotionPublicId())))
                 .toList();
         return new PagedResponse<>(content, result.getNumber(), result.getSize(),
                 result.getTotalElements(), result.getTotalPages(), result.isLast());
+    }
+
+    @Transactional
+    public WalletPromotionResponse walletDetail(
+            String userPublicId, String walletPublicId) {
+        Instant now = Instant.now();
+        UserPromotion wallet = walletRepository
+                .findByPublicIdAndDeletedAtIsNull(walletPublicId)
+                .orElseThrow(() -> notFound("Wallet voucher was not found"));
+        if (!Objects.equals(wallet.getUserPublicId(), userPublicId)) {
+            throw notFound("Wallet voucher was not found");
+        }
+        boolean changed = refreshWalletStatus(wallet, now);
+        if (changed) {
+            walletRepository.save(wallet);
+        }
+        Promotion promotion = requirePromotion(wallet.getPromotionPublicId());
+        if (promotion.getPromotionType() == PromotionType.COUPON) {
+            throw notFound("Wallet voucher was not found");
+        }
+        return mapper.wallet(wallet, promotion);
     }
 
     private void validate(
@@ -425,6 +453,32 @@ public class PromotionCatalogService {
             throw conflict("Wallet contains a missing promotion template");
         }
         return promotion;
+    }
+
+    private boolean refreshWalletStatus(UserPromotion item, Instant now) {
+        if (item.getStatus() != UserPromotionStatus.AVAILABLE) {
+            return false;
+        }
+        Integer maxUsage = item.getMaxUsage();
+        Integer usageCount = item.getUsageCount();
+        if (maxUsage != null && usageCount != null && usageCount >= maxUsage) {
+            item.setStatus(UserPromotionStatus.USED);
+            return true;
+        }
+        if (!now.isBefore(item.getValidTo())) {
+            item.setStatus(UserPromotionStatus.EXPIRED);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isUsableWalletItem(UserPromotion item, Instant now) {
+        Integer maxUsage = item.getMaxUsage();
+        Integer usageCount = item.getUsageCount();
+        return item.getStatus() == UserPromotionStatus.AVAILABLE
+                && (usageCount == null || maxUsage == null || usageCount < maxUsage)
+                && !now.isBefore(item.getValidFrom())
+                && now.isBefore(item.getValidTo());
     }
 
     private String cloneCode(Promotion source) {

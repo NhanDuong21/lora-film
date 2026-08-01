@@ -1,23 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   BadgeCheck,
+  CalendarDays,
+  CheckCircle2,
   Gift,
   Globe2,
   Loader2,
   RefreshCw,
+  ReceiptText,
+  ShoppingCart,
   TicketPercent,
   WalletCards,
+  X,
 } from "lucide-react";
 import customerPromotionService from "../services/customerPromotionService";
 import {
   badgeClass,
   conditionSummary,
+  currency,
   formatDateTime,
   friendlyPromotionError,
+  isWalletPromotionUsable,
   labelFor,
   estimatedDiscountAmount,
   promotionSourceLabel,
+  safeJsonParse,
+  walletPromotionUnavailableReason,
+  walletUsageRemaining,
   voucherDiscountSummary,
 } from "../../shared/promotionPresentation";
 
@@ -30,6 +41,184 @@ const tabItems = [
   { key: "wallet", label: "Ví voucher", icon: WalletCards },
 ];
 
+const walletIdOf = (promotion) =>
+  promotion?.walletPublicId || promotion?.selectionPublicId || promotion?.publicId;
+
+const jsonValue = (value, fallback = {}) =>
+  typeof value === "string"
+    ? safeJsonParse(value, fallback).value
+    : (value ?? fallback);
+
+const firstAction = (promotion) => {
+  const actions = jsonValue(promotion?.actionsJson);
+  return Array.isArray(actions) ? actions[0] || {} : actions || {};
+};
+
+const discountTypeLabel = (promotion) => {
+  const action = firstAction(promotion);
+  return labelFor(
+    action.discountType ||
+      action.type ||
+      action.actionType ||
+      promotion?.voucherType,
+  );
+};
+
+const maxDiscountOf = (promotion) => {
+  const action = firstAction(promotion);
+  return (
+    action.maxDiscountAmount ??
+    action.maximumDiscountAmount ??
+    action.maxAmount ??
+    null
+  );
+};
+
+const minimumOrderOf = (promotion) => {
+  const conditions = jsonValue(promotion?.conditionsJson);
+  return conditions.minimumOrderAmount ?? conditions.minOrderAmount ?? null;
+};
+
+const dayLabels = {
+  MONDAY: "T2",
+  TUESDAY: "T3",
+  WEDNESDAY: "T4",
+  THURSDAY: "T5",
+  FRIDAY: "T6",
+  SATURDAY: "T7",
+  SUNDAY: "CN",
+};
+
+const configuredValues = (conditions, primaryKey, legacyKey) => {
+  if (Array.isArray(conditions?.[primaryKey])) return conditions[primaryKey];
+  if (Array.isArray(conditions?.[legacyKey])) return conditions[legacyKey];
+  return [];
+};
+
+const labelList = (source, ids = []) => {
+  if (!source) return [];
+  if (Array.isArray(source)) {
+    return source
+      .map((item) => {
+        if (typeof item === "string" && !ids.includes(item)) return item;
+        if (item && typeof item === "object") {
+          return (
+            item.label ||
+            item.title ||
+            item.movieTitle ||
+            item.name ||
+            item.cinemaName ||
+            ""
+          );
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  if (typeof source === "object") {
+    return ids
+      .map((id) => {
+        const value = source[id] ?? source[String(id)];
+        if (typeof value === "string" && value !== String(id)) return value;
+        if (value && typeof value === "object") {
+          return (
+            value.label ||
+            value.title ||
+            value.movieTitle ||
+            value.name ||
+            value.cinemaName ||
+            ""
+          );
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const customerConditionItems = (promotion) => {
+  const conditions = jsonValue(promotion?.conditionsJson);
+  const metadata = jsonValue(promotion?.metadataJson);
+  const conditionLabels = jsonValue(metadata?.conditionLabels);
+  const items = [];
+  const minimum = minimumOrderOf(promotion);
+  const maximum = maxDiscountOf(promotion);
+  if (Number(minimum) > 0) {
+    items.push(`Áp dụng cho đơn hàng từ ${currency(minimum)}.`);
+  }
+  if (Number(maximum) > 0) {
+    items.push(`Giảm tối đa ${currency(maximum)}.`);
+  }
+  const movieIds = configuredValues(conditions, "moviePublicIds", "movieIds");
+  if (movieIds.length) {
+    const names = labelList(
+      conditionLabels?.moviePublicIds ||
+        metadata?.moviePublicIds ||
+        conditionLabels?.movieNames ||
+        metadata?.movieNames ||
+        conditionLabels?.movieTitles ||
+        metadata?.movieTitles,
+      movieIds,
+    );
+    items.push(
+      names.length
+        ? `Áp dụng cho phim ${names.join(", ")}.`
+        : "Áp dụng cho một số phim được cấu hình.",
+    );
+  }
+  const cinemaIds = configuredValues(
+    conditions,
+    "cinemaPublicIds",
+    "cinemaIds",
+  );
+  if (cinemaIds.length) {
+    const names = labelList(
+      conditionLabels?.cinemaPublicIds ||
+        metadata?.cinemaPublicIds ||
+        conditionLabels?.cinemaNames ||
+        metadata?.cinemaNames,
+      cinemaIds,
+    );
+    items.push(
+      names.length
+        ? `Áp dụng tại rạp ${names.join(", ")}.`
+        : "Áp dụng tại một số rạp được cấu hình.",
+    );
+  }
+  if (Array.isArray(conditions.dayOfWeek) && conditions.dayOfWeek.length) {
+    items.push(
+      `Áp dụng vào ${conditions.dayOfWeek
+        .map((day) => dayLabels[day] || day)
+        .join(", ")}.`,
+    );
+  }
+  if (conditions.requiredTierCode) {
+    items.push(`Dành cho hạng thành viên ${conditions.requiredTierCode}.`);
+  }
+  if (conditions.requiresVerification) {
+    items.push("Yêu cầu tài khoản đã xác thực.");
+  }
+  if (!items.length) {
+    items.push(
+      conditions && Object.keys(conditions).length > 0
+        ? "Có điều kiện áp dụng theo chương trình."
+        : "Áp dụng cho mọi đơn hàng hợp lệ.",
+    );
+  }
+  return items;
+};
+
+function DetailMetric({ label, value }) {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+      <p className="text-[10px] font-black uppercase text-zinc-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-white">{value}</p>
+    </div>
+  );
+}
+
 function PromotionCard({
   promotion,
   claimable = false,
@@ -37,8 +226,11 @@ function PromotionCard({
   recommended = false,
   busy,
   onClaim,
+  onOpenDetail,
 }) {
-  const available = ["ACTIVE", "AVAILABLE"].includes(promotion.status);
+  const available = ["ACTIVE", "AVAILABLE"].includes(
+    String(promotion.status || "").toUpperCase(),
+  );
   const remaining =
     promotion.maxRedemptions == null
       ? null
@@ -56,7 +248,23 @@ function PromotionCard({
         );
 
   return (
-    <article className="grid gap-4 border-b border-zinc-800 py-5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <article
+      role={onOpenDetail ? "button" : undefined}
+      tabIndex={onOpenDetail ? 0 : undefined}
+      onClick={onOpenDetail}
+      onKeyDown={(event) => {
+        if (!onOpenDetail) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpenDetail();
+        }
+      }}
+      className={`grid gap-4 border-b border-zinc-800 py-5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
+        onOpenDetail
+          ? "cursor-pointer rounded-lg px-3 transition-colors hover:bg-zinc-900/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
+          : ""
+      }`}
+    >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <TicketPercent className="h-4 w-4 text-emerald-400" />
@@ -105,9 +313,10 @@ function PromotionCard({
         <button
           type="button"
           disabled={busy || !available || remaining === 0}
-          onClick={() =>
-            onClaim(promotion.promotionPublicId || promotion.publicId)
-          }
+          onClick={(event) => {
+            event.stopPropagation();
+            onClaim(promotion.promotionPublicId || promotion.publicId);
+          }}
           className="inline-flex h-9 min-w-32 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 text-xs font-black text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
         >
           {busy ? (
@@ -130,14 +339,231 @@ function PromotionCard({
   );
 }
 
+function VoucherDetailModal({
+  walletId,
+  detail,
+  loading,
+  error,
+  onClose,
+  onRetry,
+  onUseNow,
+}) {
+  useEffect(() => {
+    if (!walletId) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, walletId]);
+
+  if (!walletId) return null;
+
+  const usable = detail ? isWalletPromotionUsable(detail) : false;
+  const usageRemaining = detail ? walletUsageRemaining(detail) : null;
+  const minimum = detail ? minimumOrderOf(detail) : null;
+  const maximum = detail ? maxDiscountOf(detail) : null;
+  const conditionItems = detail ? customerConditionItems(detail) : [];
+  const unavailableReason = detail
+    ? walletPromotionUnavailableReason(detail)
+    : "";
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/80 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="voucher-detail-title"
+        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-lg border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-2xl shadow-black/70 sm:rounded-lg"
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-400">
+              <TicketPercent className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase text-emerald-400">
+                Chi tiết voucher
+              </p>
+              <h2
+                id="voucher-detail-title"
+                className="mt-1 break-words text-lg font-black text-white"
+              >
+                {detail?.name || "Voucher LoraFilm"}
+              </h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Đóng"
+            onClick={onClose}
+            className="rounded-lg border border-zinc-700 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          {loading ? (
+            <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-bold text-zinc-500">
+              <Loader2 className="h-5 w-5 animate-spin" /> Đang tải chi tiết...
+            </div>
+          ) : error ? (
+            <div className="flex min-h-56 flex-col items-center justify-center text-center">
+              <AlertCircle className="h-8 w-8 text-amber-400" />
+              <p className="mt-3 text-sm font-black text-white">
+                Không thể tải chi tiết voucher
+              </p>
+              <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">
+                {error}
+              </p>
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-xs font-black text-zinc-950 hover:bg-emerald-400"
+              >
+                <RefreshCw className="h-4 w-4" /> Thử lại
+              </button>
+            </div>
+          ) : !detail ? (
+            <div className="flex min-h-56 flex-col items-center justify-center text-center">
+              <Gift className="h-8 w-8 text-zinc-700" />
+              <p className="mt-3 text-sm font-black text-white">
+                Không tìm thấy voucher
+              </p>
+              <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">
+                Voucher có thể đã hết quyền sử dụng hoặc không còn trong ví.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-2xl font-black text-emerald-300">
+                    {voucherDiscountSummary(detail)}
+                  </p>
+                  <span
+                    className={`rounded border px-2 py-1 text-[10px] font-black ${badgeClass(detail.status)}`}
+                  >
+                    {labelFor(detail.status)}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-zinc-400">
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5 text-zinc-500" />
+                    Từ {formatDateTime(detail.validFrom)}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5 text-zinc-500" />
+                    Đến {formatDateTime(detail.validTo)}
+                  </span>
+                </div>
+                {!usable && unavailableReason && (
+                  <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-bold leading-5 text-amber-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {unavailableReason}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <DetailMetric
+                  label="Loại giảm"
+                  value={discountTypeLabel(detail)}
+                />
+                <DetailMetric
+                  label="Đơn tối thiểu"
+                  value={Number(minimum) > 0 ? currency(minimum) : null}
+                />
+                <DetailMetric
+                  label="Mức giảm tối đa"
+                  value={Number(maximum) > 0 ? currency(maximum) : null}
+                />
+                <DetailMetric
+                  label="Lượt còn lại"
+                  value={
+                    usageRemaining === null
+                      ? null
+                      : `${usageRemaining} lượt`
+                  }
+                />
+              </div>
+
+              {detail.description && (
+                <section className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+                  <h3 className="flex items-center gap-2 text-xs font-black uppercase text-zinc-400">
+                    <ReceiptText className="h-4 w-4" /> Hướng dẫn
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-zinc-300">
+                    {detail.description}
+                  </p>
+                </section>
+              )}
+
+              <section className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+                <h3 className="flex items-center gap-2 text-xs font-black uppercase text-zinc-400">
+                  <CheckCircle2 className="h-4 w-4" /> Điều kiện áp dụng
+                </h3>
+                <ul className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
+                  {conditionItems.map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+          )}
+        </div>
+
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-zinc-800 bg-zinc-950/50 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-lg border border-zinc-700 px-4 text-xs font-black text-zinc-300 hover:bg-zinc-800 hover:text-white"
+          >
+            Đóng
+          </button>
+          {detail && usable && (
+            <button
+              type="button"
+              onClick={onUseNow}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-xs font-black text-zinc-950 hover:bg-emerald-400"
+            >
+              <ShoppingCart className="h-4 w-4" /> Dùng ngay
+            </button>
+          )}
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 export default function CustomerPromotionCenterPage({ embedded = false }) {
+  const navigate = useNavigate();
   const [tab, setTab] = useState(embedded ? "wallet" : "event");
   const [publicPromotions, setPublicPromotions] = useState([]);
   const [systemPromotions, setSystemPromotions] = useState([]);
   const [wallet, setWallet] = useState([]);
+  const [walletOwnershipIds, setWalletOwnershipIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState(null);
+  const [detailWalletId, setDetailWalletId] = useState("");
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,6 +578,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
           page: 0,
           size: 100,
           sort: "validTo,asc",
+          status: "ALL",
         }),
         customerPromotionService.getSystemPromotions({
           page: 0,
@@ -159,8 +586,16 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
           sort: "priority,asc",
         }),
       ]);
+      const walletItems = contentOf(walletPage);
       setPublicPromotions(contentOf(publicPage));
-      setWallet(contentOf(walletPage));
+      setWallet(walletItems.filter((item) => isWalletPromotionUsable(item)));
+      setWalletOwnershipIds(
+        new Set(
+          walletItems
+            .map((item) => item.promotionPublicId || item.promotion?.publicId)
+            .filter(Boolean),
+        ),
+      );
       setSystemPromotions(contentOf(systemPage));
       setMessage(null);
     } catch (error) {
@@ -175,18 +610,14 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const claimedPromotionIds = useMemo(
-    () => new Set(wallet.map((item) => item.promotionPublicId).filter(Boolean)),
-    [wallet],
-  );
   const eventPromotions = useMemo(
     () =>
       publicPromotions.filter(
         (item) =>
           item.promotionType === "VOUCHER" &&
-          !claimedPromotionIds.has(item.promotionPublicId || item.publicId),
+          !walletOwnershipIds.has(item.promotionPublicId || item.publicId),
       ),
-    [claimedPromotionIds, publicPromotions],
+    [publicPromotions, walletOwnershipIds],
   );
   const personalVouchers = useMemo(
     () =>
@@ -239,6 +670,52 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
     } finally {
       setBusyId("");
     }
+  };
+
+  const loadVoucherDetail = useCallback(
+    async (walletPublicId) => {
+      if (!walletPublicId) return;
+      setDetailLoading(true);
+      setDetailError("");
+      try {
+        const result =
+          await customerPromotionService.getMyPromotionDetail(walletPublicId);
+        setDetail(result);
+        if (!isWalletPromotionUsable(result)) {
+          await load();
+        }
+      } catch (error) {
+        setDetail(null);
+        setDetailError(
+          friendlyPromotionError(error) ||
+            "Voucher không còn trong ví hoặc đã hết quyền sử dụng.",
+        );
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [load],
+  );
+
+  const openVoucherDetail = (promotion) => {
+    const walletPublicId = walletIdOf(promotion);
+    if (!walletPublicId) return;
+    setDetailWalletId(walletPublicId);
+    setDetail(null);
+    setDetailError("");
+    void loadVoucherDetail(walletPublicId);
+  };
+
+  const closeVoucherDetail = useCallback(() => {
+    setDetailWalletId("");
+    setDetail(null);
+    setDetailError("");
+    setDetailLoading(false);
+  }, []);
+
+  const useVoucherNow = () => {
+    closeVoucherDetail();
+    navigate("/movies");
   };
 
   const content = (
@@ -349,10 +826,22 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
               recommended={tab === "wallet" && index === 0}
               busy={busyId === (item.promotionPublicId || item.publicId)}
               onClaim={claim}
+              onOpenDetail={
+                tab === "wallet" ? () => openVoucherDetail(item) : undefined
+              }
             />
           ))
         )}
       </section>
+      <VoucherDetailModal
+        walletId={detailWalletId}
+        detail={detail}
+        loading={detailLoading}
+        error={detailError}
+        onClose={closeVoucherDetail}
+        onRetry={() => void loadVoucherDetail(detailWalletId)}
+        onUseNow={useVoucherNow}
+      />
     </div>
   );
 

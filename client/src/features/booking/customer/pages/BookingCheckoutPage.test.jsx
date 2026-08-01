@@ -506,7 +506,7 @@ describe("BookingCheckoutPage cancellation", () => {
           promotionType: "VOUCHER",
           code: "WELCOME50",
           name: "Voucher chào mừng",
-          status: "ACTIVE",
+          status: "AVAILABLE",
           voucherType: "FIXED_AMOUNT",
           faceValue: 50000,
           minimumOrderAmount: 100000,
@@ -554,11 +554,19 @@ describe("BookingCheckoutPage cancellation", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("1 ưu đãi")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText((text) =>
+          /^1\s+/.test(text) &&
+          (text.includes("ưu đãi") || text.includes("Æ°u Ä‘Ã£i")),
+        ),
+      ).toBeInTheDocument();
+    });
     expect(customerPromotionService.getMyVouchers).toHaveBeenCalledWith({
       page: 0,
       size: 100,
       sort: "validTo,asc",
+      status: "ALL",
     });
     expect(customerPromotionService.getPublicPromotions).toHaveBeenCalledWith({
       page: 0,

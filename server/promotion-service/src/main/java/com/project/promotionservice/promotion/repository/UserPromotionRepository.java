@@ -48,6 +48,25 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Lo
             Pageable pageable);
 
     @Query("""
+            select up from UserPromotion up, Promotion p
+            where up.userPublicId = :userPublicId
+              and up.status = :status
+              and up.usageCount < up.maxUsage
+              and up.validFrom <= :now
+              and up.validTo > :now
+              and p.publicId = up.promotionPublicId
+              and p.promotionType <> :excludedPromotionType
+              and up.deletedAt is null
+              and p.deletedAt is null
+            """)
+    Page<UserPromotion> findUsableWallet(
+            @Param("userPublicId") String userPublicId,
+            @Param("status") UserPromotionStatus status,
+            @Param("excludedPromotionType") PromotionType excludedPromotionType,
+            @Param("now") Instant now,
+            Pageable pageable);
+
+    @Query("""
             select up from UserPromotion up
             where up.userPublicId = :userPublicId
               and up.status = :status

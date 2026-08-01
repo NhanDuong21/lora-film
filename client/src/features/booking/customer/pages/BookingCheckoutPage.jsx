@@ -39,7 +39,10 @@ import { getBookingErrorMessage } from "../utils/bookingErrorMessages";
 import scoreCustomerService from "@/features/score/customer/services/scoreCustomerService";
 import PromotionChooser from "@/features/promotion/customer/components/PromotionChooser";
 import customerPromotionService from "@/features/promotion/customer/services/customerPromotionService";
-import { voucherDiscountSummary } from "@/features/promotion/shared/promotionPresentation";
+import {
+  isWalletPromotionUsable,
+  voucherDiscountSummary,
+} from "@/features/promotion/shared/promotionPresentation";
 import {
   createPaymentHandoff,
   getOrCreatePaymentAttemptKey,
@@ -359,6 +362,7 @@ export default function BookingCheckoutPage() {
             page: 0,
             size: 100,
             sort: "validTo,asc",
+            status: "ALL",
           }),
           customerPromotionService.getPublicPromotions({
             page: 0,
@@ -393,6 +397,9 @@ export default function BookingCheckoutPage() {
       const walletItems = Array.isArray(walletPayload)
         ? walletPayload
         : walletPayload?.content || [];
+      const selectableWalletItems = walletItems.filter((item) =>
+        isWalletPromotionUsable(item),
+      );
       const publicItems = Array.isArray(publicPayload)
         ? publicPayload
         : publicPayload?.content || [];
@@ -403,7 +410,7 @@ export default function BookingCheckoutPage() {
         walletItems.map((item) => item.promotionPublicId).filter(Boolean),
       );
       const inventory = [
-        ...walletItems,
+        ...selectableWalletItems,
         ...systemItems,
         ...publicItems.filter(
           (item) =>
@@ -997,6 +1004,12 @@ export default function BookingCheckoutPage() {
       });
       setBooking((prev) => ({ ...prev, ...finalized }));
       if (["CONFIRMED", "COMPLETED"].includes(finalized?.status)) {
+        if (selectedWalletPromotionId || appliedCouponCode) {
+          await loadPromotionWallet();
+          setSelectedPromotion(null);
+          setAppliedCouponCode("");
+          setCouponInput("");
+        }
         navigate(`/bookings/success?bookingId=${bookingId}`);
         return;
       }

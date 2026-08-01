@@ -37,7 +37,7 @@ describe("customerPromotionService", () => {
     });
 
     expect(apiClient.get).toHaveBeenCalledWith("/api/customers/me/promotions", {
-      params: { page: 0, size: 50, sort: "validTo,asc" },
+      params: { page: 0, size: 50, sort: "validTo,asc", status: "AVAILABLE" },
     });
     expect(result.content).toHaveLength(1);
     expect(result.content[0]).toMatchObject({
@@ -46,6 +46,48 @@ describe("customerPromotionService", () => {
       name: "Summer",
       source: "CUSTOMER_WALLET",
       ownershipType: "OWNED",
+    });
+  });
+
+  it("can load the full wallet history without sending a status filter", async () => {
+    apiClient.get.mockResolvedValue({
+      data: { data: { content: [] } },
+    });
+
+    await customerPromotionService.getMyVouchers({
+      page: 0,
+      size: 100,
+      sort: "validTo,asc",
+      status: "ALL",
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith("/api/customers/me/promotions", {
+      params: { page: 0, size: 100, sort: "validTo,asc" },
+    });
+  });
+
+  it("loads and flattens a wallet promotion detail", async () => {
+    apiClient.get.mockResolvedValue({
+      data: {
+        data: {
+          publicId: "wallet-1",
+          status: "AVAILABLE",
+          promotion: { publicId: "promotion-1", name: "Summer" },
+        },
+      },
+    });
+
+    const result = await customerPromotionService.getMyPromotionDetail("wallet-1");
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      "/api/customers/me/promotions/wallet-1",
+    );
+    expect(result).toMatchObject({
+      publicId: "wallet-1",
+      walletPublicId: "wallet-1",
+      promotionPublicId: "promotion-1",
+      name: "Summer",
+      source: "CUSTOMER_WALLET",
     });
   });
 
