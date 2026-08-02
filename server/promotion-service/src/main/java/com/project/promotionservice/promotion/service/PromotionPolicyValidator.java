@@ -11,7 +11,7 @@ import java.util.Locale;
 @Component
 public class PromotionPolicyValidator {
 
-    private static final BigDecimal MAX_LEGAL_PERCENTAGE = new BigDecimal("50");
+    private static final BigDecimal MAX_PERCENTAGE = new BigDecimal("100");
     private final PromotionConditionEvaluator conditionEvaluator;
 
     public PromotionPolicyValidator(PromotionConditionEvaluator conditionEvaluator) {
@@ -45,8 +45,8 @@ public class PromotionPolicyValidator {
             if (value == null || value.signum() <= 0) {
                 invalid("Percentage discount must be greater than zero");
             }
-            if (value.compareTo(MAX_LEGAL_PERCENTAGE) > 0) {
-                invalid("Percentage discount cannot exceed the legal 50% limit");
+            if (value.compareTo(MAX_PERCENTAGE) > 0) {
+                invalid("Percentage discount cannot exceed 100%");
             }
         } else if (normalized.equals("FIXED_AMOUNT")
                 || normalized.equals("AMOUNT")) {

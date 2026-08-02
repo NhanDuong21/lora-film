@@ -577,7 +577,7 @@ public class PromotionCatalogService {
                     .countByPromotionPublicIdAndUserPublicIdAndStatusInAndDeletedAtIsNull(
                             promotion.getPublicId(), wallet.getUserPublicId(),
                             CAPACITY_STATUSES)
-                    >= promotion.getMaxRedemptionsPerUser()) {
+                    >= customerPromotionLimit(promotion, campaign)) {
                 reasonCode = "CUSTOMER_PROMOTION_LIMIT_REACHED";
                 reason = "Ban da dat gioi han su dung voucher nay";
             } else if (campaign.getMaxRedemptions() != null
@@ -586,11 +586,6 @@ public class PromotionCatalogService {
                     >= campaign.getMaxRedemptions()) {
                 reasonCode = "CAMPAIGN_CAPACITY_EXHAUSTED";
                 reason = "Chien dich da het luot su dung";
-            } else if (redemptionRepository.countCampaignUserRedemptions(
-                    campaign.getPublicId(), wallet.getUserPublicId(), CAPACITY_STATUSES)
-                    >= campaign.getMaxRedemptionsPerUser()) {
-                reasonCode = "CUSTOMER_CAMPAIGN_LIMIT_REACHED";
-                reason = "Ban da dat gioi han su dung cua chien dich";
             }
         }
         return new WalletPromotionResponse(
@@ -598,6 +593,15 @@ public class PromotionCatalogService {
                 wallet.getClaimedAt(), wallet.getValidFrom(), wallet.getValidTo(),
                 wallet.getUsageCount(), wallet.getMaxUsage(), reasonCode == null,
                 reasonCode, reason, mapper.response(promotion));
+    }
+
+    private int customerPromotionLimit(
+            Promotion promotion, PromotionCampaign campaign) {
+        int promotionLimit = promotion.getMaxRedemptionsPerUser() == null
+                ? Integer.MAX_VALUE : promotion.getMaxRedemptionsPerUser();
+        int campaignCeiling = campaign.getMaxRedemptionsPerUser() == null
+                ? Integer.MAX_VALUE : campaign.getMaxRedemptionsPerUser();
+        return Math.min(promotionLimit, campaignCeiling);
     }
 
     private String cloneCode(Promotion source) {

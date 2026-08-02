@@ -52,17 +52,4 @@ public interface PromotionRedemptionRepository
             @Param("campaignPublicId") String campaignPublicId,
             @Param("statuses") Collection<PromotionRedemptionStatus> statuses);
 
-    @Query("""
-            select count(distinct coalesce(r.reservationPublicId, r.publicId))
-            from PromotionRedemption r
-            where r.campaignPublicId = :campaignPublicId
-              and r.userPublicId = :userPublicId
-              and r.status in :statuses
-              and r.deletedAt is null
-            """)
-    long countCampaignUserRedemptions(
-            @Param("campaignPublicId") String campaignPublicId,
-            @Param("userPublicId") String userPublicId,
-            @Param("statuses") Collection<PromotionRedemptionStatus> statuses);
-
 }

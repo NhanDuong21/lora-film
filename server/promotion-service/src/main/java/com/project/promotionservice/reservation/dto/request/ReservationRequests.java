@@ -28,9 +28,9 @@ public final class ReservationRequests {
             @Pattern(regexp = USER_REFERENCE_PATTERN)
             String userPublicId,
             @NotNull @DecimalMin("0.01") BigDecimal originalAmount,
-            @Size(max = 10)
+            @Size(max = 1)
             List<@Pattern(regexp = UUID_PATTERN) String> selectedUserPromotionPublicIds,
-            @Size(max = 10)
+            @Size(max = 1)
             List<@Pattern(regexp = UUID_PATTERN) String> selectedPromotionPublicIds,
             @Size(max = 100)
             @Pattern(regexp = "^[A-Za-z0-9_-]*$") String couponCode,
@@ -48,6 +48,13 @@ public final class ReservationRequests {
         @AssertTrue(message = "At least one bookingPublicId or orderPublicId is required")
         public boolean isTransactionReferencePresent() {
             return notBlank(bookingPublicId) || notBlank(orderPublicId);
+        }
+
+        @AssertTrue(message = "Only one voucher or coupon can be selected per booking")
+        public boolean isSingleManualSelection() {
+            return distinctSize(selectedUserPromotionPublicIds)
+                    + distinctSize(selectedPromotionPublicIds)
+                    + (couponCode == null || couponCode.isBlank() ? 0 : 1) <= 1;
         }
 
         public PromotionCheckoutRequest checkoutRequest() {
@@ -82,5 +89,9 @@ public final class ReservationRequests {
 
     private static boolean notBlank(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static int distinctSize(List<String> values) {
+        return values == null ? 0 : (int) values.stream().distinct().count();
     }
 }

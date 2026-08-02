@@ -28,8 +28,8 @@ public class PromotionDiscountCalculator {
         BigDecimal discount;
         if (normalized.equals("PERCENTAGE") || normalized.equals("PERCENT")) {
             if (value == null || value.signum() <= 0
-                    || value.compareTo(BigDecimal.valueOf(50)) > 0) {
-                throw invalid("Percentage discount must be between 0 and 50");
+                    || value.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw invalid("Percentage discount must be between 0 and 100");
             }
             discount = originalAmount.multiply(value)
                     .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);

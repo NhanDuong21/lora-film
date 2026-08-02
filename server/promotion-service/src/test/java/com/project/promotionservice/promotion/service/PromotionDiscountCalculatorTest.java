@@ -54,13 +54,20 @@ class PromotionDiscountCalculatorTest {
     }
 
     @Test
-    void percentageAboveBusinessLimitIsRejected() throws Exception {
+    void percentageCanDiscountTheFullOrderButCannotExceedOneHundred() throws Exception {
         var action = objectMapper.readTree(
-                "{\"discountType\":\"PERCENTAGE\",\"discountValue\":51}");
+                "{\"discountType\":\"PERCENTAGE\",\"discountValue\":100}");
+
+        assertThat(calculator.calculate(
+                action, new BigDecimal("285000"), objectMapper.createObjectNode()))
+                .isEqualByComparingTo("285000.00");
+
+        var invalidAction = objectMapper.readTree(
+                "{\"discountType\":\"PERCENTAGE\",\"discountValue\":101}");
 
         assertThatThrownBy(() -> calculator.calculate(
-                action, new BigDecimal("285000"), objectMapper.createObjectNode()))
+                invalidAction, new BigDecimal("285000"), objectMapper.createObjectNode()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("between 0 and 50");
+                .hasMessageContaining("between 0 and 100");
     }
 }

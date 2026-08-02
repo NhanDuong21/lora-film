@@ -48,7 +48,6 @@ public class PromotionEngineService {
                     PromotionRedemptionStatus.CONFIRMED);
     private static final Set<PromotionRedemptionStatus> RESERVED_STATUS =
             EnumSet.of(PromotionRedemptionStatus.RESERVED);
-    private static final int MAX_COMPATIBILITY_CANDIDATES = 20;
 
     private final PromotionRepository promotionRepository;
     private final UserPromotionRepository walletRepository;
@@ -87,6 +86,11 @@ public class PromotionEngineService {
                 ? List.of() : request.selectedPromotionPublicIds();
         List<String> selectedWalletIds = request.selectedUserPromotionPublicIds() == null
                 ? List.of() : request.selectedUserPromotionPublicIds();
+        requireSingleManualSelection(
+                selectedPromotionIds, selectedWalletIds, request.couponCode());
+        boolean hasManualSelection = !selectedPromotionIds.isEmpty()
+                || !selectedWalletIds.isEmpty()
+                || (request.couponCode() != null && !request.couponCode().isBlank());
         for (String promotionPublicId : selectedPromotionIds) {
             Promotion promotion = requirePromotion(promotionPublicId);
             if (promotion.getPromotionType() != PromotionType.AUTO) {
@@ -95,10 +99,12 @@ public class PromotionEngineService {
             addCandidate(candidates, warnings, addedPromotions,
                     promotion, null, request, original, now, true);
         }
-        for (Promotion promotion : promotionRepository.findRuntimeCandidates(
-                PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
-            addCandidate(candidates, warnings, addedPromotions,
-                    promotion, null, request, original, now, false);
+        if (!hasManualSelection) {
+            for (Promotion promotion : promotionRepository.findRuntimeCandidates(
+                    PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
+                addCandidate(candidates, warnings, addedPromotions,
+                        promotion, null, request, original, now, false);
+            }
         }
 
         for (String walletPublicId : selectedWalletIds) {
@@ -342,71 +348,23 @@ public class PromotionEngineService {
         JsonNode actions = read(promotion.getActionsJson());
         BigDecimal discount = discountCalculator.calculate(
                 actions, original, request.contextJson());
+        Candidate candidate = new Candidate(
+                promotion, wallet, campaign, conditions, actions,
+                request.contextJson(), discount);
         requireCapacity(promotion, wallet, campaign, request.userPublicId(), discount);
         if (discount.signum() <= 0) {
             throw invalid("Promotion discount must be greater than zero");
         }
-        return new Candidate(
-                promotion, wallet, campaign, conditions, actions,
-                request.contextJson(), discount);
+        return candidate;
     }
 
     private List<Candidate> selectBest(
             List<Candidate> candidates, BigDecimal originalAmount) {
         Selection best = Selection.empty();
         for (Candidate candidate : candidates) {
-            if (!isStackable(candidate)) {
-                best = better(best, selectionOf(List.of(candidate), originalAmount));
-            }
+            best = better(best, selectionOf(List.of(candidate), originalAmount));
         }
-
-        List<Candidate> stackable = candidates.stream()
-                .filter(this::isStackable)
-                .sorted(candidateOrder())
-                .toList();
-        if (stackable.isEmpty()) {
-            return best.candidates();
-        }
-        if (stackable.size() > MAX_COMPATIBILITY_CANDIDATES) {
-            List<Candidate> selected = new ArrayList<>();
-            for (Candidate candidate : stackable) {
-                List<Candidate> trial = new ArrayList<>(selected);
-                if (selected.stream().allMatch(current -> compatible(current, candidate))) {
-                    trial.add(candidate);
-                    Selection trialSelection = selectionOf(trial, originalAmount);
-                    if (!trialSelection.candidates().isEmpty()) {
-                        selected = trial;
-                    }
-                }
-                best = better(best, selectionOf(List.of(candidate), originalAmount));
-            }
-            best = better(best, selectionOf(selected, originalAmount));
-            return best.candidates();
-        }
-
-        SelectionAccumulator accumulator = new SelectionAccumulator(best, originalAmount);
-        searchCompatible(stackable, 0, new ArrayList<>(), accumulator);
-        return accumulator.best.candidates();
-    }
-
-    private void searchCompatible(
-            List<Candidate> candidates,
-            int index,
-            List<Candidate> selected,
-            SelectionAccumulator accumulator) {
-        if (index == candidates.size()) {
-            accumulator.best = better(
-                    accumulator.best,
-                    selectionOf(List.copyOf(selected), accumulator.originalAmount));
-            return;
-        }
-        searchCompatible(candidates, index + 1, selected, accumulator);
-        Candidate next = candidates.get(index);
-        if (selected.stream().allMatch(current -> compatible(current, next))) {
-            selected.add(next);
-            searchCompatible(candidates, index + 1, selected, accumulator);
-            selected.remove(selected.size() - 1);
-        }
+        return best.candidates();
     }
 
     private Selection better(
@@ -479,12 +437,6 @@ public class PromotionEngineService {
             return Selection.empty();
         }
         discount = money(discount);
-        BigDecimal standardLimit = money(
-                originalAmount.multiply(new BigDecimal("0.50")));
-        boolean exempt = candidates.stream().allMatch(this::hasLegalCapExemption);
-        if (discount.compareTo(standardLimit) > 0 && !exempt) {
-            return Selection.empty();
-        }
         int walletItems = (int) candidates.stream()
                 .filter(candidate -> candidate.wallet() != null
                         || candidate.promotion().getPromotionType() == PromotionType.COUPON)
@@ -514,68 +466,20 @@ public class PromotionEngineService {
         return candidate.discount().min(remaining);
     }
 
-    private boolean isStackable(Candidate candidate) {
-        return Boolean.TRUE.equals(candidate.promotion().getStackable())
-                && Boolean.TRUE.equals(candidate.campaign().getStackable());
-    }
-
-    private boolean hasLegalCapExemption(Candidate candidate) {
-        String legalReference = candidate.campaign().getLegalNotificationRef();
-        return candidate.conditions().path("legalDiscountCapExempt").asBoolean(false)
-                && legalReference != null
-                && !legalReference.isBlank();
-    }
-
-    private boolean compatible(Candidate first, Candidate second) {
-        if (!isStackable(first) || !isStackable(second)) {
-            return false;
-        }
-        if (!Objects.equals(first.campaign().getPublicId(), second.campaign().getPublicId())
-                && (Boolean.TRUE.equals(first.campaign().getExclusiveCampaign())
-                || Boolean.TRUE.equals(second.campaign().getExclusiveCampaign()))) {
-            return false;
-        }
-        return allows(first, second) && allows(second, first);
-    }
-
-    private boolean allows(Candidate owner, Candidate other) {
-        JsonNode blocked = owner.conditions().get("notStackableWith");
-        if (matches(blocked, other.promotion())) {
-            return false;
-        }
-        JsonNode allowed = owner.conditions().get("stackableWith");
-        return allowed == null || !allowed.isArray() || allowed.isEmpty()
-                || matches(allowed, other.promotion());
-    }
-
-    private boolean matches(JsonNode values, Promotion promotion) {
-        if (values == null || !values.isArray()) {
-            return false;
-        }
-        for (JsonNode value : values) {
-            String token = value.asText();
-            if (token.equalsIgnoreCase(promotion.getPublicId())
-                    || token.equalsIgnoreCase(promotion.getPromotionType().name())
-                    || (promotion.getCode() != null
-                    && token.equalsIgnoreCase(promotion.getCode()))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean hasCompatibilityRules(List<Candidate> candidates) {
-        long voucherCount = candidates.stream()
-                .filter(candidate -> candidate.promotion().getPromotionType() == PromotionType.VOUCHER)
-                .count();
-        return voucherCount > 1 || candidates.stream().anyMatch(candidate ->
-                configuredArray(candidate.conditions().get("stackableWith"))
-                        || configuredArray(candidate.conditions().get("notStackableWith"))
-                        || candidate.conditions().has("allowMultipleVoucherPerOrder"));
-    }
-
     private boolean configuredArray(JsonNode value) {
         return value != null && value.isArray() && !value.isEmpty();
+    }
+
+    private void requireSingleManualSelection(
+            List<String> promotionIds,
+            List<String> walletIds,
+            String couponCode) {
+        long selectionCount = promotionIds.stream().distinct().count()
+                + walletIds.stream().distinct().count()
+                + (couponCode == null || couponCode.isBlank() ? 0 : 1);
+        if (selectionCount > 1) {
+            throw invalid("Only one voucher or coupon can be selected per booking");
+        }
     }
 
     private void requireCapacity(
@@ -594,7 +498,7 @@ public class PromotionEngineService {
         long userUsage = redemptionRepository
                 .countByPromotionPublicIdAndUserPublicIdAndStatusInAndDeletedAtIsNull(
                         promotion.getPublicId(), userPublicId, CAPACITY_STATUSES);
-        if (userUsage >= promotion.getMaxRedemptionsPerUser()) {
+        if (userUsage >= customerPromotionLimit(promotion, campaign)) {
             throw conflict("Promotion usage limit for this customer is exhausted");
         }
         if (wallet != null) {
@@ -610,11 +514,6 @@ public class PromotionEngineService {
         if (campaign.getMaxRedemptions() != null
                 && campaignUsage >= campaign.getMaxRedemptions()) {
             throw conflict("Campaign redemption capacity is exhausted");
-        }
-        long campaignUserUsage = redemptionRepository.countCampaignUserRedemptions(
-                campaign.getPublicId(), userPublicId, CAPACITY_STATUSES);
-        if (campaignUserUsage >= campaign.getMaxRedemptionsPerUser()) {
-            throw conflict("Campaign usage limit for this customer is exhausted");
         }
         BigDecimal availableBudget = campaign.getBudgetRemaining()
                 .subtract(campaign.getBudgetReserved());
@@ -652,7 +551,7 @@ public class PromotionEngineService {
                     .countByPromotionPublicIdAndUserPublicIdAndStatusInAndDeletedAtIsNull(
                             promotion.getPublicId(), userPublicId, CAPACITY_STATUSES);
             if (userUsage + byPromotion.get(promotion.getPublicId())
-                    > promotion.getMaxRedemptionsPerUser()) {
+                    > customerPromotionLimit(promotion, candidate.campaign())) {
                 throw conflict("Selected promotions exceed customer promotion capacity");
             }
             if (candidate.wallet() != null) {
@@ -682,11 +581,6 @@ public class PromotionEngineService {
                     && usage + 1 > campaign.getMaxRedemptions()) {
                 throw conflict("Selected promotions exceed campaign capacity");
             }
-            long userUsage = redemptionRepository.countCampaignUserRedemptions(
-                    campaign.getPublicId(), userPublicId, CAPACITY_STATUSES);
-            if (userUsage + 1 > campaign.getMaxRedemptionsPerUser()) {
-                throw conflict("Selected promotions exceed customer campaign capacity");
-            }
             BigDecimal totalDiscount = allocatedByCampaign.get(campaign.getPublicId());
             BigDecimal availableBudget = campaign.getBudgetRemaining()
                     .subtract(campaign.getBudgetReserved());
@@ -694,6 +588,15 @@ public class PromotionEngineService {
                 throw conflict("Selected promotions exceed campaign budget");
             }
         }
+    }
+
+    private int customerPromotionLimit(
+            Promotion promotion, PromotionCampaign campaign) {
+        int promotionLimit = promotion.getMaxRedemptionsPerUser() == null
+                ? Integer.MAX_VALUE : promotion.getMaxRedemptionsPerUser();
+        int campaignCeiling = campaign.getMaxRedemptionsPerUser() == null
+                ? Integer.MAX_VALUE : campaign.getMaxRedemptionsPerUser();
+        return Math.min(promotionLimit, campaignCeiling);
     }
 
     private UserPromotion requireWallet(
@@ -818,13 +721,4 @@ public class PromotionEngineService {
         }
     }
 
-    private static final class SelectionAccumulator {
-        private Selection best;
-        private final BigDecimal originalAmount;
-
-        private SelectionAccumulator(Selection best, BigDecimal originalAmount) {
-            this.best = best;
-            this.originalAmount = originalAmount;
-        }
-    }
 }

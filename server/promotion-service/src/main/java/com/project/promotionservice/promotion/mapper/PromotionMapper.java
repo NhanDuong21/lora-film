@@ -35,7 +35,7 @@ public class PromotionMapper {
         promotion.setDescription(blankToNull(request.description()));
         promotion.setPublicVisible(request.publicVisible());
         promotion.setPriority(request.priority());
-        promotion.setStackable(request.stackable());
+        promotion.setStackable(false);
         promotion.setConditionsJson(write(request.conditionsJson()));
         promotion.setActionsJson(write(request.actionsJson()));
         promotion.setMetadataJson(writeNullable(request.metadataJson()));

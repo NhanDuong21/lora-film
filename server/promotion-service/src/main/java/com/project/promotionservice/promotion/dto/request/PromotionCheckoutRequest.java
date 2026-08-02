@@ -1,6 +1,7 @@
 package com.project.promotionservice.promotion.dto.request;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -21,8 +22,8 @@ public record PromotionCheckoutRequest(
                 message = "userPublicId must be a positive account ID or a valid UUID")
         String userPublicId,
         @NotNull @DecimalMin(value = "0.01") BigDecimal originalAmount,
-        @Size(max = 10) List<@Pattern(regexp = UUID_PATTERN) String> selectedUserPromotionPublicIds,
-        @Size(max = 10) List<@Pattern(regexp = UUID_PATTERN) String> selectedPromotionPublicIds,
+        @Size(max = 1) List<@Pattern(regexp = UUID_PATTERN) String> selectedUserPromotionPublicIds,
+        @Size(max = 1) List<@Pattern(regexp = UUID_PATTERN) String> selectedPromotionPublicIds,
         @Size(max = 100)
         @Pattern(regexp = "^[A-Za-z0-9_-]*$") String couponCode,
         @Size(max = 20) String customerPhone,
@@ -50,5 +51,16 @@ public record PromotionCheckoutRequest(
                 selectedPromotionPublicIds, couponCode, customerPhone,
                 bookingPublicId, orderPublicId, currency, contextJson,
                 holdDurationSeconds, List.of(), List.of());
+    }
+
+    @AssertTrue(message = "Only one voucher or coupon can be selected per booking")
+    public boolean isSingleManualSelection() {
+        return size(selectedUserPromotionPublicIds)
+                + size(selectedPromotionPublicIds)
+                + (couponCode == null || couponCode.isBlank() ? 0 : 1) <= 1;
+    }
+
+    private static int size(List<String> values) {
+        return values == null ? 0 : (int) values.stream().distinct().count();
     }
 }
