@@ -131,13 +131,13 @@ const promotionSelectionId = (promotion) =>
   promotion?.code ||
   "";
 
-const promotionRequestSelection = (promotions = []) => ({
-  selectedUserPromotionPublicIds: promotions
-    .map(walletPromotionId)
-    .filter(Boolean),
-  selectedPromotionPublicIds: promotions
-    .map(systemPromotionId)
-    .filter(Boolean),
+const promotionRequestSelection = (promotion) => ({
+  selectedUserPromotionPublicIds: walletPromotionId(promotion)
+    ? [walletPromotionId(promotion)]
+    : [],
+  selectedPromotionPublicIds: systemPromotionId(promotion)
+    ? [systemPromotionId(promotion)]
+    : [],
 });
 
 const secondsUntil = (expiresAt) => {
@@ -375,7 +375,7 @@ export default function BookingCheckoutPage() {
   const [promotionLoading, setPromotionLoading] = useState(false);
   const [promotionError, setPromotionError] = useState("");
   const [promotionChooserOpen, setPromotionChooserOpen] = useState(false);
-  const [selectedPromotions, setSelectedPromotions] = useState([]);
+  const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [promotionPreview, setPromotionPreview] = useState(null);
   const [couponInput, setCouponInput] = useState("");
   const [appliedCouponCode, setAppliedCouponCode] = useState("");
@@ -389,7 +389,8 @@ export default function BookingCheckoutPage() {
     setPromotionLoading(true);
     setPromotionError("");
     try {
-      const [walletResult, publicResult] = await Promise.allSettled([
+      const [walletResult, publicResult, systemResult] =
+        await Promise.allSettled([
           customerPromotionService.getMyVouchers({
             page: 0,
             size: 100,
@@ -401,9 +402,14 @@ export default function BookingCheckoutPage() {
             size: 100,
             sort: "priority,asc",
           }),
+          customerPromotionService.getSystemPromotions({
+            page: 0,
+            size: 100,
+            sort: "priority,asc",
+          }),
         ]);
       if (
-        [walletResult, publicResult].every(
+        [walletResult, publicResult, systemResult].every(
           (result) => result.status === "rejected",
         )
       ) {
@@ -417,6 +423,10 @@ export default function BookingCheckoutPage() {
         publicResult.status === "fulfilled"
           ? (publicResult.value?.data ?? publicResult.value)
           : null;
+      const systemPayload =
+        systemResult.status === "fulfilled"
+          ? (systemResult.value?.data ?? systemResult.value)
+          : null;
       const walletItems = Array.isArray(walletPayload)
         ? walletPayload
         : walletPayload?.content || [];
@@ -426,6 +436,9 @@ export default function BookingCheckoutPage() {
       const publicItems = Array.isArray(publicPayload)
         ? publicPayload
         : publicPayload?.content || [];
+      const systemItems = Array.isArray(systemPayload)
+        ? systemPayload
+        : systemPayload?.content || [];
       const ownedPromotionIds = new Set(
         walletItems.map((item) => item.promotionPublicId).filter(Boolean),
       );
@@ -435,10 +448,11 @@ export default function BookingCheckoutPage() {
           (item) =>
             !ownedPromotionIds.has(item.promotionPublicId || item.publicId),
         ),
+        ...systemItems,
       ];
       setPromotionWallet(inventory);
       if (
-        [walletResult, publicResult].some(
+        [walletResult, publicResult, systemResult].some(
           (result) => result.status === "rejected",
         )
       ) {
@@ -732,7 +746,7 @@ export default function BookingCheckoutPage() {
           }));
           setScorePreview(null);
           setScorePreviewError("");
-          setSelectedPromotions([]);
+          setSelectedPromotion(null);
           setAppliedCouponCode("");
           try {
             setPromotionPreview(
@@ -764,7 +778,7 @@ export default function BookingCheckoutPage() {
         }));
         setScorePreview(null);
         setScorePreviewError("");
-        setSelectedPromotions([]);
+        setSelectedPromotion(null);
         setAppliedCouponCode("");
         try {
           setPromotionPreview(
@@ -839,32 +853,8 @@ export default function BookingCheckoutPage() {
     promotion,
     inventory = promotionWallet,
   ) => {
-    const id = promotionSelectionId(promotion);
-    const alreadySelected = selectedPromotions.some(
-      (selected) => String(promotionSelectionId(selected)) === String(id),
-    );
-    const nextSelections = alreadySelected
-      ? selectedPromotions.filter(
-          (selected) =>
-            String(promotionSelectionId(selected)) !== String(id),
-        )
-      : [...selectedPromotions, promotion];
-
+    const requestSelection = promotionRequestSelection(promotion);
     if (
-      !alreadySelected &&
-      selectedPromotions.length > 0 &&
-      (!promotion?.stackable ||
-        selectedPromotions.some((selected) => !selected?.stackable))
-    ) {
-      setPromotionError(
-        "Voucher này không thể cộng dồn với lựa chọn hiện tại.",
-      );
-      return;
-    }
-
-    const requestSelection = promotionRequestSelection(nextSelections);
-    if (
-      nextSelections.length > 0 &&
       requestSelection.selectedUserPromotionPublicIds.length === 0 &&
       requestSelection.selectedPromotionPublicIds.length === 0
     ) {
@@ -882,11 +872,33 @@ export default function BookingCheckoutPage() {
           ...requestSelection,
         }),
       });
-      setSelectedPromotions(nextSelections);
+      const requestedIds = new Set(
+        [walletPromotionId(promotion), systemPromotionId(promotion)]
+          .filter(Boolean)
+          .map(String),
+      );
+      const applied = (quote?.appliedPromotions || []).some((item) =>
+        [item?.userPromotionPublicId, item?.promotionPublicId]
+          .filter(Boolean)
+          .some((id) => requestedIds.has(String(id))),
+      );
+      if (!applied) {
+        const evaluation = (quote?.promotionEvaluations || []).find((item) =>
+          [item?.userPromotionPublicId, item?.promotionPublicId]
+            .filter(Boolean)
+            .some((id) => requestedIds.has(String(id))),
+        );
+        throw new Error(
+          evaluation?.reason ||
+            "Voucher chưa tạo ra mức giảm cho đơn hàng hiện tại.",
+        );
+      }
+      setSelectedPromotion(promotion);
       setAppliedCouponCode("");
       setCouponInput("");
       setPromotionPreview(quote);
       clearScoreSelection();
+      setPromotionChooserOpen(false);
     } catch (requestError) {
       setPromotionError(
         getBookingErrorMessage(
@@ -923,7 +935,7 @@ export default function BookingCheckoutPage() {
   };
 
   const clearPromotionSelection = async () => {
-    setSelectedPromotions([]);
+    setSelectedPromotion(null);
     setAppliedCouponCode("");
     setCouponInput("");
     clearScoreSelection();
@@ -948,7 +960,7 @@ export default function BookingCheckoutPage() {
         await previewBookingPromotions(
           bookingId,
           promotionPreviewSelection(inventory, selectedPaymentMethod, {
-            ...promotionRequestSelection(selectedPromotions),
+            ...promotionRequestSelection(selectedPromotion),
             couponCode: appliedCouponCode || null,
           }),
         ),
@@ -970,7 +982,7 @@ export default function BookingCheckoutPage() {
           couponCode: code,
         }),
       });
-      setSelectedPromotions([]);
+      setSelectedPromotion(null);
       setAppliedCouponCode(code);
       setPromotionPreview(quote);
       clearScoreSelection();
@@ -1039,7 +1051,7 @@ export default function BookingCheckoutPage() {
       if (["CONFIRMED", "COMPLETED"].includes(finalized?.status)) {
         if (selectedWalletPromotionIds.length > 0 || appliedCouponCode) {
           await loadPromotionWallet();
-          setSelectedPromotions([]);
+          setSelectedPromotion(null);
           setAppliedCouponCode("");
           setCouponInput("");
         }
@@ -1225,10 +1237,8 @@ export default function BookingCheckoutPage() {
   const {
     selectedUserPromotionPublicIds: selectedWalletPromotionIds,
     selectedPromotionPublicIds: selectedSystemPromotionIds,
-  } = promotionRequestSelection(selectedPromotions);
-  const selectedPromotionIds = selectedPromotions
-    .map(promotionSelectionId)
-    .filter(Boolean);
+  } = promotionRequestSelection(selectedPromotion);
+  const selectedPromotionId = promotionSelectionId(selectedPromotion);
   const refreshPromotionPreviewForPaymentMethod = async (nextPaymentMethod) => {
     if (booking?.amountLockedAt) {
       return;
@@ -1245,7 +1255,7 @@ export default function BookingCheckoutPage() {
       setPromotionPreview(quote);
       setPromotionError("");
     } catch (requestError) {
-      setSelectedPromotions([]);
+      setSelectedPromotion(null);
       setAppliedCouponCode("");
       setCouponInput("");
       clearScoreSelection();
@@ -1333,7 +1343,7 @@ export default function BookingCheckoutPage() {
         vouchers={promotionWallet}
         loading={promotionLoading}
         error={promotionError}
-        selectedPromotionIds={selectedPromotionIds}
+        selectedPromotionId={selectedPromotionId}
         backendAppliedIds={(promotionPreview?.appliedPromotions || [])
           .flatMap((item) => [
             item.userPromotionPublicId,
@@ -1345,7 +1355,10 @@ export default function BookingCheckoutPage() {
         bookingContext={promotionContext}
         onSelect={handlePromotionSelect}
         onClaim={handleClaimPromotion}
-        onClear={() => void clearPromotionSelection()}
+        onClear={() => {
+          void clearPromotionSelection();
+          setPromotionChooserOpen(false);
+        }}
         onClose={() => setPromotionChooserOpen(false)}
         onRefresh={refreshPromotionOptions}
       />
@@ -1816,40 +1829,33 @@ export default function BookingCheckoutPage() {
                 </span>
               </div>
 
-              {selectedPromotions.length > 0 ? (
+              {selectedPromotion ? (
                 <div className="min-w-0 space-y-3">
-                  <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                    {selectedPromotions.map((promotion) => (
-                      <div
-                        key={promotionSelectionId(promotion)}
-                        className="flex min-w-0 items-start gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                            <p className="min-w-0 break-words text-xs font-black text-white">
-                              {promotion.name || "Voucher LoraFilm"}
-                            </p>
-                            <span className="shrink-0 text-xs font-black text-emerald-400">
-                              {voucherDiscountSummary(promotion)}
-                            </span>
-                          </div>
-                          {promotion.code && (
-                            <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
-                              {promotion.code}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void handlePromotionSelect(promotion)}
-                          disabled={promotionLoading}
-                          aria-label={`Bỏ ${promotion.name || "voucher"}`}
-                          className="-mr-1 -mt-1 shrink-0 rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                  <div className="flex min-w-0 items-start gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                        <p className="min-w-0 break-words text-xs font-black text-white">
+                          {selectedPromotion.name || "Voucher LoraFilm"}
+                        </p>
+                        <span className="shrink-0 text-xs font-black text-emerald-400">
+                          {voucherDiscountSummary(selectedPromotion)}
+                        </span>
                       </div>
-                    ))}
+                      {selectedPromotion.code && (
+                        <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
+                          {selectedPromotion.code}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void clearPromotionSelection()}
+                      disabled={promotionLoading}
+                      aria-label="Bỏ chọn voucher"
+                      className="-mr-1 -mt-1 shrink-0 rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     {promotionPreview?.discountAmount > 0 && (

@@ -1832,7 +1832,7 @@ function CampaignModal({ record, busy, onClose, onSave }) {
             className={fieldClass}
           />
         </Field>
-        <Field label="Lượt tối đa mỗi khách" required>
+        <Field label="Trần lượt mỗi khách trên từng ưu đãi" required>
           <input
             required
             min="1"
@@ -2262,7 +2262,6 @@ function PromotionModal({
         ? (initialRecord?.publicVisible ?? !cloning)
         : false,
     priority: initialRecord?.priority ?? 100,
-    stackable: initialRecord?.stackable ?? false,
     maxRedemptions: initialRecord?.maxRedemptions ?? "",
     maxRedemptionsPerUser: initialRecord?.maxRedemptionsPerUser ?? 1,
     validFrom: toLocalInput(
@@ -2504,7 +2503,7 @@ function PromotionModal({
       description: form.description.trim(),
       publicVisible: type === "VOUCHER" ? form.publicVisible : false,
       priority: Number(form.priority),
-      stackable: form.stackable,
+      stackable: false,
       conditionsJson,
       actionsJson,
       metadataJson,
@@ -2770,7 +2769,7 @@ function PromotionModal({
               <Field
                 label={
                   form.actionType === "PERCENTAGE"
-                    ? "Phần trăm giảm (tối đa 50%)"
+                    ? "Phần trăm giảm (tối đa 100%)"
                     : "Số tiền giảm"
                 }
                 required
@@ -2783,7 +2782,7 @@ function PromotionModal({
                   <input
                     required
                     min="1"
-                    max={form.actionType === "PERCENTAGE" ? 50 : undefined}
+                    max={form.actionType === "PERCENTAGE" ? 100 : undefined}
                     type="number"
                     value={form.actionValue}
                     onChange={(e) => update("actionValue", e.target.value)}
@@ -2825,13 +2824,6 @@ function PromotionModal({
                   className={fieldClass}
                 />
               </Field>
-              <div className="flex items-center pt-5">
-                <Toggle
-                  checked={form.stackable}
-                  onChange={(v) => update("stackable", v)}
-                  label="Cho phép cộng dồn với ưu đãi hợp lệ"
-                />
-              </div>
             </div>
           )}
           {step === 2 && (
