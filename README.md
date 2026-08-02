@@ -50,29 +50,44 @@ hcm26_cpl_java_05_group3/
 
 ## Run the complete project on Windows
 
-Prerequisites: Java 21, Maven 3.9+, Node.js/npm, and Docker Desktop.
+Prerequisites: Java 21, Maven 3.9+, Node.js/npm, Docker Desktop, and a MySQL
+client such as MySQL Workbench.
 
-From PowerShell at the repository root:
+From PowerShell at the repository root, copy the shared environment template,
+then update only the MySQL credentials when the defaults do not match your
+local database:
 
 ```powershell
 Copy-Item .env.example .env
-# Fill the required passwords, API keys and mail/payment credentials in .env.
-.\scripts\start-all.ps1
+docker compose up -d
 ```
 
-The script starts the infrastructure, Eureka, all nine backend services, API
-Gateway, and the React frontend in dependency order. It also waits for every
-port and verifies that all applications are registered as `UP` in Eureka.
+Copy every checked-in application template before starting the Java services:
 
 ```powershell
-.\scripts\status-all.ps1
-.\scripts\stop-all.ps1
-# Also stop Docker infrastructure:
-.\scripts\stop-all.ps1 -Infrastructure
+$applications = @(
+  'api-gateway',
+  'server/auth-service', 'server/movie-service', 'server/booking-service',
+  'server/payment-service', 'server/notification-service', 'server/user-service',
+  'server/promotion-service', 'server/score-service', 'server/analytics-service'
+)
+foreach ($application in $applications) {
+  Copy-Item "$application/src/main/resources/application.example.properties" `
+            "$application/src/main/resources/application.properties"
+}
 ```
 
-Use `.\scripts\start-all.ps1 -SkipBuild` when the JAR files have already been
-built. Runtime logs are written under `artifacts/runtime/`.
+Eureka already has a committed `application.properties`; its matching template
+is available at `eureka-server/src/main/resources/application.example.properties`.
+All nine data services use `spring.jpa.hibernate.ddl-auto=validate`. Execute the
+canonical SQL files in `docs/database/mysql/` for Auth, User, Movie, Booking,
+Payment, Notification, Score, and Analytics before starting those services.
+Do not execute `promotion-service-schema.sql` on a fresh database: Promotion
+Service owns that schema through Flyway and applies V1 through the latest
+migration automatically before Hibernate validates it.
+
+Start Eureka first, then the nine services, and finally API Gateway. Run
+`mvn spring-boot:run` from each corresponding directory in a separate terminal.
 
 - Frontend: `http://localhost:5173`
 - API Gateway: `http://localhost:8080`
@@ -90,8 +105,10 @@ npm run dev
 
 ## Backend Run Instructions
 
-The backend uses a microservices architecture. Docker Compose creates all
-required databases and loads the required schemas automatically.
+The backend uses a microservices architecture. Docker Compose creates the
+service databases and grants the configured application user access. Manual SQL
+schemas must still be executed as described above; Promotion is the exception
+because Flyway owns its schema.
 
 Open a terminal in each service directory and run them independently. You can use the commands:
 
@@ -136,7 +153,6 @@ cp .env.example .env
 2. Edit `.env` and add your values for:
 
 - `MYSQL_ROOT_PASSWORD`
-- `MYSQL_DATABASE`
 - `MYSQL_USER`
 - `MYSQL_PASSWORD`
 

@@ -7,11 +7,6 @@ CREATE DATABASE notification_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_0900_ai_ci;
 
-CREATE USER IF NOT EXISTS 'notification_app'@'%'
-    IDENTIFIED BY 'replace-through-secret-manager';
-ALTER USER 'notification_app'@'%'
-    IDENTIFIED BY 'replace-through-secret-manager';
-
 USE notification_db;
 
 CREATE TABLE notification_requests (
@@ -281,6 +276,5 @@ INSERT INTO notification_preferences (
     ('dev-customer-marketing-opt-out', 'IN_APP', 'MARKETING', b'0', UTC_TIMESTAMP(6)),
     ('dev-customer-transactional', 'EMAIL', 'MARKETING', b'1', UTC_TIMESTAMP(6));
 
-GRANT SELECT, INSERT, UPDATE, DELETE
-    ON notification_db.* TO 'notification_app'@'%';
-FLUSH PRIVILEGES;
+-- Database users and credentials are provisioned by Docker Compose or the
+-- local database operator, never by this schema file.

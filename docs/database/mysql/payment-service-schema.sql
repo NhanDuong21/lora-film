@@ -21,6 +21,12 @@
 -- payment_refunds so provider callbacks cannot resurrect or corrupt a capture.
 -- ============================================================================
 
+CREATE DATABASE IF NOT EXISTS payment_db
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+
+USE payment_db;
+
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
