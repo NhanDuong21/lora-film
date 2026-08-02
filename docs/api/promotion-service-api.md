@@ -74,7 +74,7 @@ CREATE TABLE promotion_campaigns (
     budget_remaining DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Ngân sách còn lại',
     max_redemptions INT NULL COMMENT 'Số lượt sử dụng tối đa',
     redemption_count INT NOT NULL DEFAULT 0 COMMENT 'Số lượt đã sử dụng',
-    max_redemptions_per_user INT NOT NULL DEFAULT 1 COMMENT 'Số lượt tối đa mỗi người dùng',
+    max_redemptions_per_user INT NOT NULL DEFAULT 1 COMMENT 'Trần lượt mỗi người dùng trên từng promotion',
     legal_notification_ref VARCHAR(150) NULL COMMENT 'Mã hồ sơ thông báo khuyến mại',
     remarks TEXT NULL COMMENT 'Ghi chú nội bộ',
     version INT NOT NULL DEFAULT 1 COMMENT 'Phiên bản dữ liệu',
@@ -608,10 +608,11 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 - **BR-CAMP-02 (Kiểm soát ngân sách)**: Tự động chuyển chiến dịch sang `PAUSED` khi `budget_used + budget_reserved >= budget_amount * 0.98`. Campaign chỉ được publish/activate sau khi business approval đã `APPROVED`, legal review đã `PASSED` và budget dương.
 - **BR-CAMP-03 (Benefit thực thi)**: Campaign `COUPON/VOUCHER` chỉ được submit và publish khi có ít nhất một benefit đúng loại, chưa ở trạng thái terminal và có thời hạn giao với thời hạn campaign. `promotion_rules` là tùy chọn; không cho tạo `AUTOMATIC_DISCOUNT` vì checkout runtime hiện chưa hỗ trợ.
 - **BR-CAMP-04 (Coupon draft)**: Coupon mới luôn là `DRAFT`. Coupon đủ thời hạn được kích hoạt cùng lúc campaign chuyển sang `ACTIVE`; scheduler tiếp tục kích hoạt coupon có `valid_from` muộn hơn.
+- **BR-CAMP-05 (Quota clone độc lập)**: `campaign.maxRedemptions` và ngân sách là giới hạn chung toàn campaign. `campaign.maxRedemptionsPerUser` là trần áp riêng trên từng promotion; lượt của promotion nguồn không được cộng vào clone có `promotionPublicId` khác.
 - **BR-COUP-01 (Giới hạn mỗi khách hàng)**: Một `user_public_id` hoặc số điện thoại chỉ được áp dụng thành công mã coupon tối đa `max_redemptions_per_user` lần.
 - **BR-VOU-01 (Hạn chế vé tặng)**: Vé tặng 0đ (phát do sinh nhật hoặc nâng hạng thành viên) không áp dụng cho suất chiếu sớm (sneak show), các phòng chiếu VIP/IMAX/4DX/Gold Class và ngày Lễ Tết.
 - **BR-STACK-01 (Phạm vi runtime hiện tại)**: Reservation Runtime nhận đúng một mã coupon hoặc voucher và mức giá sau giảm không âm. Automatic rule discovery, stacking nhiều benefit và loyalty-point saga là pipeline riêng; không được giả lập stacking bằng cách gọi reserve nhiều lần cho cùng checkout.
-- **BR-ELIG-01 (Kiểm tra điều kiện)**: Thực hiện cơ chế fail-fast: Trạng thái -> Hạng thành viên (lấy từ `score-service` qua cache ACL) -> Điều kiện giỏ vé -> Trần pháp luật (Nghị định 81/2018/NĐ-CP - tối đa giảm 50% giá trị gốc).
+- **BR-ELIG-01 (Kiểm tra điều kiện)**: Thực hiện cơ chế fail-fast: Trạng thái -> Hạng thành viên (lấy từ `score-service` qua cache ACL) -> Điều kiện giỏ vé. `minimumOrderAmount` chỉ được áp dụng khi cấu hình tường minh; runtime không tự suy diễn ngưỡng đơn từ giá trị voucher.
 - **BR-REDEEM-01 (Vòng đời Reservation)**: State machine thực tế là `ACTIVE -> COMPLETED | RELEASED | CANCELLED | EXPIRED`; mọi trạng thái đích đều là terminal. `POST /internal/reservations` vừa validate vừa giữ atomically nên không tồn tại trạng thái `CREATED/RESERVED` trung gian. TTL từ 60 đến 1800 giây, mặc định 900 giây; job nội bộ tự chuyển phiên quá hạn sang `EXPIRED` và hoàn `budget_reserved`.
 - **BR-REDEEM-02 (Pricing snapshot)**: `originalAmount`, `discountAmount`, `finalAmount` và `currency` được chốt khi reserve. Confirm trong TTL phải ghi redemption đúng snapshot đã giữ, không tính lại theo cấu hình có thể vừa thay đổi. Refresh thì phải validate lại snapshot hiện vẫn hợp lệ.
 - **BR-REDEEM-03 (Idempotency và cạnh tranh)**: Mọi lệnh thay đổi trạng thái yêu cầu `X-Idempotency-Key`. Reserve ràng buộc key với payload; confirm/release/cancel/refresh idempotent theo reservation và dữ liệu đích. Redis lock chỉ giảm cạnh tranh; transaction, pessimistic lock và unique constraint của MySQL là nguồn bảo đảm cuối cùng.
@@ -770,10 +771,9 @@ Preview điều kiện benefit, campaign, quota, active hold và ngân sách t�
   `orderType(s)`, `seatType(s)`, `allowedUserIds`, `dayOfWeek`,
   `excludeRoomType(s)`, `excludeDates`, `requiredTierCode`,
   `requiresVerification`, `minimumOrderAmount/minOrderAmount`.
-- `allowMultipleVoucherPerOrder` được giữ để đọc payload cũ nhưng không còn là điều
-  kiện mở khóa stacking. Runtime dùng `Promotion.stackable` cùng
-  `PromotionCampaign.stackable`; `stackableWith` và `notStackableWith` tiếp tục lọc
-  compatibility cụ thể giữa các promotion.
+- `allowMultipleVoucherPerOrder`, `stackableWith`, `notStackableWith` và các cột
+  `stackable` được giữ để tương thích dữ liệu/schema cũ nhưng không còn tác dụng
+  runtime. Mỗi booking chỉ có một voucher/system promotion/coupon hiệu lực.
 
 #### 7.1.2. Create Reservation
 
@@ -1073,7 +1073,6 @@ Lấy danh sách các voucher thuộc quyền sở hữu của khách hàng đan
 | `PROMOTION_USAGE_LIMIT_REACHED` | 409 | Vượt quá số lượt sử dụng tối đa toàn hệ thống |
 | `PROMOTION_USER_LIMIT_REACHED` | 409 | Vượt quá lượt sử dụng tối đa của người dùng này |
 | `PROMOTION_MINIMUM_AMOUNT_NOT_MET`| 400 | Không đạt giá trị đơn hàng tối thiểu |
-| `LEGAL_DISCOUNT_CEILING_EXCEEDED` | 400 | Mức giảm vượt quá trần quy định của pháp luật (50%) |
 | `RESERVATION_NOT_FOUND` | 404 | Không tìm thấy phiên giữ khuyến mại |
 | `RESERVATION_EXPIRED` | 409 | Phiên giữ khuyến mại đã hết hạn TTL |
 | `RESERVATION_CONFLICT` | 409 | Benefit/quota/budget đang được giữ hoặc dữ liệu reservation không nhất quán |

@@ -366,8 +366,8 @@ Không kết luận quy định pháp luật hiện hành ở đây; vấn đề
 
 **Khắc phục**
 
-- Policy compliance phải chạy trên toàn quote sau stacking.
-- Quy tắc phải cấu hình/version hóa và có exception category được Legal phê duyệt.
+- Theo quyết định nghiệp vụ cuối, bỏ trần giảm 50% khỏi create/update và checkout runtime. `minimumOrderAmount` là ngưỡng giá trị đơn duy nhất khi promotion có cấu hình điều kiện này.
+- Mức giảm thực tế luôn là `min(configuredDiscount, originalAmount)`; đơn có giá trị thấp hơn voucher được giảm về 0đ, không âm. Percentage chỉ giới hạn ở 100% như validation dữ liệu.
 
 ---
 
@@ -659,8 +659,8 @@ Những phần này nên được giữ lại khi refactor.
 
 ## P2 — Đồng bộ sản phẩm và UX
 
-1. AUTO + manual selection phải được tối ưu cùng nhau.
-2. Đồng bộ multi-select/stacking giữa frontend và backend.
+1. Chốt manual selection là authoritative; chỉ dùng AUTO tốt nhất khi không có manual.
+2. Đồng bộ single-select giữa frontend, Booking và Promotion; gỡ cấu hình stacking khỏi form.
 3. Backend trả availability/reason thống nhất cho wallet/catalog.
 4. Bổ sung format/roomType/channel/date semantics.
 5. Đồng bộ action types và role names.
@@ -701,7 +701,7 @@ Những phần này nên được giữ lại khi refactor.
 10. Wallet của campaign paused/kill-switched trả unavailable reason đúng.
 11. Format/roomType/channel condition contract test từ Booking đến Promotion.
 12. Hold làm campaign chạm 98%, sau expiry không được pause vĩnh viễn.
-13. Hai promotion 50% không được vượt aggregate policy nếu policy giới hạn 50%.
+13. Voucher có giá trị lớn hơn đơn phải giảm đơn về đúng 0đ; `minimumOrderAmount` chỉ có hiệu lực khi được cấu hình tường minh.
 14. Remote promotion confirm thành công nhưng local booking commit fail phải được reconciliation phát hiện.
 
 ---
@@ -720,9 +720,9 @@ Promotion module không chỉ có lỗi UI nhỏ; có một số lỗi ở mức
 ## 9.1. Quyết định nghiệp vụ đã chốt
 
 1. `identityVerified` nghĩa là account đã hoàn tất bước xác thực để chuyển sang `ACTIVE`; giá trị được Auth Service ký trong access token. Claim thiếu hoặc sai kiểu được Booking xử lý fail-closed thành `false`.
-2. Customer có thể chọn nhiều voucher thủ công khi tất cả voucher đã chọn đều có `promotion.stackable=true` và campaign cho phép cộng dồn. Voucher không bật cộng dồn là lựa chọn độc quyền; coupon nhập mã vẫn là lựa chọn thủ công độc quyền. Mọi AUTO promotion hợp lệ luôn do backend nạp và ghép.
-3. `campaign.maxRedemptions` và `maxRedemptionsPerUser` được tính theo số reservation/order distinct, không nhân lên theo số promotion application trong cùng đơn. Số application riêng vẫn nằm ở redemption ledger.
-4. Các percentage action cộng dồn tuần tự trên số tiền còn lại. Effective discount mặc định không vượt 50% toàn quote; ngoại lệ phải có `legalDiscountCapExempt=true` trên mọi promotion và campaign có `legalNotificationRef`.
+2. Mỗi booking chỉ có một promotion benefit hiệu lực. Customer chọn tối đa một voucher/system promotion hoặc nhập một coupon; lựa chọn thủ công sẽ thay thế AUTO, còn khi không chọn thủ công engine lấy một AUTO tốt nhất.
+3. `campaign.maxRedemptions` được tính theo số reservation/order distinct trên toàn chiến dịch. `campaign.maxRedemptionsPerUser` là trần áp cho từng promotion, kết hợp với `promotion.maxRedemptionsPerUser` theo giá trị nhỏ hơn; lượt của khách được đếm theo `promotionPublicId` để các promotion clone trong cùng campaign không khóa lẫn nhau.
+4. Engine không cộng dồn promotion. Percentage action được tính một lần trên quote và tối đa 100%; fixed/full discount được giới hạn bằng giá trị đơn để final amount không âm. Không còn trần giảm runtime 50% hoặc ngưỡng tối thiểu suy diễn từ giá trị voucher.
 5. Promotion có điều kiện payment provider không được tạo checkout 0 đồng. Đơn còn phải thanh toán bắt buộc khóa provider trước khi amount lock.
 6. Full refund đảo promotion đã confirm, hoàn wallet usage, promotion/campaign counters và campaign budget bằng adjustment ledger append-only.
 7. Public claim dùng `promotion.maxRedemptions` làm claim inventory để voucher đã claim có quyền sử dụng được bảo đảm trong giới hạn. Cấp lại từ admin tạo grant instance mới sau khi grant cũ `USED`, `REVOKED` hoặc `EXPIRED`.
@@ -734,17 +734,17 @@ Promotion module không chỉ có lỗi UI nhỏ; có một số lỗi ở mức
 |---|---|---|
 | CRITICAL-01 | Đã sửa | Booking lưu provider trong amount lock; Payment từ chối provider thiếu/khác; callback kiểm tra provider thực tế; chặn provider-conditioned free checkout. |
 | HIGH-01 | Đã sửa | Auth ký claim `identityVerified`; Booking đọc claim và fail closed; bỏ hardcode `true`. |
-| HIGH-02 | Đã sửa | Engine enforce `campaign.stackable`, `exclusiveCampaign` và campaign priority trong compatibility/tie-breaker. |
-| HIGH-03 | Đã sửa | Capacity query dùng global campaign count, không chia theo promotion type. |
-| HIGH-04 | Đã sửa | Kiểm tra tổng delta theo promotion, wallet, campaign, user+campaign và budget sau khi chọn tổ hợp, dưới lock khi reserve. |
-| HIGH-05 | Đã sửa | AUTO candidates luôn được nạp cùng manual voucher/coupon và chọn tổ hợp tốt nhất. |
-| HIGH-06 | Đã sửa | Checkout dùng multi-select thật, gửi đầy đủ mảng wallet/system promotion ID; voucher không cộng dồn bị làm mờ theo lựa chọn hiện tại, còn AUTO vẫn do engine nạp và tối ưu cùng tập candidate. |
+| HIGH-02 | Đã thay thế chính sách | Engine chỉ chọn một candidate nên không còn tổ hợp cần kiểm tra `stackable`/`exclusiveCampaign`; campaign priority vẫn tham gia tie-breaker. Các trường stacking cũ chỉ được giữ để tương thích schema. |
+| HIGH-03 | Đã sửa | Tổng capacity dùng global campaign count, không chia theo promotion type. Quota mỗi khách được tính độc lập theo promotion để clone cùng campaign có lượt riêng. |
+| HIGH-04 | Đã sửa | Kiểm tra delta theo promotion, wallet, tổng campaign và budget sau khi chọn; runtime một booking chỉ có một promotion benefit. |
+| HIGH-05 | Đã thay thế chính sách | Lựa chọn voucher/coupon thủ công là authoritative và không ghép AUTO; nếu không có lựa chọn thủ công engine lấy đúng một AUTO tốt nhất. |
+| HIGH-06 | Đã sửa | Checkout dùng state chọn đơn; DTO Booking/Promotion giới hạn mảng tối đa một phần tử và engine từ chối mọi request có hơn một voucher/system promotion/coupon. |
 | HIGH-07 | Đã sửa | Thêm API idempotent `reverse`, trạng thái `REVERSED`, hoàn counters/wallet/budget và ghi adjustment reason code. |
 | HIGH-08 | Đã sửa | Redemption lưu `sequenceNo`, `amountBefore`, `discountAmount`, `amountAfter`; V11 backfill ledger cũ. |
 | HIGH-09 | Đã sửa | Snapshot campaign/type/code/name/priority/stackable/conditions/actions tại reserve; history/reversal đọc snapshot. |
 | HIGH-10 | Đã sửa | Chỉ xóa draft chưa có promotion, wallet, reservation hoặc redemption reference; template đã issue/redeem là immutable. |
 | HIGH-11 | Đã sửa | Ngưỡng exposure 98% chỉ từ chối reserve mới, không đổi business status sang `PAUSED`. |
-| HIGH-12 | Đã sửa | Compliance chạy trên aggregate quote; fixed/full/stacking đều chịu effective cap và legal exception có tham chiếu. |
+| HIGH-12 | Đã thay thế chính sách | Bỏ trần runtime 50% theo quyết định nghiệp vụ; percentage tối đa 100%, fixed/full discount tối đa bằng original amount và `minimumOrderAmount` là điều kiện tường minh duy nhất. |
 | HIGH-13 | Đã sửa | Promotion confirm/reverse phát durable outbox event; Booking consume qua inbox idempotent và scheduler đối chiếu sau grace period. Event chỉ có `orderPublicId` được bỏ qua; reservation ID lệch luôn là `MISMATCH`, không thể thành `MATCHED`. |
 | MEDIUM-01 | Đã sửa | Movie/Showtime context đưa `format` và `roomType` vào immutable Booking price snapshot rồi sang Promotion. |
 | MEDIUM-02 | Đã sửa | `channel` được snapshot theo actor (`WEB`/`BOX_OFFICE`), không còn hardcode ở promotion context. |
@@ -755,7 +755,7 @@ Promotion module không chỉ có lỗi UI nhỏ; có một số lỗi ở mức
 | MEDIUM-07 | Đã sửa | V11 bỏ unique user+template; admin issue tạo grant mới khi grant gần nhất không còn AVAILABLE. |
 | MEDIUM-08 | Đã sửa | Public claim khóa promotion và enforce claim inventory; không cấp trùng cho owner hiện có. |
 | MEDIUM-09 | Đã sửa | Campaign counter tăng/giảm một lần cho mỗi distinct reservation/order. |
-| MEDIUM-10 | Đã sửa | Percentage stacking dùng `SEQUENTIAL_REMAINING`, cùng sequence/basis được ghi vào ledger. |
+| MEDIUM-10 | Không còn áp dụng | Runtime chỉ chọn một promotion nên không còn percentage stacking; ledger vẫn lưu `sequenceNo`, amount before/discount/after để bảo toàn lịch sử. |
 | MEDIUM-11 | Đã sửa | Runtime chỉ chấp nhận ba action đã có UI và settlement đúng nghĩa: percentage, fixed amount, full discount. |
 | MEDIUM-12 | Đã sửa | Promotion admin endpoints dùng canonical role `OPERATIONS_MANAGER`, đồng nhất campaign/reservation. |
 | MEDIUM-13 | Đã sửa | Expiration worker lặp theo batch đến rỗng hoặc time budget 5.000 records mỗi lượt. |
@@ -765,6 +765,7 @@ Promotion module không chỉ có lỗi UI nhỏ; có một số lỗi ở mức
 ## 9.3. Clone voucher trong cùng campaign
 
 - Mỗi clone tiếp tục là một Promotion độc lập, có `publicId`, code, capacity, wallet grant và redemption ledger riêng; public catalog không group/deduplicate theo campaign hoặc `clonedFromPublicId`.
+- Lượt dùng của khách được đếm theo `promotionPublicId`. Dùng bản gốc hoặc một clone không làm các clone khác báo hết lượt; trần campaign theo khách chỉ đóng vai trò giới hạn tối đa cho từng promotion.
 - Clone draft kế thừa `publicVisible` của voucher nguồn thay vì luôn ép `false`.
 - Migration `V10__restore_public_clone_visibility.sql` nhận diện clone do endpoint legacy tạo, backfill `cloned_from_public_id` và khôi phục visibility khi nguồn là public voucher.
 - Vì vậy ba voucher gồm bản gốc và hai clone trong cùng campaign đều xuất hiện ở trang customer nếu cùng thỏa lifecycle/legal/kill-switch/time predicate.
@@ -788,19 +789,21 @@ Promotion module không chỉ có lỗi UI nhỏ; có một số lỗi ở mức
 | Thành phần | Lệnh xác minh | Kết quả |
 |---|---|---|
 | Auth Service | `mvn -q test` | 34 test, 0 failure/error |
-| Promotion Service | `mvn -q test` + focused contract tests | 69 test, 0 failure/error |
+| Promotion Service | `mvn -q test` + focused contract tests | 72 test, 0 failure/error |
 | Booking Service | `mvn -q test` | 164 test, 0 failure/error |
 | Payment Service | `mvn -q test` | 96 test, 0 failure/error |
 | User Service | `mvn -q test` | 28 test, 0 failure/error |
-| Frontend | `npm test -- --run` | 388 test, 0 failure/error |
+| Frontend | focused promotion/checkout regression | 25 test, 0 failure/error |
 | Frontend build | `npm run build` | Thành công |
 
-Các regression test trọng yếu bao phủ provider mismatch, verification fail-closed, campaign exclusivity/global capacity, AUTO + manual, sequential percentages, aggregate legal cap, free-checkout provider rule, confirmed reversal/adjustment ledger, Flyway/JPA validation, authoritative Booking promotion context, lifecycle event redelivery/order-only, trạng thái reconciliation và reservation ID mismatch.
+Các regression test trọng yếu bao phủ provider mismatch, verification fail-closed, global campaign capacity, quota độc lập của promotion clone, manual loại trừ AUTO, chọn một AUTO tốt nhất, từ chối nhiều manual voucher, voucher lớn hơn đơn trả final amount 0đ, minimum order tường minh, ẩn promotion đã dùng khỏi chooser, free-checkout provider rule, confirmed reversal/adjustment ledger, Flyway/JPA validation, authoritative Booking promotion context, lifecycle event redelivery/order-only, trạng thái reconciliation và reservation ID mismatch.
 
-## 9.7. Multi-select voucher và UX checkout
+## 9.7. Single-select voucher và UX checkout
 
-- `BookingCheckoutPage` lưu danh sách promotion đã chọn, preview lại toàn bộ danh sách sau mỗi thao tác và gửi đầy đủ `selectedUserPromotionPublicIds`/`selectedPromotionPublicIds` khi finalize.
-- Khi đã chọn voucher có `stackable=true`, các voucher không bật cộng dồn được làm mờ và vô hiệu hóa; khi chọn voucher không cộng dồn, mọi voucher còn lại được làm mờ. Voucher đang chọn luôn có thể bỏ chọn.
-- Modal giữ mở sau mỗi lựa chọn, hiển thị số voucher đã chọn và có hành động `Xong`/`Bỏ chọn tất cả`; kết quả `Đang áp dụng` vẫn lấy từ preview backend, tách biệt với ý định chọn trên UI.
-- Khối ưu đãi tại checkout dùng container bo góc, danh sách item co giãn, text/code tự xuống dòng và hàng nhập coupon dùng grid `minmax(0,1fr)` để không tràn sidebar.
-- Engine bỏ yêu cầu JSON ẩn `allowMultipleVoucherPerOrder`; hai voucher được ghép khi promotion và campaign đều cho phép cộng dồn, sau đó vẫn chịu `exclusiveCampaign`, `stackableWith`, `notStackableWith`, legal cap, capacity và budget.
+- `BookingCheckoutPage` lưu đúng một promotion đã chọn và chỉ gửi tối đa một ID trong `selectedUserPromotionPublicIds` hoặc `selectedPromotionPublicIds` khi preview/finalize.
+- Chọn thành công đóng modal; mở lại để đổi voucher, hoặc dùng nút xóa tại khối tóm tắt để bỏ lựa chọn hiện tại. Coupon và voucher loại trừ lẫn nhau.
+- Khối ưu đãi vẫn dùng container bo góc, item co giãn, text/code tự xuống dòng và hàng nhập coupon dùng grid `minmax(0,1fr)` để không tràn sidebar.
+- Form tạo/sửa promotion đã bỏ toggle “Cho phép cộng dồn với ưu đãi hợp lệ”; mọi create/update mới gửi `stackable=false` và backend mapper cũng ép `false`.
+- Booking DTO, Promotion DTO, Reservation DTO và Promotion Engine cùng từ chối hơn một lựa chọn thủ công. Runtime chọn đúng một candidate; manual selection chặn AUTO, còn không có manual selection thì lấy AUTO tốt nhất.
+- Không còn trần giảm mặc định 50%. Voucher cố định 15.000đ trên đơn 10.000đ giảm thực tế 10.000đ và final amount bằng 0đ; chỉ `minimumOrderAmount` được cấu hình tường minh mới khóa voucher theo giá trị đơn. Checkout vẫn chỉ lưu lựa chọn khi voucher thực sự xuất hiện trong `appliedPromotions`.
+- Modal chỉ hiển thị promotion đang eligible hoặc đang hoạt động nhưng chưa thỏa điều kiện đơn/phim/rạp/tài khoản. Wallet `USED`/hết lượt và evaluation terminal như `USAGE_LIMIT_REACHED`, hết ngân sách, hết hiệu lực hoặc cấu hình lỗi đều bị loại khỏi danh sách và khỏi số đếm tab.

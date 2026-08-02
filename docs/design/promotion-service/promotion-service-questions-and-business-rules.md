@@ -74,7 +74,7 @@
 | BR-CAMP-03 | Campaign có `budget_total > 50.000.000 VNĐ` 🟡*ASSUMPTION — cần Finance xác nhận ngưỡng* bắt buộc phải qua bước duyệt cấp 2 (role `FINANCE_DIRECTOR`), không chỉ `MARKETING_MANAGER`. |
 | BR-CAMP-04 | Sau khi Campaign đã có ít nhất 1 giao dịch `CONFIRMED`, các trường `discount_type`, `discount_value`, `conditions` **không được sửa trực tiếp** — mọi thay đổi tạo ra bản ghi `CampaignRule` phiên bản mới với `effective_from = now()`, giao dịch cũ giữ nguyên rule đã áp dụng tại thời điểm đó (forward-only, không hồi tố). |
 | BR-CAMP-05 | Người tạo Campaign (`created_by`) **không được** là người duyệt (`approved_by`) cùng một campaign — 4-eyes principle bắt buộc ở tầng database constraint, không chỉ ở UI. |
-| BR-CAMP-06 | Mọi Campaign có `discount_value` dạng phần trăm áp dụng cho vé phải qua `legal-compliance-module` kiểm tra `discount_value <= 50%` trước khi được phép chuyển `PENDING_APPROVAL` → `SCHEDULED`. |
+| BR-CAMP-06 | Promotion dạng phần trăm phải có `0 < discount_value <= 100`; đây là validation dữ liệu, không tạo thêm ngưỡng giá trị đơn. |
 | BR-CAMP-07 | Có "kill switch" cấp Admin: campaign có thể bị chuyển `PAUSED` ngay lập tức bởi role `SYSTEM_ADMIN` hoặc `MARKETING_MANAGER` bất kể trạng thái hiện tại (trừ `COMPLETED`/`CANCELLED`), hiệu lực tức thời qua invalidate cache Redis `promo:campaign:active` trong vòng ≤ 5 giây. |
 | BR-CAMP-08 | Campaign áp dụng mức giảm khác nhau theo khu vực/rạp (`applies_to.cinemaIds`) phải khai báo rõ, không được để trống (mặc định trống = áp dụng toàn quốc, phải là lựa chọn tường minh, không phải giá trị ngầm định gây nhầm lẫn). |
 
@@ -96,9 +96,9 @@
 |---|---|
 | BR-VOU-01 | Vé tặng (voucher 0đ, nguồn `BIRTHDAY`/`TIER_UPGRADE`) **không áp dụng** cho: suất chiếu sớm (trước ngày công chiếu chính thức), suất chiếu đặc biệt (IMAX/4DX/ScreenX/Gold Class), ngày Lễ/Tết, và các phim thuộc diện `isPremiere = true` từ movie-service. |
 | BR-VOU-02 | Voucher sinh nhật có hạn sử dụng **4 tháng** 🟡*theo thực tế Galaxy* kể từ ngày phát hành (`issued_at + 120 ngày`), tự động chuyển `EXPIRED` sau đó, không gia hạn. |
-| BR-VOU-03 | Một giao dịch được áp dụng nhiều voucher khi **mọi voucher được ghép** có `Promotion.stackable = true` và campaign tương ứng có `stackable = true`. Chọn voucher không bật cộng dồn làm voucher đó trở thành lựa chọn độc quyền; `allowMultipleVoucherPerOrder` chỉ còn là metadata tương thích dữ liệu cũ. |
+| BR-VOU-03 | Mỗi booking chỉ được áp dụng **tối đa 1 voucher/system promotion/coupon**. API từ chối request có nhiều lựa chọn; `stackable` và `allowMultipleVoucherPerOrder` chỉ còn là metadata tương thích dữ liệu cũ. |
 | BR-VOU-04 | Voucher **không được quy đổi thành tiền mặt** dưới bất kỳ hình thức nào (không hoàn tiền chênh lệch nếu giá trị voucher lớn hơn giá vé). |
-| BR-VOU-05 | Voucher không áp dụng đồng thời với các chương trình giảm giá cố định khác (Happy Day, Culture Day) trừ khi rule tường minh cho phép `stackableWith` — mặc định là **loại trừ lẫn nhau**. |
+| BR-VOU-05 | Voucher customer chọn không áp dụng đồng thời với chương trình giảm giá tự động khác. Lựa chọn thủ công được ưu tiên; khi customer không chọn, engine lấy một ưu đãi tự động tốt nhất. |
 | BR-VOU-06 | Voucher chính sách thành viên **không áp dụng cho giao dịch vé nhóm/vé đoàn B2B** (Co-Sales) — Eligibility Engine phải kiểm tra `orderType != GROUP_BOOKING` trước khi cho áp dụng voucher cá nhân. |
 | BR-VOU-07 | Voucher rách/hỏng/quá hạn tại quầy: nhân viên quét mã không hợp lệ → hệ thống trả lỗi rõ ràng `VOUCHER_EXPIRED`/`VOUCHER_INVALID`, không cho override thủ công trừ khi có quyền `CSKH_AGENT` + lý do ghi nhận vào audit log. |
 
@@ -117,9 +117,9 @@
 
 | Mã | Business Rule |
 |---|---|
-| BR-STACK-01 | Thứ tự xử lý pipeline **bắt buộc** theo đúng trình tự: Base Price → Discount tự động → Coupon → Voucher → Point Redemption Request. Không được đảo thứ tự trong bất kỳ trường hợp nào (đảm bảo tính deterministic, tái tạo được kết quả). |
+| BR-STACK-01 | Engine đánh giá các promotion hợp lệ rồi chọn **đúng một** benefit: lựa chọn thủ công nếu có, nếu không thì AUTO tốt nhất; Point Redemption được xử lý sau promotion. |
 | BR-STACK-02 | **Không cho phép cộng dồn 2 Coupon phần trăm** trên cùng một giao dhàng, dù đến từ 2 campaign khác nhau — chỉ 1 coupon phần trăm được áp dụng theo Priority Engine. |
-| BR-STACK-03 | **Cho phép cộng dồn** Voucher tiền mặt cố định (fixed amount) với Discount tự động theo hạng thành viên (2 loại khác bản chất: fixed amount vs percentage không xung đột về mặt tính toán và không vi phạm trần 50% nếu tính đúng thứ tự). |
+| BR-STACK-03 | Không cộng dồn voucher tiền mặt với discount tự động; mỗi booking chỉ giữ một promotion benefit hiệu lực. |
 | BR-STACK-04 | Khi 2 rule có cùng `priority`, hệ thống **luôn chọn phương án giảm nhiều tiền hơn cho khách** (customer-friendly default), trừ khi rule đánh dấu `forced: true`. |
 | BR-STACK-05 | Nếu tổng mức giảm cộng dồn (Discount + Coupon + Voucher) làm giá vé về **≤ 0**, hệ thống chặn ở mức **giá tối thiểu = 0đ** (không cho âm), phần chênh lệch dư **bị mất, không hoàn lại, không chuyển sang giao dịch khác**. |
 | BR-STACK-06 | Voucher/Coupon loại "miễn phí vé" (100% giảm) không được **cộng dồn với Point Redemption** trên cùng vé đó — nếu vé đã 0đ, hệ thống tự động khoá tuỳ chọn "dùng điểm" cho vé đó ở UI (tránh khách lãng phí điểm không cần thiết). |
@@ -145,6 +145,7 @@
 | BR-ROLLBACK-03 | Sau khi vé đã `CONFIRMED` (thanh toán thành công, vé đã xuất), **không có API nào trong Promotion Service được phép tự động hoàn coupon/voucher/điểm** — mọi trường hợp ngoại lệ (rạp huỷ suất chiếu do sự cố kỹ thuật) phải qua quy trình **CSKH thủ công có phê duyệt** (`POST /admin/vouchers/issue` với `source = COMPENSATION`), không phải rollback tự động của hệ thống. |
 | BR-ROLLBACK-04 | Coupon loại `SINGLE_USE` đã chuyển `status = USED` **không được** khôi phục lại kể cả khi giao dịch liên quan sau đó bị huỷ bởi quy trình CSKH thủ công — phát hành voucher đền bù mới thay vì tái sử dụng coupon cũ (tránh lỗi kế toán đối soát coupon 2 lần). |
 | BR-REDEEM-03 | Reservation quá hạn TTL mà chưa được `confirm()`/`rollback()` tường minh (do lỗi mất event) sẽ bị **job self-healing tự động rollback** trong vòng ≤ 2 phút kể từ khi hết hạn — không được để Reservation "treo" vô thời hạn gây khoá tài nguyên (lượt coupon, ngân sách). |
+| BR-REDEEM-04 | Quota mỗi khách được đếm theo từng `promotionPublicId`. `campaign.maxRedemptionsPerUser` là trần cho mỗi promotion trong campaign, không cộng lượt của promotion gốc và các clone; giới hạn hiệu lực là `min(promotion.maxRedemptionsPerUser, campaign.maxRedemptionsPerUser)`. `campaign.maxRedemptions` và ngân sách vẫn dùng chung toàn chiến dịch. |
 
 ## B8. Point / Tier Integration Boundary Rules
 
@@ -167,7 +168,7 @@
 
 | Mã | Business Rule |
 |---|---|
-| BR-LEGAL-01 | Mọi Campaign có `discount_type = PERCENTAGE` phải thoả `discount_value <= 50` — validate cứng tại tầng `legal-compliance-module`, không cho `SCHEDULED` nếu vi phạm, trừ khi thuộc diện miễn trừ theo Điều 8/10/11 NĐ 81/2018 và được `LEGAL_COMPLIANCE` role override kèm lý do bắt buộc ghi vào audit log. |
+| BR-LEGAL-01 | Runtime không áp trần giảm 50%. Percentage tối đa 100%; fixed/full discount được chặn ở `originalAmount`, vì vậy final amount tối thiểu là 0đ. Điều kiện giá trị đơn chỉ lấy từ `minimumOrderAmount` do admin cấu hình. |
 | BR-LEGAL-02 | Hệ thống theo dõi **tổng số ngày trong năm dương lịch** mà một loại vé/dịch vụ được áp dụng chương trình giảm giá — cảnh báo Marketing khi đạt **100/120 ngày** (ngưỡng cảnh báo sớm), chặn cứng khi đạt 120 ngày trừ trường hợp thuộc khuyến mại tập trung do Nhà nước tổ chức. |
 | BR-LEGAL-03 | Các Campaign thuộc diện phải thông báo Sở Công Thương **không được** chuyển sang `ACTIVE` nếu thiếu `legal_notification_ref` VÀ `start_date` cách ngày submit hồ sơ **dưới 3 ngày làm việc**. |
 | BR-LEGAL-04 | Rượu, thuốc lá không được dùng làm hàng hoá khuyến mại — nếu combo bắp nước có đồ uống có cồn (trường hợp đặc biệt tại một số rạp cao cấp), `legal-compliance-module` phải chặn combo đó khỏi mọi hình thức khuyến mại giảm giá/tặng kèm. |
@@ -185,7 +186,7 @@
 Rules in this document include business assumptions that still require
 Marketing/Finance/Legal confirmation. Implemented runtime behavior is narrower:
 one benefit per checkout, no automatic rule discovery/stacking, and no Score
-point mutation. Campaign legal/approval gates, the 50% percentage cap,
+point mutation. Campaign legal/approval gates, percentage validation up to 100%,
 reservation TTL/idempotency and budget enforcement are implemented in
 Promotion. Partner-funded promotions and settlement are out of scope.
 Cross-service eligibility is accepted only from a trusted caller
