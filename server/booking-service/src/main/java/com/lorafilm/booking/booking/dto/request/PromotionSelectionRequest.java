@@ -1,5 +1,6 @@
 package com.lorafilm.booking.booking.dto.request;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -7,11 +8,11 @@ import java.util.List;
 import java.util.Locale;
 
 public record PromotionSelectionRequest(
-        @Size(max = 10)
+        @Size(max = 1)
         List<@Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") String>
         selectedUserPromotionPublicIds,
 
-        @Size(max = 10)
+        @Size(max = 1)
         List<@Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") String>
         selectedPromotionPublicIds,
 
@@ -63,6 +64,13 @@ public record PromotionSelectionRequest(
         return paymentMethod == null || paymentMethod.isBlank()
                 ? null
                 : paymentMethod.trim().toUpperCase(Locale.ROOT);
+    }
+
+    @AssertTrue(message = "Only one voucher or coupon can be selected per booking")
+    public boolean isSingleManualSelection() {
+        return normalizedWalletIds().size()
+                + normalizedPromotionIds().size()
+                + (normalizedCouponCode() == null ? 0 : 1) <= 1;
     }
 
     public List<String> normalizedEvaluationWalletIds() {

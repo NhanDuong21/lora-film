@@ -1,5 +1,6 @@
 package com.lorafilm.booking.booking.dto.request;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -13,11 +14,11 @@ public record FinalizeCheckoutRequest(
         @Size(max = 100, message = "scoreIdempotencyKey must not exceed 100 characters")
         String scoreIdempotencyKey,
 
-        @Size(max = 10)
+        @Size(max = 1)
         List<@Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") String>
         selectedUserPromotionPublicIds,
 
-        @Size(max = 10)
+        @Size(max = 1)
         List<@Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") String>
         selectedPromotionPublicIds,
 
@@ -35,6 +36,11 @@ public record FinalizeCheckoutRequest(
 
     public int normalizedScorePoints() {
         return scorePoints == null ? 0 : scorePoints;
+    }
+
+    @AssertTrue(message = "Only one voucher or coupon can be selected per booking")
+    public boolean isSingleManualSelection() {
+        return promotionSelection().isSingleManualSelection();
     }
 
     public PromotionSelectionRequest promotionSelection() {
