@@ -29,7 +29,6 @@ export default function AdminLayout({ onBackHome }) {
     if (path.includes('/pricing')) return 'pricing';
     if (path === '/admin/showtime-schedules/create') return 'auto-schedule-create';
     if (path.includes('/showtime-schedules')) return 'auto-schedule-history';
-    if (path.endsWith('/events') || path.includes('/events')) return 'events-promo';
     if (path.includes('/promotions')) return 'promotions';
     if (path.endsWith('/cinemas') || path.includes('/cinemas')) return 'clusters';
     if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
@@ -43,7 +42,6 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/members')) return 'customers';
     if (path.endsWith('/staff')) return 'staff';
     if (path.endsWith('/payroll')) return 'payroll';
-    if (path.endsWith('/settings')) return 'settings';
     if (path.endsWith('/accounts')) return 'accounts';
     if (path.endsWith('/roles')) return 'roles';
     if (path.endsWith('/permissions')) return 'permissions';
