@@ -64,6 +64,15 @@ public class Booking extends FullAuditableEntity {
     @Column(name = "voucher_discount", precision = 12, scale = 2, nullable = false)
     private BigDecimal voucherDiscount = BigDecimal.ZERO;
 
+    @Column(name = "promotion_reservation_public_id", length = 36, unique = true)
+    private String promotionReservationPublicId;
+
+    @Column(name = "promotion_selection_fingerprint", length = 64)
+    private String promotionSelectionFingerprint;
+
+    @Column(name = "applied_promotions_json", columnDefinition = "JSON")
+    private String appliedPromotionsJson;
+
     @Column(name = "score_points_used", nullable = false)
     private Integer scorePointsUsed = 0;
 
@@ -223,6 +232,46 @@ public class Booking extends FullAuditableEntity {
         }
     }
 
+    public BigDecimal promotionEligibleAmount() {
+        BigDecimal grossAmount = ticketAmount.add(foodAmount).add(serviceFee).add(taxAmount);
+        return grossAmount.subtract(promotionDiscount).max(BigDecimal.ZERO)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    public void applyPromotionReservation(
+            String reservationPublicId,
+            BigDecimal discount,
+            String selectionFingerprint,
+            String appliedJson) {
+        if (amountLockedAt != null) {
+            throw new IllegalStateException("Cannot change promotion after amount lock");
+        }
+        BigDecimal normalizedDiscount = requireNonNegative(discount, "promotion engine discount")
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        if (normalizedDiscount.compareTo(promotionEligibleAmount()) > 0) {
+            throw new IllegalArgumentException("promotion engine discount exceeds eligible amount");
+        }
+        this.promotionReservationPublicId = requireText(
+                reservationPublicId, "promotionReservationPublicId");
+        this.promotionSelectionFingerprint = requireText(
+                selectionFingerprint, "promotionSelectionFingerprint");
+        this.appliedPromotionsJson = appliedJson;
+        this.voucherDiscount = normalizedDiscount;
+        recalculateFinalAmount();
+    }
+
+    public void recordPromotionSelection(String selectionFingerprint) {
+        if (amountLockedAt != null) {
+            throw new IllegalStateException("Cannot change promotion after amount lock");
+        }
+        this.promotionSelectionFingerprint = requireText(
+                selectionFingerprint, "promotionSelectionFingerprint");
+        this.promotionReservationPublicId = null;
+        this.appliedPromotionsJson = null;
+        this.voucherDiscount = BigDecimal.ZERO.setScale(2);
+        recalculateFinalAmount();
+    }
+
     private static Long requirePositive(Long value, String fieldName) {
         if (value == null || value <= 0) {
             throw new IllegalArgumentException(fieldName + " must be positive");
@@ -351,6 +400,30 @@ public class Booking extends FullAuditableEntity {
 
     public void setVoucherDiscount(BigDecimal voucherDiscount) {
         this.voucherDiscount = voucherDiscount;
+    }
+
+    public String getPromotionReservationPublicId() {
+        return promotionReservationPublicId;
+    }
+
+    public void setPromotionReservationPublicId(String promotionReservationPublicId) {
+        this.promotionReservationPublicId = promotionReservationPublicId;
+    }
+
+    public String getPromotionSelectionFingerprint() {
+        return promotionSelectionFingerprint;
+    }
+
+    public void setPromotionSelectionFingerprint(String promotionSelectionFingerprint) {
+        this.promotionSelectionFingerprint = promotionSelectionFingerprint;
+    }
+
+    public String getAppliedPromotionsJson() {
+        return appliedPromotionsJson;
+    }
+
+    public void setAppliedPromotionsJson(String appliedPromotionsJson) {
+        this.appliedPromotionsJson = appliedPromotionsJson;
     }
 
     public Integer getScorePointsUsed() {

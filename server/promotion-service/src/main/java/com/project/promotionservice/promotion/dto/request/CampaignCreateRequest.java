@@ -1,8 +1,5 @@
 package com.project.promotionservice.promotion.dto.request;
 
-import com.project.promotionservice.promotion.enums.CampaignType;
-import com.project.promotionservice.promotion.enums.FundingSource;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -13,8 +10,6 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-
-import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
 
 @Schema(description = "Request body to create a new promotion campaign")
 public class CampaignCreateRequest {
@@ -29,15 +24,6 @@ public class CampaignCreateRequest {
     private String name;
 
     private String description;
-
-    @NotNull(message = "campaignType is required")
-    private CampaignType campaignType;
-
-    @NotNull(message = "fundingSource is required")
-    private FundingSource fundingSource;
-
-    @Pattern(regexp = UUID_PATTERN, message = "partnerPublicId must be a valid UUID")
-    private String partnerPublicId;
 
     @NotNull(message = "priority is required")
     @Min(value = 0, message = "priority must be >= 0")
@@ -69,8 +55,8 @@ public class CampaignCreateRequest {
     private Instant endAt;
 
     @NotNull(message = "budgetAmount is required")
-    @DecimalMin(value = "0.0", inclusive = true, message = "budgetAmount must be >= 0")
-    private BigDecimal budgetAmount = BigDecimal.ZERO;
+    @DecimalMin(value = "0.01", message = "budgetAmount must be greater than 0")
+    private BigDecimal budgetAmount;
 
     @Min(value = 1, message = "maxRedemptions must be >= 1")
     private Integer maxRedemptions;
@@ -109,30 +95,6 @@ public class CampaignCreateRequest {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public CampaignType getCampaignType() {
-        return campaignType;
-    }
-
-    public void setCampaignType(CampaignType campaignType) {
-        this.campaignType = campaignType;
-    }
-
-    public FundingSource getFundingSource() {
-        return fundingSource;
-    }
-
-    public void setFundingSource(FundingSource fundingSource) {
-        this.fundingSource = fundingSource;
-    }
-
-    public String getPartnerPublicId() {
-        return partnerPublicId;
-    }
-
-    public void setPartnerPublicId(String partnerPublicId) {
-        this.partnerPublicId = partnerPublicId;
     }
 
     public Integer getPriority() {

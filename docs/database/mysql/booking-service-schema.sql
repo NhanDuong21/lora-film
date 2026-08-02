@@ -58,7 +58,16 @@ CREATE TABLE bookings (
         COMMENT 'Số tiền giảm giá từ chương trình khuyến mãi',
 
     voucher_discount DECIMAL(12,2) NOT NULL DEFAULT 0
-        COMMENT 'Số tiền giảm giá từ Voucher/Coupon',
+        COMMENT 'Số tiền giảm từ Promotion Engine (AUTO, VOUCHER, COUPON)',
+
+    promotion_reservation_public_id CHAR(36) NULL
+        COMMENT 'Phiên giữ ưu đãi tại Promotion Service',
+
+    promotion_selection_fingerprint CHAR(64) NULL
+        COMMENT 'Dấu vân tay lựa chọn ưu đãi đã khóa cùng checkout',
+
+    applied_promotions_json JSON NULL
+        COMMENT 'Snapshot các ưu đãi được Engine áp dụng',
 
     score_points_used INT NOT NULL DEFAULT 0,
 
@@ -164,6 +173,7 @@ CREATE TABLE bookings (
     -- Ràng buộc duy nhất
     CONSTRAINT uk_booking_public UNIQUE(public_id),
     CONSTRAINT uk_booking_code UNIQUE(booking_code),
+    CONSTRAINT uk_booking_promotion_reservation UNIQUE(promotion_reservation_public_id),
     CONSTRAINT uk_active_customer_showtime_booking UNIQUE(active_customer_showtime_key),
 
     -- Ràng buộc kiểm tra số tiền hợp lệ (không âm)

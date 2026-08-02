@@ -4,7 +4,7 @@ import com.project.promotionservice.promotion.dto.request.CampaignCreateRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignDetailResponse;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
-import com.project.promotionservice.promotion.entity.PromotionRule;
+import com.project.promotionservice.promotion.entity.Promotion;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -14,10 +14,10 @@ import java.util.stream.Collectors;
 @Component
 public class CampaignMapper {
 
-    private final RuleMapper ruleMapper;
+    private final PromotionMapper promotionMapper;
 
-    public CampaignMapper(RuleMapper ruleMapper) {
-        this.ruleMapper = ruleMapper;
+    public CampaignMapper(PromotionMapper promotionMapper) {
+        this.promotionMapper = promotionMapper;
     }
 
     public PromotionCampaign toEntity(CampaignCreateRequest request) {
@@ -29,9 +29,6 @@ public class CampaignMapper {
         entity.setCode(request.getCode());
         entity.setName(request.getName());
         entity.setDescription(request.getDescription());
-        entity.setCampaignType(request.getCampaignType());
-        entity.setFundingSource(request.getFundingSource());
-        entity.setPartnerPublicId(request.getPartnerPublicId());
         entity.setPriority(request.getPriority());
         entity.setStackable(request.getStackable());
         entity.setExclusiveCampaign(request.getExclusiveCampaign());
@@ -61,7 +58,8 @@ public class CampaignMapper {
         return response;
     }
 
-    public CampaignDetailResponse toDetailResponse(PromotionCampaign entity, List<PromotionRule> rules) {
+    public CampaignDetailResponse toDetailResponse(
+            PromotionCampaign entity, List<Promotion> promotions) {
         if (entity == null) {
             return null;
         }
@@ -69,12 +67,12 @@ public class CampaignMapper {
         CampaignDetailResponse response = new CampaignDetailResponse();
         mapCommon(entity, response);
 
-        if (rules != null) {
-            response.setRules(rules.stream()
-                    .map(ruleMapper::toResponse)
+        if (promotions != null) {
+            response.setPromotions(promotions.stream()
+                    .map(promotionMapper::response)
                     .collect(Collectors.toList()));
         } else {
-            response.setRules(new ArrayList<>());
+            response.setPromotions(new ArrayList<>());
         }
 
         return response;
@@ -86,9 +84,6 @@ public class CampaignMapper {
         response.setName(entity.getName());
         response.setSlug(entity.getSlug());
         response.setDescription(entity.getDescription());
-        response.setCampaignType(entity.getCampaignType());
-        response.setFundingSource(entity.getFundingSource());
-        response.setPartnerPublicId(entity.getPartnerPublicId());
         response.setStatus(entity.getStatus());
         response.setApprovalStatus(entity.getApprovalStatus());
         response.setLegalStatus(entity.getLegalStatus());

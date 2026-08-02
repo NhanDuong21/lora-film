@@ -6,7 +6,6 @@ CREATE TABLE promotion_campaigns (
     slug VARCHAR(255) NOT NULL COMMENT 'Slug duy nhất',
     description TEXT NULL COMMENT 'Mô tả chiến dịch',
     campaign_type VARCHAR(50) NOT NULL COMMENT 'Loại chiến dịch',
-    funding_source VARCHAR(50) NOT NULL COMMENT 'Nguồn tài trợ',
     status VARCHAR(30) NOT NULL COMMENT 'Trạng thái chiến dịch',
     approval_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái phê duyệt',
     legal_status VARCHAR(30) NOT NULL COMMENT 'Trạng thái pháp lý',
@@ -441,91 +440,6 @@ CREATE INDEX idx_compensation_status ON compensation_vouchers (status);
 CREATE INDEX idx_compensation_deleted ON compensation_vouchers (deleted_at);
 
 -- ============================================================
--- PHASE 5 - PARTNER & SETTLEMENT
--- ============================================================
-
-CREATE TABLE partners (
-    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
-    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
-    code VARCHAR(100) NOT NULL COMMENT 'Mã đối tác',
-    name VARCHAR(255) NOT NULL COMMENT 'Tên đối tác',
-    partner_type VARCHAR(50) NOT NULL COMMENT 'Loại đối tác',
-    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái',
-    tax_code VARCHAR(50) NULL COMMENT 'Mã số thuế',
-    email VARCHAR(255) NULL COMMENT 'Email liên hệ',
-    phone VARCHAR(30) NULL COMMENT 'Số điện thoại',
-    contact_person VARCHAR(255) NULL COMMENT 'Người liên hệ',
-    address VARCHAR(500) NULL COMMENT 'Địa chỉ',
-    website VARCHAR(255) NULL COMMENT 'Website',
-    contract_number VARCHAR(100) NULL COMMENT 'Số hợp đồng',
-    contract_start_at DATETIME(6) NULL COMMENT 'Ngày bắt đầu hợp đồng',
-    contract_end_at DATETIME(6) NULL COMMENT 'Ngày kết thúc hợp đồng',
-    settlement_cycle VARCHAR(30) NOT NULL COMMENT 'Chu kỳ đối soát',
-    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
-    created_by CHAR(36) NULL COMMENT 'Người tạo',
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
-    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
-    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
-    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
-    CONSTRAINT uk_partner_public UNIQUE (public_id),
-    CONSTRAINT uk_partner_code UNIQUE (code)
-) COMMENT = 'Thông tin đối tác';
-
-CREATE INDEX idx_partner_status ON partners (status);
-
-CREATE INDEX idx_partner_type ON partners (partner_type);
-
-CREATE INDEX idx_partner_deleted ON partners (deleted_at);
-
--- ============================================================
--- PARTNER SETTLEMENTS
--- ============================================================
-
-CREATE TABLE partner_settlements (
-    id BIGINT UNSIGNED AUTO_INCREMENT COMMENT 'Khóa chính nội bộ' PRIMARY KEY,
-    public_id CHAR(36) NOT NULL COMMENT 'Định danh công khai (UUID)',
-    partner_public_id CHAR(36) NOT NULL COMMENT 'Public ID đối tác',
-    campaign_public_id CHAR(36) NULL COMMENT 'Public ID chiến dịch',
-    settlement_code VARCHAR(100) NOT NULL COMMENT 'Mã đối soát',
-    settlement_period_from DATETIME(6) NOT NULL COMMENT 'Kỳ đối soát từ',
-    settlement_period_to DATETIME(6) NOT NULL COMMENT 'Kỳ đối soát đến',
-    total_orders INT NOT NULL DEFAULT 0 COMMENT 'Tổng số đơn',
-    total_discount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Tổng tiền giảm',
-    partner_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền đối tác thanh toán',
-    platform_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền hệ thống chịu',
-    adjustment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Khoản điều chỉnh',
-    final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT 'Số tiền quyết toán',
-    currency VARCHAR(10) NOT NULL DEFAULT 'VND' COMMENT 'Đơn vị tiền tệ',
-    status VARCHAR(30) NOT NULL COMMENT 'Trạng thái đối soát',
-    approved_at DATETIME(6) NULL COMMENT 'Ngày phê duyệt',
-    paid_at DATETIME(6) NULL COMMENT 'Ngày thanh toán',
-    note TEXT NULL COMMENT 'Ghi chú',
-    metadata_json JSON NULL COMMENT 'Thông tin mở rộng',
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Ngày tạo',
-    created_by CHAR(36) NULL COMMENT 'Người tạo',
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Ngày cập nhật',
-    updated_by CHAR(36) NULL COMMENT 'Người cập nhật',
-    deleted_at DATETIME(6) NULL COMMENT 'Ngày xóa mềm',
-    deleted_by CHAR(36) NULL COMMENT 'Người xóa mềm',
-    CONSTRAINT uk_settlement_public UNIQUE (public_id),
-    CONSTRAINT uk_settlement_code UNIQUE (settlement_code),
-    CONSTRAINT chk_settlement_period CHECK (
-        settlement_period_to > settlement_period_from
-    )
-) COMMENT = 'Đối soát với đối tác';
-
-CREATE INDEX idx_settlement_partner ON partner_settlements (partner_public_id);
-
-CREATE INDEX idx_settlement_campaign ON partner_settlements (campaign_public_id);
-
-CREATE INDEX idx_settlement_status ON partner_settlements (status);
-
-CREATE INDEX idx_settlement_paid ON partner_settlements (paid_at);
-
-CREATE INDEX idx_settlement_deleted ON partner_settlements (deleted_at);
-
--- ============================================================
 -- PROMOTION CONFIGURATIONS
 -- ============================================================
 
@@ -782,41 +696,11 @@ CREATE INDEX idx_rule_effective ON promotion_rules (effective_from, effective_to
 CREATE INDEX idx_rule_deleted ON promotion_rules (deleted_at);
 
 -- ============================================================
--- RUNTIME ALIGNMENT (V3 - PARTNER / CONFIGURATION / INTEGRATION)
+-- RUNTIME ALIGNMENT (CONFIGURATION / INTEGRATION)
 -- ============================================================
 -- The Flyway V3 migration is the authoritative upgrade path for existing
 -- installations. These statements keep this canonical bootstrap schema in
 -- sync with the runtime entities and can be applied after the tables above.
-
-ALTER TABLE promotion_campaigns
-    ADD COLUMN partner_public_id CHAR(36) NULL COMMENT 'Partner funding this campaign'
-        AFTER funding_source;
-CREATE INDEX idx_campaign_partner ON promotion_campaigns (partner_public_id);
-
-ALTER TABLE coupons
-    ADD COLUMN partner_public_id CHAR(36) NULL COMMENT 'Partner funding this coupon'
-        AFTER campaign_public_id;
-CREATE INDEX idx_coupon_partner ON coupons (partner_public_id);
-
-ALTER TABLE vouchers
-    ADD COLUMN partner_public_id CHAR(36) NULL COMMENT 'Partner funding this voucher'
-        AFTER campaign_public_id;
-CREATE INDEX idx_voucher_partner ON vouchers (partner_public_id);
-
-ALTER TABLE partners
-    ADD COLUMN version INT NOT NULL DEFAULT 1 COMMENT 'Optimistic lock version'
-        AFTER settlement_cycle;
-
-ALTER TABLE partner_settlements
-    ADD COLUMN version INT NOT NULL DEFAULT 1 AFTER status,
-    ADD COLUMN settlement_rule VARCHAR(50) NOT NULL DEFAULT 'PERCENTAGE_OF_DISCOUNT'
-        AFTER currency,
-    ADD COLUMN partner_percentage DECIMAL(5,2) NOT NULL DEFAULT 0
-        AFTER settlement_rule,
-    ADD COLUMN fixed_amount_per_redemption DECIMAL(18,2) NULL
-        AFTER partner_percentage;
-CREATE INDEX idx_settlement_period
-    ON partner_settlements (partner_public_id, settlement_period_from, settlement_period_to);
 
 ALTER TABLE promotion_configurations
     ADD COLUMN version INT NOT NULL DEFAULT 1 AFTER editable,

@@ -33,7 +33,7 @@ public class ProviderCallbackService {
     private final PaymentTransactionService transactionService;
     private final ObjectMapper objectMapper;
 
-    @org.springframework.beans.factory.annotation.Value("${payment.providers.vnpay.trust-return-url:false}")
+    @org.springframework.beans.factory.annotation.Value("${payment.runtime.trust-verified-browser-return:false}")
     private boolean trustVnPayReturnUrl;
 
     public ProviderCallbackService(

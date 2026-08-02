@@ -1,20 +1,17 @@
 package com.project.promotionservice.promotion.dto.response;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class CampaignDetailResponse extends CampaignResponse {
 
-    private List<RuleResponse> rules;
+    private List<PromotionResponse> promotions = new ArrayList<>();
 
-    public CampaignDetailResponse() {
-        super();
+    public List<PromotionResponse> getPromotions() {
+        return promotions;
     }
 
-    public List<RuleResponse> getRules() {
-        return rules;
-    }
-
-    public void setRules(List<RuleResponse> rules) {
-        this.rules = rules;
+    public void setPromotions(List<PromotionResponse> promotions) {
+        this.promotions = promotions == null ? new ArrayList<>() : promotions;
     }
 }

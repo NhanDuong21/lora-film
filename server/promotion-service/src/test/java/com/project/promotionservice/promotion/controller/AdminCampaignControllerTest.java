@@ -59,8 +59,6 @@ class AdminCampaignControllerTest {
         CampaignCreateRequest request = new CampaignCreateRequest();
         request.setCode("WINTER2026");
         request.setName("Winter 2026 Promo");
-        request.setCampaignType(com.project.promotionservice.promotion.enums.CampaignType.COUPON);
-        request.setFundingSource(com.project.promotionservice.promotion.enums.FundingSource.SYSTEM);
         request.setTimezone("Asia/Ho_Chi_Minh");
         request.setStartAt(Instant.now());
         request.setEndAt(Instant.now().plusSeconds(3600));
@@ -89,7 +87,7 @@ class AdminCampaignControllerTest {
         response.setPublicId(campaignId);
         response.setCode("PROMO1");
         response.setName("Promo 1 Detail");
-        response.setRules(Collections.emptyList());
+        response.setPromotions(Collections.emptyList());
 
         when(campaignService.getCampaign(campaignId)).thenReturn(response);
 

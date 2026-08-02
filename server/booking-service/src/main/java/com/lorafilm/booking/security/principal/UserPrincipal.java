@@ -14,19 +14,28 @@ public class UserPrincipal implements UserDetails {
     private final String email;
     private final List<String> roles;
     private final List<String> permissions;
+    private final boolean identityVerified;
     private final Collection<? extends GrantedAuthority> authorities;
 
-    public UserPrincipal(Long id, String username, String email, List<String> roles, List<String> permissions, Collection<? extends GrantedAuthority> authorities) {
+    public UserPrincipal(Long id, String username, String email, List<String> roles,
+            List<String> permissions, boolean identityVerified,
+            Collection<? extends GrantedAuthority> authorities) {
         this.id = id;
         this.username = username != null ? username : (email != null ? email : (id != null ? id.toString() : "anonymous"));
         this.email = email;
         this.roles = roles != null ? roles : Collections.emptyList();
         this.permissions = permissions != null ? permissions : Collections.emptyList();
+        this.identityVerified = identityVerified;
         this.authorities = authorities != null ? authorities : Collections.emptyList();
     }
 
+    public UserPrincipal(Long id, String username, String email, List<String> roles,
+            List<String> permissions, Collection<? extends GrantedAuthority> authorities) {
+        this(id, username, email, roles, permissions, false, authorities);
+    }
+
     public UserPrincipal(Long id, String email, Collection<? extends GrantedAuthority> authorities) {
-        this(id, email, email, Collections.emptyList(), Collections.emptyList(), authorities);
+        this(id, email, email, Collections.emptyList(), Collections.emptyList(), false, authorities);
     }
 
     public Long getId() {
@@ -47,6 +56,10 @@ public class UserPrincipal implements UserDetails {
 
     public List<String> getPermissions() {
         return permissions;
+    }
+
+    public boolean isIdentityVerified() {
+        return identityVerified;
     }
 
     @Override

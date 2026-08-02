@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.client.ShowtimeBookingContext;
 import com.lorafilm.booking.booking.client.ShowtimeClient;
 import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
+import com.lorafilm.booking.booking.client.PromotionReservationClient;
 import com.lorafilm.booking.booking.dto.request.CancelBookingRequest;
 import com.lorafilm.booking.booking.dto.request.CreateBookingRequest;
 import com.lorafilm.booking.booking.dto.request.FinalizeCheckoutRequest;
+import com.lorafilm.booking.booking.dto.request.PromotionSelectionRequest;
 import com.lorafilm.booking.booking.dto.response.BookingDetailResponse;
 import com.lorafilm.booking.booking.dto.response.BookingResponse;
 import com.lorafilm.booking.booking.dto.response.BookingSpendingSummaryResponse;
+import com.lorafilm.booking.booking.dto.response.PromotionQuoteResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
 import com.lorafilm.booking.booking.entity.BookingSnapshot;
@@ -94,6 +97,8 @@ class BookingServiceTest {
     private com.lorafilm.booking.booking.service.BookingSnapshotService bookingSnapshotService;
     @Mock
     private ScoreRedemptionClient scoreRedemptionClient;
+    @Mock
+    private PromotionReservationClient promotionReservationClient;
 
         @Spy
         private BookingMapper bookingMapper = new BookingMapper();
@@ -123,6 +128,19 @@ class BookingServiceTest {
                 bookingTicketService,
                 bookingSnapshotService);
         bookingService.setScoreRedemptionClient(scoreRedemptionClient);
+        bookingService.setPromotionReservationClient(promotionReservationClient);
+        lenient().when(promotionReservationClient.preview(any()))
+                .thenAnswer(invocation -> {
+                    PromotionReservationClient.CheckoutCommand command = invocation.getArgument(0);
+                    return new PromotionQuoteResponse(
+                            false,
+                            command.originalAmount(),
+                            BigDecimal.ZERO.setScale(2),
+                            command.originalAmount(),
+                            command.currency(),
+                            List.of(),
+                            List.of());
+                });
         lenient().when(showtimeClient.getSeatLayout(anyLong()))
                 .thenReturn(nonAdjacentDefaultSeatLayout());
     }
@@ -553,7 +571,9 @@ class BookingServiceTest {
 
                 BookingResponse response = bookingService.finalizeCheckout(
                                 booking.getPublicId(),
-                                new FinalizeCheckoutRequest(50, "score-idem-1"));
+                                new FinalizeCheckoutRequest(
+                                                50, "score-idem-1",
+                                                List.of(), List.of(), null, "VNPAY"));
 
                 assertEquals(50, response.scorePointsUsed());
                 assertEquals(new BigDecimal("50000.00"), response.scoreDiscount());
@@ -566,6 +586,57 @@ class BookingServiceTest {
                                 eq(new BigDecimal("240000.00")),
                                 any(String.class),
                                 eq("score-idem-1"));
+        }
+
+        @Test
+        void shouldForwardAuthoritativePromotionContextAndFailClosedVerification() throws Exception {
+                Instant purchaseAt = Instant.parse("2026-08-01T09:00:00Z");
+                Instant showtimeAt = Instant.parse("2026-08-03T01:00:00Z");
+                Booking booking = existingBooking(Instant.now().plusSeconds(900));
+                booking.setId(100L);
+                booking.setCreatedAt(purchaseAt);
+                BookingPriceSnapshotPayload snapshotPayload = new BookingPriceSnapshotPayload(
+                                1001L, SHOWTIME_PUBLIC_ID, purchaseAt, "VND",
+                                101L, "movie-public-1", "Superman", "cinema-public-1",
+                                "IMAX", "PREMIUM", "BOX_OFFICE",
+                                new BigDecimal("240000"), List.of());
+                BookingPriceSnapshot priceSnapshot = new BookingPriceSnapshot();
+                priceSnapshot.setPricingBreakdownJson(
+                                objectMapper.writeValueAsString(snapshotPayload));
+                BookingSnapshot displaySnapshot = new BookingSnapshot();
+                displaySnapshot.setShowtimeStart(showtimeAt);
+                when(securityContextService.getCurrentUserId()).thenReturn(15L);
+                when(securityContextService.isIdentityVerified()).thenReturn(false);
+                when(bookingRepository.findByPublicId(booking.getPublicId()))
+                                .thenReturn(Optional.of(booking));
+                when(priceSnapshotRepository.findByBookingId(100L))
+                                .thenReturn(Optional.of(priceSnapshot));
+                when(bookingSnapshotRepository.findByBookingId(100L))
+                                .thenReturn(Optional.of(displaySnapshot));
+
+                bookingService.previewPromotions(
+                                booking.getPublicId(),
+                                new PromotionSelectionRequest(
+                                                List.of(),
+                                                List.of(),
+                                                null,
+                                                "MOMO",
+                                                List.of(),
+                                                List.of()));
+
+                ArgumentCaptor<PromotionReservationClient.CheckoutCommand> captor =
+                                ArgumentCaptor.forClass(PromotionReservationClient.CheckoutCommand.class);
+                verify(promotionReservationClient).preview(captor.capture());
+                var context = captor.getValue().contextJson();
+                assertEquals("MOMO", context.path("paymentMethod").asText());
+                assertEquals(false, context.path("identityVerified").asBoolean());
+                assertEquals("IMAX", context.path("format").asText());
+                assertEquals("PREMIUM", context.path("roomType").asText());
+                assertEquals("BOX_OFFICE", context.path("channel").asText());
+                assertEquals("2026-08-01", context.path("purchaseDate").asText());
+                assertEquals("SATURDAY", context.path("purchaseDayOfWeek").asText());
+                assertEquals("2026-08-03", context.path("showtimeDate").asText());
+                assertEquals("MONDAY", context.path("showtimeDayOfWeek").asText());
         }
 
         private SeatReservation reservation(

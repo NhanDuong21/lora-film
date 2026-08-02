@@ -53,6 +53,9 @@ final class TestFixtures {
         if (context.getExpiresAt() == null) {
             context.setExpiresAt(Instant.now().plusSeconds(900));
         }
+        if (context.getLockedPaymentProvider() == null) {
+            context.setLockedPaymentProvider("MOCK");
+        }
         BookingPaymentContext.AnalyticsSnapshotData snapshot = context.getAnalyticsSnapshot();
         if (snapshot == null) {
             snapshot = new BookingPaymentContext.AnalyticsSnapshotData();

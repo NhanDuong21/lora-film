@@ -1,21 +1,18 @@
 package com.project.promotionservice.reservation.dto.response;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.project.promotionservice.benefit.dto.response.BenefitResponses.RedemptionResponse;
-import com.project.promotionservice.benefit.enums.BenefitEnums.RedemptionType;
+import com.project.promotionservice.promotion.dto.response.AppliedPromotionResponse;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public class ReservationResponse {
 
     private String publicId;
     private String reservationCode;
-    private RedemptionType reservationType;
     private ReservationStatus status;
-    private String campaignPublicId;
-    private String benefitPublicId;
     private String bookingPublicId;
     private String orderPublicId;
     private String paymentPublicId;
@@ -27,12 +24,10 @@ public class ReservationResponse {
     private Instant reservationStartedAt;
     private Instant reservationExpiredAt;
     private Instant confirmedAt;
-    private Instant cancelledAt;
-    private String cancelledReason;
     private Instant rollbackAt;
     private String rollbackReason;
-    private JsonNode metadataJson;
-    private RedemptionResponse redemption;
+    private JsonNode contextJson;
+    private List<AppliedPromotionResponse> appliedPromotions = List.of();
 
     public String getPublicId() {
         return publicId;
@@ -50,36 +45,12 @@ public class ReservationResponse {
         this.reservationCode = reservationCode;
     }
 
-    public RedemptionType getReservationType() {
-        return reservationType;
-    }
-
-    public void setReservationType(RedemptionType reservationType) {
-        this.reservationType = reservationType;
-    }
-
     public ReservationStatus getStatus() {
         return status;
     }
 
     public void setStatus(ReservationStatus status) {
         this.status = status;
-    }
-
-    public String getCampaignPublicId() {
-        return campaignPublicId;
-    }
-
-    public void setCampaignPublicId(String campaignPublicId) {
-        this.campaignPublicId = campaignPublicId;
-    }
-
-    public String getBenefitPublicId() {
-        return benefitPublicId;
-    }
-
-    public void setBenefitPublicId(String benefitPublicId) {
-        this.benefitPublicId = benefitPublicId;
     }
 
     public String getBookingPublicId() {
@@ -170,22 +141,6 @@ public class ReservationResponse {
         this.confirmedAt = confirmedAt;
     }
 
-    public Instant getCancelledAt() {
-        return cancelledAt;
-    }
-
-    public void setCancelledAt(Instant cancelledAt) {
-        this.cancelledAt = cancelledAt;
-    }
-
-    public String getCancelledReason() {
-        return cancelledReason;
-    }
-
-    public void setCancelledReason(String cancelledReason) {
-        this.cancelledReason = cancelledReason;
-    }
-
     public Instant getRollbackAt() {
         return rollbackAt;
     }
@@ -202,19 +157,19 @@ public class ReservationResponse {
         this.rollbackReason = rollbackReason;
     }
 
-    public JsonNode getMetadataJson() {
-        return metadataJson;
+    public JsonNode getContextJson() {
+        return contextJson;
     }
 
-    public void setMetadataJson(JsonNode metadataJson) {
-        this.metadataJson = metadataJson;
+    public void setContextJson(JsonNode contextJson) {
+        this.contextJson = contextJson;
     }
 
-    public RedemptionResponse getRedemption() {
-        return redemption;
+    public List<AppliedPromotionResponse> getAppliedPromotions() {
+        return appliedPromotions;
     }
 
-    public void setRedemption(RedemptionResponse redemption) {
-        this.redemption = redemption;
+    public void setAppliedPromotions(List<AppliedPromotionResponse> appliedPromotions) {
+        this.appliedPromotions = appliedPromotions;
     }
 }

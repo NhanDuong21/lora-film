@@ -1,6 +1,5 @@
 package com.project.promotionservice.reservation.specification;
 
-import com.project.promotionservice.benefit.enums.BenefitEnums.RedemptionType;
 import com.project.promotionservice.reservation.entity.PromotionReservation;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import org.springframework.data.jpa.domain.Specification;
@@ -13,7 +12,6 @@ public final class ReservationSpecifications {
     }
 
     public static Specification<PromotionReservation> filter(
-            RedemptionType type,
             ReservationStatus status,
             String userPublicId,
             String bookingPublicId,
@@ -21,7 +19,6 @@ public final class ReservationSpecifications {
             Instant from,
             Instant to) {
         return Specification.where(notDeleted())
-                .and(equal("reservationType", type))
                 .and(equal("status", status))
                 .and(equal("userPublicId", blankToNull(userPublicId)))
                 .and(equal("bookingPublicId", blankToNull(bookingPublicId)))
@@ -41,20 +38,16 @@ public final class ReservationSpecifications {
     }
 
     private static Specification<PromotionReservation> createdAtFrom(Instant from) {
-        return from == null
-                ? null
-                : (root, query, builder) ->
+        return from == null ? null : (root, query, builder) ->
                 builder.greaterThanOrEqualTo(root.<Instant>get("createdAt"), from);
     }
 
     private static Specification<PromotionReservation> createdAtTo(Instant to) {
-        return to == null
-                ? null
-                : (root, query, builder) ->
+        return to == null ? null : (root, query, builder) ->
                 builder.lessThanOrEqualTo(root.<Instant>get("createdAt"), to);
     }
 
     private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

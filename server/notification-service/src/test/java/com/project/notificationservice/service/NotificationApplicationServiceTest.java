@@ -10,7 +10,9 @@ import com.project.notificationservice.entity.NotificationDelivery;
 import com.project.notificationservice.entity.NotificationPreference;
 import com.project.notificationservice.entity.NotificationRecipient;
 import com.project.notificationservice.entity.NotificationRequest;
+import com.project.notificationservice.entity.InAppNotification;
 import com.project.notificationservice.repository.NotificationDeliveryRepository;
+import com.project.notificationservice.repository.InAppNotificationRepository;
 import com.project.notificationservice.repository.NotificationPreferenceRepository;
 import com.project.notificationservice.repository.NotificationRecipientRepository;
 import com.project.notificationservice.repository.NotificationRequestRepository;
@@ -37,6 +39,7 @@ class NotificationApplicationServiceTest {
     private NotificationRecipientRepository recipientRepository;
     private NotificationDeliveryRepository deliveryRepository;
     private NotificationPreferenceRepository preferenceRepository;
+    private InAppNotificationRepository inAppNotificationRepository;
     private NotificationApplicationService service;
 
     @BeforeEach
@@ -45,6 +48,7 @@ class NotificationApplicationServiceTest {
         recipientRepository = mock(NotificationRecipientRepository.class);
         deliveryRepository = mock(NotificationDeliveryRepository.class);
         preferenceRepository = mock(NotificationPreferenceRepository.class);
+        inAppNotificationRepository = mock(InAppNotificationRepository.class);
         RecipientCryptoService crypto = mock(RecipientCryptoService.class);
         when(crypto.encrypt(any())).thenReturn("encrypted");
         when(requestRepository.save(any())).thenAnswer(invocation -> {
@@ -61,6 +65,7 @@ class NotificationApplicationServiceTest {
         when(deliveryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         service = new NotificationApplicationService(
                 requestRepository, recipientRepository, deliveryRepository, preferenceRepository,
+                inAppNotificationRepository,
                 crypto, new ObjectMapper(), new SimpleMeterRegistry());
     }
 
@@ -112,6 +117,19 @@ class NotificationApplicationServiceTest {
         assertThat(result.idempotent()).isTrue();
         assertThat(result.publicId()).isEqualTo("existing");
         org.mockito.Mockito.verify(requestRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void couponIssueCreatesAnImmediateInAppNotificationWithoutExposingItInWallet() {
+        service.acceptCouponIssued(new NotificationCommands.CouponIssuedNotification(
+                "coupon-event", "user", "CPN-1234", "Ưu đãi thành viên", null, "/booking"));
+
+        org.mockito.ArgumentCaptor<InAppNotification> captor =
+                org.mockito.ArgumentCaptor.forClass(InAppNotification.class);
+        org.mockito.Mockito.verify(inAppNotificationRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserPublicId()).isEqualTo("user");
+        assertThat(captor.getValue().getBody()).contains("CPN-1234");
+        assertThat(captor.getValue().getDeepLink()).isEqualTo("/booking");
     }
 
     private CreateNotificationCommand command(Category category) {

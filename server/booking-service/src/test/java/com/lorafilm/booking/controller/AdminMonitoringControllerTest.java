@@ -3,6 +3,7 @@ package com.lorafilm.booking.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.infrastructure.repository.BookingRetryTaskRepository;
+import com.lorafilm.booking.infrastructure.repository.BookingReconciliationTaskRepository;
 import com.lorafilm.booking.monitoring.controller.AdminMonitoringController;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,9 @@ public class AdminMonitoringControllerTest {
     @Mock
     private BookingRetryTaskRepository retryTaskRepository;
 
+    @Mock
+    private BookingReconciliationTaskRepository reconciliationTaskRepository;
+
     @InjectMocks
     private AdminMonitoringController adminMonitoringController;
 
@@ -45,6 +49,9 @@ public class AdminMonitoringControllerTest {
         when(bookingRepository.countByPaymentStatus(any())).thenReturn(5L);
         when(bookingRepository.countByBookingStatus(any())).thenReturn(12L);
         when(retryTaskRepository.countByStatus(any())).thenReturn(3L);
+        when(reconciliationTaskRepository
+                .countByReconciliationStatusAndReasonStartingWith(any(), any()))
+                .thenReturn(2L);
 
         mockMvc.perform(get("/api/admin/monitoring/summary")
                         .contentType(MediaType.APPLICATION_JSON))
@@ -53,6 +60,7 @@ public class AdminMonitoringControllerTest {
                 .andExpect(jsonPath("$.data.bookingToday").value(100))
                 .andExpect(jsonPath("$.data.paymentFailed").value(5))
                 .andExpect(jsonPath("$.data.expiredBooking").value(12))
-                .andExpect(jsonPath("$.data.pendingRetry").value(3));
+                .andExpect(jsonPath("$.data.pendingRetry").value(3))
+                .andExpect(jsonPath("$.data.promotionReconciliationMismatch").value(2));
     }
 }

@@ -5,52 +5,142 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState
-} from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, AlertTriangle, Search, ShieldCheck, CreditCard } from 'lucide-react';
+  useState,
+} from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  Clock,
+  AlertTriangle,
+  Search,
+  ShieldCheck,
+  CreditCard,
+  Gift,
+  X,
+} from "lucide-react";
 import {
   BOOKING_CHANGED_EVENT,
   getBookingDetails,
   cancelBooking,
   finalizeCheckout,
-  getOrCreateScoreRedemptionKey
-} from '../services/bookingService';
-import { getConcessions, getBookingFoodOrder, addFoodItem, updateFoodQuantity, removeFoodItem } from '../services/foodService';
-import BookingStepper from '../components/BookingStepper';
-import BookingCancellationModal from '../components/BookingCancellationModal';
-import BookingNoticeModal from '../components/BookingNoticeModal';
-import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
-import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
+  previewBookingPromotions,
+  getOrCreateScoreRedemptionKey,
+} from "../services/bookingService";
+import {
+  getConcessions,
+  getBookingFoodOrder,
+  addFoodItem,
+  updateFoodQuantity,
+  removeFoodItem,
+} from "../services/foodService";
+import BookingStepper from "../components/BookingStepper";
+import BookingCancellationModal from "../components/BookingCancellationModal";
+import BookingNoticeModal from "../components/BookingNoticeModal";
+import { getBookingErrorMessage } from "../utils/bookingErrorMessages";
+import scoreCustomerService from "@/features/score/customer/services/scoreCustomerService";
+import PromotionChooser from "@/features/promotion/customer/components/PromotionChooser";
+import customerPromotionService from "@/features/promotion/customer/services/customerPromotionService";
+import {
+  isWalletPromotionUsable,
+  voucherDiscountSummary,
+} from "@/features/promotion/shared/promotionPresentation";
 import {
   createPaymentHandoff,
-  getOrCreatePaymentAttemptKey
-} from '../services/paymentHandoffService';
+  getOrCreatePaymentAttemptKey,
+} from "../services/paymentHandoffService";
 import {
   paymentErrorCode,
-  paymentErrorMessage
-} from '@/features/payment/services/paymentService';
-import { getOptimizedImageUrl } from '@/utils/imageOptimization';
+  paymentErrorMessage,
+} from "@/features/payment/services/paymentService";
+import { getOptimizedImageUrl } from "@/utils/imageOptimization";
 
-const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
+const FALLBACK_POSTER =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
 
-const MOMO_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg';
-const MOMO_LOGO_FALLBACK_URL = 'https://res.cloudinary.com/dqc4hufot/image/upload/f_auto,q_auto,w_96/logo_jg9h5v.png';
+const MOMO_LOGO_URL =
+  "https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg";
+const MOMO_LOGO_FALLBACK_URL =
+  "https://res.cloudinary.com/dqc4hufot/image/upload/f_auto,q_auto,w_96/logo_jg9h5v.png";
 const CONCESSION_PAGE_SIZE = 12;
 const CHECKOUT_PHASE = Object.freeze({
-  ADD_ONS: 'ADD_ONS',
-  PAYMENT: 'PAYMENT'
+  ADD_ONS: "ADD_ONS",
+  PAYMENT: "PAYMENT",
 });
 const CATEGORY_LABELS = {
-  ALL: 'Tất cả',
-  FOOD: 'Đồ ăn',
-  DRINK: 'Nước uống',
-  COMBO: 'Combo'
+  ALL: "Tất cả",
+  FOOD: "Đồ ăn",
+  DRINK: "Nước uống",
+  COMBO: "Combo",
 };
 
-const formatCurrency = value => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
+const formatCurrency = (value) =>
+  `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 
-const secondsUntil = expiresAt => {
+const promotionEvaluationSelection = (inventory = []) => {
+  const walletIds = new Set();
+  const promotionIds = new Set();
+  inventory.forEach((promotion) => {
+    if (promotion?.promotionType === "COUPON") return;
+    const walletId =
+      promotion?.walletPublicId ||
+      promotion?.selectionPublicId ||
+      (promotion?.source === "CUSTOMER_WALLET" ? promotion?.publicId : null);
+    if (walletId) {
+      walletIds.add(walletId);
+      return;
+    }
+    const promotionId = promotion?.promotionPublicId || promotion?.publicId;
+    if (promotionId) promotionIds.add(promotionId);
+  });
+  return {
+    evaluationUserPromotionPublicIds: Array.from(walletIds),
+    evaluationPromotionPublicIds: Array.from(promotionIds),
+  };
+};
+
+const promotionPreviewSelection = (
+  inventory = [],
+  paymentMethod = null,
+  overrides = {},
+) => ({
+  ...promotionEvaluationSelection(inventory),
+  paymentMethod,
+  ...overrides,
+});
+
+const isSystemPromotion = (promotion) =>
+  promotion?.promotionType === "AUTO" ||
+  promotion?.source === "SYSTEM_AUTO";
+
+const walletPromotionId = (promotion) =>
+  promotion?.walletPublicId ||
+  promotion?.selectionPublicId ||
+  (promotion?.source === "CUSTOMER_WALLET" ? promotion?.publicId : null) ||
+  "";
+
+const systemPromotionId = (promotion) =>
+  isSystemPromotion(promotion)
+    ? promotion?.promotionPublicId || promotion?.publicId || ""
+    : "";
+
+const promotionSelectionId = (promotion) =>
+  walletPromotionId(promotion) ||
+  systemPromotionId(promotion) ||
+  promotion?.publicId ||
+  promotion?.voucherPublicId ||
+  promotion?.id ||
+  promotion?.code ||
+  "";
+
+const promotionRequestSelection = (promotion) => ({
+  selectedUserPromotionPublicIds: walletPromotionId(promotion)
+    ? [walletPromotionId(promotion)]
+    : [],
+  selectedPromotionPublicIds: systemPromotionId(promotion)
+    ? [systemPromotionId(promotion)]
+    : [],
+});
+
+const secondsUntil = (expiresAt) => {
   const deadline = new Date(expiresAt).getTime();
   if (!Number.isFinite(deadline)) return 0;
   return Math.max(0, Math.floor((deadline - Date.now()) / 1000));
@@ -59,7 +149,7 @@ const secondsUntil = expiresAt => {
 const BookingCountdown = memo(function BookingCountdown({
   expiresAt,
   onExpire,
-  className = ''
+  className = "",
 }) {
   const [seconds, setSeconds] = useState(() => secondsUntil(expiresAt));
   const notifiedRef = useRef(false);
@@ -68,7 +158,7 @@ const BookingCountdown = memo(function BookingCountdown({
     notifiedRef.current = false;
     const update = () => {
       const remaining = secondsUntil(expiresAt);
-      setSeconds(current => current === remaining ? current : remaining);
+      setSeconds((current) => (current === remaining ? current : remaining));
       if (remaining === 0 && !notifiedRef.current) {
         notifiedRef.current = true;
         onExpire();
@@ -80,11 +170,13 @@ const BookingCountdown = memo(function BookingCountdown({
     return () => window.clearInterval(timer);
   }, [expiresAt, onExpire]);
 
-  const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const remainingSeconds = String(seconds % 60).padStart(2, '0');
+  const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const remainingSeconds = String(seconds % 60).padStart(2, "0");
 
   return (
-    <span className={`${className} ${seconds < 60 ? 'text-red-500 animate-pulse' : 'text-amber-500'}`}>
+    <span
+      className={`${className} ${seconds < 60 ? "text-red-500 animate-pulse" : "text-amber-500"}`}
+    >
       {minutes}:{remainingSeconds}
     </span>
   );
@@ -95,17 +187,22 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
   quantity,
   isUpdating,
   disabled,
-  onQuantityChange
+  onQuantityChange,
 }) {
-  const imageUrl = getOptimizedImageUrl(item.imageUrl, { width: 192, height: 192 });
+  const imageUrl = getOptimizedImageUrl(item.imageUrl, {
+    width: 192,
+    height: 192,
+  });
 
   return (
     <article
       className="relative flex min-h-40 gap-4 overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900 p-4 transition-colors hover:border-zinc-700/80"
-      style={{ contentVisibility: 'auto', containIntrinsicSize: '160px' }}
+      style={{ contentVisibility: "auto", containIntrinsicSize: "160px" }}
     >
       <div className="relative flex aspect-square w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/60">
-        <span className="px-2 text-center text-[8px] font-bold text-zinc-600">Chưa có ảnh</span>
+        <span className="px-2 text-center text-[8px] font-bold text-zinc-600">
+          Chưa có ảnh
+        </span>
         {imageUrl && (
           <img
             src={imageUrl}
@@ -116,8 +213,8 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
             decoding="async"
             fetchPriority="low"
             className="absolute inset-0 h-full w-full object-cover"
-            onError={event => {
-              event.currentTarget.style.display = 'none';
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
             }}
           />
         )}
@@ -126,14 +223,22 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
       <div className="flex flex-grow flex-col justify-between space-y-3 py-0.5">
         <div className="space-y-1">
           <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-zinc-400">
-            {CATEGORY_LABELS[String(item.type || '').toUpperCase()] || item.type || 'Combo'}
+            {CATEGORY_LABELS[String(item.type || "").toUpperCase()] ||
+              item.type ||
+              "Combo"}
           </span>
-          <h4 className="line-clamp-1 text-xs font-black leading-snug text-white">{item.name}</h4>
-          <p className="line-clamp-2 text-[9px] leading-normal text-zinc-500">{item.description}</p>
+          <h4 className="line-clamp-1 text-xs font-black leading-snug text-white">
+            {item.name}
+          </h4>
+          <p className="line-clamp-2 text-[9px] leading-normal text-zinc-500">
+            {item.description}
+          </p>
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-xs font-black text-brand-orange">{formatCurrency(item.price)}</span>
+          <span className="text-xs font-black text-brand-orange">
+            {formatCurrency(item.price)}
+          </span>
           <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-1">
             <button
               type="button"
@@ -142,14 +247,14 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
               onClick={() => onQuantityChange(item, false, quantity)}
               className={`flex h-6 w-6 items-center justify-center rounded text-xs font-black transition-colors ${
                 quantity > 0 && !isUpdating && !disabled
-                  ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                  : 'cursor-not-allowed text-zinc-700'
+                  ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  : "cursor-not-allowed text-zinc-700"
               }`}
             >
               -
             </button>
             <span className="w-5 text-center text-xs font-bold text-zinc-200">
-              {isUpdating ? '...' : quantity}
+              {isUpdating ? "..." : quantity}
             </span>
             <button
               type="button"
@@ -158,8 +263,8 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
               onClick={() => onQuantityChange(item, true, quantity)}
               className={`flex h-6 w-6 items-center justify-center rounded text-xs font-black transition-colors ${
                 !isUpdating && !disabled
-                  ? 'bg-brand-orange text-white hover:bg-opacity-90'
-                  : 'cursor-not-allowed text-zinc-700'
+                  ? "bg-brand-orange text-white hover:bg-opacity-90"
+                  : "cursor-not-allowed text-zinc-700"
               }`}
             >
               +
@@ -171,51 +276,57 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
   );
 });
 
-const getBookingStatus = booking => booking?.bookingStatus || booking?.status;
+const getBookingStatus = (booking) => booking?.bookingStatus || booking?.status;
 
 const mergeCheckoutBooking = (current, fresh) => ({
   ...current,
   ...fresh,
   snapshot: fresh?.snapshot || current?.snapshot || null,
   foodOrder: fresh?.foodOrder ?? fresh?.food ?? current?.foodOrder ?? null,
-  finalAmount: fresh?.totalAmount ?? fresh?.finalAmount ?? current?.finalAmount ?? 0,
+  finalAmount:
+    fresh?.totalAmount ?? fresh?.finalAmount ?? current?.finalAmount ?? 0,
   ticketAmount: fresh?.ticketAmount ?? current?.ticketAmount ?? 0,
-  expiresAt: fresh?.expiresAt
-    ?? fresh?.expiredAt
-    ?? fresh?.paymentDeadline
-    ?? current?.expiresAt
+  expiresAt:
+    fresh?.expiresAt ??
+    fresh?.expiredAt ??
+    fresh?.paymentDeadline ??
+    current?.expiresAt,
 });
 
 const getTerminalBookingNotice = (status, bookingId) => {
-  if (status === 'CANCELLED') {
+  if (status === "CANCELLED") {
     return {
-      title: 'Đơn đã được hủy',
-      message: 'Đơn này đã được hủy và ghế đã được trả lại. Bạn không thể tiếp tục thanh toán cho đơn này.',
-      variant: 'warning',
-      redirectTo: `/bookings/${bookingId}`
+      title: "Đơn đã được hủy",
+      message:
+        "Đơn này đã được hủy và ghế đã được trả lại. Bạn không thể tiếp tục thanh toán cho đơn này.",
+      variant: "warning",
+      redirectTo: `/bookings/${bookingId}`,
     };
   }
-  if (status === 'EXPIRED') {
+  if (status === "EXPIRED") {
     return {
-      title: 'Đã hết thời gian giữ ghế',
-      message: 'Thời gian thanh toán của đơn đã kết thúc và ghế không còn được giữ. Vui lòng chọn lại suất chiếu và ghế.',
-      variant: 'warning',
-      redirectTo: '/movies'
+      title: "Đã hết thời gian giữ ghế",
+      message:
+        "Thời gian thanh toán của đơn đã kết thúc và ghế không còn được giữ. Vui lòng chọn lại suất chiếu và ghế.",
+      variant: "warning",
+      redirectTo: "/movies",
     };
   }
-  if (['CONFIRMED', 'COMPLETED'].includes(status)) {
+  if (["CONFIRMED", "COMPLETED"].includes(status)) {
     return {
-      title: 'Đơn đã được thanh toán',
-      message: 'Đơn này đã hoàn tất thanh toán. Bạn có thể mở chi tiết đơn để xem vé.',
-      variant: 'success',
-      redirectTo: `/bookings/${bookingId}`
+      title: "Đơn đã được thanh toán",
+      message:
+        "Đơn này đã hoàn tất thanh toán. Bạn có thể mở chi tiết đơn để xem vé.",
+      variant: "success",
+      redirectTo: `/bookings/${bookingId}`,
     };
   }
   return {
-    title: 'Đơn không còn thanh toán được',
-    message: 'Trạng thái mới nhất của đơn không cho phép tạo thêm giao dịch thanh toán.',
-    variant: 'warning',
-    redirectTo: `/bookings/${bookingId}`
+    title: "Đơn không còn thanh toán được",
+    message:
+      "Trạng thái mới nhất của đơn không cho phép tạo thêm giao dịch thanh toán.",
+    variant: "warning",
+    redirectTo: `/bookings/${bookingId}`,
   };
 };
 
@@ -226,7 +337,7 @@ export default function BookingCheckoutPage() {
   // Extract bookingId from query params
   const bookingId = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return params.get('bookingId');
+    return params.get("bookingId");
   }, [location.search]);
   const bookingDraft = location.state || {};
 
@@ -243,28 +354,121 @@ export default function BookingCheckoutPage() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [cancelError, setCancelError] = useState('');
+  const [cancelError, setCancelError] = useState("");
   const [notice, setNotice] = useState(null);
 
   // Filter & Search states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogExpanded, setCatalogExpanded] = useState(false);
 
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('VNPAY');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("VNPAY");
   const [userScore, setUserScore] = useState(null);
-  const [scorePointsInput, setScorePointsInput] = useState('');
+  const [scorePointsInput, setScorePointsInput] = useState("");
   const [scorePreview, setScorePreview] = useState(null);
   const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
-  const [scorePreviewError, setScorePreviewError] = useState('');
+  const [scorePreviewError, setScorePreviewError] = useState("");
+  const [promotionWallet, setPromotionWallet] = useState([]);
+  const [promotionLoading, setPromotionLoading] = useState(false);
+  const [promotionError, setPromotionError] = useState("");
+  const [promotionChooserOpen, setPromotionChooserOpen] = useState(false);
+  const [selectedPromotion, setSelectedPromotion] = useState(null);
+  const [promotionPreview, setPromotionPreview] = useState(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCouponCode, setAppliedCouponCode] = useState("");
   const lastTerminalNoticeRef = useRef(null);
   const cartUpdatingRef = useRef(false);
   const expirationHandledRef = useRef(false);
   const [deadlineExpired, setDeadlineExpired] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const loadPromotionWallet = useCallback(async () => {
+    setPromotionLoading(true);
+    setPromotionError("");
+    try {
+      const [walletResult, publicResult, systemResult] =
+        await Promise.allSettled([
+          customerPromotionService.getMyVouchers({
+            page: 0,
+            size: 100,
+            sort: "validTo,asc",
+            status: "ALL",
+          }),
+          customerPromotionService.getPublicPromotions({
+            page: 0,
+            size: 100,
+            sort: "priority,asc",
+          }),
+          customerPromotionService.getSystemPromotions({
+            page: 0,
+            size: 100,
+            sort: "priority,asc",
+          }),
+        ]);
+      if (
+        [walletResult, publicResult, systemResult].every(
+          (result) => result.status === "rejected",
+        )
+      ) {
+        throw walletResult.reason;
+      }
+      const walletPayload =
+        walletResult.status === "fulfilled"
+          ? (walletResult.value?.data ?? walletResult.value)
+          : null;
+      const publicPayload =
+        publicResult.status === "fulfilled"
+          ? (publicResult.value?.data ?? publicResult.value)
+          : null;
+      const systemPayload =
+        systemResult.status === "fulfilled"
+          ? (systemResult.value?.data ?? systemResult.value)
+          : null;
+      const walletItems = Array.isArray(walletPayload)
+        ? walletPayload
+        : walletPayload?.content || [];
+      const selectableWalletItems = walletItems.filter((item) =>
+        isWalletPromotionUsable(item),
+      );
+      const publicItems = Array.isArray(publicPayload)
+        ? publicPayload
+        : publicPayload?.content || [];
+      const systemItems = Array.isArray(systemPayload)
+        ? systemPayload
+        : systemPayload?.content || [];
+      const ownedPromotionIds = new Set(
+        walletItems.map((item) => item.promotionPublicId).filter(Boolean),
+      );
+      const inventory = [
+        ...selectableWalletItems,
+        ...publicItems.filter(
+          (item) =>
+            !ownedPromotionIds.has(item.promotionPublicId || item.publicId),
+        ),
+        ...systemItems,
+      ];
+      setPromotionWallet(inventory);
+      if (
+        [walletResult, publicResult, systemResult].some(
+          (result) => result.status === "rejected",
+        )
+      ) {
+        setPromotionError(
+          "Một phần danh sách ưu đãi chưa tải được. Bạn vẫn có thể dùng các ưu đãi đang hiển thị.",
+        );
+      }
+      return inventory;
+    } catch {
+      setPromotionWallet([]);
+      setPromotionError("Không thể tải danh sách ưu đãi lúc này.");
+      return [];
+    } finally {
+      setPromotionLoading(false);
+    }
+  }, []);
 
   // Load initial data
   const fetchData = useCallback(async () => {
@@ -274,6 +478,7 @@ export default function BookingCheckoutPage() {
       return;
     }
     setLoading(true);
+    const promotionInventoryPromise = loadPromotionWallet();
     try {
       const bookingData = await getBookingDetails(bookingId);
       let foodOrder = null;
@@ -282,22 +487,50 @@ export default function BookingCheckoutPage() {
       } catch {
         foodOrder = null;
       }
-      setBooking(mergeCheckoutBooking(null, {
-        ...bookingData,
-        foodOrder: foodOrder ?? bookingData.foodOrder ?? bookingData.food ?? null,
-        finalAmount: bookingData.totalAmount ?? bookingData.finalAmount ?? 0,
-        ticketAmount: bookingData.ticketAmount ?? 0,
-        expiresAt: bookingData.expiresAt ?? bookingData.expiredAt ?? bookingData.paymentDeadline,
-        snapshot: bookingData.snapshot ?? bookingData.presentation ?? bookingDraft.showtime ?? null
-      }));
+      setBooking(
+        mergeCheckoutBooking(null, {
+          ...bookingData,
+          foodOrder:
+            foodOrder ?? bookingData.foodOrder ?? bookingData.food ?? null,
+          finalAmount: bookingData.totalAmount ?? bookingData.finalAmount ?? 0,
+          ticketAmount: bookingData.ticketAmount ?? 0,
+          expiresAt:
+            bookingData.expiresAt ??
+            bookingData.expiredAt ??
+            bookingData.paymentDeadline,
+          snapshot:
+            bookingData.snapshot ??
+            bookingData.presentation ??
+            bookingDraft.showtime ??
+            null,
+        }),
+      );
+      if (!bookingData.amountLockedAt) {
+        try {
+          const promotionInventory = await promotionInventoryPromise;
+          const automaticPreview = await previewBookingPromotions(
+            bookingId,
+            promotionPreviewSelection(
+              promotionInventory,
+              selectedPaymentMethod,
+            ),
+          );
+          setPromotionPreview(automaticPreview);
+        } catch {
+          setPromotionPreview(null);
+          setPromotionError("Không thể kiểm tra ưu đãi lúc này.");
+        }
+      }
       if (Number(bookingData.scorePointsUsed || 0) > 0) {
         setScorePointsInput(String(bookingData.scorePointsUsed));
         setScorePreview({
           eligible: true,
           requestedPoints: Number(bookingData.scorePointsUsed),
           discountAmount: Number(bookingData.scoreDiscount || 0),
-          remainingAmount: Number(bookingData.totalAmount ?? bookingData.finalAmount ?? 0),
-          locked: Boolean(bookingData.amountLockedAt)
+          remainingAmount: Number(
+            bookingData.totalAmount ?? bookingData.finalAmount ?? 0,
+          ),
+          locked: Boolean(bookingData.amountLockedAt),
         });
       }
 
@@ -312,16 +545,17 @@ export default function BookingCheckoutPage() {
         // the customer from completing the current Booking.
         setUserScore(null);
       }
-
     } catch (err) {
-      setError(getBookingErrorMessage(
-        err,
-        'Không thể tải thông tin đặt vé. Vui lòng thử lại.'
-      ));
+      setError(
+        getBookingErrorMessage(
+          err,
+          "Không thể tải thông tin đặt vé. Vui lòng thử lại.",
+        ),
+      );
     } finally {
       setLoading(false);
     }
-  }, [bookingId, bookingDraft.showtime]);
+  }, [bookingId, bookingDraft.showtime, loadPromotionWallet]);
 
   useEffect(() => {
     // Data loading is intentionally triggered when the public Booking ID changes.
@@ -329,47 +563,52 @@ export default function BookingCheckoutPage() {
     fetchData();
   }, [fetchData]);
 
-  const refreshBookingState = useCallback(async ({ notifyTerminal = false } = {}) => {
-    if (!bookingId) return null;
+  const refreshBookingState = useCallback(
+    async ({ notifyTerminal = false } = {}) => {
+      if (!bookingId) return null;
 
-    try {
-      const freshBooking = await getBookingDetails(bookingId);
-      const freshStatus = getBookingStatus(freshBooking);
-      setBooking(current => mergeCheckoutBooking(current, freshBooking));
+      try {
+        const freshBooking = await getBookingDetails(bookingId);
+        const freshStatus = getBookingStatus(freshBooking);
+        setBooking((current) => mergeCheckoutBooking(current, freshBooking));
 
-      if (
-        notifyTerminal
-        && freshStatus
-        && freshStatus !== 'PENDING_PAYMENT'
-        && lastTerminalNoticeRef.current !== freshStatus
-      ) {
-        lastTerminalNoticeRef.current = freshStatus;
-        setPaymentLoading(false);
-        setNotice(getTerminalBookingNotice(freshStatus, bookingId));
+        if (
+          notifyTerminal &&
+          freshStatus &&
+          freshStatus !== "PENDING_PAYMENT" &&
+          lastTerminalNoticeRef.current !== freshStatus
+        ) {
+          lastTerminalNoticeRef.current = freshStatus;
+          setPaymentLoading(false);
+          setNotice(getTerminalBookingNotice(freshStatus, bookingId));
+        }
+        return freshBooking;
+      } catch {
+        // Background synchronization must not replace an already loaded checkout
+        // with a transient connection error. Commands still validate server-side.
+        return null;
       }
-      return freshBooking;
-    } catch {
-      // Background synchronization must not replace an already loaded checkout
-      // with a transient connection error. Commands still validate server-side.
-      return null;
-    }
-  }, [bookingId]);
+    },
+    [bookingId],
+  );
 
   useEffect(() => {
     if (!bookingId) return undefined;
 
-    const handleBookingChanged = event => {
+    const handleBookingChanged = (event) => {
       const changedBookingId = event?.detail?.publicId;
       if (changedBookingId && changedBookingId !== bookingId) return;
 
-      if (event?.detail?.action === 'CANCELLED') {
-        setBooking(current => current
-          ? { ...current, status: 'CANCELLED', bookingStatus: 'CANCELLED' }
-          : current);
+      if (event?.detail?.action === "CANCELLED") {
+        setBooking((current) =>
+          current
+            ? { ...current, status: "CANCELLED", bookingStatus: "CANCELLED" }
+            : current,
+        );
         setPaymentLoading(false);
-        if (lastTerminalNoticeRef.current !== 'CANCELLED') {
-          lastTerminalNoticeRef.current = 'CANCELLED';
-          setNotice(getTerminalBookingNotice('CANCELLED', bookingId));
+        if (lastTerminalNoticeRef.current !== "CANCELLED") {
+          lastTerminalNoticeRef.current = "CANCELLED";
+          setNotice(getTerminalBookingNotice("CANCELLED", bookingId));
         }
       }
       void refreshBookingState({ notifyTerminal: true });
@@ -378,24 +617,24 @@ export default function BookingCheckoutPage() {
       void refreshBookingState({ notifyTerminal: true });
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === "visible") {
         void refreshBookingState({ notifyTerminal: true });
       }
     };
 
     const refreshTimer = window.setInterval(
       () => void refreshBookingState({ notifyTerminal: true }),
-      15_000
+      15_000,
     );
     window.addEventListener(BOOKING_CHANGED_EVENT, handleBookingChanged);
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(refreshTimer);
       window.removeEventListener(BOOKING_CHANGED_EVENT, handleBookingChanged);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [bookingId, refreshBookingState]);
 
@@ -404,36 +643,44 @@ export default function BookingCheckoutPage() {
     expirationHandledRef.current = true;
     setDeadlineExpired(true);
     setNotice({
-      title: 'Thời gian giữ ghế đã kết thúc',
-      message: 'Đơn không còn khả dụng để thanh toán và ghế sẽ được trả lại cho khách hàng khác.',
-      variant: 'warning',
-      redirectTo: '/movies?error=expired'
+      title: "Thời gian giữ ghế đã kết thúc",
+      message:
+        "Đơn không còn khả dụng để thanh toán và ghế sẽ được trả lại cho khách hàng khác.",
+      variant: "warning",
+      redirectTo: "/movies?error=expired",
     });
   }, []);
 
   // Concession categories
   const categories = useMemo(() => {
     const cats = new Set();
-    concessions.forEach(c => {
+    concessions.forEach((c) => {
       if (c.type) cats.add(c.type.toUpperCase());
     });
-    return ['ALL', ...Array.from(cats)];
+    return ["ALL", ...Array.from(cats)];
   }, [concessions]);
 
   // Filtered concessions
   const filteredConcessions = useMemo(() => {
-    const normalizedSearch = deferredSearchQuery.trim().toLocaleLowerCase('vi-VN');
-    return concessions.filter(c => {
-      const matchSearch = (c.name || '').toLocaleLowerCase('vi-VN').includes(normalizedSearch) ||
-                          (c.description || '').toLocaleLowerCase('vi-VN').includes(normalizedSearch);
-      const matchCat = selectedCategory === 'ALL' || (c.type && c.type.toUpperCase() === selectedCategory);
+    const normalizedSearch = deferredSearchQuery
+      .trim()
+      .toLocaleLowerCase("vi-VN");
+    return concessions.filter((c) => {
+      const matchSearch =
+        (c.name || "").toLocaleLowerCase("vi-VN").includes(normalizedSearch) ||
+        (c.description || "")
+          .toLocaleLowerCase("vi-VN")
+          .includes(normalizedSearch);
+      const matchCat =
+        selectedCategory === "ALL" ||
+        (c.type && c.type.toUpperCase() === selectedCategory);
       return matchSearch && matchCat;
     });
   }, [concessions, deferredSearchQuery, selectedCategory]);
 
   const catalogTotalPages = Math.max(
     1,
-    Math.ceil(filteredConcessions.length / CONCESSION_PAGE_SIZE)
+    Math.ceil(filteredConcessions.length / CONCESSION_PAGE_SIZE),
   );
   const currentCatalogPage = Math.min(catalogPage, catalogTotalPages);
   const pagedConcessions = useMemo(() => {
@@ -447,105 +694,150 @@ export default function BookingCheckoutPage() {
   const foodOrderItems = booking?.foodOrder?.items;
   const cartItemsByProductId = useMemo(() => {
     const result = new Map();
-    const cartItems = Array.isArray(foodOrderItems)
-      ? foodOrderItems
-      : [];
-    cartItems.forEach(item => {
+    const cartItems = Array.isArray(foodOrderItems) ? foodOrderItems : [];
+    cartItems.forEach((item) => {
       result.set(item.productId, {
         quantity: item.quantity || 0,
-        itemId: item.id
+        itemId: item.id,
       });
     });
     return result;
   }, [foodOrderItems]);
 
   // Handle add/modify food in cart
-  const handleQuantityChange = useCallback(async (concession, increment, quantity) => {
-    if (cartUpdatingRef.current) return;
-    cartUpdatingRef.current = true;
-    setCartUpdatingId(concession.id);
+  const handleQuantityChange = useCallback(
+    async (concession, increment, quantity) => {
+      if (cartUpdatingRef.current) return;
+      cartUpdatingRef.current = true;
+      setCartUpdatingId(concession.id);
 
-    const itemId = cartItemsByProductId.get(concession.id)?.itemId;
-    const newQty = quantity + (increment ? 1 : -1);
+      const itemId = cartItemsByProductId.get(concession.id)?.itemId;
+      const newQty = quantity + (increment ? 1 : -1);
 
-    try {
-      let updatedFoodOrder;
-      if (quantity === 0 && increment) {
-        // Add new
-        updatedFoodOrder = await addFoodItem(bookingId, { productId: concession.id, quantity: 1 });
-      } else if (newQty > 0) {
-        // Update quantity
-        updatedFoodOrder = await updateFoodQuantity(bookingId, itemId, newQty);
-      } else {
-        // Remove
-        await removeFoodItem(bookingId, itemId);
-        // Fetch fresh details since remove returns empty
+      try {
+        let updatedFoodOrder;
+        if (quantity === 0 && increment) {
+          // Add new
+          updatedFoodOrder = await addFoodItem(bookingId, {
+            productId: concession.id,
+            quantity: 1,
+          });
+        } else if (newQty > 0) {
+          // Update quantity
+          updatedFoodOrder = await updateFoodQuantity(
+            bookingId,
+            itemId,
+            newQty,
+          );
+        } else {
+          // Remove
+          await removeFoodItem(bookingId, itemId);
+          // Fetch fresh details since remove returns empty
+          const freshBooking = await getBookingDetails(bookingId);
+          setBooking((prev) => ({
+            ...prev,
+            ...freshBooking,
+            snapshot: freshBooking.snapshot || prev.snapshot,
+            foodOrder: freshBooking.foodOrder,
+            finalAmount:
+              freshBooking.totalAmount ??
+              freshBooking.finalAmount ??
+              prev.finalAmount,
+          }));
+          setScorePreview(null);
+          setScorePreviewError("");
+          setSelectedPromotion(null);
+          setAppliedCouponCode("");
+          try {
+            setPromotionPreview(
+              await previewBookingPromotions(
+                bookingId,
+                promotionPreviewSelection(
+                  promotionWallet,
+                  selectedPaymentMethod,
+                ),
+              ),
+            );
+          } catch {
+            setPromotionPreview(null);
+          }
+          setCartUpdatingId(null);
+          return;
+        }
+
         const freshBooking = await getBookingDetails(bookingId);
-        setBooking(prev => ({
+        setBooking((prev) => ({
           ...prev,
           ...freshBooking,
           snapshot: freshBooking.snapshot || prev.snapshot,
-          foodOrder: freshBooking.foodOrder,
-          finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
+          foodOrder: updatedFoodOrder || freshBooking.foodOrder,
+          finalAmount:
+            freshBooking.totalAmount ??
+            freshBooking.finalAmount ??
+            prev.finalAmount,
         }));
         setScorePreview(null);
-        setScorePreviewError('');
+        setScorePreviewError("");
+        setSelectedPromotion(null);
+        setAppliedCouponCode("");
+        try {
+          setPromotionPreview(
+            await previewBookingPromotions(
+              bookingId,
+              promotionPreviewSelection(promotionWallet, selectedPaymentMethod),
+            ),
+          );
+        } catch {
+          setPromotionPreview(null);
+        }
+      } catch (err) {
+        setNotice({
+          title: "Không thể cập nhật bắp nước",
+          message: getBookingErrorMessage(
+            err,
+            "Kết nối không ổn định. Vui lòng thử lại.",
+          ),
+          variant: "error",
+        });
+      } finally {
+        cartUpdatingRef.current = false;
         setCartUpdatingId(null);
-        return;
       }
-
-      const freshBooking = await getBookingDetails(bookingId);
-      setBooking(prev => ({
-        ...prev,
-        ...freshBooking,
-        snapshot: freshBooking.snapshot || prev.snapshot,
-        foodOrder: updatedFoodOrder || freshBooking.foodOrder,
-        finalAmount: freshBooking.totalAmount ?? freshBooking.finalAmount ?? prev.finalAmount
-      }));
-      setScorePreview(null);
-      setScorePreviewError('');
-    } catch (err) {
-      setNotice({
-        title: 'Không thể cập nhật bắp nước',
-        message: getBookingErrorMessage(
-          err,
-          'Kết nối không ổn định. Vui lòng thử lại.'
-        ),
-        variant: 'error'
-      });
-    } finally {
-      cartUpdatingRef.current = false;
-      setCartUpdatingId(null);
-    }
-  }, [bookingId, cartItemsByProductId]);
+    },
+    [bookingId, cartItemsByProductId, promotionWallet, selectedPaymentMethod],
+  );
 
   const handlePreviewScore = async () => {
     const points = Number(scorePointsInput);
     if (!Number.isInteger(points) || points <= 0) {
       setScorePreview(null);
-      setScorePreviewError('Vui lòng nhập số điểm nguyên lớn hơn 0.');
+      setScorePreviewError("Vui lòng nhập số điểm nguyên lớn hơn 0.");
       return;
     }
     setScorePreviewLoading(true);
-    setScorePreviewError('');
+    setScorePreviewError("");
     try {
       const response = await scoreCustomerService.redeemPreview({
         bookingPublicId: bookingId,
-        points
+        points,
       });
       const preview = response?.data ?? response;
       if (!preview?.eligible) {
         setScorePreview(null);
-        setScorePreviewError(preview?.message || 'Số điểm này chưa thể áp dụng cho đơn.');
+        setScorePreviewError(
+          preview?.message || "Số điểm này chưa thể áp dụng cho đơn.",
+        );
         return;
       }
       setScorePreview(preview);
     } catch (err) {
       setScorePreview(null);
-      setScorePreviewError(getBookingErrorMessage(
-        err,
-        'Không thể kiểm tra điểm lúc này. Vui lòng thử lại.'
-      ));
+      setScorePreviewError(
+        getBookingErrorMessage(
+          err,
+          "Không thể kiểm tra điểm lúc này. Vui lòng thử lại.",
+        ),
+      );
     } finally {
       setScorePreviewLoading(false);
     }
@@ -553,17 +845,168 @@ export default function BookingCheckoutPage() {
 
   const clearScoreSelection = () => {
     setScorePreview(null);
-    setScorePointsInput('');
-    setScorePreviewError('');
+    setScorePointsInput("");
+    setScorePreviewError("");
+  };
+
+  const handlePromotionSelect = async (
+    promotion,
+    inventory = promotionWallet,
+  ) => {
+    const requestSelection = promotionRequestSelection(promotion);
+    if (
+      requestSelection.selectedUserPromotionPublicIds.length === 0 &&
+      requestSelection.selectedPromotionPublicIds.length === 0
+    ) {
+      setPromotionError(
+        "Voucher sự kiện cần được nhận vào ví trước khi sử dụng.",
+      );
+      return;
+    }
+
+    setPromotionLoading(true);
+    setPromotionError("");
+    try {
+      const quote = await previewBookingPromotions(bookingId, {
+        ...promotionPreviewSelection(inventory, selectedPaymentMethod, {
+          ...requestSelection,
+        }),
+      });
+      const requestedIds = new Set(
+        [walletPromotionId(promotion), systemPromotionId(promotion)]
+          .filter(Boolean)
+          .map(String),
+      );
+      const applied = (quote?.appliedPromotions || []).some((item) =>
+        [item?.userPromotionPublicId, item?.promotionPublicId]
+          .filter(Boolean)
+          .some((id) => requestedIds.has(String(id))),
+      );
+      if (!applied) {
+        const evaluation = (quote?.promotionEvaluations || []).find((item) =>
+          [item?.userPromotionPublicId, item?.promotionPublicId]
+            .filter(Boolean)
+            .some((id) => requestedIds.has(String(id))),
+        );
+        throw new Error(
+          evaluation?.reason ||
+            "Voucher chưa tạo ra mức giảm cho đơn hàng hiện tại.",
+        );
+      }
+      setSelectedPromotion(promotion);
+      setAppliedCouponCode("");
+      setCouponInput("");
+      setPromotionPreview(quote);
+      clearScoreSelection();
+      setPromotionChooserOpen(false);
+    } catch (requestError) {
+      setPromotionError(
+        getBookingErrorMessage(
+          requestError,
+          "Voucher này không thể áp dụng cho đơn hiện tại.",
+        ),
+      );
+    } finally {
+      setPromotionLoading(false);
+    }
+  };
+
+  const handleClaimPromotion = async (promotion) => {
+    const promotionPublicId =
+      promotion?.promotionPublicId || promotion?.publicId;
+    setPromotionLoading(true);
+    setPromotionError("");
+    try {
+      const claimed =
+        await customerPromotionService.claimVoucher(promotionPublicId);
+      const inventory = await loadPromotionWallet();
+      await handlePromotionSelect(claimed, inventory);
+    } catch (requestError) {
+      setPromotionError(
+        getBookingErrorMessage(
+          requestError,
+          "Không thể nhận voucher sự kiện lúc này.",
+        ),
+      );
+      throw requestError;
+    } finally {
+      setPromotionLoading(false);
+    }
+  };
+
+  const clearPromotionSelection = async () => {
+    setSelectedPromotion(null);
+    setAppliedCouponCode("");
+    setCouponInput("");
+    clearScoreSelection();
+    try {
+      setPromotionPreview(
+        await previewBookingPromotions(
+          bookingId,
+          promotionPreviewSelection(promotionWallet, selectedPaymentMethod),
+        ),
+      );
+      setPromotionError("");
+    } catch {
+      setPromotionPreview(null);
+      setPromotionError("Không thể làm mới ưu đãi lúc này.");
+    }
+  };
+
+  const refreshPromotionOptions = async () => {
+    const inventory = await loadPromotionWallet();
+    try {
+      setPromotionPreview(
+        await previewBookingPromotions(
+          bookingId,
+          promotionPreviewSelection(inventory, selectedPaymentMethod, {
+            ...promotionRequestSelection(selectedPromotion),
+            couponCode: appliedCouponCode || null,
+          }),
+        ),
+      );
+      setPromotionError("");
+    } catch {
+      setPromotionError("Không thể kiểm tra điều kiện ưu đãi lúc này.");
+    }
+  };
+
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    setPromotionLoading(true);
+    setPromotionError("");
+    try {
+      const quote = await previewBookingPromotions(bookingId, {
+        ...promotionPreviewSelection(promotionWallet, selectedPaymentMethod, {
+          couponCode: code,
+        }),
+      });
+      setSelectedPromotion(null);
+      setAppliedCouponCode(code);
+      setPromotionPreview(quote);
+      clearScoreSelection();
+    } catch (requestError) {
+      setAppliedCouponCode("");
+      setPromotionError(
+        getBookingErrorMessage(
+          requestError,
+          "Mã coupon không hợp lệ hoặc chưa đủ điều kiện.",
+        ),
+      );
+    } finally {
+      setPromotionLoading(false);
+    }
   };
 
   // Lock Booking-owned amount, then let Payment Service create the attempt.
   const handleStartPayment = async () => {
     if (!termsAgreed) {
       setNotice({
-        title: 'Chưa đồng ý điều khoản',
-        message: 'Bạn cần đồng ý với Điều khoản và Quy định của LoraFilm trước khi tiếp tục thanh toán.',
-        variant: 'warning'
+        title: "Chưa đồng ý điều khoản",
+        message:
+          "Bạn cần đồng ý với Điều khoản và Quy định của LoraFilm trước khi tiếp tục thanh toán.",
+        variant: "warning",
       });
       return;
     }
@@ -571,18 +1014,22 @@ export default function BookingCheckoutPage() {
     try {
       const freshBooking = await getBookingDetails(bookingId);
       const freshStatus = getBookingStatus(freshBooking);
-      const freshDeadline = freshBooking.expiresAt
-        ?? freshBooking.expiredAt
-        ?? freshBooking.paymentDeadline;
-      setBooking(current => mergeCheckoutBooking(current, freshBooking));
+      const freshDeadline =
+        freshBooking.expiresAt ??
+        freshBooking.expiredAt ??
+        freshBooking.paymentDeadline;
+      setBooking((current) => mergeCheckoutBooking(current, freshBooking));
+      // Payment initiation needs a fresh wall-clock sample after reloading the Booking.
+      // eslint-disable-next-line react-hooks/purity
+      const checkoutStartedAt = Date.now();
 
       if (
-        freshStatus !== 'PENDING_PAYMENT'
-        || (freshDeadline && new Date(freshDeadline).getTime() <= Date.now())
+        freshStatus !== "PENDING_PAYMENT" ||
+        (freshDeadline &&
+          new Date(freshDeadline).getTime() <= checkoutStartedAt)
       ) {
-        const effectiveStatus = freshStatus === 'PENDING_PAYMENT'
-          ? 'EXPIRED'
-          : freshStatus;
+        const effectiveStatus =
+          freshStatus === "PENDING_PAYMENT" ? "EXPIRED" : freshStatus;
         lastTerminalNoticeRef.current = effectiveStatus;
         setNotice(getTerminalBookingNotice(effectiveStatus, bookingId));
         return;
@@ -591,19 +1038,34 @@ export default function BookingCheckoutPage() {
       const selectedScorePoints = Number(scorePreview?.requestedPoints || 0);
       const finalized = await finalizeCheckout(bookingId, {
         scorePoints: selectedScorePoints,
-        scoreIdempotencyKey: selectedScorePoints > 0
-          ? getOrCreateScoreRedemptionKey(bookingId, selectedScorePoints)
-          : null
+        scoreIdempotencyKey:
+          selectedScorePoints > 0
+            ? getOrCreateScoreRedemptionKey(bookingId, selectedScorePoints)
+            : null,
+        selectedUserPromotionPublicIds: selectedWalletPromotionIds,
+        selectedPromotionPublicIds: selectedSystemPromotionIds,
+        couponCode: appliedCouponCode || null,
+        paymentMethod: selectedPaymentMethod,
       });
-      setBooking(prev => ({ ...prev, ...finalized }));
+      setBooking((prev) => ({ ...prev, ...finalized }));
+      if (["CONFIRMED", "COMPLETED"].includes(finalized?.status)) {
+        if (selectedWalletPromotionIds.length > 0 || appliedCouponCode) {
+          await loadPromotionWallet();
+          setSelectedPromotion(null);
+          setAppliedCouponCode("");
+          setCouponInput("");
+        }
+        navigate(`/bookings/success?bookingId=${bookingId}`);
+        return;
+      }
       const idempotencyKey = getOrCreatePaymentAttemptKey(
         bookingId,
-        selectedPaymentMethod
+        selectedPaymentMethod,
       );
       const payment = await createPaymentHandoff({
         bookingPublicId: bookingId,
         paymentMethod: selectedPaymentMethod,
-        idempotencyKey
+        idempotencyKey,
       });
 
       if (payment?.paymentUrl) {
@@ -612,22 +1074,23 @@ export default function BookingCheckoutPage() {
       }
 
       setNotice({
-        title: 'Đã tạo yêu cầu thanh toán',
-        message: 'Hệ thống thanh toán đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái giao dịch.',
-        variant: 'success',
-        redirectTo: `/bookings/${bookingId}`
+        title: "Đã tạo yêu cầu thanh toán",
+        message:
+          "Hệ thống thanh toán đã tiếp nhận yêu cầu. Bạn có thể tiếp tục theo dõi trạng thái giao dịch.",
+        variant: "success",
+        redirectTo: `/bookings/${bookingId}`,
       });
     } catch (err) {
       const errorCode = paymentErrorCode(err);
       const bookingUnavailable = [
-        'BOOKING_CANCELLED',
-        'BOOKING_NOT_PAYABLE',
-        'BOOKING_PAYMENT_DEADLINE_EXPIRED',
-        'BOOKING_SEATS_NOT_HELD'
+        "BOOKING_CANCELLED",
+        "BOOKING_NOT_PAYABLE",
+        "BOOKING_PAYMENT_DEADLINE_EXPIRED",
+        "BOOKING_SEATS_NOT_HELD",
       ].includes(errorCode);
       const alreadyPaid = [
-        'BOOKING_ALREADY_PAID',
-        'PAYMENT_ALREADY_SUCCESS'
+        "BOOKING_ALREADY_PAID",
+        "PAYMENT_ALREADY_SUCCESS",
       ].includes(errorCode);
       let latestBooking = null;
       if (bookingUnavailable || alreadyPaid) {
@@ -635,23 +1098,25 @@ export default function BookingCheckoutPage() {
       }
       const latestStatus = getBookingStatus(latestBooking);
 
-      if (latestStatus && latestStatus !== 'PENDING_PAYMENT') {
+      if (latestStatus && latestStatus !== "PENDING_PAYMENT") {
         lastTerminalNoticeRef.current = latestStatus;
         setNotice(getTerminalBookingNotice(latestStatus, bookingId));
       } else {
         setNotice({
-          title: errorCode === 'BOOKING_PAYMENT_DEADLINE_EXPIRED'
-            ? 'Đã hết thời gian giữ ghế'
-            : alreadyPaid
-              ? 'Đơn đã được thanh toán'
-              : bookingUnavailable
-                ? 'Đơn không còn thanh toán được'
-                : 'Không thể chuẩn bị thanh toán',
+          title:
+            errorCode === "BOOKING_PAYMENT_DEADLINE_EXPIRED"
+              ? "Đã hết thời gian giữ ghế"
+              : alreadyPaid
+                ? "Đơn đã được thanh toán"
+                : bookingUnavailable
+                  ? "Đơn không còn thanh toán được"
+                  : "Không thể chuẩn bị thanh toán",
           message: paymentErrorMessage(err),
-          variant: alreadyPaid ? 'success' : 'error',
-          redirectTo: bookingUnavailable || alreadyPaid
-            ? `/bookings/${bookingId}`
-            : undefined
+          variant: alreadyPaid ? "success" : "error",
+          redirectTo:
+            bookingUnavailable || alreadyPaid
+              ? `/bookings/${bookingId}`
+              : undefined,
         });
       }
     } finally {
@@ -661,20 +1126,20 @@ export default function BookingCheckoutPage() {
 
   const handleCancelBooking = async () => {
     setCancelling(true);
-    setCancelError('');
+    setCancelError("");
     try {
       await cancelBooking(
         bookingId,
-        'Khách hàng chủ động hủy đặt chỗ tại checkout'
+        "Khách hàng chủ động hủy đặt chỗ tại checkout",
       );
       setCancelModalOpen(false);
-      navigate('/movies');
+      navigate("/movies");
     } catch (requestError) {
       setCancelError(
         getBookingErrorMessage(
           requestError,
-          'Không thể hủy đặt vé. Vui lòng thử lại.'
-        )
+          "Không thể hủy đặt vé. Vui lòng thử lại.",
+        ),
       );
     } finally {
       setCancelling(false);
@@ -686,7 +1151,9 @@ export default function BookingCheckoutPage() {
       <div className="flex items-center justify-center min-h-screen bg-[#050506] text-white">
         <div className="flex flex-col items-center gap-4 animate-pulse">
           <div className="w-12 h-12 border-4 border-brand-orange border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-semibold tracking-wider text-zinc-400">Đang chuẩn bị thông tin thanh toán...</p>
+          <p className="text-sm font-semibold tracking-wider text-zinc-400">
+            Đang chuẩn bị thông tin thanh toán...
+          </p>
         </div>
       </div>
     );
@@ -698,10 +1165,14 @@ export default function BookingCheckoutPage() {
         <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-6">
           <AlertTriangle className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-zinc-100 mb-2">Đơn hàng không khả dụng</h2>
-        <p className="text-sm text-zinc-400 max-w-md mb-8">{error || "Đơn hàng này không tồn tại hoặc đã hết hạn."}</p>
+        <h2 className="text-xl font-bold text-zinc-100 mb-2">
+          Đơn hàng không khả dụng
+        </h2>
+        <p className="text-sm text-zinc-400 max-w-md mb-8">
+          {error || "Đơn hàng này không tồn tại hoặc đã hết hạn."}
+        </p>
         <button
-          onClick={() => navigate('/movies')}
+          onClick={() => navigate("/movies")}
           className="bg-brand-orange hover:bg-opacity-90 text-white font-bold px-6 py-3 rounded-full transition-all text-xs uppercase tracking-wider"
         >
           Quay lại chọn phim
@@ -712,7 +1183,7 @@ export default function BookingCheckoutPage() {
 
   const { snapshot } = booking;
   const bookingStatus = booking.bookingStatus || booking.status;
-  const isPending = bookingStatus === 'PENDING_PAYMENT';
+  const isPending = bookingStatus === "PENDING_PAYMENT";
   const isExpired = deadlineExpired || !isPending;
   const draftSeats = bookingDraft.selectedSeats || [];
   const snapshotSeats = Array.isArray(snapshot?.seats) ? snapshot.seats : [];
@@ -728,39 +1199,114 @@ export default function BookingCheckoutPage() {
   const movie = snapshot?.movie || {};
   const cinema = snapshot?.cinema || {};
   const auditorium = snapshot?.auditorium || {};
-  const movieTitle = snapshot?.movieTitle || movie?.title || booking.movieTitle || 'Thông tin phim đang cập nhật';
-  const moviePosterUrl = snapshot?.moviePosterUrl
-    || snapshot?.moviePoster
-    || movie?.posterUrl
-    || booking.posterUrl
-    || null;
+  const movieTitle =
+    snapshot?.movieTitle ||
+    movie?.title ||
+    booking.movieTitle ||
+    "Thông tin phim đang cập nhật";
+  const moviePosterUrl =
+    snapshot?.moviePosterUrl ||
+    snapshot?.moviePoster ||
+    movie?.posterUrl ||
+    booking.posterUrl ||
+    null;
   const displayMoviePosterUrl = moviePosterUrl
     ? getOptimizedImageUrl(moviePosterUrl, { width: 200, height: 300 })
     : FALLBACK_POSTER;
-  const seatLabel = seat => seat.label || seat.seatLabel || seat.seatCode || 'Chưa rõ';
-  const seatType = seat => seat.type || seat.seatType;
-  const foodItemName = item => item.productName || item.name || 'Bắp nước';
-  const foodItemAmount = item => item.finalAmount
-    ?? item.totalAmount
-    ?? ((item.unitPrice || 0) * (item.quantity || 0));
-  const foodAmount = booking.foodOrder?.finalAmount
-    ?? booking.foodOrder?.totalAmount
-    ?? booking.foodAmount
-    ?? 0;
+  const seatLabel = (seat) =>
+    seat.label || seat.seatLabel || seat.seatCode || "Chưa rõ";
+  const seatType = (seat) => seat.type || seat.seatType;
+  const foodItemName = (item) => item.productName || item.name || "Bắp nước";
+  const foodItemAmount = (item) =>
+    item.finalAmount ??
+    item.totalAmount ??
+    (item.unitPrice || 0) * (item.quantity || 0);
+  const foodAmount =
+    booking.foodOrder?.finalAmount ??
+    booking.foodOrder?.totalAmount ??
+    booking.foodAmount ??
+    0;
   const availableScorePoints = Math.max(
     0,
-    Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0)
+    Number(userScore?.currentPoints || 0) - Number(userScore?.heldPoints || 0),
   );
   const selectedScoreDiscount = Number(scorePreview?.discountAmount || 0);
-  const displayFinalAmount = scorePreview?.eligible
-    ? Number(scorePreview.remainingAmount)
-    : Number(booking.finalAmount || 0);
+  const promotionDiscountTotal =
+    Number(booking.promotionDiscount || 0) +
+    Number(promotionPreview?.discountAmount ?? booking.voucherDiscount ?? 0);
+  const {
+    selectedUserPromotionPublicIds: selectedWalletPromotionIds,
+    selectedPromotionPublicIds: selectedSystemPromotionIds,
+  } = promotionRequestSelection(selectedPromotion);
+  const selectedPromotionId = promotionSelectionId(selectedPromotion);
+  const refreshPromotionPreviewForPaymentMethod = async (nextPaymentMethod) => {
+    if (booking?.amountLockedAt) {
+      return;
+    }
+    try {
+      const quote = await previewBookingPromotions(
+        bookingId,
+        promotionPreviewSelection(promotionWallet, nextPaymentMethod, {
+          selectedUserPromotionPublicIds: selectedWalletPromotionIds,
+          selectedPromotionPublicIds: selectedSystemPromotionIds,
+          couponCode: appliedCouponCode || null,
+        }),
+      );
+      setPromotionPreview(quote);
+      setPromotionError("");
+    } catch (requestError) {
+      setSelectedPromotion(null);
+      setAppliedCouponCode("");
+      setCouponInput("");
+      clearScoreSelection();
+      try {
+        setPromotionPreview(
+          await previewBookingPromotions(
+            bookingId,
+            promotionPreviewSelection(promotionWallet, nextPaymentMethod),
+          ),
+        );
+      } catch {
+        setPromotionPreview(null);
+      }
+      setPromotionError(
+        getBookingErrorMessage(
+          requestError,
+          "Ưu đãi đã chọn không còn phù hợp với phương thức thanh toán này.",
+        ),
+      );
+    }
+  };
+  const promotionContext = {
+    moviePublicId:
+      booking.snapshot?.moviePublicId ||
+      booking.snapshot?.movie?.publicId ||
+      booking.moviePublicId ||
+      "",
+    cinemaPublicId:
+      booking.snapshot?.cinemaPublicId ||
+      booking.snapshot?.cinema?.publicId ||
+      booking.cinemaPublicId ||
+      "",
+    movieTitle: movieTitle || booking.snapshot?.movieTitle || "",
+    cinemaName:
+      booking.snapshot?.cinemaName || booking.snapshot?.cinema?.name || "",
+    showtimeStart,
+  };
+  const promotionAdjustedAmount = Number(
+    promotionPreview?.eligible
+      ? promotionPreview.finalAmount
+      : booking.finalAmount || 0,
+  );
+  const displayFinalAmount = scorePreview?.locked
+    ? Number(booking.finalAmount || 0)
+    : Math.max(0, promotionAdjustedAmount - selectedScoreDiscount);
   const maxScorePoints = Math.max(
     0,
     Math.min(
       availableScorePoints,
-      Math.floor(Math.max(0, Number(booking.finalAmount || 0) - 1) / 1000)
-    )
+      Math.floor(Math.max(0, promotionAdjustedAmount - 1) / 1000),
+    ),
   );
   const isPaymentPhase = phase === CHECKOUT_PHASE.PAYMENT;
 
@@ -785,12 +1331,37 @@ export default function BookingCheckoutPage() {
           error={cancelError}
           pending={cancelling}
           onClose={() => {
-            setCancelError('');
+            setCancelError("");
             setCancelModalOpen(false);
           }}
           onConfirm={handleCancelBooking}
         />
       )}
+
+      <PromotionChooser
+        open={promotionChooserOpen}
+        vouchers={promotionWallet}
+        loading={promotionLoading}
+        error={promotionError}
+        selectedPromotionId={selectedPromotionId}
+        backendAppliedIds={(promotionPreview?.appliedPromotions || [])
+          .flatMap((item) => [
+            item.userPromotionPublicId,
+            item.promotionPublicId,
+          ])
+          .filter(Boolean)}
+        promotionEvaluations={promotionPreview?.promotionEvaluations || []}
+        bookingAmount={Number(booking.finalAmount || 0)}
+        bookingContext={promotionContext}
+        onSelect={handlePromotionSelect}
+        onClaim={handleClaimPromotion}
+        onClear={() => {
+          void clearPromotionSelection();
+          setPromotionChooserOpen(false);
+        }}
+        onClose={() => setPromotionChooserOpen(false)}
+        onRefresh={refreshPromotionOptions}
+      />
 
       <div className="max-w-7xl mx-auto w-full">
         {/* Booking Stepper */}
@@ -803,7 +1374,9 @@ export default function BookingCheckoutPage() {
             <div className="lg:hidden bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-500 shrink-0" />
-                <span className="text-xs text-zinc-400 font-bold">Thời gian giao dịch còn lại</span>
+                <span className="text-xs text-zinc-400 font-bold">
+                  Thời gian giao dịch còn lại
+                </span>
               </div>
               <BookingCountdown
                 expiresAt={booking.expiresAt}
@@ -821,22 +1394,22 @@ export default function BookingCheckoutPage() {
                   <AlertTriangle className="h-7 w-7" />
                 </div>
                 <h2 className="text-xl font-black text-white">
-                  {bookingStatus === 'CANCELLED'
-                    ? 'Đơn đã được hủy'
-                    : bookingStatus === 'EXPIRED' || deadlineExpired
-                      ? 'Đã hết thời gian giữ ghế'
-                      : ['CONFIRMED', 'COMPLETED'].includes(bookingStatus)
-                        ? 'Đơn đã thanh toán thành công'
-                        : 'Đơn không còn thanh toán được'}
+                  {bookingStatus === "CANCELLED"
+                    ? "Đơn đã được hủy"
+                    : bookingStatus === "EXPIRED" || deadlineExpired
+                      ? "Đã hết thời gian giữ ghế"
+                      : ["CONFIRMED", "COMPLETED"].includes(bookingStatus)
+                        ? "Đơn đã thanh toán thành công"
+                        : "Đơn không còn thanh toán được"}
                 </h2>
                 <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-zinc-400">
-                  {bookingStatus === 'CANCELLED'
-                    ? 'Ghế của đơn đã được trả lại. VNPay và MoMo đã được khóa để tránh tạo giao dịch cho đơn đã hủy.'
-                    : bookingStatus === 'EXPIRED' || deadlineExpired
-                      ? 'Thời hạn thanh toán đã kết thúc và ghế không còn được giữ.'
-                      : ['CONFIRMED', 'COMPLETED'].includes(bookingStatus)
-                        ? 'Bạn có thể mở chi tiết đơn để xem thông tin vé đã phát hành.'
-                        : 'Vui lòng mở chi tiết đơn để kiểm tra trạng thái mới nhất.'}
+                  {bookingStatus === "CANCELLED"
+                    ? "Ghế của đơn đã được trả lại. VNPay và MoMo đã được khóa để tránh tạo giao dịch cho đơn đã hủy."
+                    : bookingStatus === "EXPIRED" || deadlineExpired
+                      ? "Thời hạn thanh toán đã kết thúc và ghế không còn được giữ."
+                      : ["CONFIRMED", "COMPLETED"].includes(bookingStatus)
+                        ? "Bạn có thể mở chi tiết đơn để xem thông tin vé đã phát hành."
+                        : "Vui lòng mở chi tiết đơn để kiểm tra trạng thái mới nhất."}
                 </p>
                 <div className="mt-6 flex flex-wrap justify-center gap-3">
                   <button
@@ -848,7 +1421,7 @@ export default function BookingCheckoutPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => navigate('/movies')}
+                    onClick={() => navigate("/movies")}
                     className="rounded-xl border border-zinc-700 px-5 py-3 text-xs font-black uppercase text-zinc-200 transition-colors hover:bg-zinc-800"
                   >
                     Chọn suất chiếu khác
@@ -861,20 +1434,24 @@ export default function BookingCheckoutPage() {
                 <div className="flex flex-col justify-between gap-4 border-b border-zinc-800 pb-5 sm:flex-row sm:items-center">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-black text-white">Thêm bắp nước?</h2>
+                      <h2 className="text-lg font-black text-white">
+                        Thêm bắp nước?
+                      </h2>
                       <span className="rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-zinc-400">
                         Không bắt buộc
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-zinc-500">Chọn nhanh món yêu thích hoặc bỏ qua để thanh toán vé.</p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Chọn nhanh món yêu thích hoặc bỏ qua để thanh toán vé.
+                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setCatalogExpanded(value => !value)}
+                      onClick={() => setCatalogExpanded((value) => !value)}
                       className="rounded-xl border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
                     >
-                      {catalogExpanded ? 'Thu gọn' : 'Xem tất cả'}
+                      {catalogExpanded ? "Thu gọn" : "Xem tất cả"}
                     </button>
                     <button
                       type="button"
@@ -889,7 +1466,7 @@ export default function BookingCheckoutPage() {
                 {catalogExpanded && (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex gap-2 overflow-x-auto py-1 scrollbar-none">
-                      {categories.map(cat => (
+                      {categories.map((cat) => (
                         <button
                           key={cat}
                           onClick={() => {
@@ -898,8 +1475,8 @@ export default function BookingCheckoutPage() {
                           }}
                           className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition-all ${
                             selectedCategory === cat
-                              ? 'bg-brand-orange text-white'
-                              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                              ? "bg-brand-orange text-white"
+                              : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                           }`}
                         >
                           {CATEGORY_LABELS[cat] || cat}
@@ -926,8 +1503,9 @@ export default function BookingCheckoutPage() {
                 {/* Grid of concession items */}
                 {filteredConcessions.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {visibleConcessions.map(item => {
-                      const { quantity = 0 } = cartItemsByProductId.get(item.id) || {};
+                    {visibleConcessions.map((item) => {
+                      const { quantity = 0 } =
+                        cartItemsByProductId.get(item.id) || {};
                       const isUpdating = cartUpdatingId === item.id;
 
                       return (
@@ -944,7 +1522,9 @@ export default function BookingCheckoutPage() {
                   </div>
                 ) : (
                   <div className="text-center py-10 bg-zinc-900/20 border border-zinc-800 rounded-2xl border-dashed">
-                    <span className="text-xs text-zinc-500 italic block">Không tìm thấy bắp nước phù hợp...</span>
+                    <span className="text-xs text-zinc-500 italic block">
+                      Không tìm thấy bắp nước phù hợp...
+                    </span>
                   </div>
                 )}
                 {catalogExpanded && catalogTotalPages > 1 && (
@@ -955,7 +1535,9 @@ export default function BookingCheckoutPage() {
                     <button
                       type="button"
                       disabled={currentCatalogPage === 1}
-                      onClick={() => setCatalogPage(value => Math.max(1, value - 1))}
+                      onClick={() =>
+                        setCatalogPage((value) => Math.max(1, value - 1))
+                      }
                       className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Trang trước
@@ -966,7 +1548,11 @@ export default function BookingCheckoutPage() {
                     <button
                       type="button"
                       disabled={currentCatalogPage === catalogTotalPages}
-                      onClick={() => setCatalogPage(value => Math.min(catalogTotalPages, value + 1))}
+                      onClick={() =>
+                        setCatalogPage((value) =>
+                          Math.min(catalogTotalPages, value + 1),
+                        )
+                      }
                       className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Trang sau
@@ -979,36 +1565,54 @@ export default function BookingCheckoutPage() {
               <div className="space-y-5">
                 <div className="space-y-5 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 p-5 md:p-6">
                   <div>
-                    <h2 className="text-lg font-black text-white">Chọn phương thức thanh toán</h2>
-                    <p className="mt-1 text-xs text-zinc-500">Bạn sẽ được chuyển sang cổng thanh toán bảo mật.</p>
+                    <h2 className="text-lg font-black text-white">
+                      Chọn phương thức thanh toán
+                    </h2>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Bạn sẽ được chuyển sang cổng thanh toán bảo mật.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
                       type="button"
-                      onClick={() => setSelectedPaymentMethod('VNPAY')}
+                      onClick={() => {
+                        setSelectedPaymentMethod("VNPAY");
+                        void refreshPromotionPreviewForPaymentMethod("VNPAY");
+                      }}
                       className={`border rounded-2xl p-5 flex items-center gap-4 text-left transition-colors ${
-                        selectedPaymentMethod === 'VNPAY'
-                          ? 'border-brand-orange bg-brand-orange/10'
-                          : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
+                        selectedPaymentMethod === "VNPAY"
+                          ? "border-brand-orange bg-brand-orange/10"
+                          : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700"
                       }`}
                     >
                       <div className="w-12 aspect-[4/3] bg-white rounded-lg p-1.5 flex items-center justify-center">
-                        <img src="https://sandbox.vnpayment.vn/paymentv2/Images/brands/logo.svg" alt="VNPay Logo" className="max-h-full max-w-full object-contain" />
+                        <img
+                          src="https://sandbox.vnpayment.vn/paymentv2/Images/brands/logo.svg"
+                          alt="VNPay Logo"
+                          className="max-h-full max-w-full object-contain"
+                        />
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-200">VNPay</h4>
-                        <p className="text-[9px] text-zinc-650 mt-0.5">Hỗ trợ ngân hàng nội địa & quốc tế</p>
+                        <h4 className="text-xs font-black text-zinc-200">
+                          VNPay
+                        </h4>
+                        <p className="text-[9px] text-zinc-650 mt-0.5">
+                          Hỗ trợ ngân hàng nội địa & quốc tế
+                        </p>
                       </div>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setSelectedPaymentMethod('MOMO')}
+                      onClick={() => {
+                        setSelectedPaymentMethod("MOMO");
+                        void refreshPromotionPreviewForPaymentMethod("MOMO");
+                      }}
                       className={`border rounded-2xl p-5 flex items-center gap-4 text-left transition-colors ${
-                        selectedPaymentMethod === 'MOMO'
-                          ? 'border-brand-orange bg-brand-orange/10'
-                          : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-700'
+                        selectedPaymentMethod === "MOMO"
+                          ? "border-brand-orange bg-brand-orange/10"
+                          : "border-zinc-800 bg-zinc-900/30 hover:border-zinc-700"
                       }`}
                     >
                       <div className="w-12 aspect-[4/3] bg-pink-100 rounded-lg p-2 flex items-center justify-center">
@@ -1018,17 +1622,23 @@ export default function BookingCheckoutPage() {
                           width="48"
                           height="36"
                           decoding="async"
-                          onError={event => {
-                            if (event.currentTarget.dataset.fallbackApplied) return;
-                            event.currentTarget.dataset.fallbackApplied = 'true';
+                          onError={(event) => {
+                            if (event.currentTarget.dataset.fallbackApplied)
+                              return;
+                            event.currentTarget.dataset.fallbackApplied =
+                              "true";
                             event.currentTarget.src = MOMO_LOGO_FALLBACK_URL;
                           }}
                           className="max-h-full max-w-full object-contain"
                         />
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-zinc-200">MoMo</h4>
-                        <p className="text-[9px] text-zinc-650 mt-0.5">Thanh toán nhanh qua ví điện tử</p>
+                        <h4 className="text-xs font-black text-zinc-200">
+                          MoMo
+                        </h4>
+                        <p className="text-[9px] text-zinc-650 mt-0.5">
+                          Thanh toán nhanh qua ví điện tử
+                        </p>
                       </div>
                     </button>
                   </div>
@@ -1043,7 +1653,9 @@ export default function BookingCheckoutPage() {
             <div className="hidden items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-2.5 shadow-inner lg:flex">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-500" />
-                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">Thời gian còn lại</span>
+                <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">
+                  Thời gian còn lại
+                </span>
               </div>
               <BookingCountdown
                 expiresAt={booking.expiresAt}
@@ -1064,15 +1676,19 @@ export default function BookingCheckoutPage() {
                   fetchPriority="high"
                   className="w-full h-full object-cover"
                   onError={(event) => {
-                    if (event.currentTarget.src.startsWith('data:')) return;
+                    if (event.currentTarget.src.startsWith("data:")) return;
                     event.currentTarget.onerror = null;
                     event.currentTarget.src = FALLBACK_POSTER;
                   }}
                 />
               </div>
               <div className="min-w-0 flex-grow space-y-1">
-                <span className="text-[9px] font-black uppercase tracking-widest text-brand-orange">Thông tin suất chiếu</span>
-                <h3 className="line-clamp-2 text-sm font-black leading-snug text-white">{movieTitle}</h3>
+                <span className="text-[9px] font-black uppercase tracking-widest text-brand-orange">
+                  Thông tin suất chiếu
+                </span>
+                <h3 className="line-clamp-2 text-sm font-black leading-snug text-white">
+                  {movieTitle}
+                </h3>
               </div>
             </div>
 
@@ -1080,83 +1696,266 @@ export default function BookingCheckoutPage() {
             <div className="space-y-2 border-b border-zinc-800 py-2 text-[11px]">
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Cụm rạp</span>
-                <span className="text-white font-bold text-right">{snapshot?.cinemaName || cinema?.name || 'Chưa có thông tin rạp'}</span>
+                <span className="text-white font-bold text-right">
+                  {snapshot?.cinemaName ||
+                    cinema?.name ||
+                    "Chưa có thông tin rạp"}
+                </span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="shrink-0 font-medium text-zinc-500">Phòng chiếu</span>
-                <span className="text-right font-bold text-zinc-200">{snapshot?.auditoriumName || auditorium?.name || 'Chưa có thông tin phòng'}</span>
+                <span className="shrink-0 font-medium text-zinc-500">
+                  Phòng chiếu
+                </span>
+                <span className="text-right font-bold text-zinc-200">
+                  {snapshot?.auditoriumName ||
+                    auditorium?.name ||
+                    "Chưa có thông tin phòng"}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Suất chiếu</span>
                 <span className="text-white font-bold text-right">
                   {showtimeStart
-                    ? `${new Date(showtimeStart).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} · ${new Date(showtimeStart).toLocaleDateString('vi-VN')}`
-                    : 'Chưa có thông tin'}
+                    ? `${new Date(showtimeStart).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} · ${new Date(showtimeStart).toLocaleDateString("vi-VN")}`
+                    : "Chưa có thông tin"}
                 </span>
               </div>
             </div>
 
             {/* Selected Seats */}
             <div className="space-y-2 border-b border-zinc-800 py-2">
-              <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Các vị trí ghế</span>
+              <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">
+                Các vị trí ghế
+              </span>
               {visibleSeats.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {visibleSeats.map((seat, index) => (
                     <span
-                      key={seat.seatPublicId || seat.id || seat.publicId || index}
+                      key={
+                        seat.seatPublicId || seat.id || seat.publicId || index
+                      }
                       className="rounded-lg border border-brand-orange/20 bg-brand-orange/10 px-2.5 py-1 text-[10px] font-black text-brand-orange"
                     >
                       {seatLabel(seat)}
-                      {seatType(seat) ? ` · ${seatType(seat)}` : ''}
+                      {seatType(seat) ? ` · ${seatType(seat)}` : ""}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="text-[11px] text-red-400">Không tìm thấy dữ liệu ghế của đơn. Vui lòng tải lại trang.</p>
+                <p className="text-[11px] text-red-400">
+                  Không tìm thấy dữ liệu ghế của đơn. Vui lòng tải lại trang.
+                </p>
               )}
             </div>
 
             {/* Food items breakdown */}
             <div className="space-y-2 border-b border-zinc-800 py-2">
-              <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">Bắp nước đã chọn</span>
+              <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">
+                Bắp nước đã chọn
+              </span>
               {selectedFoodItems.length > 0 ? (
                 <div className="max-h-24 space-y-1.5 overflow-y-auto pr-1">
                   {selectedFoodItems.map((item, index) => (
                     <div
-                      key={item.id || item.productId || `${foodItemName(item)}-${index}`}
+                      key={
+                        item.id ||
+                        item.productId ||
+                        `${foodItemName(item)}-${index}`
+                      }
                       className="grid grid-cols-[minmax(0,1fr)_36px_78px] items-center gap-2 text-[11px]"
                     >
-                      <span className="truncate text-zinc-300" title={foodItemName(item)}>{foodItemName(item)}</span>
-                      <span className="text-center font-bold text-zinc-500">x{item.quantity}</span>
-                      <span className="text-right font-bold text-zinc-100">{formatCurrency(foodItemAmount(item))}</span>
+                      <span
+                        className="truncate text-zinc-300"
+                        title={foodItemName(item)}
+                      >
+                        {foodItemName(item)}
+                      </span>
+                      <span className="text-center font-bold text-zinc-500">
+                        x{item.quantity}
+                      </span>
+                      <span className="text-right font-bold text-zinc-100">
+                        {formatCurrency(foodItemAmount(item))}
+                      </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-[11px] text-zinc-650 italic">Chưa chọn bắp nước đi kèm</div>
+                <div className="text-[11px] text-zinc-650 italic">
+                  Chưa chọn bắp nước đi kèm
+                </div>
               )}
             </div>
 
             {/* Pricing breakdown */}
             <div className="space-y-2.5 border-b border-zinc-800 py-2 text-xs">
               <div className="flex justify-between items-center text-zinc-300">
-                <span className="font-bold">Tiền vé ({visibleSeats.length} ghế):</span>
-                <span className="font-black text-sm">{formatCurrency(booking.ticketAmount)}</span>
+                <span className="font-bold">
+                  Tiền vé ({visibleSeats.length} ghế):
+                </span>
+                <span className="font-black text-sm">
+                  {formatCurrency(booking.ticketAmount)}
+                </span>
               </div>
               <div className="flex justify-between items-center text-zinc-300">
                 <span className="font-bold">Tiền bắp nước:</span>
-                <span className="font-black text-sm">{formatCurrency(foodAmount)}</span>
+                <span className="font-black text-sm">
+                  {formatCurrency(foodAmount)}
+                </span>
               </div>
-              {booking.promotionDiscount > 0 && (
+              {promotionDiscountTotal > 0 && (
                 <div className="flex justify-between items-center text-emerald-400 font-bold bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
                   <span>Khuyến mãi / Giảm giá:</span>
-                  <span>-{formatCurrency(booking.promotionDiscount)}</span>
+                  <span>-{formatCurrency(promotionDiscountTotal)}</span>
                 </div>
               )}
               <div className="flex justify-between pt-1 text-[10px] text-zinc-500">
                 <span>Thuế GTGT (VAT) đã bao gồm:</span>
                 <span>10%</span>
               </div>
+            </div>
+
+            <div className="min-w-0 space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Gift className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-200">
+                    Ưu đãi
+                  </span>
+                </div>
+                <span className="whitespace-nowrap text-[10px] font-black text-emerald-400">
+                  {promotionLoading
+                    ? "Đang tải..."
+                    : `${promotionWallet.length} ưu đãi`}
+                </span>
+              </div>
+
+              {selectedPromotion ? (
+                <div className="min-w-0 space-y-3">
+                  <div className="flex min-w-0 items-start gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                        <p className="min-w-0 break-words text-xs font-black text-white">
+                          {selectedPromotion.name || "Voucher LoraFilm"}
+                        </p>
+                        <span className="shrink-0 text-xs font-black text-emerald-400">
+                          {voucherDiscountSummary(selectedPromotion)}
+                        </span>
+                      </div>
+                      {selectedPromotion.code && (
+                        <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
+                          {selectedPromotion.code}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void clearPromotionSelection()}
+                      disabled={promotionLoading}
+                      aria-label="Bỏ chọn voucher"
+                      className="-mr-1 -mt-1 shrink-0 rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    {promotionPreview?.discountAmount > 0 && (
+                      <p className="text-[10px] font-bold text-emerald-300">
+                        Engine xác nhận giảm{" "}
+                        {formatCurrency(promotionPreview.discountAmount)}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPromotionChooserOpen(true)}
+                      disabled={isExpired || promotionLoading}
+                      className="h-9 rounded-lg border border-zinc-700 px-3 text-[10px] font-black uppercase text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
+                    >
+                      Chỉnh voucher
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {appliedCouponCode ? (
+                    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-xs font-black text-white">
+                          {appliedCouponCode}
+                        </p>
+                        <p className="mt-1 text-[10px] font-bold text-emerald-300">
+                          Giảm{" "}
+                          {formatCurrency(
+                            promotionPreview?.discountAmount || 0,
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void clearPromotionSelection()}
+                        aria-label="Bỏ coupon"
+                        className="p-2 text-zinc-500 hover:text-white"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : promotionPreview?.appliedPromotions?.length > 0 ? (
+                    <div className="min-w-0 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                      <p className="break-words text-xs font-black text-white">
+                        {promotionPreview.appliedPromotions
+                          .map((item) => item.name)
+                          .join(", ")}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold text-emerald-300">
+                        Ưu đãi giảm{" "}
+                        {formatCurrency(promotionPreview.discountAmount)}
+                      </p>
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setPromotionChooserOpen(true)}
+                    disabled={isExpired}
+                    className="w-full rounded-lg bg-emerald-500 py-2.5 text-[10px] font-black uppercase tracking-wider text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                  >
+                    Chọn ưu đãi
+                  </button>
+                </>
+              )}
+
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <input
+                  value={couponInput}
+                  onChange={(event) =>
+                    setCouponInput(event.target.value.toUpperCase())
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleApplyCoupon();
+                    }
+                  }}
+                  disabled={isExpired || promotionLoading}
+                  placeholder="Mã coupon"
+                  aria-label="Mã coupon"
+                  className="min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 font-mono text-xs font-bold text-white outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleApplyCoupon()}
+                  disabled={
+                    !couponInput.trim() || isExpired || promotionLoading
+                  }
+                  className="rounded-lg bg-zinc-100 px-3 text-[10px] font-black uppercase text-zinc-950 disabled:opacity-40"
+                >
+                  Áp dụng
+                </button>
+              </div>
+
+              {promotionError && !promotionChooserOpen && (
+                <p role="alert" className="text-[10px] leading-4 text-red-400">
+                  {promotionError}
+                </p>
+              )}
             </div>
 
             {/* Score redemption is available before Payment handoff on both checkout steps. */}
@@ -1169,19 +1968,26 @@ export default function BookingCheckoutPage() {
                   </span>
                 </div>
                 <span className="text-[10px] font-black text-brand-orange whitespace-nowrap">
-                  {availableScorePoints.toLocaleString('vi-VN')} điểm
+                  {availableScorePoints.toLocaleString("vi-VN")} điểm
                 </span>
               </div>
 
               {userScore ? (
                 <>
                   <p className="text-[10px] leading-relaxed text-zinc-500">
-                    1 điểm = 1.000đ. Điểm được giữ khi chốt đơn và chỉ bị trừ sau khi thanh toán thành công.
+                    1 điểm = 1.000đ. Điểm được giữ khi chốt đơn và chỉ bị trừ
+                    sau khi thanh toán thành công.
                   </p>
                   {scorePreview?.eligible ? (
                     <div className="space-y-2">
                       <div className="flex justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-[11px] font-bold text-emerald-400">
-                        <span>Đã chọn {Number(scorePreview.requestedPoints).toLocaleString('vi-VN')} điểm</span>
+                        <span>
+                          Đã chọn{" "}
+                          {Number(scorePreview.requestedPoints).toLocaleString(
+                            "vi-VN",
+                          )}{" "}
+                          điểm
+                        </span>
                         <span>-{formatCurrency(selectedScoreDiscount)}</span>
                       </div>
                       {scorePreview.locked ? (
@@ -1209,9 +2015,13 @@ export default function BookingCheckoutPage() {
                           value={scorePointsInput}
                           onChange={(event) => {
                             setScorePointsInput(event.target.value);
-                            setScorePreviewError('');
+                            setScorePreviewError("");
                           }}
-                          placeholder={maxScorePoints > 0 ? `Tối đa ${maxScorePoints}` : 'Không đủ điểm'}
+                          placeholder={
+                            maxScorePoints > 0
+                              ? `Tối đa ${maxScorePoints}`
+                              : "Không đủ điểm"
+                          }
                           disabled={maxScorePoints <= 0 || isExpired}
                           aria-label="Số điểm muốn dùng"
                           className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs font-bold text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-brand-orange disabled:cursor-not-allowed disabled:opacity-50"
@@ -1219,23 +2029,34 @@ export default function BookingCheckoutPage() {
                         <button
                           type="button"
                           onClick={handlePreviewScore}
-                          disabled={scorePreviewLoading || maxScorePoints <= 0 || isExpired}
+                          disabled={
+                            scorePreviewLoading ||
+                            maxScorePoints <= 0 ||
+                            isExpired
+                          }
                           className="shrink-0 rounded-xl bg-brand-orange px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {scorePreviewLoading ? 'Đang kiểm tra...' : 'Dùng điểm'}
+                          {scorePreviewLoading
+                            ? "Đang kiểm tra..."
+                            : "Dùng điểm"}
                         </button>
                       </div>
                       {maxScorePoints > 0 && (
                         <button
                           type="button"
-                          onClick={() => setScorePointsInput(String(maxScorePoints))}
+                          onClick={() =>
+                            setScorePointsInput(String(maxScorePoints))
+                          }
                           className="text-[9px] font-bold uppercase tracking-wider text-brand-orange hover:underline"
                         >
                           Chọn số điểm tối đa
                         </button>
                       )}
                       {scorePreviewError && (
-                        <p role="alert" className="text-[10px] leading-relaxed text-red-400">
+                        <p
+                          role="alert"
+                          className="text-[10px] leading-relaxed text-red-400"
+                        >
                           {scorePreviewError}
                         </p>
                       )}
@@ -1244,7 +2065,8 @@ export default function BookingCheckoutPage() {
                 </>
               ) : (
                 <p className="text-[10px] leading-relaxed text-zinc-500">
-                  Điểm thành viên đang tạm thời không khả dụng. Bạn vẫn có thể thanh toán bình thường.
+                  Điểm thành viên đang tạm thời không khả dụng. Bạn vẫn có thể
+                  thanh toán bình thường.
                 </p>
               )}
             </div>
@@ -1252,8 +2074,12 @@ export default function BookingCheckoutPage() {
             {/* Grand Total box */}
             <div className="flex items-center justify-between rounded-2xl border border-brand-orange/30 bg-zinc-950/80 px-4 py-3 shadow-[0_0_15px_rgba(255,122,0,0.1)]">
               <div>
-                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider block mb-0.5">Tổng số tiền</span>
-                <span className="text-[9px] text-brand-orange/80 font-bold uppercase">Đã bao gồm VAT</span>
+                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider block mb-0.5">
+                  Tổng số tiền
+                </span>
+                <span className="text-[9px] text-brand-orange/80 font-bold uppercase">
+                  Đã bao gồm VAT
+                </span>
               </div>
               <span className="text-2xl font-black tracking-tight text-brand-orange">
                 {formatCurrency(displayFinalAmount)}
@@ -1269,7 +2095,11 @@ export default function BookingCheckoutPage() {
                   className="mt-0.5 h-4 w-4 shrink-0 accent-brand-orange"
                 />
                 <span className="text-[11px] font-medium leading-4 text-zinc-400">
-                  Tôi đồng ý với <span className="font-bold text-zinc-200">Điều khoản và Quy định</span> giao dịch mua vé trực tuyến.
+                  Tôi đồng ý với{" "}
+                  <span className="font-bold text-zinc-200">
+                    Điều khoản và Quy định
+                  </span>{" "}
+                  giao dịch mua vé trực tuyến.
                 </span>
               </label>
             )}
@@ -1281,8 +2111,8 @@ export default function BookingCheckoutPage() {
                   onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
                   className={`w-full rounded-2xl py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition-all ${
                     !isExpired
-                      ? 'cursor-pointer bg-brand-orange text-white shadow-brand-orange/25 hover:bg-orange-600'
-                      : 'cursor-not-allowed border border-zinc-800 bg-zinc-850 text-zinc-500'
+                      ? "cursor-pointer bg-brand-orange text-white shadow-brand-orange/25 hover:bg-orange-600"
+                      : "cursor-not-allowed border border-zinc-800 bg-zinc-850 text-zinc-500"
                   }`}
                 >
                   Tiếp tục thanh toán · {formatCurrency(displayFinalAmount)}
@@ -1297,12 +2127,14 @@ export default function BookingCheckoutPage() {
                     <CreditCard className="h-4 w-4" />
                     <span>
                       {paymentLoading
-                        ? 'Đang tạo giao dịch...'
+                        ? "Đang tạo giao dịch..."
                         : `Thanh toán qua ${selectedPaymentMethod} · ${formatCurrency(displayFinalAmount)}`}
                     </span>
                   </button>
                   {!termsAgreed && (
-                    <p className="text-center text-[10px] text-zinc-500">Đồng ý điều khoản để tiếp tục thanh toán.</p>
+                    <p className="text-center text-[10px] text-zinc-500">
+                      Đồng ý điều khoản để tiếp tục thanh toán.
+                    </p>
                   )}
                   <button
                     onClick={() => setPhase(CHECKOUT_PHASE.ADD_ONS)}
@@ -1316,7 +2148,7 @@ export default function BookingCheckoutPage() {
               <button
                 disabled={paymentLoading || isExpired || cancelling}
                 onClick={() => {
-                  setCancelError('');
+                  setCancelError("");
                   setCancelModalOpen(true);
                 }}
                 className="block w-full cursor-pointer py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-zinc-600 transition-colors hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"

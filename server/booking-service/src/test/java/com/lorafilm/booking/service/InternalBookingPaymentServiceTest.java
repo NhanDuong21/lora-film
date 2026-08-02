@@ -119,6 +119,7 @@ class InternalBookingPaymentServiceTest {
                 Instant.now().plusSeconds(900),
                 null);
         booking.setId(100L);
+        booking.setPaymentMethodSnapshot("VNPAY");
         booking.lockAmount(Instant.now());
     }
 
@@ -136,6 +137,7 @@ class InternalBookingPaymentServiceTest {
         assertEquals("VND", context.currency());
         assertEquals(booking.getAmountLockedAt(), context.amountLockedAt());
         assertEquals(booking.getExpiresAt(), context.expiresAt());
+        assertEquals("VNPAY", context.lockedPaymentProvider());
         assertTrue(context.payable());
         assertEquals("Superman", context.analyticsSnapshot().movieTitle());
         assertEquals("movie-public-101", context.analyticsSnapshot().moviePublicId());

@@ -6,15 +6,19 @@ public class MonitoringSummaryResponse {
     private long paymentFailed;
     private long expiredBooking;
     private long pendingRetry;
+    private long promotionReconciliationMismatch;
 
     public MonitoringSummaryResponse() {
     }
 
-    public MonitoringSummaryResponse(long bookingToday, long paymentFailed, long expiredBooking, long pendingRetry) {
+    public MonitoringSummaryResponse(long bookingToday, long paymentFailed,
+                                     long expiredBooking, long pendingRetry,
+                                     long promotionReconciliationMismatch) {
         this.bookingToday = bookingToday;
         this.paymentFailed = paymentFailed;
         this.expiredBooking = expiredBooking;
         this.pendingRetry = pendingRetry;
+        this.promotionReconciliationMismatch = promotionReconciliationMismatch;
     }
 
     public long getBookingToday() {
@@ -47,5 +51,14 @@ public class MonitoringSummaryResponse {
 
     public void setPendingRetry(long pendingRetry) {
         this.pendingRetry = pendingRetry;
+    }
+
+    public long getPromotionReconciliationMismatch() {
+        return promotionReconciliationMismatch;
+    }
+
+    public void setPromotionReconciliationMismatch(
+            long promotionReconciliationMismatch) {
+        this.promotionReconciliationMismatch = promotionReconciliationMismatch;
     }
 }

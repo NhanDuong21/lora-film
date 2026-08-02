@@ -3,10 +3,13 @@ package com.project.paymentservice.service;
 import com.project.paymentservice.config.PaymentRuntimeProperties;
 import com.project.paymentservice.entity.Payment;
 import com.project.paymentservice.enumtype.PaymentStatus;
+import com.project.paymentservice.exception.BusinessException;
 import com.project.paymentservice.provider.PaymentProvider;
 import com.project.paymentservice.provider.PaymentProviderRegistry;
 import com.project.paymentservice.provider.ProviderCallbackResult;
 import com.project.paymentservice.repository.PaymentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -18,6 +21,8 @@ import java.util.Optional;
 
 @Component
 public class PaymentProviderRecoveryScheduler {
+    private static final Logger log = LoggerFactory.getLogger(PaymentProviderRecoveryScheduler.class);
+
     private final PaymentRepository paymentRepository;
     private final PaymentProviderRegistry providerRegistry;
     private final PaymentTransactionService transactionService;
@@ -53,17 +58,39 @@ public class PaymentProviderRecoveryScheduler {
                         payment.getId(), now.plusSeconds(properties.getSettlementHoldSeconds()));
                 continue;
             }
-            Optional<ProviderCallbackResult> result = provider.queryStatus(payment);
+            Optional<ProviderCallbackResult> result;
+            try {
+                result = provider.queryStatus(payment);
+            } catch (RuntimeException exception) {
+                defer(payment, provider, now);
+                log.warn("Provider status query failed: paymentId={}, provider={}, error={}",
+                        payment.getId(), payment.getProviderCode(), exception.getClass().getSimpleName());
+                continue;
+            }
             if (result.isPresent()) {
-                transactionService.applyProviderResult(
-                        payment.getProviderCode(), result.get(), null);
+                try {
+                    transactionService.applyProviderResult(
+                            payment.getProviderCode(), result.get(), null);
+                } catch (BusinessException exception) {
+                    defer(payment, provider, now);
+                    log.warn("Provider recovery result requires attention: paymentId={}, provider={}, errorCode={}",
+                            payment.getId(), payment.getProviderCode(), exception.getErrorCode());
+                } catch (RuntimeException exception) {
+                    defer(payment, provider, now);
+                    log.warn("Provider recovery result failed: paymentId={}, provider={}, error={}",
+                            payment.getId(), payment.getProviderCode(), exception.getClass().getSimpleName());
+                }
             } else {
-                int retryDelaySeconds = Math.max(
-                        properties.getSettlementHoldSeconds(),
-                        provider.recoveryRetryDelaySeconds());
-                transactionService.deferUncertainStatus(
-                        payment.getId(), now.plusSeconds(retryDelaySeconds));
+                defer(payment, provider, now);
             }
         }
+    }
+
+    private void defer(Payment payment, PaymentProvider provider, Instant now) {
+        int retryDelaySeconds = Math.max(
+                properties.getSettlementHoldSeconds(),
+                provider.recoveryRetryDelaySeconds());
+        transactionService.deferUncertainStatus(
+                payment.getId(), now.plusSeconds(retryDelaySeconds));
     }
 }

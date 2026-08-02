@@ -41,16 +41,22 @@ public class InternalSchedulerController {
         return run("campaigns-expire");
     }
 
-    @PostMapping("/coupons/expire")
-    @Operation(summary = "Expire coupons that reached their validity end")
-    public ResponseEntity<ApiResponse<Integer>> expireCoupons() {
-        return run("coupons-expire");
+    @PostMapping("/promotions/activate")
+    @Operation(summary = "Activate draft promotions whose campaign and validity period are active")
+    public ResponseEntity<ApiResponse<Integer>> activatePromotions() {
+        return run("promotions-activate");
     }
 
-    @PostMapping("/vouchers/expire")
-    @Operation(summary = "Expire vouchers that reached their validity end")
-    public ResponseEntity<ApiResponse<Integer>> expireVouchers() {
-        return run("vouchers-expire");
+    @PostMapping("/promotions/expire")
+    @Operation(summary = "Expire promotion templates that reached their validity end")
+    public ResponseEntity<ApiResponse<Integer>> expirePromotions() {
+        return run("promotions-expire");
+    }
+
+    @PostMapping("/wallet/expire")
+    @Operation(summary = "Expire customer wallet items that reached their validity end")
+    public ResponseEntity<ApiResponse<Integer>> expireWallet() {
+        return run("wallet-expire");
     }
 
     @PostMapping("/outbox/publish")

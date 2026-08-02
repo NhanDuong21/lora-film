@@ -31,6 +31,7 @@ export const routePaths = {
     paymentDetail: '/admin/payments/:paymentPublicId',
     cinemas: '/admin/cinemas',
     concessions: '/admin/concessions',
+    promotions: '/admin/promotions',
     events: '/admin/events',
     finance: '/admin/analytics',
     analytics: '/admin/analytics',

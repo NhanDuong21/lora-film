@@ -5,18 +5,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.notificationservice.domain.NotificationTypes.Category;
 import com.project.notificationservice.domain.NotificationTypes.Channel;
 import com.project.notificationservice.domain.NotificationTypes.DeliveryStatus;
+import com.project.notificationservice.domain.NotificationTypes.Priority;
 import com.project.notificationservice.domain.NotificationTypes.RequestStatus;
 import com.project.notificationservice.entity.NotificationDelivery;
+import com.project.notificationservice.entity.InAppNotification;
 import com.project.notificationservice.entity.NotificationPreference;
 import com.project.notificationservice.entity.NotificationRecipient;
 import com.project.notificationservice.entity.NotificationRequest;
 import com.project.notificationservice.exception.NotificationException;
 import com.project.notificationservice.repository.NotificationDeliveryRepository;
+import com.project.notificationservice.repository.InAppNotificationRepository;
 import com.project.notificationservice.repository.NotificationPreferenceRepository;
 import com.project.notificationservice.repository.NotificationRecipientRepository;
 import com.project.notificationservice.repository.NotificationRequestRepository;
 import com.project.notificationservice.service.NotificationCommands.AcceptedNotification;
 import com.project.notificationservice.service.NotificationCommands.CreateNotificationCommand;
+import com.project.notificationservice.service.NotificationCommands.CouponIssuedNotification;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -33,6 +38,7 @@ public class NotificationApplicationService {
     private final NotificationRecipientRepository recipientRepository;
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationPreferenceRepository preferenceRepository;
+    private final InAppNotificationRepository inAppNotificationRepository;
     private final RecipientCryptoService cryptoService;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
@@ -42,6 +48,7 @@ public class NotificationApplicationService {
             NotificationRecipientRepository recipientRepository,
             NotificationDeliveryRepository deliveryRepository,
             NotificationPreferenceRepository preferenceRepository,
+            InAppNotificationRepository inAppNotificationRepository,
             RecipientCryptoService cryptoService,
             ObjectMapper objectMapper,
             MeterRegistry meterRegistry) {
@@ -49,6 +56,7 @@ public class NotificationApplicationService {
         this.recipientRepository = recipientRepository;
         this.deliveryRepository = deliveryRepository;
         this.preferenceRepository = preferenceRepository;
+        this.inAppNotificationRepository = inAppNotificationRepository;
         this.cryptoService = cryptoService;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
@@ -114,6 +122,72 @@ public class NotificationApplicationService {
         meterRegistry.counter("notification_requests_total",
                 "eventType", command.eventType(), "category", command.category().name()).increment();
         return new AcceptedNotification(request.getPublicId(), request.getStatus().name(), false, count);
+    }
+
+    @Transactional
+    public AcceptedNotification acceptCouponIssued(CouponIssuedNotification command) {
+        String idempotencyKey = "coupon-issued-" + command.sourceEventId();
+        Optional<NotificationRequest> existing = requestRepository
+                .findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            NotificationRequest request = existing.get();
+            int deliveries = deliveryRepository
+                    .findByNotificationRequestIdOrderByCreatedAtAsc(request.getId()).size();
+            return new AcceptedNotification(request.getPublicId(), request.getStatus().name(),
+                    true, deliveries);
+        }
+
+        Instant now = Instant.now();
+        NotificationRequest request = new NotificationRequest();
+        request.setIdempotencyKey(idempotencyKey);
+        request.setSourceService("promotion-service");
+        request.setSourceEventId(command.sourceEventId());
+        request.setEventType("COUPON_ISSUED");
+        request.setTemplateKey("COUPON_ISSUED");
+        request.setLocale("vi-VN");
+        request.setCategory(Category.TRANSACTIONAL);
+        request.setPriority(Priority.NORMAL);
+        request.setExpiresAt(command.expiresAt());
+        request.setStatus(RequestStatus.COMPLETED);
+        request.setPayloadJson(writeJson(Map.of(
+                "publicData", Map.of(
+                        "couponCode", command.couponCode(),
+                        "promotionName", command.promotionName()),
+                "deepLink", command.deepLink())));
+        request = requestRepository.save(request);
+
+        NotificationRecipient recipient = new NotificationRecipient();
+        recipient.setNotificationRequestId(request.getId());
+        recipient.setUserPublicId(command.userPublicId());
+        recipient.setLocale("vi-VN");
+        recipient = recipientRepository.save(recipient);
+
+        NotificationDelivery delivery = new NotificationDelivery();
+        delivery.setNotificationRequestId(request.getId());
+        delivery.setNotificationRecipientId(recipient.getId());
+        delivery.setChannel(Channel.IN_APP);
+        delivery.setProvider("in-app");
+        delivery.setStatus(DeliveryStatus.SENT);
+        delivery.setAttemptCount(1);
+        delivery.setSentAt(now);
+        delivery.setDeliveredAt(now);
+        delivery = deliveryRepository.save(delivery);
+
+        InAppNotification inApp = new InAppNotification();
+        inApp.setNotificationDeliveryId(delivery.getId());
+        inApp.setUserPublicId(command.userPublicId());
+        inApp.setTitle("Bạn có coupon mới");
+        inApp.setBody("Mã " + command.couponCode() + " cho ưu đãi "
+                + command.promotionName() + ". Nhập mã này tại checkout để sử dụng.");
+        inApp.setCategory(Category.TRANSACTIONAL.name());
+        inApp.setDeepLink(command.deepLink());
+        inApp.setExpiresAt(command.expiresAt());
+        inAppNotificationRepository.save(inApp);
+        meterRegistry.counter("notification_requests_total",
+                "eventType", "COUPON_ISSUED", "category", Category.TRANSACTIONAL.name())
+                .increment();
+        return new AcceptedNotification(request.getPublicId(), request.getStatus().name(),
+                false, 1);
     }
 
     @Transactional(readOnly = true)

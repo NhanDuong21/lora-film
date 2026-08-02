@@ -1,6 +1,5 @@
 package com.project.promotionservice.reservation.controller;
 
-import com.project.promotionservice.benefit.enums.BenefitEnums.RedemptionType;
 import com.project.promotionservice.common.response.ApiResponse;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.reservation.dto.response.ReservationResponse;
@@ -43,7 +42,6 @@ public class AdminReservationController {
     @GetMapping
     @Operation(summary = "Search reservation history")
     public ResponseEntity<ApiResponse<PagedResponse<ReservationResponse>>> history(
-            @RequestParam(required = false) RedemptionType type,
             @RequestParam(required = false) ReservationStatus status,
             @RequestParam(required = false)
             @Pattern(regexp = USER_REFERENCE_PATTERN,
@@ -62,7 +60,7 @@ public class AdminReservationController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return ResponseEntity.ok(ApiResponse.success(reservationService.history(
-                type, status, userPublicId, bookingPublicId, orderPublicId,
+                status, userPublicId, bookingPublicId, orderPublicId,
                 from, to, page, size)));
     }
 }

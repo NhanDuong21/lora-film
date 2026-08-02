@@ -1,7 +1,5 @@
 package com.project.promotionservice.promotion.dto.request;
 
-import com.project.promotionservice.promotion.enums.CampaignType;
-import com.project.promotionservice.promotion.enums.FundingSource;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
@@ -56,8 +54,6 @@ class CampaignRequestValidationTest {
         CampaignCreateRequest request = new CampaignCreateRequest();
         request.setCode("PROD2026");
         request.setName("Production Campaign");
-        request.setCampaignType(CampaignType.COUPON);
-        request.setFundingSource(FundingSource.SYSTEM);
         request.setPriority(100);
         request.setStackable(false);
         request.setExclusiveCampaign(false);

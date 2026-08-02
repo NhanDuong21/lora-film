@@ -3,8 +3,6 @@ package com.project.promotionservice.promotion.entity;
 import com.project.promotionservice.common.entity.BaseAuditableEntity;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
-import com.project.promotionservice.promotion.enums.CampaignType;
-import com.project.promotionservice.promotion.enums.FundingSource;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 
 import jakarta.persistence.Column;
@@ -31,17 +29,6 @@ public class PromotionCampaign extends BaseAuditableEntity {
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "campaign_type", length = 50, nullable = false)
-    private CampaignType campaignType;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "funding_source", length = 50, nullable = false)
-    private FundingSource fundingSource;
-
-    @Column(name = "partner_public_id", length = 36)
-    private String partnerPublicId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
@@ -128,7 +115,6 @@ public class PromotionCampaign extends BaseAuditableEntity {
                              Instant createdAt, String createdBy, Instant updatedAt,
                              String updatedBy, Instant deletedAt, String deletedBy,
                              String code, String name, String slug, String description,
-                             CampaignType campaignType, FundingSource fundingSource,
                              CampaignStatus status, CampaignApprovalStatus approvalStatus,
                              LegalStatus legalStatus, Integer priority, Boolean stackable,
                              Boolean exclusiveCampaign, Boolean autoActivate, Boolean autoComplete,
@@ -143,8 +129,6 @@ public class PromotionCampaign extends BaseAuditableEntity {
         this.name = name;
         this.slug = slug;
         this.description = description;
-        this.campaignType = campaignType;
-        this.fundingSource = fundingSource;
         this.status = status;
         this.approvalStatus = approvalStatus;
         this.legalStatus = legalStatus;
@@ -202,30 +186,6 @@ public class PromotionCampaign extends BaseAuditableEntity {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public CampaignType getCampaignType() {
-        return campaignType;
-    }
-
-    public void setCampaignType(CampaignType campaignType) {
-        this.campaignType = campaignType;
-    }
-
-    public FundingSource getFundingSource() {
-        return fundingSource;
-    }
-
-    public void setFundingSource(FundingSource fundingSource) {
-        this.fundingSource = fundingSource;
-    }
-
-    public String getPartnerPublicId() {
-        return partnerPublicId;
-    }
-
-    public void setPartnerPublicId(String partnerPublicId) {
-        this.partnerPublicId = partnerPublicId;
     }
 
     public CampaignStatus getStatus() {

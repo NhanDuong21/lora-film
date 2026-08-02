@@ -59,4 +59,9 @@ public class SecurityContextServiceImpl implements SecurityContextService {
         return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equalsIgnoreCase(permission));
     }
+
+    @Override
+    public boolean isIdentityVerified() {
+        return getCurrentUser().map(UserPrincipal::isIdentityVerified).orElse(false);
+    }
 }
