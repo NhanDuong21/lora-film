@@ -183,15 +183,27 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
 
         List<SeatLayoutDto.SeatPriceDto> seatPriceDtos = seats.stream().map(seat -> {
             ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
-            if (showtimePrice == null || showtimePrice.getPrice() == null
-                    || showtimePrice.getPrice().signum() <= 0) {
+            boolean hasValidPrice = showtimePrice != null
+                    && showtimePrice.getPrice() != null
+                    && showtimePrice.getPrice().signum() > 0;
+            boolean nonSellableSeatType = seat.getSeatType().getCode()
+                    == com.lorafilm.movie.seat.domain.enums.SeatTypeCode.DISABLED;
+            if (!hasValidPrice && !nonSellableSeatType) {
                 throw new BusinessException(ErrorCode.PRICING_INCOMPLETE,
                         "Missing or invalid price for SeatType " + seat.getSeatType().getPublicId());
             }
-            BigDecimal price = SeatPriceAllocation.perPhysicalSeat(
-                    seat.getSeatType().getCode(), showtimePrice.getPrice());
-            String currency = showtimePrice.getCurrency();
-            boolean isBlocked = blockedSeatMap.containsKey(seat.getId());
+            BigDecimal price = hasValidPrice
+                    ? SeatPriceAllocation.perPhysicalSeat(
+                            seat.getSeatType().getCode(), showtimePrice.getPrice())
+                    : null;
+            String currency = hasValidPrice ? showtimePrice.getCurrency() : null;
+            // The internal layout is also consumed by Booking's single-seat-gap
+            // policy.  A DISABLED seat has no price by design and must be treated
+            // as unavailable there, otherwise selecting adjacent seats can be
+            // rejected for leaving a phantom gap beside a non-sellable seat.
+            boolean isBlocked = blockedSeatMap.containsKey(seat.getId())
+                    || nonSellableSeatType
+                    || seat.getStatus() != SeatStatus.ACTIVE;
 
             SeatLayoutDto.SeatPriceDto dto = new SeatLayoutDto.SeatPriceDto();
             dto.setId(seat.getId());

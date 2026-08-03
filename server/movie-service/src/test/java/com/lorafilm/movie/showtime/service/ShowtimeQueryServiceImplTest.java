@@ -6,7 +6,9 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,7 @@ import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.service.SeatService;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.dto.SeatLayoutDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeDto;
 import com.lorafilm.movie.showtime.dto.ShowtimeMapper;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
@@ -214,6 +217,40 @@ class ShowtimeQueryServiceImplTest {
                 BusinessException.class,
                 () -> showtimeService.getSeatLayout("public-123"));
         assertEquals(ErrorCode.PRICING_INCOMPLETE, exception.getErrorCode());
+    }
+
+    @Test
+    void getSeatLayout_unpricedDisabledSeat_isReturnedAsBlocked() {
+        showtime.setPublicId("public-123");
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123"))
+                .thenReturn(Optional.of(showtime));
+
+        SeatType disabledSeatType = new SeatType();
+        disabledSeatType.setId(4L);
+        disabledSeatType.setCode(SeatTypeCode.DISABLED);
+
+        Seat disabledSeat = new Seat();
+        disabledSeat.setId(104L);
+        disabledSeat.setAuditorium(auditorium);
+        disabledSeat.setSeatType(disabledSeatType);
+        disabledSeat.setStatus(SeatStatus.ACTIVE);
+        disabledSeat.setSeatCode("A4");
+
+        when(seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId()))
+                .thenReturn(Collections.singletonList(disabledSeat));
+        when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.emptyList());
+        when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L,
+                com.lorafilm.movie.common.enums.ActionStatus.ACTIVE))
+                .thenReturn(Collections.emptyList());
+
+        SeatLayoutDto result = showtimeService.getSeatLayout("public-123");
+
+        assertEquals(1, result.getSeats().size());
+        SeatLayoutDto.SeatPriceDto seat = result.getSeats().get(0);
+        assertEquals("DISABLED", seat.getSeatType());
+        assertNull(seat.getPrice());
+        assertNull(seat.getCurrency());
+        assertTrue(seat.isBlockedForShowtime());
     }
 
     @Test
