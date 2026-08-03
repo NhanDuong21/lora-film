@@ -164,7 +164,8 @@ CREATE TABLE `promotion_campaigns` (
   `updated_by` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `deleted_at` datetime(6) DEFAULT NULL,
   `deleted_by` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  CONSTRAINT `chk_promotion_campaign_legal_status` CHECK ((`legal_status` in (_utf8mb4'PENDING',_utf8mb4'PASSED',_utf8mb4'FAILED')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

@@ -40,3 +40,14 @@ ALTER TABLE notification_requests
     CHECK (status IN (
         'ACCEPTED', 'PROCESSING', 'COMPLETED', 'PARTIALLY_FAILED', 'FAILED', 'CANCELLED'
     ));
+
+USE promotion_db;
+
+-- The legacy seed used COMPLIANT, while LegalStatus in the service exposes PASSED.
+UPDATE promotion_campaigns
+SET legal_status = 'PASSED'
+WHERE legal_status = 'COMPLIANT';
+
+ALTER TABLE promotion_campaigns
+    ADD CONSTRAINT chk_promotion_campaign_legal_status
+    CHECK (legal_status IN ('PENDING', 'PASSED', 'FAILED'));
