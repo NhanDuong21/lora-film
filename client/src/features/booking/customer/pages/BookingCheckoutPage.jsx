@@ -52,6 +52,7 @@ import {
   paymentErrorMessage,
 } from "@/features/payment/services/paymentService";
 import { getOptimizedImageUrl } from "@/utils/imageOptimization";
+import { promotionDecision } from "../utils/promotionDecision";
 
 const FALLBACK_POSTER =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
@@ -374,6 +375,7 @@ export default function BookingCheckoutPage() {
   const [promotionWallet, setPromotionWallet] = useState([]);
   const [promotionLoading, setPromotionLoading] = useState(false);
   const [promotionError, setPromotionError] = useState("");
+  const [promotionNotice, setPromotionNotice] = useState(null);
   const [promotionChooserOpen, setPromotionChooserOpen] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [promotionPreview, setPromotionPreview] = useState(null);
@@ -748,6 +750,7 @@ export default function BookingCheckoutPage() {
           setScorePreviewError("");
           setSelectedPromotion(null);
           setAppliedCouponCode("");
+          setPromotionNotice(null);
           try {
             setPromotionPreview(
               await previewBookingPromotions(
@@ -780,6 +783,7 @@ export default function BookingCheckoutPage() {
         setScorePreviewError("");
         setSelectedPromotion(null);
         setAppliedCouponCode("");
+        setPromotionNotice(null);
         try {
           setPromotionPreview(
             await previewBookingPromotions(
@@ -866,27 +870,34 @@ export default function BookingCheckoutPage() {
 
     setPromotionLoading(true);
     setPromotionError("");
+    setPromotionNotice(null);
     try {
       const quote = await previewBookingPromotions(bookingId, {
         ...promotionPreviewSelection(inventory, selectedPaymentMethod, {
           ...requestSelection,
         }),
       });
-      const requestedIds = new Set(
-        [walletPromotionId(promotion), systemPromotionId(promotion)]
-          .filter(Boolean)
-          .map(String),
-      );
-      const applied = (quote?.appliedPromotions || []).some((item) =>
-        [item?.userPromotionPublicId, item?.promotionPublicId]
-          .filter(Boolean)
-          .some((id) => requestedIds.has(String(id))),
-      );
-      if (!applied) {
+      const decision = promotionDecision(quote, { promotion });
+      if (!decision.applied && decision.notice) {
+        setSelectedPromotion(null);
+        setAppliedCouponCode("");
+        setCouponInput("");
+        setPromotionPreview(quote);
+        setPromotionNotice(decision.notice);
+        clearScoreSelection();
+        setPromotionChooserOpen(false);
+        return;
+      }
+      if (!decision.applied) {
         const evaluation = (quote?.promotionEvaluations || []).find((item) =>
           [item?.userPromotionPublicId, item?.promotionPublicId]
             .filter(Boolean)
-            .some((id) => requestedIds.has(String(id))),
+            .some((id) =>
+              [walletPromotionId(promotion), systemPromotionId(promotion)]
+                .filter(Boolean)
+                .map(String)
+                .includes(String(id)),
+            ),
         );
         throw new Error(
           evaluation?.reason ||
@@ -897,9 +908,11 @@ export default function BookingCheckoutPage() {
       setAppliedCouponCode("");
       setCouponInput("");
       setPromotionPreview(quote);
+      setPromotionNotice(decision.notice);
       clearScoreSelection();
       setPromotionChooserOpen(false);
     } catch (requestError) {
+      setPromotionNotice(null);
       setPromotionError(
         getBookingErrorMessage(
           requestError,
@@ -938,6 +951,7 @@ export default function BookingCheckoutPage() {
     setSelectedPromotion(null);
     setAppliedCouponCode("");
     setCouponInput("");
+    setPromotionNotice(null);
     clearScoreSelection();
     try {
       setPromotionPreview(
@@ -956,17 +970,27 @@ export default function BookingCheckoutPage() {
   const refreshPromotionOptions = async () => {
     const inventory = await loadPromotionWallet();
     try {
-      setPromotionPreview(
-        await previewBookingPromotions(
-          bookingId,
-          promotionPreviewSelection(inventory, selectedPaymentMethod, {
-            ...promotionRequestSelection(selectedPromotion),
-            couponCode: appliedCouponCode || null,
-          }),
-        ),
+      const quote = await previewBookingPromotions(
+        bookingId,
+        promotionPreviewSelection(inventory, selectedPaymentMethod, {
+          ...promotionRequestSelection(selectedPromotion),
+          couponCode: appliedCouponCode || null,
+        }),
       );
+      const decision = promotionDecision(quote, {
+        promotion: selectedPromotion,
+        couponCode: appliedCouponCode,
+      });
+      if (!decision.applied && decision.notice) {
+        setSelectedPromotion(null);
+        setAppliedCouponCode("");
+        setCouponInput("");
+      }
+      setPromotionPreview(quote);
+      setPromotionNotice(decision.notice);
       setPromotionError("");
     } catch {
+      setPromotionNotice(null);
       setPromotionError("Không thể kiểm tra điều kiện ưu đãi lúc này.");
     }
   };
@@ -976,18 +1000,26 @@ export default function BookingCheckoutPage() {
     if (!code) return;
     setPromotionLoading(true);
     setPromotionError("");
+    setPromotionNotice(null);
     try {
       const quote = await previewBookingPromotions(bookingId, {
         ...promotionPreviewSelection(promotionWallet, selectedPaymentMethod, {
           couponCode: code,
         }),
       });
+      const decision = promotionDecision(quote, { couponCode: code });
+      if (!decision.applied && !decision.notice) {
+        throw new Error("Coupon chưa tạo ra mức giảm cho đơn hàng hiện tại.");
+      }
       setSelectedPromotion(null);
-      setAppliedCouponCode(code);
+      setAppliedCouponCode(decision.applied ? code : "");
+      if (!decision.applied) setCouponInput("");
       setPromotionPreview(quote);
+      setPromotionNotice(decision.notice);
       clearScoreSelection();
     } catch (requestError) {
       setAppliedCouponCode("");
+      setPromotionNotice(null);
       setPromotionError(
         getBookingErrorMessage(
           requestError,
@@ -1054,6 +1086,7 @@ export default function BookingCheckoutPage() {
           setSelectedPromotion(null);
           setAppliedCouponCode("");
           setCouponInput("");
+          setPromotionNotice(null);
         }
         navigate(`/bookings/success?bookingId=${bookingId}`);
         return;
@@ -1252,12 +1285,23 @@ export default function BookingCheckoutPage() {
           couponCode: appliedCouponCode || null,
         }),
       );
+      const decision = promotionDecision(quote, {
+        promotion: selectedPromotion,
+        couponCode: appliedCouponCode,
+      });
+      if (!decision.applied && decision.notice) {
+        setSelectedPromotion(null);
+        setAppliedCouponCode("");
+        setCouponInput("");
+      }
       setPromotionPreview(quote);
+      setPromotionNotice(decision.notice);
       setPromotionError("");
     } catch (requestError) {
       setSelectedPromotion(null);
       setAppliedCouponCode("");
       setCouponInput("");
+      setPromotionNotice(null);
       clearScoreSelection();
       try {
         setPromotionPreview(
@@ -1825,7 +1869,7 @@ export default function BookingCheckoutPage() {
                 <span className="whitespace-nowrap text-[10px] font-black text-emerald-400">
                   {promotionLoading
                     ? "Đang tải..."
-                    : `${promotionWallet.length} ưu đãi`}
+                    : `${promotionWallet.length} ưu đãi khả dụng`}
                 </span>
               </div>
 
@@ -1838,13 +1882,32 @@ export default function BookingCheckoutPage() {
                           {selectedPromotion.name || "Voucher LoraFilm"}
                         </p>
                         <span className="shrink-0 text-xs font-black text-emerald-400">
-                          {voucherDiscountSummary(selectedPromotion)}
+                          {promotionPreview?.appliedPromotions?.length > 1
+                            ? `Tổng -${formatCurrency(promotionPreview.discountAmount)}`
+                            : voucherDiscountSummary(selectedPromotion)}
                         </span>
                       </div>
                       {selectedPromotion.code && (
                         <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
                           {selectedPromotion.code}
                         </p>
+                      )}
+                      {promotionPreview?.appliedPromotions?.length > 1 && (
+                        <div className="mt-2 space-y-1 border-t border-emerald-500/10 pt-2 text-[10px] text-emerald-200">
+                          {promotionPreview.appliedPromotions.map((item) => (
+                            <div
+                              key={item.promotionPublicId}
+                              className="flex items-start justify-between gap-2"
+                            >
+                              <span className="min-w-0 break-words">
+                                {item.name}
+                              </span>
+                              <span className="shrink-0 font-black">
+                                -{formatCurrency(item.discountAmount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <button
@@ -1883,11 +1946,19 @@ export default function BookingCheckoutPage() {
                           {appliedCouponCode}
                         </p>
                         <p className="mt-1 text-[10px] font-bold text-emerald-300">
-                          Giảm{" "}
+                          Tổng giảm{" "}
                           {formatCurrency(
                             promotionPreview?.discountAmount || 0,
                           )}
                         </p>
+                        {promotionPreview?.appliedPromotions?.length > 1 && (
+                          <p className="mt-1 text-[9px] leading-4 text-zinc-400">
+                            {promotionPreview.appliedPromotions
+                              .map((item) => item.name)
+                              .filter(Boolean)
+                              .join(" + ")}
+                          </p>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1954,6 +2025,18 @@ export default function BookingCheckoutPage() {
               {promotionError && !promotionChooserOpen && (
                 <p role="alert" className="text-[10px] leading-4 text-red-400">
                   {promotionError}
+                </p>
+              )}
+              {promotionNotice && !promotionChooserOpen && (
+                <p
+                  role="status"
+                  className={`rounded-lg border px-3 py-2 text-[10px] leading-4 ${
+                    promotionNotice.variant === "stacked"
+                      ? "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200"
+                      : "border-amber-500/20 bg-amber-500/[0.06] text-amber-200"
+                  }`}
+                >
+                  {promotionNotice.message}
                 </p>
               )}
             </div>

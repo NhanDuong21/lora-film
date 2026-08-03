@@ -88,6 +88,28 @@ describe("PromotionChooser", () => {
     ).toBeDisabled();
   });
 
+  it("explains conditional AUTO stacking for a stackable voucher", () => {
+    render(
+      <PromotionChooser
+        {...defaultProps}
+        vouchers={[voucher({ stackable: true })]}
+        promotionEvaluations={[
+          {
+            promotionPublicId: "voucher-1",
+            eligible: true,
+            discountAmount: 20000,
+            reasonCode: "ELIGIBLE",
+            reason: "Có thể sử dụng cho đơn hiện tại",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText(/cộng dồn với 1 ưu đãi auto khi chiến dịch cho phép/i),
+    ).toBeInTheDocument();
+  });
+
   it("shows system vouchers in a separate selectable tab", () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();

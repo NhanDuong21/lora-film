@@ -160,6 +160,36 @@ class PromotionCatalogServiceTest {
     }
 
     @Test
+    void createPersistsExplicitPromotionStackingPolicy() {
+        Instant now = Instant.now();
+        PromotionCampaign campaign = campaign(
+                CampaignStatus.DRAFT, CampaignApprovalStatus.DRAFT,
+                now.minusSeconds(3600), now.plusSeconds(172800));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-1"))
+                .thenReturn(Optional.of(campaign));
+        when(promotionRepository.save(any(Promotion.class)))
+                .thenAnswer(invocation -> {
+                    Promotion saved = invocation.getArgument(0);
+                    saved.setPublicId("promotion-stackable");
+                    return saved;
+                });
+        PromotionUpsertRequest base = upsert("STACKABLE", now, null);
+        PromotionUpsertRequest stackable = new PromotionUpsertRequest(
+                base.campaignPublicId(), base.promotionType(), base.code(),
+                base.name(), base.description(), base.publicVisible(),
+                base.priority(), true, base.conditionsJson(), base.actionsJson(),
+                base.metadataJson(), base.maxRedemptions(),
+                base.maxRedemptionsPerUser(), base.validFrom(), base.validTo(),
+                base.clonedFromPublicId());
+
+        service.create(stackable, "admin");
+
+        ArgumentCaptor<Promotion> captor = ArgumentCaptor.forClass(Promotion.class);
+        verify(promotionRepository).save(captor.capture());
+        assertThat(captor.getValue().getStackable()).isTrue();
+    }
+
+    @Test
     void createCloneIsBlockedWhenTargetCampaignIsNotEditable() {
         Instant now = Instant.now();
         PromotionCampaign campaign = campaign(

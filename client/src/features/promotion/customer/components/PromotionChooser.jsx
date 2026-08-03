@@ -245,6 +245,9 @@ const conditionNotes = (promotion, scopeLabels = {}) => {
   if (conditions?.requiresVerification) {
     notes.push("Yêu cầu tài khoản đã xác thực");
   }
+  if (promotion?.stackable) {
+    notes.push("Có thể cộng dồn với 1 ưu đãi AUTO khi chiến dịch cho phép");
+  }
   return notes;
 };
 

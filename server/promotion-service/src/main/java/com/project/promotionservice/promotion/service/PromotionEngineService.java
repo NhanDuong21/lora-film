@@ -88,9 +88,6 @@ public class PromotionEngineService {
                 ? List.of() : request.selectedUserPromotionPublicIds();
         requireSingleManualSelection(
                 selectedPromotionIds, selectedWalletIds, request.couponCode());
-        boolean hasManualSelection = !selectedPromotionIds.isEmpty()
-                || !selectedWalletIds.isEmpty()
-                || (request.couponCode() != null && !request.couponCode().isBlank());
         for (String promotionPublicId : selectedPromotionIds) {
             Promotion promotion = requirePromotion(promotionPublicId);
             if (promotion.getPromotionType() != PromotionType.AUTO) {
@@ -99,12 +96,13 @@ public class PromotionEngineService {
             addCandidate(candidates, warnings, addedPromotions,
                     promotion, null, request, original, now, true);
         }
-        if (!hasManualSelection) {
-            for (Promotion promotion : promotionRepository.findRuntimeCandidates(
-                    PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
-                addCandidate(candidates, warnings, addedPromotions,
-                        promotion, null, request, original, now, false);
-            }
+        // AUTO promotions always remain in the comparison set. A customer-selected
+        // voucher/coupon must never replace a larger automatic discount merely
+        // because it was selected manually.
+        for (Promotion promotion : promotionRepository.findRuntimeCandidates(
+                PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
+            addCandidate(candidates, warnings, addedPromotions,
+                    promotion, null, request, original, now, false);
         }
 
         for (String walletPublicId : selectedWalletIds) {
@@ -364,7 +362,45 @@ public class PromotionEngineService {
         for (Candidate candidate : candidates) {
             best = better(best, selectionOf(List.of(candidate), originalAmount));
         }
+
+        List<Candidate> automaticCandidates = candidates.stream()
+                .filter(candidate -> candidate.promotion().getPromotionType()
+                        == PromotionType.AUTO)
+                .toList();
+        Candidate manualCandidate = candidates.stream()
+                .filter(candidate -> candidate.promotion().getPromotionType()
+                        != PromotionType.AUTO)
+                .findFirst()
+                .orElse(null);
+        if (manualCandidate != null) {
+            for (Candidate automaticCandidate : automaticCandidates) {
+                if (canStack(manualCandidate, automaticCandidate)) {
+                    best = better(best, selectionOf(
+                            List.of(automaticCandidate, manualCandidate),
+                            originalAmount));
+                }
+            }
+        }
         return best.candidates();
+    }
+
+    private boolean canStack(Candidate manual, Candidate automatic) {
+        if (manual.promotion().getPromotionType() == PromotionType.AUTO
+                || automatic.promotion().getPromotionType() != PromotionType.AUTO) {
+            return false;
+        }
+        if (!Boolean.TRUE.equals(manual.promotion().getStackable())
+                || !Boolean.TRUE.equals(automatic.promotion().getStackable())
+                || !Boolean.TRUE.equals(manual.campaign().getStackable())
+                || !Boolean.TRUE.equals(automatic.campaign().getStackable())) {
+            return false;
+        }
+        boolean differentCampaign = !Objects.equals(
+                manual.campaign().getPublicId(), automatic.campaign().getPublicId());
+        return !differentCampaign
+                || (!Boolean.TRUE.equals(manual.campaign().getExclusiveCampaign())
+                && !Boolean.TRUE.equals(
+                automatic.campaign().getExclusiveCampaign()));
     }
 
     private Selection better(

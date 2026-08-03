@@ -9,6 +9,7 @@ import {
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import BookingCheckoutPage from "./BookingCheckoutPage";
+import { promotionDecision } from "../utils/promotionDecision";
 import {
   cancelBooking,
   finalizeCheckout,
@@ -68,6 +69,66 @@ vi.mock(
 vi.mock("../components/BookingStepper", () => ({
   default: () => <div>Booking stepper</div>,
 }));
+
+describe("promotionDecision", () => {
+  const walletVoucher = {
+    publicId: "wallet-1",
+    walletPublicId: "wallet-1",
+    promotionPublicId: "voucher-1",
+    source: "CUSTOMER_WALLET",
+    promotionType: "VOUCHER",
+    name: "WELCOME10K",
+  };
+
+  it("keeps a better automatic discount without consuming the voucher", () => {
+    const decision = promotionDecision(
+      {
+        discountAmount: 21000,
+        appliedPromotions: [
+          {
+            promotionPublicId: "auto-1",
+            promotionType: "AUTO",
+            name: "Giảm 10% ngày thường",
+            discountAmount: 21000,
+          },
+        ],
+      },
+      { promotion: walletVoucher },
+    );
+
+    expect(decision.applied).toBe(false);
+    expect(decision.notice?.variant).toBe("protected");
+    expect(decision.notice?.message).toMatch(/voucher\/coupon chưa bị sử dụng/i);
+  });
+
+  it("reports the combined total when voucher and AUTO are both applied", () => {
+    const decision = promotionDecision(
+      {
+        discountAmount: 51000,
+        appliedPromotions: [
+          {
+            promotionPublicId: "auto-1",
+            promotionType: "AUTO",
+            name: "Giảm 10% ngày thường",
+            discountAmount: 21000,
+          },
+          {
+            promotionPublicId: "voucher-1",
+            userPromotionPublicId: "wallet-1",
+            promotionType: "VOUCHER",
+            name: "Voucher gia đình",
+            discountAmount: 30000,
+          },
+        ],
+      },
+      { promotion: walletVoucher },
+    );
+
+    expect(decision.applied).toBe(true);
+    expect(decision.notice?.variant).toBe("stacked");
+    expect(decision.notice?.message).toMatch(/tổng giảm 51\.000đ/i);
+  });
+});
 
 describe("BookingCheckoutPage cancellation", () => {
   beforeEach(() => {

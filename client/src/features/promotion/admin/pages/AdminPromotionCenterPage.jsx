@@ -1497,6 +1497,11 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
             </span>
           </DetailItem>
           <DetailItem label="Ưu tiên">{promotion.priority ?? 0}</DetailItem>
+          <DetailItem label="Cộng dồn">
+            {promotion.stackable
+              ? "Cho phép khi chiến dịch và ưu đãi đi kèm cũng cho phép"
+              : "Không cho phép"}
+          </DetailItem>
           <DetailItem label="Hiệu lực">
             <span>Từ {dateTime(promotion.validFrom)}</span>
             <span className="mt-1 block">
@@ -1862,6 +1867,11 @@ function CampaignModal({ record, busy, onClose, onSave }) {
             checked={form.exclusiveCampaign}
             onChange={(v) => update("exclusiveCampaign", v)}
             label="Chiến dịch độc quyền"
+          />
+          <Toggle
+            checked={form.stackable}
+            onChange={(v) => update("stackable", v)}
+            label="Cho phép các ưu đãi trong chiến dịch được cộng dồn"
           />
         </div>
         <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4 md:col-span-2">
@@ -2276,6 +2286,7 @@ function PromotionModal({
       rawConditions.minimumOrderAmount ?? rawConditions.minOrderAmount ?? "",
     requiredTierCode: rawConditions.requiredTierCode || "",
     requiresVerification: Boolean(rawConditions.requiresVerification),
+    stackable: Boolean(initialRecord?.stackable),
     dayOfWeek: Array.isArray(rawConditions.dayOfWeek)
       ? rawConditions.dayOfWeek
       : [],
@@ -2503,7 +2514,7 @@ function PromotionModal({
       description: form.description.trim(),
       publicVisible: type === "VOUCHER" ? form.publicVisible : false,
       priority: Number(form.priority),
-      stackable: false,
+      stackable: form.stackable,
       conditionsJson,
       actionsJson,
       metadataJson,
@@ -2824,6 +2835,20 @@ function PromotionModal({
                   className={fieldClass}
                 />
               </Field>
+              <div className="flex items-center pt-5">
+                <Toggle
+                  checked={form.stackable}
+                  onChange={(value) => update("stackable", value)}
+                  label="Cho phép cộng dồn với 1 ưu đãi AUTO"
+                />
+              </div>
+              {form.stackable && (
+                <p className="text-[10px] leading-4 text-amber-300 md:col-span-2">
+                  Chỉ cộng dồn khi cả hai ưu đãi và cả hai chiến dịch đều cho
+                  phép. Chiến dịch độc quyền không được ghép với chiến dịch
+                  khác.
+                </p>
+              )}
             </div>
           )}
           {step === 2 && (
