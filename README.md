@@ -79,12 +79,11 @@ foreach ($application in $applications) {
 
 Eureka already has a committed `application.properties`; its matching template
 is available at `eureka-server/src/main/resources/application.example.properties`.
-All nine data services use `spring.jpa.hibernate.ddl-auto=validate`. Execute the
-canonical SQL files in `docs/database/mysql/` for Auth, User, Movie, Booking,
-Payment, Notification, Score, and Analytics before starting those services.
-Do not execute `promotion-service-schema.sql` on a fresh database: Promotion
-Service owns that schema through Flyway and applies V1 through the latest
-migration automatically before Hibernate validates it.
+All nine data services use `spring.jpa.hibernate.ddl-auto=validate`. Execute each
+service's canonical SQL file in `docs/database/mysql/`, including
+`promotion-service-schema.sql`, before starting the corresponding service.
+These files recreate their service database, so back up any data that must be
+kept before executing them.
 
 Start Eureka first, then the nine services, and finally API Gateway. Run
 `mvn spring-boot:run` from each corresponding directory in a separate terminal.
@@ -107,8 +106,7 @@ npm run dev
 
 The backend uses a microservices architecture. Docker Compose creates the
 service databases and grants the configured application user access. Manual SQL
-schemas must still be executed as described above; Promotion is the exception
-because Flyway owns its schema.
+schemas must still be executed as described above.
 
 Open a terminal in each service directory and run them independently. You can use the commands:
 

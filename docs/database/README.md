@@ -21,4 +21,4 @@ Thư mục này lưu trữ toàn bộ các tệp tin cấu trúc mã nguồn SQL
 
 ## Hướng Dẫn Triển Khai Kiểm Thử Local
 * Đảm bảo môi trường máy cá nhân đã cài đặt Docker Container và MySQL client.
-* `docker-compose.yml` chỉ tạo database và cấp quyền cho user ứng dụng; nó không tự nạp các file SQL trong thư mục này. Với database mới, chạy các schema thủ công trước khi start service. Riêng Promotion Service dùng Flyway tại `server/promotion-service/src/main/resources/db/migration/`; không chạy `promotion-service-schema.sql` trước Flyway trên database mới.
+* `docker-compose.yml` chỉ tạo database và cấp quyền cho user ứng dụng; nó không tự nạp các file SQL trong thư mục này. Với database mới, chạy schema canonical của từng service thủ công trước khi start service, bao gồm `promotion-service-schema.sql`. Các file schema có thể tạo lại database nên cần sao lưu dữ liệu cần giữ trước khi chạy.

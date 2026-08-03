@@ -21,7 +21,7 @@ Promotion Service được phát triển theo các nguyên tắc:
 - Production Ready
 - Code First
 - API First
-- Database Migration bằng Flyway/Liquibase
+- Database schema được bootstrap thủ công từ `docs/database/mysql/promotion-service-schema.sql`
 - Không sử dụng Lombok
 
 ---
@@ -60,7 +60,7 @@ Bao gồm:
 - Redis Configuration
 - Feign Configuration
 - Database Configuration
-- Flyway/Liquibase
+- Canonical database schema
 - Global Exception Handler
 - Base Entity
 - Base Repository
@@ -445,7 +445,7 @@ Trước khi tạo Pull Request, cần kiểm tra:
 - Đúng Coding Convention.
 - Đúng Package Structure.
 - Đúng Naming Convention.
-- Đã cập nhật Migration nếu thay đổi Database.
+- Đã cập nhật file schema canonical nếu thay đổi Database.
 
 ---
 
