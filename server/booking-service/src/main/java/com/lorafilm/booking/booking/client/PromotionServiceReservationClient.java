@@ -26,8 +26,9 @@ public class PromotionServiceReservationClient implements PromotionReservationCl
     public PromotionServiceReservationClient(
             RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper,
-            @Value("${services.promotion-service.url:http://localhost:8087}") String serviceUrl,
-            @Value("${services.promotion-service.internal-token:${app.internal-token}}") String internalToken) {
+            @Value("${services.promotion-service.url:${PROMOTION_SERVICE_URL:http://localhost:8087}}") String serviceUrl,
+            @Value("${services.promotion-service.internal-token:${PROMOTION_BOOKING_SERVICE_TOKEN:${app.internal-token}}}")
+            String internalToken) {
         this.restClient = restClientBuilder.baseUrl(serviceUrl).build();
         this.objectMapper = objectMapper;
         this.internalToken = internalToken;
