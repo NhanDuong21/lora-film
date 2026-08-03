@@ -243,7 +243,7 @@ public class AuthServiceImpl implements AuthService {
 				ValidationResult result = waitForValidation(requestId, future);
 				
 				if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
-					Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
+					Role role = roleRepository.findByCode(CUSTOMER_ROLE)
 							.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
 
 					Account existingForUpdate = accountRepository.findByEmail(email).orElse(null);

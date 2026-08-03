@@ -36,7 +36,7 @@ class OAuth2AccountServiceTest {
         when(providerRepository.findByProviderAndProviderUserId(
                 AuthProvider.GOOGLE, "google-sub-123")).thenReturn(Optional.empty());
         when(accountRepository.findByEmail("customer@example.com")).thenReturn(Optional.empty());
-        when(roleRepository.findByRoleName("CUSTOMER")).thenReturn(Optional.of(customerRole));
+        when(roleRepository.findByCode("CUSTOMER")).thenReturn(Optional.of(customerRole));
         when(accountRepository.save(org.mockito.ArgumentMatchers.any(Account.class)))
                 .thenAnswer(invocation -> {
                     Account account = invocation.getArgument(0);

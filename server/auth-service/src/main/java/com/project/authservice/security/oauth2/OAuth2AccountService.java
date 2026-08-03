@@ -121,7 +121,7 @@ public class OAuth2AccountService {
     }
 
     private Account createCustomerAccount(String email, String registrationId) {
-        Role customerRole = roleRepository.findByRoleName("CUSTOMER")
+        Role customerRole = roleRepository.findByCode("CUSTOMER")
                 .orElseThrow(() -> new IllegalStateException("Default role CUSTOMER not found"));
 
         Account account = new Account();

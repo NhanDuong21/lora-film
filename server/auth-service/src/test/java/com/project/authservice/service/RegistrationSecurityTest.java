@@ -88,7 +88,7 @@ class RegistrationSecurityTest {
         when(passwordEncoder.encode(plaintext)).thenReturn(passwordHash);
         
         com.project.authservice.entity.Role mockRole = new com.project.authservice.entity.Role();
-        when(roleRepository.findByRoleName(org.mockito.ArgumentMatchers.anyString()))
+        when(roleRepository.findByCode("CUSTOMER"))
                 .thenReturn(Optional.of(mockRole));
         when(accountRepository.save(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(i -> i.getArgument(0));
@@ -142,7 +142,7 @@ class RegistrationSecurityTest {
         when(passwordEncoder.encode("Password@123")).thenReturn("$2a$10$storedHash");
 
         com.project.authservice.entity.Role role = new com.project.authservice.entity.Role();
-        when(roleRepository.findByRoleName(anyString())).thenReturn(Optional.of(role));
+        when(roleRepository.findByCode("CUSTOMER")).thenReturn(Optional.of(role));
         when(accountRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         org.mockito.Mockito.doAnswer(invocation -> {
             String requestId = invocation.getArgument(1);

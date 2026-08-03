@@ -127,7 +127,7 @@ public class AccountServiceImpl implements AccountService {
             throw new com.project.authservice.exception.BusinessException("Email is already registered");
         }
 
-        Role role = roleRepository.findByRoleName("EMPLOYEE")
+        Role role = roleRepository.findByCode("EMPLOYEE")
                 .orElseThrow(() -> new ResourceNotFoundException("Role EMPLOYEE not found"));
 
         Account account = new Account();
