@@ -228,6 +228,14 @@ function Register() {
                     setGlobalError(`CCCD này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySecs} giây.`);
                     return;
                 }
+                if (errorCode === "PHONE_NUMBER_AND_CCCD_RESERVED") {
+                    const retrySecs = error?.data?.retryAfterSeconds
+                        || error?.response?.data?.data?.retryAfterSeconds
+                        || error?.retryAfterSeconds
+                        || 60;
+                    setGlobalError(`Số điện thoại và CCCD này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySecs} giây.`);
+                    return;
+                }
 
                 if (errorCode === "REGISTRATION_ALREADY_PENDING") {
                     setGlobalError("Tài khoản này đang chờ xác thực OTP. Đang chuyển hướng sang trang OTP...");

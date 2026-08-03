@@ -71,6 +71,30 @@ class AccountVerifiedConsumerOAuthTest {
         verify(acknowledgment).acknowledge();
     }
 
+    @Test
+    void releasesRegistrationReservationUsingNormalizedEmailOwner() throws Exception {
+        Dependencies dependencies = new Dependencies();
+        AccountVerifiedConsumer consumer = dependencies.consumer();
+        AccountVerifiedEvent event = oauthEvent();
+        event.getData().setPhoneNumber("0901234567");
+        event.getData().setCccd("092205006789");
+        event.getData().setEmail(" Customer@Example.COM ");
+        Acknowledgment acknowledgment = mock(Acknowledgment.class);
+        User existingUser = new User();
+        existingUser.setAccountId(31L);
+
+        when(dependencies.objectMapper.readValue("event", AccountVerifiedEvent.class))
+                .thenReturn(event);
+        when(dependencies.userRepository.findById(31L)).thenReturn(Optional.of(existingUser));
+        when(dependencies.customerProfileRepository.existsByAccountId(31L)).thenReturn(true);
+
+        consumer.consume("event", acknowledgment);
+
+        verify(dependencies.reservationService).release(
+                "0901234567", "092205006789", "customer@example.com");
+        verify(acknowledgment).acknowledge();
+    }
+
     private AccountVerifiedEvent oauthEvent() {
         AccountVerifiedPayload payload = new AccountVerifiedPayload();
         payload.setRequestId("oauth-request");

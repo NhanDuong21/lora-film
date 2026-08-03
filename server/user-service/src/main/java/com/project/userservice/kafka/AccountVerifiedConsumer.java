@@ -73,6 +73,9 @@ public class AccountVerifiedConsumer {
             String phoneNumber = event.getData().getPhoneNumber();
             String cccd = event.getData().getCccd();
             String requestId = event.getData().getRequestId();
+            String reservationOwner = payload.getEmail() == null
+                    ? requestId
+                    : payload.getEmail().trim().toLowerCase(java.util.Locale.ROOT);
 
             // Duplicate event check (Idempotency)
             User existingUser = userRepository.findById(accountId).orElse(null);
@@ -99,7 +102,7 @@ public class AccountVerifiedConsumer {
                 }
                 ensureCustomerProfile(accountId);
                 recordProfileCreated(accountId, payload.getEmail(), requestId, "SUCCESS");
-                releaseReservationAfterCommit(phoneNumber, cccd, requestId);
+                releaseReservationAfterCommit(phoneNumber, cccd, reservationOwner);
                 log.info("Idempotently handled existing user profile for accountId={}", accountId);
                 acknowledgment.acknowledge();
                 return;
@@ -107,14 +110,14 @@ public class AccountVerifiedConsumer {
 
             if (phoneNumber != null && userRepository.existsByPhoneNumber(phoneNumber)) {
                 recordProfileCreated(accountId, payload.getEmail(), requestId, "FAILED");
-                releaseReservationAfterCommit(phoneNumber, cccd, requestId);
+                releaseReservationAfterCommit(phoneNumber, cccd, reservationOwner);
                 acknowledgment.acknowledge();
                 return;
             }
 
             if (cccd != null && userRepository.existsByCccd(cccd)) {
                 recordProfileCreated(accountId, payload.getEmail(), requestId, "FAILED");
-                releaseReservationAfterCommit(phoneNumber, cccd, requestId);
+                releaseReservationAfterCommit(phoneNumber, cccd, reservationOwner);
                 acknowledgment.acknowledge();
                 return;
             }
@@ -162,7 +165,7 @@ public class AccountVerifiedConsumer {
                     "Created from verified account");
 
             recordProfileCreated(accountId, event.getData().getEmail(), requestId, "SUCCESS");
-            releaseReservationAfterCommit(phoneNumber, cccd, requestId);
+            releaseReservationAfterCommit(phoneNumber, cccd, reservationOwner);
 
             log.info("Successfully created user profile for accountId: {}. Masked CCCD: {}", accountId, event.getData().getCccdMasked());
             acknowledgment.acknowledge();
