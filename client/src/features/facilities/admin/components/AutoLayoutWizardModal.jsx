@@ -12,6 +12,7 @@ import {
   DoorOpen
 } from 'lucide-react';
 import SeatGridDesigner from './SeatGridDesigner';
+import { generateAutoSeatMatrix } from '../utils/seatLayout';
 
 export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, currentSkipIO }) {
   const [step, setStep] = useState(1);
@@ -44,69 +45,15 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
   // Generate the preview matrix based on current selections
   const previewMatrix = useMemo(() => {
     if (step !== 4) return [];
-    
-    let matrix = [];
-    for (let r = 0; r < rows; r++) {
-      let rowArr = [];
-      for (let c = 0; c < cols; c++) {
-        rowArr.push({ type: 'STANDARD' });
-      }
-      matrix.push(rowArr);
-    }
-
-    // Apply Vertical Aisle
-    if (verticalAisle === 'CENTER' && cols > 0) {
-      const mid = Math.floor(cols / 2);
-      for (let r = 0; r < rows; r++) matrix[r][mid].type = 'AISLE';
-    } else if (verticalAisle === 'TWO' && cols > 3) {
-      const q1 = Math.floor(cols / 3);
-      const q2 = Math.floor((cols * 2) / 3);
-      for (let r = 0; r < rows; r++) {
-        matrix[r][q1].type = 'AISLE';
-        matrix[r][q2].type = 'AISLE';
-      }
-    }
-
-    // Apply Horizontal Aisle (typically after row E, index 4)
-    if (horizontalAisle && rows > 5) {
-      for (let c = 0; c < cols; c++) {
-        matrix[4][c].type = 'AISLE';
-      }
-    }
-
-    // Exits
-    if (exitLeft && rows > 0) matrix[0][0].type = 'EXIT';
-    if (exitRight && rows > 0 && cols > 1) matrix[0][cols - 1].type = 'EXIT';
-
-    // Auto Seating Zones (only applied to non-aisle, non-exit cells)
-    if (strategy === 'AUTO') {
-      const standardThreshold = Math.floor(rows * 0.3);
-      const coupleThreshold = Math.floor(rows * 0.85);
-
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          if (matrix[r][c].type !== 'STANDARD') continue; // Skip aisles/exits
-
-          if (r >= coupleThreshold) {
-            matrix[r][c].type = 'COUPLE';
-          } else if (r >= standardThreshold) {
-            matrix[r][c].type = 'VIP';
-          }
-        }
-      }
-
-      // Wheelchairs (2 seats in front row or right after horizontal aisle)
-      let wPlaced = 0;
-      const targetRow = horizontalAisle && rows > 5 ? 5 : 0;
-      for (let c = 0; c < cols && wPlaced < 2; c++) {
-        if (matrix[targetRow][c].type === 'STANDARD') {
-          matrix[targetRow][c].type = 'DISABLED';
-          wPlaced++;
-        }
-      }
-    }
-
-    return matrix;
+    return generateAutoSeatMatrix({
+      rows,
+      cols,
+      verticalAisle,
+      horizontalAisle,
+      exitLeft,
+      exitRight,
+      strategy,
+    });
   }, [step, rows, cols, verticalAisle, horizontalAisle, exitLeft, exitRight, strategy]);
 
   // Compute stats for Preview

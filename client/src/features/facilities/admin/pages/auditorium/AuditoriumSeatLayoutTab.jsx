@@ -5,6 +5,7 @@ import BrushToolbar from '@/features/facilities/admin/components/BrushToolbar';
 import StatsPanel from '@/features/facilities/admin/components/StatsPanel';
 import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDesigner';
 import { getAuditoriumStatus } from '@/features/facilities/admin/utils/facilityPresentation';
+import { buildSeatItems } from '@/features/facilities/admin/utils/seatLayout';
 
 export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo, onUpdateSeats, triggerToast }) {
   // Seating grid dimensions
@@ -154,75 +155,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
         if (matched) typeMapping[code] = matched.publicId;
       });
 
-      const calculateRowLabel = (rIdx, skip) => {
-        let letterCode = 65; // 'A'
-        for (let i = 0; i < rIdx; i++) {
-          letterCode++;
-          if (skip && (letterCode === 73 || letterCode === 79)) { // 'I' is 73, 'O' is 79
-            letterCode++;
-          }
-        }
-        if (skip && (letterCode === 73 || letterCode === 79)) {
-            letterCode++;
-        }
-        return String.fromCharCode(letterCode);
-      };
-
-      const seatsList = [];
-      for (let r = 0; r < rows; r++) {
-        const rowLabel = calculateRowLabel(r, skipIO);
-        let seatNumber = 1;
-
-        const coupleCols = [];
-        for (let c = 0; c < cols; c++) {
-          if (matrix[r][c].type === 'COUPLE') coupleCols.push(c);
-        }
-
-        for (let c = 0; c < cols; c++) {
-          const cell = matrix[r][c];
-          if (cell.type === 'AISLE' || cell.type === 'EXIT') continue;
-
-          const seatTypeCode = cell.type;
-          const seatTypePublicId = typeMapping[seatTypeCode];
-          
-          if (!seatTypePublicId) {
-            console.warn(`Missing seatType mapping for ${seatTypeCode}`);
-          }
-
-          const seatCode = `${rowLabel}${seatNumber}`;
-
-          let pairGroup = null;
-          if (seatTypeCode === 'COUPLE') {
-            const indexInCoupleCols = coupleCols.indexOf(c);
-            if (indexInCoupleCols !== -1) {
-              const isEvenIndex = indexInCoupleCols % 2 === 0;
-              const partnerIndex = isEvenIndex ? indexInCoupleCols + 1 : indexInCoupleCols - 1;
-              const hasPartner = partnerIndex >= 0 && partnerIndex < coupleCols.length 
-                                 && Math.abs(coupleCols[indexInCoupleCols] - coupleCols[partnerIndex]) === 1;
-              
-              if (hasPartner) {
-                if (isEvenIndex) {
-                  pairGroup = `group_${seatCode}_${rowLabel}${seatNumber + 1}`;
-                } else {
-                  pairGroup = `group_${rowLabel}${seatNumber - 1}_${seatCode}`;
-                }
-              }
-            }
-          }
-
-          seatsList.push({
-            seatTypePublicId,
-            rowLabel,
-            seatNumber,
-            seatCode,
-            positionRow: r + 1,
-            positionColumn: c + 1,
-            pairGroup,
-            status: 'ACTIVE'
-          });
-          seatNumber++;
-        }
-      }
+      const seatsList = buildSeatItems({ matrix, rows, cols, skipIO, typeMapping });
 
       // Update seats
       const seatsSuccess = await onUpdateSeats(seatsList);
@@ -239,7 +172,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
         triggerToast?.('Lưu sơ đồ ghế thành công!');
       }
     } catch (err) {
-      triggerToast?.('Lỗi: Không thể cập nhật sơ đồ ghế', 'error');
+      triggerToast?.(`Lỗi: ${err.message || 'Không thể cập nhật sơ đồ ghế'}`, 'error');
       console.error(err);
     } finally {
       setIsSubmitting(false);

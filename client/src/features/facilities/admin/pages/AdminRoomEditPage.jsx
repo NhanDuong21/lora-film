@@ -18,6 +18,7 @@ import RoomForm from '@/features/facilities/admin/components/RoomForm';
 import BrushToolbar from '@/features/facilities/admin/components/BrushToolbar';
 import StatsPanel from '@/features/facilities/admin/components/StatsPanel';
 import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDesigner';
+import { buildSeatItems } from '@/features/facilities/admin/utils/seatLayout';
 
 export default function AdminRoomEditPage() {
   const { triggerToast } = useOutletContext() || {};
@@ -267,66 +268,7 @@ export default function AdminRoomEditPage() {
 
       // 2. If layout was editable (initialStatus was DRAFT), sync seats using bulk endpoint first (while status is still DRAFT)
       if (isLayoutEditable) {
-        const seatsList = [];
-
-        const calculateRowLabel = (rIdx, skip) => {
-          let letterCode = 65; // 'A'
-          for (let i = 0; i < rIdx; i++) {
-            letterCode++;
-            if (skip && (letterCode === 73 || letterCode === 79)) {
-              letterCode++;
-            }
-          }
-          if (skip && (letterCode === 73 || letterCode === 79)) {
-              letterCode++;
-          }
-          return String.fromCharCode(letterCode);
-        };
-
-        for (let r = 0; r < rows; r++) {
-          const rowLabel = calculateRowLabel(r, skipIO);
-          let seatNumber = 1;
-
-          // Group couple seats
-          const coupleCols = [];
-          for (let c = 0; c < cols; c++) {
-            if (matrix[r][c].type === 'COUPLE') {
-              coupleCols.push(c);
-            }
-          }
-
-          for (let c = 0; c < cols; c++) {
-            const cell = matrix[r][c];
-            if (cell.type === 'AISLE' || cell.type === 'EXIT') continue;
-
-            const seatTypeCode = cell.type;
-            const seatTypePublicId = typeMapping[seatTypeCode];
-
-            let pairGroup = null;
-            if (seatTypeCode === 'COUPLE') {
-              const indexInCoupleCols = coupleCols.indexOf(c);
-              if (indexInCoupleCols !== -1) {
-                const pairIndex = Math.floor(indexInCoupleCols / 2) + 1;
-                pairGroup = `${rowLabel}_P${pairIndex}`;
-              }
-            }
-
-            const seatCode = `${rowLabel}${seatNumber}`;
-
-            seatsList.push({
-              seatTypePublicId,
-              rowLabel,
-              seatNumber,
-              seatCode,
-              positionRow: r + 1,
-              positionColumn: c + 1,
-              pairGroup,
-              status: 'ACTIVE'
-            });
-
-            seatNumber++;
-          }
-        }
+        const seatsList = buildSeatItems({ matrix, rows, cols, skipIO, typeMapping });
 
         const bulkRes = await adminRoomService.bulkCreateSeats(roomId, { seats: seatsList });
         if (!bulkRes?.success) {
