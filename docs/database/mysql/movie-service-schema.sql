@@ -12,6 +12,12 @@
 -- 5. Customer APIs must filter deleted_at IS NULL and only expose public/active data.
 -- 6. HELD / BOOKED seat state is NOT owned by Movie Service.
 
+CREATE DATABASE IF NOT EXISTS movie_db
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+
+USE movie_db;
+
 -- ============================================================
 -- 1. MOVIE CATALOG
 -- ============================================================

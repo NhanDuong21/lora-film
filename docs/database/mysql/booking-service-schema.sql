@@ -60,10 +60,10 @@ CREATE TABLE bookings (
     voucher_discount DECIMAL(12,2) NOT NULL DEFAULT 0
         COMMENT 'Số tiền giảm từ Promotion Engine (AUTO, VOUCHER, COUPON)',
 
-    promotion_reservation_public_id CHAR(36) NULL
+    promotion_reservation_public_id VARCHAR(36) NULL
         COMMENT 'Phiên giữ ưu đãi tại Promotion Service',
 
-    promotion_selection_fingerprint CHAR(64) NULL
+    promotion_selection_fingerprint VARCHAR(64) NULL
         COMMENT 'Dấu vân tay lựa chọn ưu đãi đã khóa cùng checkout',
 
     applied_promotions_json JSON NULL

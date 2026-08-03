@@ -26,6 +26,7 @@ public class NotificationSuppression {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "destination_hash", nullable = false, length = 64)
     private String destinationHash;
     @Enumerated(EnumType.STRING)

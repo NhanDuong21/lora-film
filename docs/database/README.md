@@ -11,9 +11,7 @@ Thư mục này lưu trữ toàn bộ các tệp tin cấu trúc mã nguồn SQL
     * payment-service-schema.sql: Schema lưu vết giao dịch tài chính, lịch sử đối soát dòng tiền.
     * promotion-service-schema.sql: Schema phân hệ chiến dịch và lịch sử sử dụng mã giảm giá.
     * score-service-schema.sql: Schema tích điểm thưởng và phân hạng thành viên khách hàng.
-    * Notification service dùng một file duy nhất tại
-      `server/notification-service/deployment/database/notification-schema.sql`;
-      database chỉ lưu dữ liệu vận hành, không lưu nội dung template.
+    * notification-service-schema.sql: Schema dữ liệu vận hành của Notification Service; không lưu nội dung template.
     * analytics-service-schema.sql: Kho lưu trữ đệm số liệu tổng hợp doanh thu phục vụ báo cáo Dashboard.
 
 ## Nguyên Tắc Thiết Kế Sống Còn (Crucial Principles)
@@ -23,4 +21,4 @@ Thư mục này lưu trữ toàn bộ các tệp tin cấu trúc mã nguồn SQL
 
 ## Hướng Dẫn Triển Khai Kiểm Thử Local
 * Đảm bảo môi trường máy cá nhân đã cài đặt Docker Container và MySQL client.
-* Khi khởi chạy hệ thống, các file .sql trong thư mục mysql/ sẽ được nạp tự động vào các container database tương ứng thông qua cấu hình volume trong docker-compose.yml.
+* `docker-compose.yml` chỉ tạo database và cấp quyền cho user ứng dụng; nó không tự nạp các file SQL trong thư mục này. Với database mới, chạy schema canonical của từng service thủ công trước khi start service, bao gồm `promotion-service-schema.sql`. Các file schema có thể tạo lại database nên cần sao lưu dữ liệu cần giữ trước khi chạy.

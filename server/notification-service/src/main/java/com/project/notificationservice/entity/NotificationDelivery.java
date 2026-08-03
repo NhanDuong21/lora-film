@@ -28,6 +28,7 @@ public class NotificationDelivery {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "public_id", nullable = false, unique = true, length = 36)
     private String publicId;
     @Column(name = "notification_request_id", nullable = false)

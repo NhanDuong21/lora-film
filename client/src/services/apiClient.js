@@ -88,8 +88,18 @@ apiClient.interceptors.response.use(
 
             const refreshVal = getRefreshToken();
             if (!refreshVal) {
-                clearAuthData();
-                window.location.href = "/login";
+                // A guest can legitimately receive a 401 from an endpoint that
+                // is expected to be public (for example while the catalog is
+                // being served by a stale/misconfigured backend). Never force
+                // that guest away from the homepage. Redirect only when this
+                // request belongs to an existing authenticated session.
+                const hadAccessToken = Boolean(getAuthToken());
+                if (hadAccessToken) {
+                    clearAuthData();
+                    window.location.href = "/login";
+                }
+                processQueue(error, null);
+                isRefreshing = false;
                 return Promise.reject(error);
             }
 

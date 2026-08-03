@@ -29,6 +29,7 @@ public class NotificationRequest {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "public_id", nullable = false, unique = true, length = 36)
     private String publicId;
     @Column(name = "idempotency_key", nullable = false, unique = true, length = 200)

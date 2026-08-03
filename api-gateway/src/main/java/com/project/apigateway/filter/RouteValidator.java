@@ -32,7 +32,10 @@ public class RouteValidator {
             "/api/customer/concessions",
             "/api/cinemas",
             "/api/showtimes",
-            "/api/membership-tiers"
+            "/api/membership-tiers",
+            // Public promotion catalog is displayed on the homepage and can
+            // be browsed by guests. Claiming a voucher remains protected.
+            "/api/promotions/public"
     );
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
             "/api/payments/callback",

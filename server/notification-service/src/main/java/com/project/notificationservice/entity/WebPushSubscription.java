@@ -8,6 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -20,6 +22,7 @@ public class WebPushSubscription {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "public_id", nullable = false, unique = true, length = 36)
     private String publicId;
     @Column(name = "user_public_id", nullable = false, length = 80)
@@ -30,6 +33,7 @@ public class WebPushSubscription {
     private String p256dhEncrypted;
     @Column(name = "auth_encrypted", nullable = false, length = 1000)
     private String authEncrypted;
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "user_agent_hash", length = 64)
     private String userAgentHash;
     @Column(nullable = false)
