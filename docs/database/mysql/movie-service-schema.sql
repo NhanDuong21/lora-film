@@ -387,6 +387,8 @@ CREATE TABLE auditoriums (
     deleted_by BIGINT NULL,
     CONSTRAINT fk_auditoriums_cinema FOREIGN KEY (cinema_id) REFERENCES cinemas (id) ON DELETE RESTRICT,
     CONSTRAINT uk_auditoriums_cinema_name UNIQUE (cinema_id, name),
+    CONSTRAINT chk_auditorium_screen_type CHECK (screen_type IN ('STANDARD', 'IMAX', '4DX', 'SCREENX')),
+    CONSTRAINT chk_auditorium_sound_type CHECK (sound_type IN ('STANDARD', 'DOLBY_ATMOS')),
     CONSTRAINT chk_auditorium_capacity CHECK (capacity > 0),
     CONSTRAINT chk_auditorium_cleaning_buffer CHECK (cleaning_buffer_minutes >= 0),
     INDEX idx_auditoriums_cinema_status (cinema_id, status),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -104,6 +104,7 @@ export default function AdminPaymentsPage() {
     resolutionCode: '',
     note: '',
   });
+  const requestSequence = useRef(0);
 
   const params = useMemo(() => ({
     page,
@@ -117,6 +118,7 @@ export default function AdminPaymentsPage() {
   }), [filters, page]);
 
   const load = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     setLoading(true);
     try {
       const result = activeTab === 'transactions'
@@ -124,6 +126,7 @@ export default function AdminPaymentsPage() {
         : activeTab === 'refunds'
           ? await getAdminRefunds({ page, size: 20 })
           : await getPaymentOperations(activeTab, { page, size: 20 });
+      if (sequence !== requestSequence.current) return;
       setItems(result?.content || []);
       setPageInfo({
         number: result?.number || 0,
@@ -131,30 +134,48 @@ export default function AdminPaymentsPage() {
         totalElements: result?.totalElements || 0,
       });
     } catch (error) {
+      if (sequence !== requestSequence.current) return;
+      setItems([]);
+      setPageInfo({ number: 0, totalPages: 0, totalElements: 0 });
       triggerAlert?.(paymentErrorMessage(error));
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   }, [activeTab, page, params, triggerAlert]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      requestSequence.current += 1;
+    };
   }, [load]);
 
   const changeTab = key => {
+    setItems([]);
+    setPageInfo({ number: 0, totalPages: 0, totalElements: 0 });
     setActiveTab(key);
     setPage(0);
   };
 
   const updateFilter = (field, value) => {
+    setItems([]);
+    setPageInfo({ number: 0, totalPages: 0, totalElements: 0 });
     setFilters(current => ({ ...current, [field]: value }));
     setPage(0);
   };
 
   const resetFilters = () => {
+    setItems([]);
+    setPageInfo({ number: 0, totalPages: 0, totalElements: 0 });
     setFilters({ query: '', status: '', provider: '', reconciliationStatus: '' });
     setPage(0);
+  };
+
+  const changePage = nextPage => {
+    setItems([]);
+    setPageInfo(current => ({ ...current, number: nextPage }));
+    setPage(nextPage);
   };
 
   const replay = async (kind, id) => {
@@ -454,7 +475,7 @@ export default function AdminPaymentsPage() {
           <Pagination
             page={pageInfo.number}
             totalPages={pageInfo.totalPages}
-            onChange={setPage}
+            onChange={changePage}
           />
         )}
       </section>
@@ -794,14 +815,15 @@ function OperationTable({
         </tr>
       </thead>
       <tbody className="divide-y divide-zinc-800">
-        {items.map(item => {
+        {items.map((item, index) => {
           const id = kind === 'webhooks' ? item.id : kind === 'outbox' ? item.eventId : item.publicId;
+          const stableKey = id ?? item.paymentPublicId ?? item.paymentId ?? `${kind}-${index}`;
           const status = item.processingStatus || item.status;
           const canReplay = kind === 'webhooks'
             ? status === 'FAILED'
             : ['FAILED', 'DEAD_LETTER'].includes(status);
           return (
-            <tr key={id} className="hover:bg-zinc-800/30">
+            <tr key={`${kind}:${stableKey}`} className="hover:bg-zinc-800/30">
               <td className="p-4">
                 <strong className="block">
                   {kind === 'reconciliations'

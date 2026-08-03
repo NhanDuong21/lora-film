@@ -44,6 +44,20 @@ vi.mock('../../services/paymentService', () => ({
 }));
 
 const emptyPage = { content: [], number: 0, totalPages: 0, totalElements: 0 };
+const transactionPage = {
+  content: [{
+    paymentPublicId: 'payment-public-id',
+    paymentTransactionCode: 'TXN-OLD-ROW',
+    status: 'SUCCESS',
+    paymentMethod: 'ONLINE',
+    provider: 'VNPAY',
+    amount: 100000,
+    currency: 'VND',
+  }],
+  number: 0,
+  totalPages: 1,
+  totalElements: 1,
+};
 const webhookPage = {
   content: [{
     id: 17,
@@ -141,5 +155,20 @@ describe('AdminPaymentsPage role operations', () => {
     await waitFor(() => expect(context.triggerConfirm).toHaveBeenCalled());
     await waitFor(() => expect(retryAdminRefund)
       .toHaveBeenCalledWith('refund-public-id'));
+  });
+
+  it('clears rows from the previous tab when an operation request fails', async () => {
+    searchAdminPayments.mockResolvedValueOnce(transactionPage);
+    getPaymentOperations.mockRejectedValueOnce(new Error('operation request failed'));
+
+    render(<AdminPaymentsPage />);
+    expect(await screen.findByText('TXN-OLD-ROW')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Công cụ kỹ thuật' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thông báo nhà cung cấp' }));
+
+    await waitFor(() => expect(context.triggerAlert).toHaveBeenCalled());
+    expect(screen.queryByText('TXN-OLD-ROW')).not.toBeInTheDocument();
+    expect(screen.getByText('Chưa có thông báo nhà cung cấp')).toBeInTheDocument();
   });
 });

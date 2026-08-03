@@ -675,6 +675,8 @@ CREATE TABLE `payment_outbox_events` (
 
   CONSTRAINT `pk_payment_outbox_events` PRIMARY KEY (`id`),
   CONSTRAINT `uk_payment_outbox_event_id` UNIQUE (`event_id`),
+  CONSTRAINT `chk_payment_outbox_destination`
+      CHECK (`destination` IN ('BOOKING_SERVICE_REST', 'ANALYTICS_KAFKA')),
   CONSTRAINT `chk_payment_outbox_status`
       CHECK (`status` IN (
         'PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED', 'DEAD_LETTER'
