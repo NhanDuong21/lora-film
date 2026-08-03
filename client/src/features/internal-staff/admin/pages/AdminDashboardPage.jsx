@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   Clock3,
@@ -207,10 +208,13 @@ export default function AdminDashboardView() {
               <TrendingUp className="w-5 h-5 text-zinc-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-zinc-300">Biểu đồ Doanh thu chưa khả dụng</p>
+              <p className="text-sm font-bold text-zinc-300">Báo cáo doanh thu và vận hành</p>
               <p className="mx-auto mt-2 max-w-xl text-xs leading-5 text-zinc-500">
-                Doanh thu chi tiết, vé bán, và thống kê tăng trưởng sẽ được tích hợp đầy đủ khi module Analytics hoàn thiện.
+                Xem doanh thu, vé bán, cảnh báo và khuyến nghị tại Trung tâm phân tích.
               </p>
+              <Link to="/admin/analytics" className="mt-2 rounded-xl bg-brand-orange px-4 py-2 text-xs font-black text-white">
+                Mở báo cáo phân tích
+              </Link>
             </div>
           </div>
         </div>

@@ -1,10 +1,13 @@
 package com.lorafilm.movie.showtime.service;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,6 +28,7 @@ import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
+import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
@@ -220,7 +224,7 @@ class ShowtimeQueryServiceImplTest {
     }
 
     @Test
-    void getSeatLayout_unpricedDisabledSeat_isReturnedAsBlocked() {
+    void getSeatLayout_accessibleSeat_usesStandardPriceAndRemainsBookable() {
         showtime.setPublicId("public-123");
         when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("public-123"))
                 .thenReturn(Optional.of(showtime));
@@ -238,7 +242,11 @@ class ShowtimeQueryServiceImplTest {
 
         when(seatRepository.findByAuditoriumIdAndDeletedAtIsNull(auditorium.getId()))
                 .thenReturn(Collections.singletonList(disabledSeat));
-        when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(Collections.emptyList());
+        ShowtimePrice standardPrice = new ShowtimePrice();
+        standardPrice.setSeatType(seatTypeStandard);
+        standardPrice.setPrice(new BigDecimal("75000"));
+        standardPrice.setCurrency("VND");
+        when(showtimePriceRepository.findByShowtimeId(10L)).thenReturn(List.of(standardPrice));
         when(showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(10L,
                 com.lorafilm.movie.common.enums.ActionStatus.ACTIVE))
                 .thenReturn(Collections.emptyList());
@@ -248,9 +256,9 @@ class ShowtimeQueryServiceImplTest {
         assertEquals(1, result.getSeats().size());
         SeatLayoutDto.SeatPriceDto seat = result.getSeats().get(0);
         assertEquals("DISABLED", seat.getSeatType());
-        assertNull(seat.getPrice());
-        assertNull(seat.getCurrency());
-        assertTrue(seat.isBlockedForShowtime());
+        assertEquals(new BigDecimal("75000"), seat.getPrice());
+        assertEquals("VND", seat.getCurrency());
+        assertFalse(seat.isBlockedForShowtime());
     }
 
     @Test

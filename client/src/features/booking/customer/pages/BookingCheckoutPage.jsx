@@ -367,6 +367,7 @@ export default function BookingCheckoutPage() {
   // Terms agreement state for payment step
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("VNPAY");
+  const selectedPaymentMethodRef = useRef("VNPAY");
   const [userScore, setUserScore] = useState(null);
   const [scorePointsInput, setScorePointsInput] = useState("");
   const [scorePreview, setScorePreview] = useState(null);
@@ -514,7 +515,7 @@ export default function BookingCheckoutPage() {
             bookingId,
             promotionPreviewSelection(
               promotionInventory,
-              selectedPaymentMethod,
+              selectedPaymentMethodRef.current,
             ),
           );
           setPromotionPreview(automaticPreview);
@@ -1621,6 +1622,7 @@ export default function BookingCheckoutPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        selectedPaymentMethodRef.current = "VNPAY";
                         setSelectedPaymentMethod("VNPAY");
                         void refreshPromotionPreviewForPaymentMethod("VNPAY");
                       }}
@@ -1650,6 +1652,7 @@ export default function BookingCheckoutPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        selectedPaymentMethodRef.current = "MOMO";
                         setSelectedPaymentMethod("MOMO");
                         void refreshPromotionPreviewForPaymentMethod("MOMO");
                       }}

@@ -175,17 +175,17 @@ public class PaymentSecurityTest {
     }
 
     @Test
-    void employeeAndSupervisorCanReachCashEndpoints() throws Exception {
+    void staffAndLegacyEmployeeRolesCanReachCashEndpoints() throws Exception {
         String paymentPublicId = "11111111-1111-4111-8111-111111111111";
 
         mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
                 .header("Authorization", "Bearer "
-                        + generateJwt(21L, "employee@test.com", "EMPLOYEE")))
+                        + generateJwt(20L, "staff@test.com", "STAFF")))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
                 .header("Authorization", "Bearer "
-                        + generateJwt(22L, "supervisor@test.com", "SUPERVISOR")))
+                        + generateJwt(21L, "employee@test.com", "EMPLOYEE")))
                 .andExpect(status().isNotFound());
     }
 

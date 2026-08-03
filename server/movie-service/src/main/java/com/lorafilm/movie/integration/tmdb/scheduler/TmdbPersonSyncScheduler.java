@@ -9,11 +9,13 @@ import com.lorafilm.movie.movie.repository.PersonRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@ConditionalOnProperty(name = "tmdb.sync-enabled", havingValue = "true")
 public class TmdbPersonSyncScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(TmdbPersonSyncScheduler.class);

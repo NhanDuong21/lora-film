@@ -1,5 +1,4 @@
-import React from 'react';
-import { Award, Sparkles, TrendingUp, TrendingDown, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Award, TrendingUp, TrendingDown, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
 
 export default function TierHistoryTimeline({ tierHistory = [], isLoading = false }) {
   const formatDateTime = (dateStr) => {

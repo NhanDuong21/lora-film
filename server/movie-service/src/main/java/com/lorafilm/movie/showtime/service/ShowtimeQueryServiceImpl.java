@@ -23,6 +23,7 @@ import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.util.AccessibleSeatPricing;
 import com.lorafilm.movie.pricing.util.SeatPriceAllocation;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
@@ -169,9 +170,6 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
         List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeId(showtime.getId());
         List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActionStatus.ACTIVE);
 
-        Map<Long, ShowtimePrice> priceMap = prices.stream()
-                .collect(Collectors.toMap(p -> p.getSeatType().getId(), p -> p));
-
         Map<Long, ShowtimeBlockedSeat> blockedSeatMap = blockedSeats.stream()
                 .collect(Collectors.toMap(b -> b.getSeat().getId(), b -> b));
 
@@ -182,13 +180,11 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
                 .collect(Collectors.groupingBy(seat -> seat.getPairGroup().trim()));
 
         List<SeatLayoutDto.SeatPriceDto> seatPriceDtos = seats.stream().map(seat -> {
-            ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
+            ShowtimePrice showtimePrice = AccessibleSeatPricing.findPrice(prices, seat.getSeatType());
             boolean hasValidPrice = showtimePrice != null
                     && showtimePrice.getPrice() != null
                     && showtimePrice.getPrice().signum() > 0;
-            boolean nonSellableSeatType = seat.getSeatType().getCode()
-                    == com.lorafilm.movie.seat.domain.enums.SeatTypeCode.DISABLED;
-            if (!hasValidPrice && !nonSellableSeatType) {
+            if (!hasValidPrice) {
                 throw new BusinessException(ErrorCode.PRICING_INCOMPLETE,
                         "Missing or invalid price for SeatType " + seat.getSeatType().getPublicId());
             }
@@ -197,12 +193,7 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
                             seat.getSeatType().getCode(), showtimePrice.getPrice())
                     : null;
             String currency = hasValidPrice ? showtimePrice.getCurrency() : null;
-            // The internal layout is also consumed by Booking's single-seat-gap
-            // policy.  A DISABLED seat has no price by design and must be treated
-            // as unavailable there, otherwise selecting adjacent seats can be
-            // rejected for leaving a phantom gap beside a non-sellable seat.
             boolean isBlocked = blockedSeatMap.containsKey(seat.getId())
-                    || nonSellableSeatType
                     || seat.getStatus() != SeatStatus.ACTIVE;
 
             SeatLayoutDto.SeatPriceDto dto = new SeatLayoutDto.SeatPriceDto();

@@ -8,6 +8,7 @@ import com.lorafilm.movie.pricing.repository.PricePolicyRepository;
 import com.lorafilm.movie.pricing.service.PricePolicyResolver;
 import com.lorafilm.movie.pricing.service.model.PriceResolutionResult;
 import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import org.springframework.stereotype.Service;
@@ -104,6 +105,13 @@ public class PricePolicyResolverImpl implements PricePolicyResolver {
 
         for (SeatType seatType : requiredSeatTypes) {
             List<Candidate> candidates = collectCandidates(showtime, localStart, seatType, policies);
+            if (candidates.isEmpty() && seatType.getCode() == SeatTypeCode.DISABLED) {
+                candidates = requiredSeatTypes.stream()
+                        .filter(required -> required.getCode() == SeatTypeCode.STANDARD)
+                        .findFirst()
+                        .map(standard -> collectCandidates(showtime, localStart, standard, policies))
+                        .orElseGet(List::of);
+            }
             if (candidates.isEmpty()) {
                 missing.add(diagnostic(seatType, List.of()));
                 continue;

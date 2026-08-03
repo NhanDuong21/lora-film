@@ -128,8 +128,10 @@ export default function AdminSidebar({
           : []),
         ...(isFullAdmin
           ? [
+              { key: 'scores-dashboard', label: 'Tổng quan Loyalty', path: '/admin/scores/dashboard', icon: Award },
               { key: 'scores-tiers', label: 'Hạng thành viên', path: '/admin/scores/tiers', icon: Award },
               { key: 'scores-viewer', label: 'Tra cứu điểm thưởng', path: '/admin/scores/viewer', icon: Gift },
+              { key: 'scores-reconciliation', label: 'Đối soát điểm', path: '/admin/scores/reconciliation', icon: History },
             ]
           : []),
       ],

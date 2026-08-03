@@ -2,7 +2,6 @@ import useCustomerScore from '@/features/score/customer/hooks/useCustomerScore';
 import MembershipCard from '@/features/score/customer/components/MembershipCard';
 import TierProgressBar from '@/features/score/customer/components/TierProgressBar';
 import ScoreHistoryTable from '@/features/score/customer/components/ScoreHistoryTable';
-import ComingSoonLayout from '@/features/score/customer/components/ComingSoonLayout';
 import OutstandingBadge from '@/features/score/customer/components/OutstandingBadge';
 import ExpiringPointsSection from '@/features/score/customer/components/ExpiringPointsSection';
 import TierHistoryTimeline from '@/features/score/customer/components/TierHistoryTimeline';
@@ -116,10 +115,6 @@ export default function LoyaltyCenterPage() {
           />
         </div>
 
-        {/* Coming Soon Features */}
-        <div className="pt-4">
-          <ComingSoonLayout />
-        </div>
       </div>
     </div>
   );

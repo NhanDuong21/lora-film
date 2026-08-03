@@ -2,7 +2,7 @@ import { useState } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
 import ExpiringPointsSection from '@/features/score/customer/components/ExpiringPointsSection';
 import TierHistoryTimeline from '@/features/score/customer/components/TierHistoryTimeline';
-import { Search, Award, User, Lock, TrendingUp, AlertCircle, FileText, Calendar, ArrowUpRight, ArrowDownLeft, RefreshCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { Search, Award, User, TrendingUp, AlertCircle, FileText, Calendar, ArrowUpRight, ArrowDownLeft, RefreshCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 
 export default function AdminScoreViewerPage() {
   const {
@@ -30,7 +30,7 @@ export default function AdminScoreViewerPage() {
       await fetchUserHistory(searchId.trim(), { page: 0, size: 10 });
       await fetchUserExpiringPoints(searchId.trim());
       await fetchUserTierHistory(searchId.trim());
-    } catch (err) {
+    } catch {
       // error handled in hook
     }
   };

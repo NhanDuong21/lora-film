@@ -29,6 +29,7 @@ const renderPage = () => render(
   <MemoryRouter initialEntries={['/admin/showtimes/showtime-1']}>
     <Routes>
       <Route path="/admin/showtimes/:id" element={<AdminShowtimeDetailPage />} />
+      <Route path="/admin/showtime-schedules/:id" element={<div>Schedule preview</div>} />
     </Routes>
   </MemoryRouter>,
 );

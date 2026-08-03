@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
-import { PlusCircle, MinusCircle, RotateCcw, Search, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { PlusCircle, MinusCircle, RotateCcw, Search, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AdminScoreAdjustmentsPage() {
   const {

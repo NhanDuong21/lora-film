@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
-import { ShieldAlert, Play, RefreshCw, CheckCircle, AlertCircle, Search, FileText, Check } from 'lucide-react';
+import { ShieldAlert, Play, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AdminScoreReconciliationPage() {
   const {
@@ -16,7 +16,6 @@ export default function AdminScoreReconciliationPage() {
   const [remark, setRemark] = useState('');
   const [notification, setNotification] = useState(null);
   const [selectedRunId, setSelectedRunId] = useState(null);
-  const [filterStatus, setFilterStatus] = useState('ALL');
 
   useEffect(() => {
     fetchReconciliationRuns({ page: 0, size: 20 });

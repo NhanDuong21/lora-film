@@ -34,7 +34,7 @@ import { updateUserProfile, uploadAvatar } from '@/features/auth/services/userSe
 const accountTabs = new Set(['profile', 'password', 'email', 'sessions']);
 const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 const fieldClass = 'w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-brand-orange disabled:cursor-not-allowed disabled:opacity-60';
 
 const resolveMediaUrl = (value) => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;

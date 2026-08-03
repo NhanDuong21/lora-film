@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminDashboardView from './AdminDashboardPage';
 import { getBookingMonitoringSummary } from '@/features/booking/admin/services/adminBookingService';
@@ -12,6 +13,12 @@ vi.mock('@/features/internal-staff/admin/services/userAdminService', () => ({
 }));
 
 describe('AdminDashboardView', () => {
+  const renderDashboard = () => render(
+    <MemoryRouter>
+      <AdminDashboardView />
+    </MemoryRouter>
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
     getDashboard.mockResolvedValue({
@@ -29,7 +36,7 @@ describe('AdminDashboardView', () => {
       pendingRetry: 3
     });
 
-    render(<AdminDashboardView />);
+    renderDashboard();
 
     expect(await screen.findByText('7')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
@@ -42,7 +49,7 @@ describe('AdminDashboardView', () => {
   it('keeps user-service statistics available when booking monitoring is down', async () => {
     getBookingMonitoringSummary.mockRejectedValue(new Error('unavailable'));
 
-    render(<AdminDashboardView />);
+    renderDashboard();
 
     expect(await screen.findByText(/Dữ liệu đặt vé tạm thời chưa khả dụng/i))
       .toBeInTheDocument();
@@ -55,7 +62,7 @@ describe('AdminDashboardView', () => {
     getBookingMonitoringSummary.mockRejectedValue(new Error('booking unavailable'));
     getDashboard.mockRejectedValue(new Error('user unavailable'));
 
-    render(<AdminDashboardView />);
+    renderDashboard();
 
     expect(await screen.findByText(/Không thể tải dữ liệu giám sát hệ thống/i))
       .toBeInTheDocument();

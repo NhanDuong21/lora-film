@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { CheckCircle, Info, Printer, ArrowRight, ShoppingBag } from 'lucide-react';
-import { getBookingDetails } from '../services/bookingService';
+import { getBookingDetails, getBookingTickets } from '../services/bookingService';
 import BookingStepper from '../components/BookingStepper';
+import TicketQrCode from '../components/TicketQrCode';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 
 export default function BookingSuccessPage() {
@@ -28,14 +29,43 @@ export default function BookingSuccessPage() {
       return;
     }
     setLoading(true);
+    setError(null);
     try {
-      const data = await getBookingDetails(bookingId);
-      setBooking(data);
+      const [data, tickets] = await Promise.all([
+        getBookingDetails(bookingId),
+        getBookingTickets(bookingId),
+      ]);
+      const bookingStatus = data.bookingStatus || data.status;
+      const paymentStatus = data.paymentStatus || data.payment?.status;
+      if (!['CONFIRMED', 'COMPLETED'].includes(bookingStatus)) {
+        throw new Error('BOOKING_NOT_CONFIRMED');
+      }
+      if (paymentStatus && paymentStatus !== 'SUCCESS') {
+        throw new Error('PAYMENT_NOT_SUCCESSFUL');
+      }
+      if (!Array.isArray(tickets) || tickets.length === 0) {
+        throw new Error('TICKETS_NOT_READY');
+      }
+      setBooking({
+        ...data,
+        snapshot: data.snapshot ?? data.presentation ?? null,
+        foodOrder: data.foodOrder ?? data.food ?? null,
+        finalAmount: data.finalAmount ?? data.totalAmount ?? 0,
+        paymentMethodSnapshot: data.paymentMethodSnapshot
+          ?? data.paymentProvider
+          ?? (paymentStatus === 'SUCCESS' ? 'Thanh toán đã xác nhận' : null),
+        tickets,
+      });
     } catch (err) {
-      setError(getBookingErrorMessage(
-        err,
-        'Không thể tải thông tin đơn hàng. Vui lòng thử lại.'
-      ));
+      const consistencyMessages = {
+        BOOKING_NOT_CONFIRMED: 'Đơn chưa được xác nhận thành công. Vui lòng kiểm tra trạng thái trong lịch sử đặt vé.',
+        PAYMENT_NOT_SUCCESSFUL: 'Thanh toán chưa được xác nhận thành công. Vui lòng kiểm tra lại giao dịch.',
+        TICKETS_NOT_READY: 'Vé đang được phát hành. Vui lòng thử lại sau ít phút.',
+      };
+      setError(
+        consistencyMessages[err.message]
+        || getBookingErrorMessage(err, 'Không thể tải thông tin đơn hàng. Vui lòng thử lại.'),
+      );
     } finally {
       setLoading(false);
     }
@@ -48,11 +78,6 @@ export default function BookingSuccessPage() {
 
   const formatCurrency = (val) => {
     return (val || 0).toLocaleString('vi-VN') + 'đ';
-  };
-
-  // Generate Google Charts API QR Code URL dynamically
-  const getQrCodeUrl = (code) => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(code)}`;
   };
 
   const handlePrint = () => {
@@ -115,9 +140,9 @@ export default function BookingSuccessPage() {
           <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 print:hidden">VÉ XEM PHIM CỦA BẠN (TICKET)</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {tickets.map(ticket => (
+            {tickets.map((ticket, index) => (
               <div
-                key={ticket.id}
+                key={ticket.id || ticket.publicId || ticket.ticketCode || `ticket-${index}`}
                 className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative print:bg-white print:text-black print:border-black print:shadow-none"
               >
                 {/* Decorative half-circle cutouts (ticket style) */}
@@ -168,10 +193,10 @@ export default function BookingSuccessPage() {
                 {/* Right Section: Scanning QR Code */}
                 <div className="w-full md:w-44 shrink-0 bg-zinc-950/60 p-6 flex flex-col items-center justify-center text-center gap-3 print:bg-white print:border-t print:border-black">
                   <div className="w-28 aspect-square bg-white rounded-xl p-2 shadow-inner shrink-0 flex items-center justify-center">
-                    <img
-                      src={getQrCodeUrl(ticket.ticketCode)}
-                      alt={ticket.ticketCode}
-                      className="max-w-full max-h-full"
+                    <TicketQrCode
+                      ticketCode={ticket.ticketCode}
+                      size={200}
+                      className="max-h-full max-w-full"
                     />
                   </div>
                   <span className="text-[9px] text-zinc-500 font-black uppercase tracking-wider">MÃ QR ĐỂ VÀO PHÒNG CHIẾU</span>
@@ -236,7 +261,7 @@ export default function BookingSuccessPage() {
               <div>
                 <span className="text-zinc-500 font-bold block text-[9px] uppercase">Mã tham chiếu thanh toán</span>
                 <span className="text-zinc-200 font-bold print:text-black">
-                  {booking.paymentReference || 'Chưa ghi nhận'}
+                  {booking.paymentReference || 'Không có mã từ cổng thanh toán'}
                 </span>
               </div>
             </div>

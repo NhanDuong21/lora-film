@@ -44,6 +44,7 @@ export default function AdminPaymentDetailPage() {
   const isAdmin = (userRole || '').replace(/^ROLE_/, '') === 'ADMIN';
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [refundAction, setRefundAction] = useState(null);
   const [refundForm, setRefundForm] = useState({
@@ -56,29 +57,55 @@ export default function AdminPaymentDetailPage() {
   const [refundRequestKey, setRefundRequestKey] = useState('');
 
   const load = useCallback(async () => {
-    const result = await getAdminPayment(paymentPublicId);
-    setDetail(result);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const result = await getAdminPayment(paymentPublicId);
+      setDetail(result);
+    } catch (error) {
+      setDetail(null);
+      setLoadError(paymentErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
   }, [paymentPublicId]);
 
   useEffect(() => {
-    let active = true;
     const timer = window.setTimeout(() => {
-      load()
-        .catch(error => {
-          if (!active) return;
-          triggerAlert?.(paymentErrorMessage(error));
-          navigate('/admin/payments');
-        })
-        .finally(() => active && setLoading(false));
+      load();
     }, 0);
     return () => {
-      active = false;
       window.clearTimeout(timer);
     };
-  }, [load, navigate, triggerAlert]);
+  }, [load]);
 
   if (loading) {
     return <div className="py-24 text-center text-zinc-500">Đang tải giao dịch...</div>;
+  }
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-3xl border border-red-500/30 bg-red-500/5 p-8 text-center text-white">
+        <AlertTriangle className="mx-auto h-10 w-10 text-red-400" />
+        <h1 className="mt-4 text-xl font-black">Không thể tải chi tiết giao dịch</h1>
+        <p className="mt-3 text-sm leading-6 text-zinc-400">{loadError}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black uppercase"
+          >
+            Thử lại
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/admin/payments')}
+            className="rounded-xl border border-zinc-700 px-5 py-2.5 text-xs font-black uppercase"
+          >
+            Quay lại danh sách
+          </button>
+        </div>
+      </div>
+    );
   }
   if (!detail) return null;
 

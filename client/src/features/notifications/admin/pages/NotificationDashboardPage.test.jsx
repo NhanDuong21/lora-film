@@ -44,11 +44,11 @@ describe('NotificationDashboardPage', () => {
         );
 
         expect(await screen.findByRole('heading', {
-            name: 'Notification control room',
+            name: 'Trung tâm điều phối thông báo',
         })).toBeInTheDocument();
         expect(screen.getByText('83.3%')).toBeInTheDocument();
         expect(screen.getByText('1234567890')).toBeInTheDocument();
-        expect(screen.getByText('RETRY SCHEDULED')).toBeInTheDocument();
+        expect(screen.getByText('Chờ gửi lại')).toBeInTheDocument();
     });
 
     it('shows a recoverable error state when the operations API is unavailable', async () => {
@@ -62,9 +62,9 @@ describe('NotificationDashboardPage', () => {
             </MemoryRouter>,
         );
 
-        expect(await screen.findByText('Unable to load notification data'))
+        expect(await screen.findByText('Không thể tải dữ liệu thông báo'))
             .toBeInTheDocument();
         expect(screen.getByText('notification API unavailable')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
     });
 });

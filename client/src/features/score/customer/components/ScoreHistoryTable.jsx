@@ -113,7 +113,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
           <AlertCircle className="h-10 w-10 text-zinc-700 mb-2" />
           <p className="text-sm font-bold text-zinc-400">Chưa có giao dịch điểm thưởng nào</p>
           <p className="text-xs text-zinc-600 max-w-sm leading-relaxed">
-            Các giao dịch tích điểm từ việc đặt tour hoặc sử dụng điểm thanh toán sẽ được tự động cập nhật tại đây.
+            Điểm tích lũy và điểm đã dùng từ các đơn đặt vé sẽ được cập nhật tại đây.
           </p>
         </div>
       ) : (

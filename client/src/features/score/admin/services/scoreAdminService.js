@@ -3,6 +3,28 @@ import apiClient from '@/services/apiClient';
 const ADMIN_SCORE_API_URL = '/api/admin/scores/users';
 const ADMIN_TIER_API_URL = '/api/admin/membership-tiers';
 
+const asNumber = value => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
+};
+
+export const normalizeScoreDashboardStats = (raw = {}) => ({
+  totalMembers: asNumber(raw.totalMembers),
+  totalPointsEarned: asNumber(raw.totalPointsEarned),
+  totalPointsRedeemed: asNumber(raw.totalPointsRedeemed),
+  totalPointsHeld: asNumber(raw.totalPointsHeld),
+  totalPointsExpired: asNumber(raw.totalPointsExpired),
+  silverMembers: asNumber(raw.silverMembers),
+  goldMembers: asNumber(raw.goldMembers),
+  diamondMembers: asNumber(raw.diamondMembers),
+  pendingReconciliationMismatches: asNumber(
+    raw.pendingReconciliationMismatches ?? raw.pendingReconciliations,
+  ),
+  lastReconciliationBatch: raw.lastReconciliationBatch || 'N/A',
+  lastReconciliationTime:
+    raw.lastReconciliationTime ?? raw.lastReconciliationDate ?? null,
+});
+
 const scoreAdminService = {
   /**
    * Get user score details by accountId (Lazy Initializes if not found in DB)
@@ -147,7 +169,7 @@ const scoreAdminService = {
    */
   getDashboardStats: async () => {
     const response = await apiClient.get('/api/admin/scores/dashboard');
-    return response.data?.data || response.data;
+    return normalizeScoreDashboardStats(response.data?.data || response.data);
   }
 };
 

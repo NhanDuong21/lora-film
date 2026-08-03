@@ -1323,22 +1323,25 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
 
   useEffect(() => {
     let active = true;
-    setDetail(record);
-    setLoading(true);
-    setError("");
-    adminPromotionService
-      .getPromotion(record.publicId)
-      .then((result) => {
-        if (active) setDetail(result || record);
-      })
-      .catch((requestError) => {
-        if (active) setError(errorText(requestError));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      setDetail(record);
+      setLoading(true);
+      setError("");
+      adminPromotionService
+        .getPromotion(record.publicId)
+        .then((result) => {
+          if (active) setDetail(result || record);
+        })
+        .catch((requestError) => {
+          if (active) setError(errorText(requestError));
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [record]);
 
@@ -1356,6 +1359,8 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
     : Array.isArray(conditions.cinemaIds)
       ? conditions.cinemaIds
       : [];
+  const movieIdsKey = movieIds.join("|");
+  const cinemaIdsKey = cinemaIds.join("|");
   const metadata = parseJsonObject(promotion.metadataJson);
   const campaign = campaigns.find(
     (item) => item.value === promotion.campaignPublicId,
@@ -1368,13 +1373,7 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
 
   useEffect(() => {
     let active = true;
-    const ids = Array.isArray(movieIds) ? movieIds : [];
-    if (ids.length === 0) {
-      setMovieNames(new Map());
-      return () => {
-        active = false;
-      };
-    }
+    const ids = movieIdsKey ? movieIdsKey.split("|") : [];
     Promise.all(
       ids.map(async (id) => {
         try {
@@ -1397,17 +1396,11 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
     return () => {
       active = false;
     };
-  }, [movieIds.join("|")]);
+  }, [movieIdsKey]);
 
   useEffect(() => {
     let active = true;
-    const ids = Array.isArray(cinemaIds) ? cinemaIds : [];
-    if (ids.length === 0) {
-      setCinemaNames(new Map());
-      return () => {
-        active = false;
-      };
-    }
+    const ids = cinemaIdsKey ? cinemaIdsKey.split("|") : [];
     Promise.all(
       ids.map(async (id) => {
         try {
@@ -1427,7 +1420,7 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
     return () => {
       active = false;
     };
-  }, [cinemaIds.join("|")]);
+  }, [cinemaIdsKey]);
 
   const dayNames = Array.isArray(conditions.dayOfWeek)
     ? conditions.dayOfWeek.map(

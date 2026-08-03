@@ -1,5 +1,5 @@
 export const ADMIN_MOVIE_QUERY_DEFAULTS = Object.freeze({
-  status: 'DRAFT',
+  status: 'ALL',
   keyword: '',
   page: 0,
   size: 10,

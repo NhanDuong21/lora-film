@@ -15,6 +15,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getCinemas } from '@/features/catalog/customer/services/movieService';
 import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+const resolveMediaUrl = value => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
+
 const dropdownPanelClass =
   'overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95 p-2 shadow-[0_20px_55px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl';
 
@@ -388,7 +391,7 @@ export default function Header() {
                   >
                     {user?.avatarUrl ? (
                       <img
-                        src={user.avatarUrl}
+                        src={resolveMediaUrl(user.avatarUrl)}
                         alt={user?.fullName || 'Ảnh đại diện'}
                         className="h-full w-full object-cover"
                       />

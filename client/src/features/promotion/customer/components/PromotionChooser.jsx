@@ -376,8 +376,8 @@ export default function PromotionChooser({
     };
   }, [
     open,
-    scopeIds.movieIds.join("|"),
-    scopeIds.cinemaIds.join("|"),
+    scopeIds.movieIds,
+    scopeIds.cinemaIds,
     scopeLabels.movies,
     scopeLabels.cinemas,
   ]);

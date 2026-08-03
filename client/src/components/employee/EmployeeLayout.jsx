@@ -1,58 +1,19 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  Ticket, 
-  CheckSquare, 
-  Calendar, 
   LogOut, 
   Home,
   User,
-  DollarSign,
   Banknote
 } from 'lucide-react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
 const EMPLOYEE_MENUS = [
   {
-    id: 'dashboard',
-    path: '/employee/dashboard',
-    label: 'Tổng quan',
-    icon: Home,
-    permission: 'PAYROLL_VIEW'
-  },
-  {
-    id: 'pos',
-    path: '/employee/pos',
-    label: 'Đặt Vé Tại Quầy',
-    icon: Ticket,
-    permission: 'PERM_POS_ACCESS'
-  },
-  {
     id: 'cash-payment',
     path: '/employee/payments/cash',
     label: 'Thu Tiền Tại Quầy',
     icon: Banknote,
     permission: null
-  },
-  {
-    id: 'checkin',
-    path: '/employee/checkin',
-    label: 'Kiểm Tra Vé',
-    icon: CheckSquare,
-    permission: 'PERM_CHECKIN'
-  },
-  {
-    id: 'schedules',
-    path: '/employee/schedules',
-    label: 'Xem Lịch Chiếu',
-    icon: Calendar,
-    permission: 'PERM_VIEW_SCHEDULE'
-  },
-  {
-    id: 'payroll',
-    path: '/employee/payroll',
-    label: 'Lương Của Tôi',
-    icon: DollarSign,
-    permission: 'PERM_VIEW_PAYROLL'
   }
 ];
 
@@ -68,13 +29,8 @@ export default function EmployeeLayout() {
 
   const activeTab = (() => {
     const path = location.pathname;
-    if (path.endsWith('/pos')) return 'pos';
-    if (path.endsWith('/checkin')) return 'checkin';
-    if (path.endsWith('/schedules')) return 'schedules';
-    if (path.endsWith('/payroll')) return 'payroll';
-    if (path.endsWith('/dashboard')) return 'dashboard';
     if (path.includes('/payments/cash')) return 'cash-payment';
-    return 'pos';
+    return 'cash-payment';
   })();
 
   return (

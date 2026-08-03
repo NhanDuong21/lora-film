@@ -1,5 +1,4 @@
-import React from 'react';
-import { AlertCircle, ArrowRight, ShieldAlert } from 'lucide-react';
+import { AlertCircle, ShieldAlert } from 'lucide-react';
 
 export default function OutstandingBadge({ outstandingPoints = 0, variant = 'banner' }) {
   if (!outstandingPoints || outstandingPoints <= 0) {

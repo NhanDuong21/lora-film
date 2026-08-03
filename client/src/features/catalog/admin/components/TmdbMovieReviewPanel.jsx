@@ -94,12 +94,15 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
   const collectionDiffs = asArray(review?.collectionDiffs);
   const reviewStatusConfig = REVIEW_STATUS_CONFIG[review?.reviewStatus];
   const healthStatusConfig = HEALTH_STATUS_CONFIG[readiness?.healthStatus];
-  const showError = Boolean(error && !isLoading && !isRefreshing);
+  const featureDisabled = error?.type === 'FEATURE_DISABLED';
+  const showError = Boolean(error && !featureDisabled && !isLoading && !isRefreshing);
   const panelStatusConfig = isRefreshing
     ? PANEL_STATUS_CONFIG.REFRESHING
     : isLoading || !hasRequested
       ? PANEL_STATUS_CONFIG.LOADING
-      : showError && !review
+      : featureDisabled
+        ? PANEL_STATUS_CONFIG.UNAVAILABLE
+        : showError && !review
         ? PANEL_STATUS_CONFIG.UNAVAILABLE
         : showError && review
           ? PANEL_STATUS_CONFIG.STALE
@@ -129,13 +132,20 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
         <button
           type="button"
           onClick={onRetry}
-          disabled={isLoading || isRefreshing}
+          disabled={featureDisabled || isLoading || isRefreshing}
           className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading || isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {isRefreshing ? 'Đang cập nhật' : isLoading ? 'Đang tải' : 'Làm mới'}
+          {featureDisabled ? 'Tích hợp đang tắt' : isRefreshing ? 'Đang cập nhật' : isLoading ? 'Đang tải' : 'Làm mới'}
         </button>
       </div>
+
+      {featureDisabled && (
+        <div className="m-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] px-4 py-3 text-sm text-amber-200" role="status">
+          <p className="font-semibold">Đối chiếu nguồn ngoài không khả dụng</p>
+          <p className="mt-1 text-xs leading-5 text-zinc-400">{error.message}</p>
+        </div>
+      )}
 
       {(!hasRequested || isLoading) && !review && !error && (
         <div className="flex items-start gap-3 p-6 text-sm text-zinc-400" role="status">

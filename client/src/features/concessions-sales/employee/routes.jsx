@@ -1,6 +1,6 @@
-import EmployeePOSView from './pages/EmployeePOSPage';
+import { Navigate } from 'react-router-dom';
 
 export const employeeConcessionRoutes = [
-    { index: true, element: <EmployeePOSView /> },
-    { path: 'pos', element: <EmployeePOSView /> }
+    { index: true, element: <Navigate to="payments/cash" replace /> },
+    { path: 'pos', element: <Navigate to="/employee/payments/cash" replace /> }
 ];
