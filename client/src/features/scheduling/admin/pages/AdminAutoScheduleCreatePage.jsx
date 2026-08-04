@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
+import useExistingShowtimeSummary from '@/features/scheduling/admin/hooks/useExistingShowtimeSummary';
 import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20';
@@ -116,6 +117,11 @@ export default function AdminAutoScheduleCreatePage() {
     dateRangeInfo,
     handleSubmit,
   } = form;
+  const existingSchedule = useExistingShowtimeSummary({
+    cinemaSlug: selectedCinema?.slug,
+    scheduleFrom,
+    scheduleTo,
+  });
 
   const visibleMovies = useMemo(() => {
     const query = movieSearch.trim().toLocaleLowerCase('vi');
@@ -332,6 +338,12 @@ export default function AdminAutoScheduleCreatePage() {
                   <button type="button" onClick={clearMovieVersions} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800">Bỏ chọn tất cả</button>
                 </div>
               </div>
+              {selectedMovieNames.length === 1 && (
+                <div className="mt-3 flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100" role="status">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                  <p><strong>Bạn đang chọn một phim.</strong> Lịch tạo ra có thể dồn nhiều suất vào phim này vì không có phim khác để cân bằng.</p>
+                </div>
+              )}
               {movieLoadError ? (
                 <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
                   <p>Không thể tải danh sách phim.</p>
@@ -420,6 +432,33 @@ export default function AdminAutoScheduleCreatePage() {
                   ['Phim', selectedMovieNames.join(', ') || 'Chưa chọn'],
                 ].map(([label, value]) => <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"><p className="text-xs font-bold text-zinc-500">{label}</p><p className="mt-2 text-sm font-black text-white">{value}</p></div>)}
               </div>
+              <div className="mt-5 flex flex-col gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-black">Cách lịch tự động xử lý lịch cũ</p>
+                  <p className="mt-1 leading-6 text-blue-100/80">Hệ thống chỉ bổ sung vào khung còn trống. Suất đã có không bị di chuyển hoặc hủy; vì vậy ngày đã kín có thể không tạo thêm suất nào.</p>
+                  {existingSchedule.isLoading && <p className="mt-1 text-xs text-blue-200/70" role="status">Đang kiểm tra lịch hiện có…</p>}
+                  {!existingSchedule.isLoading && !existingSchedule.error && (
+                    <p className="mt-1 text-xs font-bold text-blue-200">Đã tìm thấy {existingSchedule.totalExisting} suất hiện có trong khoảng ngày này.</p>
+                  )}
+                  {existingSchedule.error && <p className="mt-1 text-xs text-amber-200">Chưa tải được lịch hiện có; bạn vẫn có thể kiểm tra lại ở bản đề xuất.</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/showtimes?${new URLSearchParams({
+                    ...(selectedCinema?.slug ? { cinemaSlug: selectedCinema.slug } : {}),
+                    date: scheduleFrom,
+                  }).toString()}`)}
+                  className="min-h-10 shrink-0 rounded-lg border border-blue-400/30 px-3 text-xs font-black text-blue-200 hover:bg-blue-500/10"
+                >
+                  Kiểm tra lịch hiện có
+                </button>
+              </div>
+              {selectedMovieNames.length === 1 && (
+                <div className="mt-4 flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100" role="status">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                  <p><strong>Cảnh báo phân bổ:</strong> Bạn chỉ chọn {selectedMovieNames[0]}. Hệ thống không thể cân bằng suất giữa nhiều phim trong bản lịch này.</p>
+                </div>
+              )}
               {readinessIssues.length > 0 ? (
                 <div role="alert" className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
                   <p className="font-black text-amber-200">Cần hoàn tất trước khi tạo lịch</p>

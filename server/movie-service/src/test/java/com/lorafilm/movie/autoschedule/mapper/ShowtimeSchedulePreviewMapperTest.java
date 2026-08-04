@@ -9,6 +9,7 @@ import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewItemResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +81,11 @@ class ShowtimeSchedulePreviewMapperTest {
     @Test
     void toSummaryResponse_shouldMapCorrectly() {
         ShowtimeSchedulePreview preview = mock(ShowtimeSchedulePreview.class);
+        Cinema cinema = mock(Cinema.class);
+        when(cinema.getPublicId()).thenReturn("cinema-1");
+        when(cinema.getSlug()).thenReturn("lora-cinema");
+        when(cinema.getName()).thenReturn("Lora Cinema");
+        when(preview.getCinema()).thenReturn(cinema);
         when(preview.getTotalCandidateCount()).thenReturn(10);
         when(preview.getValidCandidateCount()).thenReturn(8);
         when(preview.getRejectedCandidateCount()).thenReturn(2);
@@ -88,6 +94,9 @@ class ShowtimeSchedulePreviewMapperTest {
         ShowtimeSchedulePreviewSummaryResponse summary = mapper.toSummaryResponse(preview);
 
         assertThat(summary).isNotNull();
+        assertThat(summary.getCinemaPublicId()).isEqualTo("cinema-1");
+        assertThat(summary.getCinemaSlug()).isEqualTo("lora-cinema");
+        assertThat(summary.getCinemaName()).isEqualTo("Lora Cinema");
         assertThat(summary.getTotalCandidateCount()).isEqualTo(10);
         assertThat(summary.getValidCandidateCount()).isEqualTo(8);
         assertThat(summary.getRejectedCandidateCount()).isEqualTo(2);

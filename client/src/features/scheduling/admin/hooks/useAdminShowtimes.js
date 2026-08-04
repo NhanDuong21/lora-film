@@ -11,9 +11,9 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
   const [isOptionsLoading, setIsOptionsLoading] = useState(false);
   
   // Filters
-  const [cinemaSlug, setCinemaSlug] = useState('');
+  const [cinemaSlug, setCinemaSlug] = useState(initialFilters?.cinemaSlug || '');
   const [movieSlug, setMovieSlug] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(initialFilters?.date || '');
   const [status, setStatus] = useState(initialFilters?.status || '');
   const [format, setFormat] = useState('');
   const [audioLanguage, setAudioLanguage] = useState('');

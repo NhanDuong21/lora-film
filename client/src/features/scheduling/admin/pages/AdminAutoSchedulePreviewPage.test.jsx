@@ -3,9 +3,11 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { derivePreviewCapabilities } from '../utils/autoSchedulePreviewLifecycle';
 import useAutoSchedulePreview from '../hooks/useAutoSchedulePreview';
+import useExistingShowtimeSummary from '../hooks/useExistingShowtimeSummary';
 import AdminAutoSchedulePreviewPage from './AdminAutoSchedulePreviewPage';
 
 vi.mock('../hooks/useAutoSchedulePreview');
+vi.mock('../hooks/useExistingShowtimeSummary');
 
 const candidate = (index = 1, overrides = {}) => ({
   itemPublicId: `item-${index}`,
@@ -109,6 +111,13 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAutoSchedulePreview.mockReturnValue(hookValue());
+    useExistingShowtimeSummary.mockReturnValue({
+      countsByDate: {},
+      totalExisting: 0,
+      isLoading: false,
+      error: null,
+      retry: vi.fn(),
+    });
   });
 
   it('defaults to the earliest service date containing a selected recommendation', () => {
@@ -255,10 +264,65 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     }));
     renderPage();
 
-    expect(screen.getByText('2/3 phim được xếp lịch')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Phim C có giờ chiếu hợp lệ nhưng chưa có suất nào');
+    expect(screen.getByText('2/3 phim có suất đề xuất')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Phim C có phương án hợp lệ nhưng chưa có suất nào được chọn');
     expect(screen.getByRole('alert')).toHaveTextContent('Phim A đang chiếm 87.5%');
     expect(screen.getByRole('button', { name: /Phim C.*0 suất/i })).toBeInTheDocument();
+  });
+
+  it('explains zero shows by date using operational reasons and candidate units', () => {
+    const items = [
+      candidate(1, {
+        itemPublicId: 'ice-cream-release',
+        moviePublicId: 'ice-cream',
+        movieTitle: 'Gã Bán Kem',
+        serviceDate: '2026-08-04',
+        validationStatus: 'REJECTED',
+        rejectionCode: 'SHOWTIME_OUTSIDE_RELEASE_WINDOW',
+        selected: false,
+      }),
+      candidate(2, {
+        itemPublicId: 'ice-cream-overlap',
+        moviePublicId: 'ice-cream',
+        movieTitle: 'Gã Bán Kem',
+        serviceDate: '2026-08-05',
+        startTime: '2026-08-05T10:00:00Z',
+        endTime: '2026-08-05T11:00:00Z',
+        occupancyEndTime: '2026-08-05T11:15:00Z',
+        validationStatus: 'REJECTED',
+        rejectionCode: 'SHOWTIME_OVERLAP_CONFLICT',
+        selected: false,
+      }),
+    ];
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      items,
+      selectedIds: new Set(),
+      previewOverrides: { cinemaSlug: 'lora-cinema' },
+    }));
+    useExistingShowtimeSummary.mockReturnValue({
+      countsByDate: { '2026-08-04': 3, '2026-08-05': 28 },
+      totalExisting: 31,
+      isLoading: false,
+      error: null,
+      retry: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('Phân bổ suất đề xuất')).toBeInTheDocument();
+    expect(screen.getByText(/không phải do bị thuật toán bỏ quên/i)).toBeInTheDocument();
+    expect(screen.getByText('Ngoài thời gian phát hành')).toBeInTheDocument();
+    expect(screen.getByText('0 phương án hợp lệ / 2 phương án đã xét')).toBeInTheDocument();
+    expect(screen.getByText(/31 suất hiện có · 0 suất đề xuất thêm/)).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole('group', { name: 'Xem kết quả theo ngày' }))
+      .getByRole('button', { name: /05\/08\/2026/i }));
+    expect(screen.getAllByText('Lịch hiện có đang chiếm khung giờ').length).toBeGreaterThan(0);
+    expect(screen.getByText('0 phương án hợp lệ / 1 phương án đã xét')).toBeInTheDocument();
+    expect(screen.getAllByText(/28 suất hiện có.*0 suất đề xuất thêm/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /Xem lịch chiếu hiện có/i })).toHaveAttribute(
+      'href',
+      '/admin/showtimes?cinemaSlug=lora-cinema&date=2026-08-05',
+    );
   });
 
   it('explains the historical S4 minimum-coverage limitation', () => {
@@ -413,6 +477,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(dialog).toHaveTextContent('Đang soạn');
     expect(dialog).toHaveTextContent('Suất lỗi trong toàn bộ đề xuất');
     expect(dialog).toHaveTextContent('lần thử lại sẽ dùng cùng khóa an toàn');
+    expect(dialog).toHaveTextContent('Lịch chỉ có một phim');
 
     await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo 1 suất chiếu' })));
     expect(value.handleApply).toHaveBeenCalledTimes(1);

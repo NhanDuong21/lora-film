@@ -45,6 +45,8 @@ const AdminShowtimePage = () => {
   } = useAdminShowtimes({
     triggerToast,
     initialFilters: {
+      cinemaSlug: searchParams.get('cinemaSlug') || '',
+      date: searchParams.get('date') || '',
       batchId: searchParams.get('batchId') || '',
       source: searchParams.get('source') || '',
       status: searchParams.get('status') || '',
@@ -56,10 +58,12 @@ const AdminShowtimePage = () => {
   const [batchActionDialog, setBatchActionDialog] = useState(null);
 
   useEffect(() => {
+    setCinemaSlug(searchParams.get('cinemaSlug') || '');
+    setDate(searchParams.get('date') || '');
     setBatchId(searchParams.get('batchId') || '');
     setSource(searchParams.get('source') || '');
     setStatus(searchParams.get('status') || '');
-  }, [searchParams, setBatchId, setSource, setStatus]);
+  }, [searchParams, setBatchId, setCinemaSlug, setDate, setSource, setStatus]);
 
   useEffect(() => {
     if (!locationStateProcessed.current && location.state) {
@@ -106,10 +110,14 @@ const AdminShowtimePage = () => {
     nextSearchParams.delete('batchId');
     nextSearchParams.delete('source');
     nextSearchParams.delete('status');
+    nextSearchParams.delete('cinemaSlug');
+    nextSearchParams.delete('date');
     setSearchParams(nextSearchParams, { replace: true });
     setBatchId('');
     setSource('');
     setStatus('');
+    setCinemaSlug('');
+    setDate('');
   };
 
   const handleTransitionBatch = async (targetStatus) => {

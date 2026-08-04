@@ -51,6 +51,8 @@ describe('useAdminShowtimes source and batch filters', () => {
   it('uses URL-backed initial filters on the first request', async () => {
     const { result } = renderHook(() => useAdminShowtimes({
       initialFilters: {
+        cinemaSlug: 'lora-cinema',
+        date: '2026-08-04',
         source: 'AUTO',
         batchId: 'preview-initial',
         status: 'DRAFT',
@@ -62,6 +64,8 @@ describe('useAdminShowtimes source and batch filters', () => {
     expect(adminShowtimeService.getShowtimes).toHaveBeenLastCalledWith({
       page: 0,
       size: 10,
+      cinemaSlug: 'lora-cinema',
+      date: '2026-08-04',
       source: 'AUTO',
       batchId: 'preview-initial',
       status: 'DRAFT',

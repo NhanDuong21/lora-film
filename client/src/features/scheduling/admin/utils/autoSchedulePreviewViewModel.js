@@ -7,11 +7,19 @@ import {
   UNKNOWN_SERVICE_DATE_KEY,
 } from './autoSchedulePreviewDateTime';
 import { getCandidateApplyStateMeta } from './autoSchedulePreviewLifecycle';
+import { getOperationalReasonPresentation } from './autoScheduleOperationalInsights';
 
 const REASON_LABELS = Object.freeze({
   SHOWTIME_OUTSIDE_OPERATING_HOURS: 'Ngoài giờ hoạt động của cụm rạp',
   SHOWTIME_OVERLAPS_EXISTING: 'Trùng với suất chiếu hiện có',
+  SHOWTIME_OVERLAP_CONFLICT: 'Trùng với suất chiếu hiện có',
+  SHOWTIME_OUTSIDE_RELEASE_WINDOW: 'Ngoài thời gian phát hành của phim',
+  CINEMA_OPERATING_HOURS_NOT_CONFIGURED: 'Chưa cấu hình giờ hoạt động cho ngày này',
+  SHOWTIME_OVERLAPS_CINEMA_CLOSURE: 'Trùng với lịch đóng cửa của rạp',
+  SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE: 'Trùng với lịch bảo trì phòng chiếu',
   MOVIE_NOT_ELIGIBLE: 'Phim chưa đủ điều kiện',
+  MOVIE_STATUS_NOT_ELIGIBLE: 'Trạng thái phim không cho phép tạo suất chiếu',
+  MOVIE_VERSION_NOT_ACTIVE: 'Định dạng phim không hoạt động',
   AUDITORIUM_UNAVAILABLE: 'Phòng chiếu không khả dụng',
   NOT_ENOUGH_CLEANING_TIME: 'Không đủ thời gian dọn dẹp',
 });
@@ -53,6 +61,7 @@ export const getMoviePalette = movieKey => {
 const getConciseReason = item => {
   const code = item.rejectionCode || item.applyErrorCode;
   if (code && REASON_LABELS[code]) return REASON_LABELS[code];
+  if (code) return getOperationalReasonPresentation(code).label;
 
   const rawReason = item.rejectionReason || item.applyErrorMessage || '';
   const normalized = rawReason.toUpperCase();

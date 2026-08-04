@@ -19,6 +19,7 @@ import {
 import AutoScheduleCandidateDrawer from '@/features/scheduling/admin/components/AutoScheduleCandidateDrawer';
 import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
+import useExistingShowtimeSummary from '@/features/scheduling/admin/hooks/useExistingShowtimeSummary';
 import {
   CANDIDATE_PAGE_SIZES,
   CANDIDATE_VIEWS,
@@ -41,6 +42,7 @@ import {
   findSelectionBlock,
   SELECTION_BLOCK_TYPES,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewSelection';
+import { getDailyOperationalSummaries } from '@/features/scheduling/admin/utils/autoScheduleOperationalInsights';
 import {
   buildCandidateViewModels,
   getDefaultActiveServiceDate,
@@ -142,6 +144,12 @@ const AdminAutoSchedulePreviewPage = () => {
     handleApply,
     fetchPreview,
   } = useAutoSchedulePreview(id, { triggerToast, onSuccess: handleSuccess });
+  const existingSchedule = useExistingShowtimeSummary({
+    cinemaSlug: preview?.cinemaSlug,
+    scheduleFrom: preview?.scheduleFrom,
+    scheduleTo: preview?.scheduleTo,
+    excludeBatchId: preview?.previewPublicId || id,
+  });
 
   const [filterAuditorium, setFilterAuditorium] = useState('');
   const [filterMovie, setFilterMovie] = useState('');
@@ -157,6 +165,7 @@ const AdminAutoSchedulePreviewPage = () => {
   const [drawerReturnFocusElement, setDrawerReturnFocusElement] = useState(null);
   const [zoomMode, setZoomMode] = useState(TIMELINE_ZOOM_MODES.FIT);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [distributionDate, setDistributionDate] = useState('');
 
   const lifecycleKey = `${preview?.previewPublicId || id}:${capabilities?.effectiveStatus || 'UNKNOWN'}`;
   const previewKey = preview?.previewPublicId || id;
@@ -174,13 +183,25 @@ const AdminAutoSchedulePreviewPage = () => {
     timezone: effectiveTimezone,
   }), [effectiveTimezone, items, selectedItemIds]);
   const sortedViewModels = useMemo(() => sortCandidateViewModels(viewModels), [viewModels]);
-  const movieDistribution = useMemo(
+  const allMovieDistribution = useMemo(
     () => getMovieDistribution(viewModels),
     [viewModels],
+  );
+  const movieDistribution = useMemo(
+    () => getMovieDistribution(viewModels, distributionDate),
+    [distributionDate, viewModels],
   );
   const movieDistributionSummary = useMemo(
     () => getMovieDistributionSummary(movieDistribution),
     [movieDistribution],
+  );
+  const overallMovieDistributionSummary = useMemo(
+    () => getMovieDistributionSummary(allMovieDistribution),
+    [allMovieDistribution],
+  );
+  const dailyOperationalSummaries = useMemo(
+    () => getDailyOperationalSummaries(viewModels),
+    [viewModels],
   );
   const candidateById = useMemo(
     () => new Map(viewModels.map(candidate => [candidate.id, candidate])),
@@ -232,6 +253,9 @@ const AdminAutoSchedulePreviewPage = () => {
   const selectedRoomCount = useMemo(() => new Set(
     selectedCandidates.map(item => item.auditoriumPublicId || item.auditoriumName),
   ).size, [selectedCandidates]);
+  const selectedMovieCount = useMemo(() => new Set(
+    selectedCandidates.map(item => item.moviePublicId || item.movieVersionPublicId || item.movieTitle),
+  ).size, [selectedCandidates]);
   const selectedIssueCount = useMemo(() => selectedCandidates.filter(item => (
     item.validationStatus === 'REJECTED'
     || item.applyStatus === 'CONFLICT'
@@ -250,9 +274,9 @@ const AdminAutoSchedulePreviewPage = () => {
   const uniqueAuditoriums = useMemo(() => Array.from(new Set(
     viewModels.map(candidate => candidate.auditoriumName),
   )).sort(), [viewModels]);
-  const uniqueMovies = useMemo(() => movieDistribution
+  const uniqueMovies = useMemo(() => allMovieDistribution
     .map(movie => ({ key: movie.movieKey, title: movie.movieTitle }))
-    .sort((left, right) => left.title.localeCompare(right.title, 'vi')), [movieDistribution]);
+    .sort((left, right) => left.title.localeCompare(right.title, 'vi')), [allMovieDistribution]);
   const uniqueReasons = useMemo(() => Array.from(new Set(
     viewModels.map(candidate => candidate.conciseReason).filter(Boolean),
   )).sort(), [viewModels]);
@@ -412,7 +436,7 @@ const AdminAutoSchedulePreviewPage = () => {
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Tóm tắt lịch đề xuất">
           {[
             [capabilities.effectiveStatus === 'APPLIED' ? 'Suất chiếu đã tạo' : 'Suất được đề xuất', capabilities.effectiveStatus === 'APPLIED' ? candidateMetrics.createdShowtimes : candidateMetrics.selectedRecommendations],
-            ['Phim có trong lịch', `${movieDistributionSummary.representedMovieCount}/${movieDistributionSummary.eligibleMovieCount}`],
+            ['Phim có suất đề xuất', `${overallMovieDistributionSummary.representedMovieCount}/${allMovieDistribution.length}`],
             ['Phòng được sử dụng', selectedRoomCount],
             ['Suất cần kiểm tra', candidateMetrics.issueCandidates],
             ['Tổng suất hệ thống đã xét', preview.totalCandidateCount ?? candidateMetrics.totalGenerated],
@@ -422,19 +446,69 @@ const AdminAutoSchedulePreviewPage = () => {
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 md:p-5" aria-labelledby="movie-distribution-title">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 id="movie-distribution-title" className="text-base font-black uppercase text-white">Phân bổ phim trong lịch</h2>
+              <h2 id="movie-distribution-title" className="text-base font-black uppercase text-white">Phân bổ suất đề xuất</h2>
               <p className="mt-1 text-sm text-zinc-400">
-                So sánh số suất được chọn với toàn bộ giờ chiếu hợp lệ của từng phim.
+                Đây là phần hệ thống đề xuất thêm vào các khung còn trống; lịch hiện có không bị di chuyển hoặc thay thế.
               </p>
             </div>
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
-              movieDistributionSummary.hasCoverageGap || movieDistributionSummary.isHighlyConcentrated
+              movieDistributionSummary.hasCoverageGap || movieDistributionSummary.hasBlockedMovies || movieDistributionSummary.isHighlyConcentrated
                 ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
                 : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
             }`}>
-              {movieDistributionSummary.representedMovieCount}/{movieDistributionSummary.eligibleMovieCount} phim được xếp lịch
+              {movieDistributionSummary.representedMovieCount}/{movieDistribution.length} phim có suất đề xuất
             </span>
           </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" role="group" aria-label="Xem kết quả theo ngày">
+            <button
+              type="button"
+              aria-pressed={!distributionDate}
+              onClick={() => setDistributionDate('')}
+              className={`rounded-xl border p-3 text-left ${!distributionDate ? 'border-brand-orange bg-brand-orange/10' : 'border-zinc-800 bg-zinc-950/50'}`}
+            >
+              <span className="block text-xs font-black text-white">Toàn bộ khoảng ngày</span>
+              <span className="mt-1 block text-xs text-zinc-500">{existingSchedule.totalExisting} suất hiện có · {candidateMetrics.selectedRecommendations} suất đề xuất thêm</span>
+            </button>
+            {dailyOperationalSummaries.map(day => {
+              const existingCount = existingSchedule.countsByDate[day.serviceDate] || 0;
+              return (
+              <button
+                key={day.serviceDate}
+                type="button"
+                aria-pressed={distributionDate === day.serviceDate}
+                onClick={() => setDistributionDate(day.serviceDate)}
+                className={`rounded-xl border p-3 text-left ${distributionDate === day.serviceDate ? 'border-brand-orange bg-brand-orange/10' : day.state === 'NO_VALID_OPTIONS' ? 'border-amber-500/30 bg-amber-500/5' : 'border-zinc-800 bg-zinc-950/50'}`}
+              >
+                <span className="block text-xs font-black text-white">{formatServiceDateKey(day.serviceDate)}</span>
+                <span className={`mt-1 block text-xs ${day.state === 'NO_VALID_OPTIONS' ? 'text-amber-300' : 'text-zinc-500'}`}>{day.label}</span>
+                <span className="mt-1 block text-[11px] text-zinc-500">{existingCount} suất hiện có · {day.scheduledCount} suất đề xuất thêm</span>
+                <span className="mt-1 block text-[11px] text-zinc-600">{day.validCount}/{day.generatedCount} phương án hợp lệ</span>
+              </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-sm text-blue-100">
+            <p>
+              <strong>Phạm vi đang xem:</strong> {distributionDate ? formatServiceDateKey(distributionDate) : 'Toàn bộ khoảng ngày'} · {' '}
+              {distributionDate ? existingSchedule.countsByDate[distributionDate] || 0 : existingSchedule.totalExisting} suất hiện có + {' '}
+              {distributionDate ? dailyOperationalSummaries.find(day => day.serviceDate === distributionDate)?.scheduledCount || 0 : candidateMetrics.selectedRecommendations} suất đề xuất thêm.
+            </p>
+            <Link
+              to={`/admin/showtimes?${new URLSearchParams({
+                ...(preview.cinemaSlug ? { cinemaSlug: preview.cinemaSlug } : {}),
+                date: distributionDate || preview.scheduleFrom,
+              }).toString()}`}
+              className="inline-flex items-center gap-1 font-bold text-blue-300 hover:text-blue-200"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden="true" /> Xem lịch chiếu hiện có
+            </Link>
+          </div>
+          {existingSchedule.isLoading && <p className="text-xs text-zinc-500" role="status">Đang đối chiếu lịch chiếu hiện có…</p>}
+          {existingSchedule.error && (
+            <p className="text-xs text-amber-300">Chưa tải được số suất hiện có. Các lý do loại trong bản đề xuất vẫn được giữ nguyên để kiểm tra.</p>
+          )}
 
           {(movieDistributionSummary.hasCoverageGap || movieDistributionSummary.isHighlyConcentrated) && (
             <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100" role="alert">
@@ -443,7 +517,7 @@ const AdminAutoSchedulePreviewPage = () => {
                 <p className="font-bold">Lịch đang phân bổ chưa cân bằng.</p>
                 {movieDistributionSummary.hasCoverageGap && (
                   <p className="mt-1">
-                    {movieDistributionSummary.uncoveredMovies.map(movie => movie.movieTitle).join(', ')} có giờ chiếu hợp lệ nhưng chưa có suất nào.
+                    {movieDistributionSummary.uncoveredMovies.map(movie => movie.movieTitle).join(', ')} có phương án hợp lệ nhưng chưa có suất nào được chọn.
                   </p>
                 )}
                 {movieDistributionSummary.isHighlyConcentrated && (
@@ -455,27 +529,43 @@ const AdminAutoSchedulePreviewPage = () => {
             </div>
           )}
 
+          {movieDistributionSummary.hasBlockedMovies && (
+            <div className="flex gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
+              <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-300" aria-hidden="true" />
+              <div>
+                <p className="font-bold">Có phim 0 suất vì không còn phương án hợp lệ, không phải do bị thuật toán bỏ quên.</p>
+                <p className="mt-1">
+                  {movieDistributionSummary.blockedMovies.map(movie => `${movie.movieTitle}: ${movie.operationalState.label}`).join(' · ')}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-3 lg:grid-cols-2">
             {movieDistribution.map(movie => (
-              <button
+              <article
                 key={movie.movieKey}
-                type="button"
-                onClick={() => {
-                  setFilterMovie(current => current === movie.movieKey ? '' : movie.movieKey);
-                  setCandidatePage(1);
-                }}
-                aria-pressed={filterMovie === movie.movieKey}
                 className={`rounded-xl border p-3 text-left transition-colors ${
                   filterMovie === movie.movieKey
                     ? 'border-brand-orange bg-brand-orange/10'
-                    : movie.hasCoverageGap
+                    : movie.hasCoverageGap || movie.validCount === 0
                       ? 'border-amber-500/30 bg-amber-500/5'
                       : 'border-zinc-800 bg-zinc-950/50 hover:border-zinc-700'
                 }`}
               >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterMovie(current => current === movie.movieKey ? '' : movie.movieKey);
+                    setFilterDate(distributionDate);
+                    setCandidatePage(1);
+                  }}
+                  aria-pressed={filterMovie === movie.movieKey}
+                  className="block w-full text-left"
+                >
                 <div className="flex items-center justify-between gap-3">
                   <span className="min-w-0 truncate text-sm font-bold text-white">{movie.movieTitle}</span>
-                  <span className={`shrink-0 text-sm font-black ${movie.hasCoverageGap ? 'text-amber-300' : 'text-white'}`}>
+                  <span className={`shrink-0 text-sm font-black ${movie.hasCoverageGap || movie.validCount === 0 ? 'text-amber-300' : 'text-white'}`}>
                     {movie.scheduledCount} suất · {movie.sharePercent}%
                   </span>
                 </div>
@@ -489,10 +579,27 @@ const AdminAutoSchedulePreviewPage = () => {
                   />
                 </div>
                 <p className="mt-2 text-xs text-zinc-500">
-                    {movie.validCount} giờ chiếu hợp lệ / {movie.generatedCount} giờ đã xét
-                  {movie.hasCoverageGap ? ' · Chưa được xếp lịch' : ''}
+                  {movie.validCount} phương án hợp lệ / {movie.generatedCount} phương án đã xét
                 </p>
-              </button>
+                </button>
+                <div className={`mt-3 rounded-lg border p-2.5 text-xs ${movie.operationalState.tone === 'success' ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-amber-500/20 bg-amber-500/5 text-amber-100'}`}>
+                  <p className="font-black">{movie.operationalState.label}</p>
+                  <p className="mt-1 leading-5 opacity-80">{movie.operationalState.explanation}</p>
+                  {movie.scheduledCount === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterMovie(movie.movieKey);
+                        setFilterDate(distributionDate);
+                        selectCandidateView(movie.validCount > 0 ? CANDIDATE_VIEWS.UNSELECTED_VALID : CANDIDATE_VIEWS.ISSUES);
+                      }}
+                      className="mt-2 font-black text-brand-orange hover:text-orange-300"
+                    >
+                      {movie.operationalState.actionLabel || 'Xem chi tiết nguyên nhân'} →
+                    </button>
+                  )}
+                </div>
+              </article>
             ))}
           </div>
         </section>
@@ -662,6 +769,12 @@ const AdminAutoSchedulePreviewPage = () => {
               <dt className="text-zinc-500">Suất lỗi trong toàn bộ đề xuất</dt><dd className="text-right font-bold text-amber-300">{candidateMetrics.issueCandidates}</dd>
               <dt className="text-zinc-500">Suất lỗi trong phần đã chọn</dt><dd className="text-right font-bold text-amber-300">{selectedIssueCount}</dd>
             </dl>
+            {selectedMovieCount === 1 && selectedItemIds.size > 0 && (
+              <div className="mt-4 flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-100" role="alert">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                <p><strong>Lịch chỉ có một phim.</strong> Hệ thống sẽ lấp các khung trống bằng phim này nên kết quả có thể dồn suất. Quay lại bước chọn phim nếu bạn muốn thuật toán cân bằng giữa nhiều phim.</p>
+              </div>
+            )}
             <div className="mt-5 space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
               <p>Hệ thống sẽ kiểm tra giá cho toàn bộ suất đã chọn trước khi tạo.</p>
               <p>Nếu có suất thiếu giá hoặc bị trùng lịch, không suất nào được tạo để tránh lịch dở dang.</p>

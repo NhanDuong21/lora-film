@@ -1,3 +1,8 @@
+import {
+  getMovieOperationalState,
+  summarizeRejectionReasons,
+} from './autoScheduleOperationalInsights';
+
 export const CANDIDATE_VIEWS = Object.freeze({
   RECOMMENDED: 'RECOMMENDED',
   UNSELECTED_VALID: 'UNSELECTED_VALID',
@@ -48,10 +53,10 @@ export const getCandidateMetrics = (items, selectedItemIds) => {
   };
 };
 
-export const getMovieDistribution = candidates => {
+export const getMovieDistribution = (candidates, serviceDate = '') => {
   const groups = new Map();
 
-  (candidates || []).forEach(candidate => {
+  (candidates || []).filter(candidate => !serviceDate || candidate.serviceDate === serviceDate).forEach(candidate => {
     const movieKey = candidate.movieKey
       || candidate.moviePublicId
       || candidate.movieVersionPublicId
@@ -66,19 +71,28 @@ export const getMovieDistribution = candidates => {
         validCount: 0,
         selectedCount: 0,
         createdCount: 0,
+        candidates: [],
       });
     }
     const group = groups.get(movieKey);
+    group.candidates.push(candidate);
     group.generatedCount += 1;
     if (candidate.validationStatus === 'VALID') group.validCount += 1;
     if (candidate.selected) group.selectedCount += 1;
     if (candidate.applyStatus === 'CREATED') group.createdCount += 1;
   });
 
-  const rows = Array.from(groups.values()).map(group => ({
-    ...group,
-    scheduledCount: group.createdCount > 0 ? group.createdCount : group.selectedCount,
-  }));
+  const rows = Array.from(groups.values()).map(group => {
+    const scheduledCount = group.createdCount > 0 ? group.createdCount : group.selectedCount;
+    const rejectionReasons = summarizeRejectionReasons(group.candidates);
+    const row = {
+      ...group,
+      scheduledCount,
+      rejectionReasons,
+    };
+    delete row.candidates;
+    return { ...row, operationalState: getMovieOperationalState(row) };
+  });
   const totalScheduled = rows.reduce((sum, row) => sum + row.scheduledCount, 0);
 
   return rows
@@ -102,14 +116,17 @@ export const getMovieDistributionSummary = distribution => {
   const representedMovieCount = rows.filter(row => row.scheduledCount > 0).length;
   const dominant = rows.find(row => row.scheduledCount > 0) || null;
   const uncoveredMovies = rows.filter(row => row.hasCoverageGap);
+  const blockedMovies = rows.filter(row => row.validCount === 0 && row.scheduledCount === 0);
 
   return {
     eligibleMovieCount,
     representedMovieCount,
     uncoveredMovies,
+    blockedMovies,
     dominantMovieTitle: dominant?.movieTitle || null,
     dominantSharePercent: dominant?.sharePercent || 0,
     hasCoverageGap: uncoveredMovies.length > 0,
+    hasBlockedMovies: blockedMovies.length > 0,
     isHighlyConcentrated: eligibleMovieCount > 1 && (dominant?.sharePercent || 0) > 60,
   };
 };

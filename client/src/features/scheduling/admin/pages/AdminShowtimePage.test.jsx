@@ -73,10 +73,12 @@ describe('AdminShowtimePage URL-backed batch context', () => {
   it('synchronizes source/batch on initial load and later URL changes', async () => {
     const value = hookValue();
     useAdminShowtimes.mockReturnValue(value);
-    renderPage('/admin/showtimes?source=AUTO&batchId=preview-1');
+    renderPage('/admin/showtimes?source=AUTO&batchId=preview-1&cinemaSlug=lora-cinema&date=2026-08-04');
 
     await waitFor(() => expect(value.setBatchId).toHaveBeenCalledWith('preview-1'));
     expect(value.setSource).toHaveBeenCalledWith('AUTO');
+    expect(value.setCinemaSlug).toHaveBeenCalledWith('lora-cinema');
+    expect(value.setDate).toHaveBeenCalledWith('2026-08-04');
     expect(value.fetchShowtimes).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Next batch' }));
@@ -87,7 +89,7 @@ describe('AdminShowtimePage URL-backed batch context', () => {
   it('removes source, batch, and URL status through clear-filter behavior', async () => {
     const value = hookValue();
     useAdminShowtimes.mockReturnValue(value);
-    renderPage('/admin/showtimes?source=AUTO&batchId=preview-1&status=DRAFT');
+    renderPage('/admin/showtimes?source=AUTO&batchId=preview-1&status=DRAFT&cinemaSlug=lora-cinema&date=2026-08-04');
     await waitFor(() => expect(value.setStatus).toHaveBeenCalledWith('DRAFT'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
@@ -96,6 +98,8 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     expect(value.setBatchId).toHaveBeenLastCalledWith('');
     expect(value.setSource).toHaveBeenLastCalledWith('');
     expect(value.setStatus).toHaveBeenLastCalledWith('');
+    expect(value.setCinemaSlug).toHaveBeenLastCalledWith('');
+    expect(value.setDate).toHaveBeenLastCalledWith('');
   });
 
   it('uses server preflight and result counts without window.confirm or batch deletion', async () => {

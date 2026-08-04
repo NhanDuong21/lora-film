@@ -14,6 +14,7 @@ public class ShowtimeSchedulePreviewSummaryResponse {
     private Long version;
 
     private String cinemaPublicId;
+    private String cinemaSlug;
     private String cinemaName;
 
     private LocalDate scheduleFrom;
@@ -83,6 +84,9 @@ public class ShowtimeSchedulePreviewSummaryResponse {
 
     public String getCinemaPublicId() { return cinemaPublicId; }
     public void setCinemaPublicId(String cinemaPublicId) { this.cinemaPublicId = cinemaPublicId; }
+
+    public String getCinemaSlug() { return cinemaSlug; }
+    public void setCinemaSlug(String cinemaSlug) { this.cinemaSlug = cinemaSlug; }
 
     public String getCinemaName() { return cinemaName; }
     public void setCinemaName(String cinemaName) { this.cinemaName = cinemaName; }
