@@ -1,5 +1,6 @@
 package com.project.promotionservice.promotion.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.integration.client.UserRecipientValidationClient;
@@ -301,15 +302,8 @@ public class PromotionCatalogService {
             }
             UserPromotion grant = createGrant(promotion, user, actor);
             issuedCount++;
-            if (promotion.getPromotionType() == PromotionType.COUPON) {
-                eventService.record("USER_PROMOTION", grant.getPublicId(),
-                        "COUPON_ISSUED", Map.of(
-                                "userPublicId", user,
-                                "couponCode", promotion.getCode(),
-                                "promotionName", promotion.getName(),
-                                "validTo", promotion.getValidTo().toString(),
-                                "deepLink", "/booking"), actor);
-            } else {
+            recordVoucherGranted(grant, promotion, user, actor);
+            if (promotion.getPromotionType() != PromotionType.COUPON) {
                 issued.add(mapper.wallet(grant, promotion));
             }
         }
@@ -443,6 +437,56 @@ public class PromotionCatalogService {
                     mapper.wallet(saved, promotion), actor);
         }
         return saved;
+    }
+
+    private void recordVoucherGranted(
+            UserPromotion grant, Promotion promotion, String userPublicId, String actor) {
+        PromotionResponse details = mapper.response(promotion);
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("userPublicId", userPublicId);
+        payload.put("voucherCode", promotion.getCode());
+        payload.put("voucherName", promotion.getName());
+        payload.put("promotionType", promotion.getPromotionType().name());
+        payload.put("validTo", promotion.getValidTo().toString());
+        payload.put("deepLink", "/booking");
+
+        JsonNode action = details.actionsJson();
+        if (action != null && action.isArray() && !action.isEmpty()) {
+            action = action.get(0);
+        }
+        putJsonValue(payload, action, "discountType",
+                "discountType", "type", "actionType");
+        putJsonValue(payload, action, "discountValue",
+                "discountValue", "value", "amount", "percentage");
+        putJsonValue(payload, action, "maxDiscountAmount",
+                "maxDiscountAmount", "maximumDiscountAmount", "maxAmount");
+        putJsonValue(payload, details.conditionsJson(), "minimumOrderAmount",
+                "minimumOrderAmount", "minOrderAmount");
+
+        eventService.record("USER_PROMOTION", grant.getPublicId(),
+                "VOUCHER_GRANTED", payload, actor);
+    }
+
+    private void putJsonValue(
+            Map<String, Object> target, JsonNode source,
+            String targetField, String... sourceFields) {
+        if (source == null || !source.isObject()) {
+            return;
+        }
+        for (String sourceField : sourceFields) {
+            JsonNode value = source.get(sourceField);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+            if (value.isNumber()) {
+                target.put(targetField, value.decimalValue());
+            } else if (value.isBoolean()) {
+                target.put(targetField, value.booleanValue());
+            } else if (!value.asText().isBlank()) {
+                target.put(targetField, value.asText());
+            }
+            return;
+        }
     }
 
     private void requireTemplateMutable(Promotion promotion) {

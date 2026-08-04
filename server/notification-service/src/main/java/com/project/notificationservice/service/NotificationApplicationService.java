@@ -20,13 +20,14 @@ import com.project.notificationservice.repository.NotificationRecipientRepositor
 import com.project.notificationservice.repository.NotificationRequestRepository;
 import com.project.notificationservice.service.NotificationCommands.AcceptedNotification;
 import com.project.notificationservice.service.NotificationCommands.CreateNotificationCommand;
-import com.project.notificationservice.service.NotificationCommands.CouponIssuedNotification;
+import com.project.notificationservice.service.NotificationCommands.VoucherGrantedNotification;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -125,8 +126,8 @@ public class NotificationApplicationService {
     }
 
     @Transactional
-    public AcceptedNotification acceptCouponIssued(CouponIssuedNotification command) {
-        String idempotencyKey = "coupon-issued-" + command.sourceEventId();
+    public AcceptedNotification acceptVoucherGranted(VoucherGrantedNotification command) {
+        String idempotencyKey = "voucher-granted-" + command.sourceEventId();
         Optional<NotificationRequest> existing = requestRepository
                 .findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
@@ -138,56 +139,87 @@ public class NotificationApplicationService {
         }
 
         Instant now = Instant.now();
+        boolean emailSuppressed = preferenceRepository
+                .findByUserPublicIdAndChannelAndCategory(
+                        command.userPublicId(), Channel.EMAIL, Category.MARKETING.name())
+                .map(preference -> !preference.isEnabled())
+                .orElse(false);
+        Map<String, Object> publicData = Map.of(
+                "voucherCode", command.voucherCode(),
+                "voucherName", command.voucherName());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("userName", command.userName());
+        payload.put("voucherCode", command.voucherCode());
+        payload.put("voucherName", command.voucherName());
+        payload.put("discountValue", command.discountValue());
+        payload.put("minOrderAmount", command.minimumOrderAmount());
+        payload.put("expiryDate", command.expiryDate());
+        payload.put("useNowLink", command.useNowLink());
+        payload.put("deepLink", command.deepLink());
+        payload.put("publicData", publicData);
+
         NotificationRequest request = new NotificationRequest();
         request.setIdempotencyKey(idempotencyKey);
         request.setSourceService("promotion-service");
         request.setSourceEventId(command.sourceEventId());
-        request.setEventType("COUPON_ISSUED");
-        request.setTemplateKey("COUPON_ISSUED");
+        request.setEventType("VOUCHER_GRANTED");
+        request.setTemplateKey("VOUCHER_GRANTED");
         request.setLocale("vi-VN");
-        request.setCategory(Category.TRANSACTIONAL);
+        request.setCategory(Category.MARKETING);
         request.setPriority(Priority.NORMAL);
         request.setExpiresAt(command.expiresAt());
-        request.setStatus(RequestStatus.COMPLETED);
-        request.setPayloadJson(writeJson(Map.of(
-                "publicData", Map.of(
-                        "couponCode", command.couponCode(),
-                        "promotionName", command.promotionName()),
-                "deepLink", command.deepLink())));
+        request.setStatus(emailSuppressed ? RequestStatus.COMPLETED : RequestStatus.ACCEPTED);
+        request.setPayloadJson(writeJson(payload));
         request = requestRepository.save(request);
 
         NotificationRecipient recipient = new NotificationRecipient();
         recipient.setNotificationRequestId(request.getId());
         recipient.setUserPublicId(command.userPublicId());
+        recipient.setEmailEncrypted(cryptoService.encrypt(command.email()));
         recipient.setLocale("vi-VN");
         recipient = recipientRepository.save(recipient);
 
-        NotificationDelivery delivery = new NotificationDelivery();
-        delivery.setNotificationRequestId(request.getId());
-        delivery.setNotificationRecipientId(recipient.getId());
-        delivery.setChannel(Channel.IN_APP);
-        delivery.setProvider("in-app");
-        delivery.setStatus(DeliveryStatus.SENT);
-        delivery.setAttemptCount(1);
-        delivery.setSentAt(now);
-        delivery.setDeliveredAt(now);
-        delivery = deliveryRepository.save(delivery);
+        NotificationDelivery emailDelivery = new NotificationDelivery();
+        emailDelivery.setNotificationRequestId(request.getId());
+        emailDelivery.setNotificationRecipientId(recipient.getId());
+        emailDelivery.setChannel(Channel.EMAIL);
+        emailDelivery.setProvider("smtp");
+        if (emailSuppressed) {
+            emailDelivery.setStatus(DeliveryStatus.SUPPRESSED);
+            emailDelivery.setFailureCode("MARKETING_OPT_OUT");
+            emailDelivery.setFailureMessage(
+                    "Customer marketing preference disabled this channel");
+        } else {
+            emailDelivery.setStatus(DeliveryStatus.PENDING);
+        }
+        deliveryRepository.save(emailDelivery);
+
+        NotificationDelivery inAppDelivery = new NotificationDelivery();
+        inAppDelivery.setNotificationRequestId(request.getId());
+        inAppDelivery.setNotificationRecipientId(recipient.getId());
+        inAppDelivery.setChannel(Channel.IN_APP);
+        inAppDelivery.setProvider("in-app");
+        inAppDelivery.setStatus(DeliveryStatus.SENT);
+        inAppDelivery.setAttemptCount(1);
+        inAppDelivery.setSentAt(now);
+        inAppDelivery.setDeliveredAt(now);
+        inAppDelivery = deliveryRepository.save(inAppDelivery);
 
         InAppNotification inApp = new InAppNotification();
-        inApp.setNotificationDeliveryId(delivery.getId());
+        inApp.setNotificationDeliveryId(inAppDelivery.getId());
         inApp.setUserPublicId(command.userPublicId());
-        inApp.setTitle("Bạn có coupon mới");
-        inApp.setBody("Mã " + command.couponCode() + " cho ưu đãi "
-                + command.promotionName() + ". Nhập mã này tại checkout để sử dụng.");
-        inApp.setCategory(Category.TRANSACTIONAL.name());
+        inApp.setTitle("Bạn có voucher mới");
+        inApp.setBody("Mã " + command.voucherCode() + " cho ưu đãi "
+                + command.voucherName() + ". Nhập mã này tại checkout để sử dụng.");
+        inApp.setCategory(Category.MARKETING.name());
         inApp.setDeepLink(command.deepLink());
         inApp.setExpiresAt(command.expiresAt());
         inAppNotificationRepository.save(inApp);
         meterRegistry.counter("notification_requests_total",
-                "eventType", "COUPON_ISSUED", "category", Category.TRANSACTIONAL.name())
+                "eventType", "VOUCHER_GRANTED", "category", Category.MARKETING.name())
                 .increment();
         return new AcceptedNotification(request.getPublicId(), request.getStatus().name(),
-                false, 1);
+                false, 2);
     }
 
     @Transactional(readOnly = true)

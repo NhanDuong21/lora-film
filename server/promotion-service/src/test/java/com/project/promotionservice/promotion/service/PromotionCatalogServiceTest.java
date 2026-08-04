@@ -259,12 +259,15 @@ class PromotionCatalogServiceTest {
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         verify(eventService).record(eq("USER_PROMOTION"), eq("grant-1"),
-                eq("COUPON_ISSUED"), payloadCaptor.capture(), eq("admin"));
+                eq("VOUCHER_GRANTED"), payloadCaptor.capture(), eq("admin"));
         assertThat(payloadCaptor.getValue())
                 .isInstanceOfSatisfying(Map.class, payload -> {
                     assertThat(payload).containsEntry("userPublicId", "user-1");
-                    assertThat(payload).containsEntry("couponCode", "CPN-PRIVATE");
-                    assertThat(payload).containsEntry("promotionName", "Private coupon");
+                    assertThat(payload).containsEntry("voucherCode", "CPN-PRIVATE");
+                    assertThat(payload).containsEntry("voucherName", "Private coupon");
+                    assertThat(payload).containsEntry("discountType", "FIXED_AMOUNT");
+                    assertThat(String.valueOf(payload.get("discountValue")))
+                            .isEqualTo("50000");
                     assertThat(payload).containsEntry("deepLink", "/booking");
                 });
     }

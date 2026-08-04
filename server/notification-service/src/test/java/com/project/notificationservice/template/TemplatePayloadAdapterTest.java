@@ -53,6 +53,35 @@ class TemplatePayloadAdapterTest {
                 .doesNotContainKey("internalOnly");
     }
 
+    @Test
+    void adaptsEveryPublishedVoucherGrantedVariable() {
+        TemplateDocument template = document(Map.of(
+                "user_name", optional(),
+                "voucher_name", optional(),
+                "voucher_code", optional(),
+                "discount_value", optional(),
+                "min_order_amount", optional(),
+                "expiry_date", optional(),
+                "use_now_link", optional()));
+
+        Map<String, Object> adapted = adapter.adapt(Map.of(
+                "userName", "Nguyen Van A",
+                "voucherName", "Ưu đãi thành viên",
+                "voucherCode", "CPN-1234",
+                "discountValue", "50.000 ₫",
+                "minOrderAmount", "150.000 ₫",
+                "expiryDate", "31/12/2099 23:59",
+                "useNowLink", "http://localhost:5173/booking"), template);
+
+        assertThat(adapted).containsEntry("user_name", "Nguyen Van A")
+                .containsEntry("voucher_name", "Ưu đãi thành viên")
+                .containsEntry("voucher_code", "CPN-1234")
+                .containsEntry("discount_value", "50.000 ₫")
+                .containsEntry("min_order_amount", "150.000 ₫")
+                .containsEntry("expiry_date", "31/12/2099 23:59")
+                .containsEntry("use_now_link", "http://localhost:5173/booking");
+    }
+
     private TemplateDocument document(Map<String, TemplateRegistry.VariableDefinition> schema) {
         return new TemplateDocument(
                 "TICKET_PURCHASED", "Ticket", "", Category.TRANSACTIONAL,

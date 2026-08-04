@@ -3,10 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   CalendarClock,
+  Check,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Copy,
   Film,
   Inbox,
   MapPin,
@@ -51,6 +53,34 @@ const isTicketNotification = item => (
   || item?.notificationType === 'TICKET_ISSUED'
   || item?.notificationType === 'BOOKING_CONFIRMED'
 );
+
+const voucherCodeOf = item => {
+  if (!['VOUCHER_GRANTED', 'COUPON_ISSUED'].includes(item?.notificationType)) {
+    return '';
+  }
+  return String(
+    item?.data?.voucherCode
+    || item?.data?.couponCode
+    || item?.data?.promotionCode
+    || ''
+  ).trim();
+};
+
+const copyToClipboard = async value => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const input = document.createElement('textarea');
+  input.value = value;
+  input.setAttribute('readonly', '');
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand('copy');
+  input.remove();
+};
 
 function TicketDetails({ data }) {
   const seats = asList(data?.seatNames);
@@ -132,47 +162,85 @@ function TicketDetails({ data }) {
 function NotificationCard({ item, onOpen }) {
   const unread = !item.readAt;
   const ticket = isTicketNotification(item);
+  const voucherCode = voucherCodeOf(item);
+  const [copied, setCopied] = useState(false);
+
+  const copyVoucherCode = async () => {
+    try {
+      await copyToClipboard(voucherCode);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(item)}
-      className={`w-full rounded-2xl border p-4 text-left transition-all sm:p-5 ${
+    <article
+      className={`w-full rounded-2xl border p-4 transition-all sm:p-5 ${
         unread
           ? 'border-amber-500/25 bg-amber-500/[0.04] hover:border-amber-500/40'
           : 'border-zinc-800 bg-zinc-950/30 hover:border-zinc-700'
       }`}
     >
-      <div className="flex items-start gap-3">
-        <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-          ticket ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-800 text-zinc-400'
-        }`}>
-          {ticket ? <Ticket className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h4 className={`text-sm ${unread ? 'font-black text-white' : 'font-bold text-zinc-300'}`}>
-                {item.title}
-              </h4>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">{item.body}</p>
+      <button
+        type="button"
+        onClick={() => onOpen(item)}
+        className="w-full text-left"
+      >
+        <div className="flex items-start gap-3">
+          <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+            ticket ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-800 text-zinc-400'
+          }`}>
+            {ticket ? <Ticket className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className={`text-sm ${unread ? 'font-black text-white' : 'font-bold text-zinc-300'}`}>
+                  {item.title}
+                </h4>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">{item.body}</p>
+              </div>
+              {unread && (
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-orange" />
+              )}
             </div>
-            {unread && (
-              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-orange" />
-            )}
-          </div>
-          {ticket && <TicketDetails data={item.data || {}} />}
-          <div className="mt-3 flex items-center justify-between gap-3 text-[10px] font-bold text-zinc-600">
-            <span>{formatDateTime(item.createdAt)}</span>
-            {item.actionUrl && (
-              <span className="inline-flex items-center gap-1 text-amber-500">
-                Xem chi tiết <ChevronRight className="h-3 w-3" />
-              </span>
-            )}
+            {ticket && <TicketDetails data={item.data || {}} />}
           </div>
         </div>
+      </button>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pl-12 text-[10px] font-bold text-zinc-600">
+        <span>{formatDateTime(item.createdAt)}</span>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {voucherCode && (
+            <button
+              type="button"
+              onClick={copyVoucherCode}
+              aria-label={`Sao chép mã voucher ${voucherCode}`}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 transition-colors ${
+                copied
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                  : 'border-amber-500/25 bg-amber-500/5 text-amber-500 hover:border-amber-500/50 hover:bg-amber-500/10'
+              }`}
+            >
+              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              <span className="font-mono">{voucherCode}</span>
+              <span>{copied ? 'Đã sao chép' : 'Sao chép mã'}</span>
+            </button>
+          )}
+          {item.actionUrl && (
+            <button
+              type="button"
+              onClick={() => onOpen(item)}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-amber-500 hover:bg-amber-500/10"
+            >
+              Xem chi tiết <ChevronRight className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       </div>
-    </button>
+    </article>
   );
 }
 
