@@ -30,7 +30,7 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast, onRefresh }
         name: `${room.name} - Bản sao`,
         screenType: room.screenType,
         soundType: room.soundType,
-        capacity: 0,
+        capacity: Number(room.capacity),
         cleaningBufferMinutes: room.cleaningBufferMinutes || 15,
       });
       if (!created?.success || !created.data?.publicId) {
