@@ -24,7 +24,7 @@ describe('useAdminShowtimes source and batch filters', () => {
     const { result } = renderHook(() => useAdminShowtimes());
 
     await act(async () => result.current.fetchShowtimes());
-    expect(adminShowtimeService.getShowtimes).toHaveBeenLastCalledWith({ page: 0, size: 10 });
+    expect(adminShowtimeService.getShowtimes).toHaveBeenLastCalledWith({ page: 0, size: 100 });
 
     act(() => {
       result.current.setSource('AUTO');
@@ -34,7 +34,7 @@ describe('useAdminShowtimes source and batch filters', () => {
     await act(async () => result.current.fetchShowtimes());
     expect(adminShowtimeService.getShowtimes).toHaveBeenLastCalledWith({
       page: 0,
-      size: 10,
+      size: 100,
       source: 'AUTO',
       batchId: 'preview-1',
     });
@@ -63,7 +63,7 @@ describe('useAdminShowtimes source and batch filters', () => {
 
     expect(adminShowtimeService.getShowtimes).toHaveBeenLastCalledWith({
       page: 0,
-      size: 10,
+      size: 100,
       cinemaSlug: 'lora-cinema',
       date: '2026-08-04',
       source: 'AUTO',

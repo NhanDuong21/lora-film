@@ -46,12 +46,23 @@ const defaultProps = {
 };
 
 describe('ShowtimeTable cinema timezone', () => {
+  it('opens the operational timeline by default and drills into a quick detail drawer', () => {
+    const onViewDetail = vi.fn();
+    render(<ShowtimeTable {...defaultProps} onViewDetail={onViewDetail} />);
+
+    expect(screen.getByRole('region', { name: 'Phòng chiếu × thời gian' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Phim thử nghiệm.*Mở chi tiết/i }));
+    expect(screen.getByRole('dialog', { name: 'Phim thử nghiệm' })).toHaveTextContent('sẵn sàng lúc');
+    fireEvent.click(screen.getByRole('button', { name: 'Mở chi tiết và giá vé' }));
+    expect(onViewDetail).toHaveBeenCalledWith('showtime-1');
+  });
+
   it('formats list start and end in each Showtime cinema timezone', () => {
     render(<ShowtimeTable {...defaultProps} />);
 
     expect(screen.getByText('01:30')).toBeInTheDocument();
-    expect(screen.getByText('03:00')).toBeInTheDocument();
-    expect(screen.getAllByText('25/07/2026')).toHaveLength(2);
+    expect(screen.getAllByText('03:00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('25/07/2026').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('2026-07-25')).not.toBeInTheDocument();
   });
 
@@ -83,7 +94,7 @@ describe('ShowtimeTable cinema timezone', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('Đang mở bán')).toBeInTheDocument();
+    expect(screen.getAllByText('Đang mở bán').length).toBeGreaterThan(0);
     expect(screen.getByText('Lịch tạo tự động')).toBeInTheDocument();
     expect(screen.getByText('6F1D8CA0')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Thay lịch' }))

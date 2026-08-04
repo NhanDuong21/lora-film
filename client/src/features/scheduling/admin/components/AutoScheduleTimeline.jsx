@@ -25,6 +25,21 @@ const ZOOM_OPTIONS = [
 ];
 
 const getStatePresentation = candidate => {
+  if (candidate.operationalStatus === 'OPEN_FOR_BOOKING') {
+    return { marker: 'Đang mở bán', icon: CheckCircle2, className: 'border-solid' };
+  }
+  if (candidate.operationalStatus === 'DRAFT') {
+    return { marker: 'Đang soạn', icon: Clock3, className: 'border-dashed' };
+  }
+  if (candidate.operationalStatus === 'CLOSED') {
+    return { marker: 'Đã đóng bán', icon: Minus, className: 'border-solid opacity-80' };
+  }
+  if (candidate.operationalStatus === 'CANCELLED') {
+    return { marker: 'Đã hủy', icon: AlertTriangle, className: 'border-dashed opacity-60' };
+  }
+  if (candidate.operationalStatus === 'FINISHED') {
+    return { marker: 'Đã chiếu', icon: CheckCircle2, className: 'border-solid opacity-55' };
+  }
   if (candidate.diagnostic) {
     return { marker: 'Chẩn đoán', icon: Search, className: 'border-dashed border-white/80' };
   }
@@ -53,7 +68,9 @@ const AutoScheduleTimeline = ({
   zoomMode,
   onZoomChange,
   onOpenDetails,
+  variant = 'proposal',
 }) => {
+  const isOperations = variant === 'operations';
   const viewportRef = useRef(null);
   const [viewportWidth, setViewportWidth] = useState(FALLBACK_VIEWPORT_WIDTH);
   const timelineWindow = useMemo(
@@ -142,15 +159,15 @@ const AutoScheduleTimeline = ({
         </li>
         <li className="flex items-center gap-2">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-emerald-300 text-emerald-300" aria-hidden="true"><Star className="h-3 w-3" /></span>
-          Suất đã chọn
+          {isOperations ? 'Đang mở bán' : 'Suất đã chọn'}
         </li>
         <li className="flex items-center gap-2">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-dashed border-white text-white" aria-hidden="true"><Search className="h-3 w-3" /></span>
-          Suất đang kiểm tra
+          {isOperations ? 'Đang soạn / cần kiểm tra' : 'Suất đang kiểm tra'}
         </li>
         <li className="flex items-center gap-2">
           <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-dashed border-red-300 text-red-300" aria-hidden="true"><AlertTriangle className="h-3 w-3" /></span>
-          Không hợp lệ / trùng lịch
+          {isOperations ? 'Đã hủy / có vấn đề' : 'Không hợp lệ / trùng lịch'}
         </li>
       </ul>
 
@@ -197,7 +214,7 @@ const AutoScheduleTimeline = ({
                         <div key={tick} className="pointer-events-none absolute inset-y-0 border-l border-zinc-800/60" style={{ left: `${((tick - timelineWindow.startMinute) / timelineWindow.totalMinutes) * 100}%` }} />
                       ))}
                       {rowCandidates.length === 0 && (
-                        <span className="absolute inset-0 flex items-center px-4 text-xs text-zinc-600">Chưa có suất đã chọn</span>
+                        <span className="absolute inset-0 flex items-center px-4 text-xs text-zinc-600">{isOperations ? 'Không có suất trong nhóm đang xem' : 'Chưa có suất đã chọn'}</span>
                       )}
                       {rowCandidates.map(candidate => {
                         const state = getStatePresentation(candidate);

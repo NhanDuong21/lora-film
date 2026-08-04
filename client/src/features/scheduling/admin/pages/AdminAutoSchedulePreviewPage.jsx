@@ -64,10 +64,10 @@ import {
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const CANDIDATE_VIEW_LABELS = {
-  [CANDIDATE_VIEWS.RECOMMENDED]: 'Đề xuất',
-  [CANDIDATE_VIEWS.UNSELECTED_VALID]: 'Hợp lệ chưa chọn',
-  [CANDIDATE_VIEWS.ISSUES]: 'Không hợp lệ / xung đột',
-  [CANDIDATE_VIEWS.ALL]: 'Tất cả đề xuất',
+  [CANDIDATE_VIEWS.RECOMMENDED]: 'Hệ thống đã chọn',
+  [CANDIDATE_VIEWS.UNSELECTED_VALID]: 'Phương án thay thế',
+  [CANDIDATE_VIEWS.ISSUES]: 'Cần kiểm tra',
+  [CANDIDATE_VIEWS.ALL]: 'Tất cả phương án',
   [CANDIDATE_VIEWS.CREATED]: 'Suất chiếu đã tạo',
 };
 
@@ -170,7 +170,6 @@ const AdminAutoSchedulePreviewPage = () => {
   const [drawerCandidateId, setDrawerCandidateId] = useState(null);
   const [drawerReturnFocusElement, setDrawerReturnFocusElement] = useState(null);
   const [zoomMode, setZoomMode] = useState(TIMELINE_ZOOM_MODES.FIT);
-  const [timelineOpen, setTimelineOpen] = useState(false);
   const [distributionDate, setDistributionDate] = useState('');
   const [scheduleActionDialog, setScheduleActionDialog] = useState(null);
   const [isScheduleActionLoading, setIsScheduleActionLoading] = useState(false);
@@ -423,7 +422,6 @@ const AdminAutoSchedulePreviewPage = () => {
   };
   const showDiagnosticOnTimeline = candidate => {
     if (!candidate.timelineEligible) return;
-    setTimelineOpen(true);
     setDiagnosticChoice({ key: previewKey, id: candidate.id });
     setActiveDateChoice({ key: previewKey, date: candidate.serviceDate });
   };
@@ -565,6 +563,41 @@ const AdminAutoSchedulePreviewPage = () => {
             ['Suất cần kiểm tra', candidateMetrics.issueCandidates],
             ['Tổng suất hệ thống đã xét', preview.totalCandidateCount ?? candidateMetrics.totalGenerated],
           ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
+        </section>
+
+        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 md:p-5" aria-labelledby="proposal-timeline-title">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Lịch đề xuất</p>
+              <h2 id="proposal-timeline-title" className="mt-1 text-xl font-black text-zinc-100">Phòng chiếu × thời gian</h2>
+              <p className="mt-1 text-sm text-zinc-500">Rà soát lịch hệ thống đã chọn; bấm vào một suất để xem lý do và điều chỉnh.</p>
+            </div>
+            {diagnosticCandidate && (
+              <button type="button" onClick={clearDiagnostic} className="flex items-center gap-2 rounded-xl border border-dashed border-blue-400/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-200"><X className="h-4 w-4" />Bỏ đánh dấu: {diagnosticCandidate.movieTitle}</button>
+            )}
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Ngày vận hành đang rà soát</p>
+            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Chọn ngày vận hành">
+              {serviceDates.map(date => <button key={date} type="button" aria-pressed={activeServiceDate === date} onClick={() => selectActiveDate(date)} className={`rounded-xl border px-3 py-2 text-sm font-bold ${activeServiceDate === date ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400'}`}>{formatServiceDateKey(date)}</button>)}
+            </div>
+          </div>
+          {diagnosticConflict && (
+            <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200" role="status">
+              Suất đang kiểm tra bị trùng khoảng sử dụng phòng với một suất đã chọn trong toàn bộ lịch.
+            </p>
+          )}
+          {activeServiceDate ? (
+            <AutoScheduleTimeline
+              serviceDate={activeServiceDate}
+              candidates={timelineCandidates}
+              auditoriums={relevantAuditoriums}
+              zoomMode={zoomMode}
+              onZoomChange={setZoomMode}
+              onOpenDetails={openDrawer}
+            />
+          ) : <div className="py-12 text-center text-zinc-500">Không có ngày vận hành hợp lệ để hiển thị sơ đồ.</div>}
+          <p className="text-xs text-zinc-500" data-testid="timeline-boundary-evidence">Đang hiển thị {timelineCandidates.filter(candidate => !candidate.diagnostic).length} suất hệ thống đã chọn{diagnosticCandidate ? ' và 1 suất đang kiểm tra' : ''}. Hệ thống vẫn kiểm tra xung đột trên toàn bộ {items.length} phương án.</p>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 md:p-5" aria-labelledby="movie-distribution-title">
@@ -741,46 +774,6 @@ const AdminAutoSchedulePreviewPage = () => {
           </section>
         )}
 
-        <details
-          open={timelineOpen}
-          onToggle={event => setTimelineOpen(event.currentTarget.open)}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 md:p-5"
-        >
-          <summary className="cursor-pointer list-none">
-            <span className="block text-base font-black text-zinc-200">Xem sơ đồ phòng chiếu</span>
-            <span className="mt-1 block text-xs text-zinc-500">Chế độ nâng cao để kiểm tra trực quan giờ chiếu và xung đột phòng.</span>
-          </summary>
-          <div className="mt-4 space-y-4 border-t border-zinc-800 pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Ngày vận hành đang rà soát</p>
-              <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Chọn ngày vận hành">
-                {serviceDates.map(date => <button key={date} type="button" aria-pressed={activeServiceDate === date} onClick={() => selectActiveDate(date)} className={`rounded-xl border px-3 py-2 text-sm font-bold ${activeServiceDate === date ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400'}`}>{formatServiceDateKey(date)}</button>)}
-              </div>
-            </div>
-            {diagnosticCandidate && (
-              <button type="button" onClick={clearDiagnostic} className="flex items-center gap-2 rounded-xl border border-dashed border-blue-400/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-200"><X className="h-4 w-4" />Bỏ đánh dấu trên sơ đồ: {diagnosticCandidate.movieTitle}</button>
-            )}
-          </div>
-          {diagnosticConflict && (
-            <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200" role="status">
-              Suất đang kiểm tra bị trùng khoảng sử dụng phòng với một suất đã chọn trong toàn bộ lịch.
-            </p>
-          )}
-          {activeServiceDate ? (
-            <AutoScheduleTimeline
-              serviceDate={activeServiceDate}
-              candidates={timelineCandidates}
-              auditoriums={relevantAuditoriums}
-              zoomMode={zoomMode}
-              onZoomChange={setZoomMode}
-              onOpenDetails={openDrawer}
-            />
-          ) : <div className="py-12 text-center text-zinc-500">Không có ngày vận hành hợp lệ để hiển thị sơ đồ.</div>}
-          <p className="text-xs text-zinc-500" data-testid="timeline-boundary-evidence">Đang hiển thị {timelineCandidates.filter(candidate => !candidate.diagnostic).length} suất đã chọn{diagnosticCandidate ? ' và 1 suất đang kiểm tra' : ''}. Hệ thống vẫn kiểm tra xung đột trên toàn bộ {items.length} suất đề xuất.</p>
-          </div>
-        </details>
-
         <section className="space-y-4">
           <details className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-relaxed text-zinc-400">
             <summary className="cursor-pointer font-bold text-zinc-300">Thông tin nâng cao về cách hệ thống xếp lịch</summary>
@@ -807,48 +800,46 @@ const AdminAutoSchedulePreviewPage = () => {
         {pagination.totalItems === 0 ? (
           <section className="rounded-2xl border border-dashed border-zinc-800 py-14 text-center text-zinc-500">{getEmptyStateMessage(candidateView)}</section>
         ) : (
-          <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1050px] text-left">
-                <thead className="border-b border-zinc-800 bg-zinc-950/70 text-[10px] uppercase tracking-wider text-zinc-400"><tr><th className="px-4 py-3">Ngày / giờ</th><th className="px-4 py-3">Phòng</th><th className="px-4 py-3">Phim / phiên bản</th><th className="px-4 py-3"><span title="Điểm ưu tiên do hệ thống xếp lịch tính; điểm cao hơn được ưu tiên hơn.">Mức ưu tiên</span></th><th className="px-4 py-3">Kết quả kiểm tra</th><th className="px-4 py-3">Lựa chọn / hành động</th></tr></thead>
-                <tbody>
-                  {pagination.items.map(candidate => {
-                    const selectionBlock = !candidate.selected ? findSelectionBlock(candidate.raw, selectedItemsIndex) : null;
-                    const selectionAvailable = capabilities.isEditable && candidate.validationStatus === 'VALID' && candidate.applyStatus === 'PENDING';
-                    const selectionDisabled = !capabilities.canSelect || Boolean(selectionBlock);
-                    const showDiagnosticAction = (candidateView === CANDIDATE_VIEWS.ISSUES || candidateView === CANDIDATE_VIEWS.ALL) && candidate.timelineEligible;
-                    const validationPresentation = getCandidateValidationPresentation(candidate.validationStatus);
-                    const scoreBreakdownRows = getScoreBreakdownRows(candidate.technicalDetails.scoreBreakdown);
-                    return (
-                      <tr key={candidate.id} data-testid="candidate-row" className="border-b border-zinc-800/70 align-top text-sm last:border-b-0">
-                        <td className="px-4 py-3"><strong className="text-zinc-200">{formatServiceDateKey(candidate.serviceDate)}</strong><div className="mt-1 text-xs text-zinc-400">{candidate.startTimeDisplay}–{candidate.endTimeDisplay}</div></td>
-                        <td className="px-4 py-3 text-zinc-300">{candidate.auditoriumName}</td>
-                        <td className="px-4 py-3"><strong className="text-white">{candidate.movieTitle}</strong><div className="mt-1 text-xs text-zinc-400">{candidate.versionName}</div></td>
-                        <td className="px-4 py-3 text-zinc-300"><span className="font-bold text-white">{candidate.score ?? '—'}</span></td>
-                        <td className="px-4 py-3"><span className={`inline-flex rounded border px-2 py-1 text-[10px] font-black uppercase ${getStatusTone(candidate)}`}>{validationPresentation.label} · {candidate.applyState.label}</span>{candidate.conciseReason && <div className="mt-2 max-w-xs text-xs text-zinc-400">{candidate.conciseReason}</div>}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {selectionAvailable ? <label className="flex items-center gap-2 text-xs font-bold text-zinc-300"><input type="checkbox" checked={candidate.selected} disabled={selectionDisabled} onChange={() => handleToggleSelection(candidate.id, candidate.selected)} aria-label={`Chọn ${candidate.movieTitle} lúc ${candidate.startTimeDisplay}`} />{candidate.selected ? 'Đã chọn' : 'Chưa chọn'}</label> : <span className="text-xs text-zinc-500">{candidate.selected ? 'Đã chọn' : 'Không thể chọn'}</span>}
-                            {showDiagnosticAction && <button type="button" onClick={() => showDiagnosticOnTimeline(candidate)} className="flex items-center gap-1 rounded-lg border border-blue-500/30 px-2 py-1.5 text-xs font-bold text-blue-300"><Eye className="h-3.5 w-3.5" />Xem trên sơ đồ</button>}
-                            {candidate.createdShowtimePath && (
-                              <Link
-                                to={candidate.createdShowtimePath}
-                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs font-bold text-emerald-300"
-                                aria-label={`Mở suất chiếu ${candidate.createdShowtimePublicId}`}
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /> Suất chiếu
-                              </Link>
-                            )}
-                            <button type="button" onClick={event => openDrawer(candidate, event.currentTarget)} className="rounded-lg border border-zinc-700 px-2 py-1.5 text-xs font-bold text-zinc-300">Mở chi tiết</button>
-                          </div>
-                          <details className="mt-3 text-xs text-zinc-400"><summary className="cursor-pointer font-bold">Thông tin nâng cao</summary><dl className="mt-2 space-y-1 break-all"><div>Thứ tự rà soát: {candidate.rank ?? '—'}</div><div className="font-mono">ID: {candidate.id}</div><div className="font-mono">validationStatus: {candidate.validationStatus}</div><div className="font-mono">applyStatus: {candidate.applyStatus}</div><div className="font-mono">startTime: {candidate.technicalDetails.startTime || '—'}</div><div className="font-mono">endTime: {candidate.technicalDetails.endTime || '—'}</div><div className="font-mono">occupancyEndTime: {candidate.technicalDetails.occupancyEndTime || '—'}</div><div className="font-mono">codes: {[candidate.technicalDetails.rejectionCode, candidate.technicalDetails.applyErrorCode].filter(Boolean).join(' / ') || '—'}</div>{scoreBreakdownRows.length > 0 && <div className="mt-2 rounded border border-zinc-800 p-2"><dt className="font-bold text-zinc-300">Thành phần điểm</dt>{scoreBreakdownRows.map(row => <dd key={row.key} className="mt-1 flex justify-between gap-3"><span>{row.label}</span><span className="font-mono">{row.value}</span></dd>)}</div>}<div className="font-mono">scoreBreakdown(raw): {candidate.technicalDetails.scoreBreakdown ? JSON.stringify(candidate.technicalDetails.scoreBreakdown) : '—'}</div></dl></details>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          <section className="grid gap-3 xl:grid-cols-2" aria-label="Hàng đợi rà soát suất đề xuất">
+            {pagination.items.map(candidate => {
+              const selectionBlock = !candidate.selected ? findSelectionBlock(candidate.raw, selectedItemsIndex) : null;
+              const selectionAvailable = capabilities.isEditable && candidate.validationStatus === 'VALID' && candidate.applyStatus === 'PENDING';
+              const selectionDisabled = !capabilities.canSelect || Boolean(selectionBlock);
+              const showDiagnosticAction = (candidateView === CANDIDATE_VIEWS.ISSUES || candidateView === CANDIDATE_VIEWS.ALL) && candidate.timelineEligible;
+              const validationPresentation = getCandidateValidationPresentation(candidate.validationStatus);
+              const scoreBreakdownRows = getScoreBreakdownRows(candidate.technicalDetails.scoreBreakdown);
+              return (
+                <article key={candidate.id} data-testid="candidate-row" className={`rounded-2xl border p-4 ${candidate.validationStatus !== 'VALID' ? 'border-red-500/30 bg-red-500/5' : candidate.selected ? 'border-blue-500/30 bg-blue-500/5' : 'border-zinc-800 bg-zinc-900/40'}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-zinc-400">
+                        <span className="text-white">{formatServiceDateKey(candidate.serviceDate)}</span>
+                        <span>{candidate.startTimeDisplay}–{candidate.endTimeDisplay}</span>
+                        <span>·</span>
+                        <span>{candidate.auditoriumName}</span>
+                      </div>
+                      <h3 className="mt-2 truncate text-base font-black text-white">{candidate.movieTitle}</h3>
+                      <p className="mt-1 text-xs text-zinc-500">{candidate.versionName}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="block text-[10px] font-bold uppercase text-zinc-600">Ưu tiên</span>
+                      <span className="text-xl font-black text-white">{candidate.score ?? '—'}</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${getStatusTone(candidate)}`}>{validationPresentation.label} · {candidate.applyState.label}</span>
+                    {candidate.conciseReason && <span className="text-xs text-zinc-400">{candidate.conciseReason}</span>}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
+                    {selectionAvailable ? <label className="mr-auto flex items-center gap-2 text-xs font-bold text-zinc-300"><input type="checkbox" checked={candidate.selected} disabled={selectionDisabled} onChange={() => handleToggleSelection(candidate.id, candidate.selected)} aria-label={`Chọn ${candidate.movieTitle} lúc ${candidate.startTimeDisplay}`} />{candidate.selected ? 'Đã chọn' : 'Chưa chọn'}</label> : <span className="mr-auto text-xs text-zinc-500">{candidate.selected ? 'Đã chọn' : 'Không thể chọn'}</span>}
+                    {showDiagnosticAction && <button type="button" onClick={() => showDiagnosticOnTimeline(candidate)} className="flex items-center gap-1 rounded-lg border border-blue-500/30 px-2 py-1.5 text-xs font-bold text-blue-300"><Eye className="h-3.5 w-3.5" />Xem trên sơ đồ</button>}
+                    {candidate.createdShowtimePath && <Link to={candidate.createdShowtimePath} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs font-bold text-emerald-300" aria-label={`Mở suất chiếu ${candidate.createdShowtimePublicId}`}><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />Suất chiếu</Link>}
+                    <button type="button" onClick={event => openDrawer(candidate, event.currentTarget)} className="rounded-lg border border-zinc-700 px-2 py-1.5 text-xs font-bold text-zinc-300 hover:bg-zinc-800">Kiểm tra chi tiết</button>
+                  </div>
+                  <details className="mt-3 text-xs text-zinc-400"><summary className="cursor-pointer font-bold">Thông tin nâng cao</summary><dl className="mt-2 space-y-1 break-all"><div>Thứ tự rà soát: {candidate.rank ?? '—'}</div><div className="font-mono">ID: {candidate.id}</div><div className="font-mono">validationStatus: {candidate.validationStatus}</div><div className="font-mono">applyStatus: {candidate.applyStatus}</div><div className="font-mono">startTime: {candidate.technicalDetails.startTime || '—'}</div><div className="font-mono">endTime: {candidate.technicalDetails.endTime || '—'}</div><div className="font-mono">occupancyEndTime: {candidate.technicalDetails.occupancyEndTime || '—'}</div><div className="font-mono">codes: {[candidate.technicalDetails.rejectionCode, candidate.technicalDetails.applyErrorCode].filter(Boolean).join(' / ') || '—'}</div>{scoreBreakdownRows.length > 0 && <div className="mt-2 rounded border border-zinc-800 p-2"><dt className="font-bold text-zinc-300">Thành phần điểm</dt>{scoreBreakdownRows.map(row => <dd key={row.key} className="mt-1 flex justify-between gap-3"><span>{row.label}</span><span className="font-mono">{row.value}</span></dd>)}</div>}<div className="font-mono">scoreBreakdown(raw): {candidate.technicalDetails.scoreBreakdown ? JSON.stringify(candidate.technicalDetails.scoreBreakdown) : '—'}</div></dl></details>
+                </article>
+              );
+            })}
           </section>
         )}
 
@@ -858,6 +849,16 @@ const AdminAutoSchedulePreviewPage = () => {
             <span className="text-sm text-zinc-400">Trang {pagination.page}/{pagination.totalPages} · {pagination.totalItems} suất</span>
             <div className="flex gap-2"><button type="button" onClick={() => setCandidatePage(pagination.page - 1)} disabled={pagination.page <= 1} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Trước</button><button type="button" onClick={() => setCandidatePage(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Sau</button></div>
           </nav>
+        )}
+
+        {capabilities.isEditable && (
+          <section className="sticky bottom-4 z-30 flex flex-col gap-3 rounded-2xl border border-brand-orange/30 bg-zinc-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur md:flex-row md:items-center md:justify-between" aria-label="Tiến độ duyệt lịch">
+            <div>
+              <p className="text-sm font-black text-white">Đã chọn {selectedItemIds.size} suất · {candidateMetrics.issueCandidates} suất cần kiểm tra</p>
+              <p className="mt-1 text-xs text-zinc-500">Kiểm tra ngoại lệ trên timeline trước khi tạo lịch vận hành.</p>
+            </div>
+            <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 text-sm font-black text-zinc-950 disabled:opacity-50"><Save className="h-4 w-4" />Xác nhận lịch và tiếp tục</button>
+          </section>
         )}
       </main>
 

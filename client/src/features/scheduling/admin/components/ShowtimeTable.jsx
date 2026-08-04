@@ -1,7 +1,9 @@
-import { Calendar, CheckCircle2, ChevronRight, Filter, Play, Plus, RefreshCw, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronRight, Filter, LayoutList, PanelsTopLeft, Play, Plus, RefreshCw, RotateCcw, Sparkles, X } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import OperationalShowtimeTimeline from '@/features/scheduling/admin/components/OperationalShowtimeTimeline';
 import {
   formatShowtimeCinemaDate,
   formatShowtimeCinemaTime,
@@ -64,6 +66,7 @@ export default function ShowtimeTable({
   onTransitionBatch,
   isBatchActionLoading,
 }) {
+  const [viewMode, setViewMode] = useState('TIMELINE');
   const cinemaOptions = cinemas.map(cinema => ({
     value: cinema.slug,
     label: cinema.name,
@@ -122,21 +125,16 @@ export default function ShowtimeTable({
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="Tóm tắt lịch chiếu">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs font-bold text-zinc-500">Mở bán trên trang này</p>
-          <p className="mt-2 text-2xl font-black text-emerald-300">{formatCount(activeCount)}</p>
-          <p className="mt-1 text-xs text-zinc-500">suất trong danh sách hiện tại</p>
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3" aria-label="Tóm tắt lịch chiếu">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm">
+          <span><strong className="text-emerald-300">{formatCount(activeCount)}</strong> <span className="text-zinc-500">mở bán</span></span>
+          <span><strong className="text-blue-300">{formatCount(draftCount)}</strong> <span className="text-zinc-500">đang soạn</span></span>
+          <span><strong className={needsActionCount ? 'text-amber-300' : 'text-zinc-300'}>{formatCount(needsActionCount)}</strong> <span className="text-zinc-500">cần xử lý</span></span>
+          <span className="text-xs text-zinc-600">{formatCount(totalElements)} suất theo bộ lọc</span>
         </div>
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs font-bold text-zinc-500">Đang soạn</p>
-          <p className="mt-2 text-2xl font-black text-blue-300">{formatCount(draftCount)}</p>
-          <p className="mt-1 text-xs text-zinc-500">chưa mở bán cho khách</p>
-        </div>
-        <div className={`rounded-2xl border p-4 ${needsActionCount ? 'border-amber-500/30 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900/70'}`}>
-          <p className="text-xs font-bold text-zinc-500">Cần kiểm tra</p>
-          <p className={`mt-2 text-2xl font-black ${needsActionCount ? 'text-amber-300' : 'text-zinc-200'}`}>{formatCount(needsActionCount)}</p>
-          <p className="mt-1 text-xs text-zinc-500">suất cần bạn xem lại</p>
+        <div className="flex rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Chế độ xem lịch chiếu">
+          <button type="button" aria-pressed={viewMode === 'TIMELINE'} onClick={() => setViewMode('TIMELINE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'TIMELINE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><PanelsTopLeft className="h-4 w-4" />Timeline</button>
+          <button type="button" aria-pressed={viewMode === 'LIST'} onClick={() => setViewMode('LIST')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'LIST' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><LayoutList className="h-4 w-4" />Danh sách</button>
         </div>
       </section>
 
@@ -227,7 +225,22 @@ export default function ShowtimeTable({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/30" aria-label="Danh sách suất chiếu">
+      {!isLoading && showtimes.length > 0 && viewMode === 'TIMELINE' && (
+        <>
+          <OperationalShowtimeTimeline showtimes={showtimes} requestedDate={date} onViewDetail={onViewDetail} />
+          {totalPages > 1 && (
+            <nav className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3" aria-label="Phân trang timeline lịch chiếu">
+              <span className="text-xs text-zinc-500">Trang dữ liệu {currentPage + 1}/{totalPages} · lọc theo ngày và rạp để có góc nhìn chính xác hơn</span>
+              <div className="flex gap-2">
+                <button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Trang trước</button>
+                <button type="button" disabled={currentPage === totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Trang sau</button>
+              </div>
+            </nav>
+          )}
+        </>
+      )}
+
+      <section className={`${viewMode === 'TIMELINE' && showtimes.length > 0 && !isLoading ? 'hidden' : ''} overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/30`} aria-label="Danh sách suất chiếu">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-4 md:px-5">
           <div>
             <h2 className="text-base font-black">Danh sách suất chiếu</h2>
