@@ -8,7 +8,6 @@ import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResult;
-import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.TmdbQueueBreakdownResponse;
 import com.lorafilm.movie.movie.dto.MovieSummaryResponse;
 import com.lorafilm.movie.movie.dto.MovieGenreAssignRequest;
@@ -288,37 +287,9 @@ public class AdminMovieControllerTest {
     }
 
     @Test
-    void bulkArchiveOldTmdbMovies_ReturnsPerMovieResults() throws Exception {
-        MovieBulkArchiveResponse response = new MovieBulkArchiveResponse(
-                1,
-                1,
-                0,
-                0,
-                100,
-                List.of(MovieBulkApprovalResult.archived("movie-1", "Old Movie", MovieStatus.INACTIVE)));
-        when(movieService.bulkArchiveOldTmdbMovies(any(AdminMovieListQuery.class), eq(100))).thenReturn(response);
-
-        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
-                        .param("limit", "100")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "status": "DRAFT",
-                                  "source": "TMDB"
-                                }
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.requested").value(1))
-                .andExpect(jsonPath("$.data.archived").value(1))
-                .andExpect(jsonPath("$.data.results[0].outcome").value("ARCHIVED"))
-                .andExpect(jsonPath("$.data.results[0].newStatus").value("INACTIVE"));
-    }
-
-    @Test
     void tmdbQueueBreakdown_ReturnsSeparatedCounts() throws Exception {
         when(movieService.getTmdbQueueBreakdown(any(AdminMovieListQuery.class)))
-                .thenReturn(new TmdbQueueBreakdownResponse(17, 8, 6, 3));
+                .thenReturn(new TmdbQueueBreakdownResponse(17, 8, 4, 2, 3));
 
         mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
                         .param("status", "DRAFT")
@@ -328,7 +299,8 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.total").value(17))
                 .andExpect(jsonPath("$.data.future").value(8))
-                .andExpect(jsonPath("$.data.old").value(6))
+                .andExpect(jsonPath("$.data.readyToShow").value(4))
+                .andExpect(jsonPath("$.data.needsSchedule").value(2))
                 .andExpect(jsonPath("$.data.undated").value(3));
     }
 
@@ -448,6 +420,7 @@ public class AdminMovieControllerTest {
                 501L,
                 "PENDING",
                 true,
+                MovieStatus.UPCOMING,
                 List.of(),
                 new MovieReadinessDto(MovieHealthStatus.READY, "READY", List.of(), List.of()),
                 java.time.LocalDateTime.of(2026, 7, 1, 0, 0),
@@ -466,6 +439,7 @@ public class AdminMovieControllerTest {
                 .andExpect(jsonPath("$.data.tmdbId").value(501))
                 .andExpect(jsonPath("$.data.reviewStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.canApprove").value(true))
+                .andExpect(jsonPath("$.data.approvalTarget").value("UPCOMING"))
                 .andExpect(jsonPath("$.data.readiness.healthStatus").value("READY"))
                 .andExpect(jsonPath("$.data.hasProviderChanges").value(true))
                 .andExpect(jsonPath("$.data.scalarDiffs[0].field").value("title"))

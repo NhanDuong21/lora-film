@@ -11,6 +11,8 @@ import jakarta.persistence.criteria.Subquery;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.Locale;
 
 public class MovieSpecification {
@@ -95,6 +97,22 @@ public class MovieSpecification {
             subquery.select(cb.literal(1)).where(
                     cb.equal(showtime.get("movie").get("id"), root.get("id")),
                     cb.isNull(showtime.get("deletedAt")));
+            return hasShowtime ? cb.exists(subquery) : cb.not(cb.exists(subquery));
+        };
+    }
+
+    public static Specification<Movie> hasOperationalShowtime(
+            Instant now,
+            Collection<com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus> statuses,
+            boolean hasShowtime) {
+        return (root, query, cb) -> {
+            Subquery<Integer> subquery = query.subquery(Integer.class);
+            Root<Showtime> showtime = subquery.from(Showtime.class);
+            subquery.select(cb.literal(1)).where(
+                    cb.equal(showtime.get("movie").get("id"), root.get("id")),
+                    cb.isNull(showtime.get("deletedAt")),
+                    showtime.get("status").in(statuses),
+                    cb.greaterThan(showtime.get("endTime"), now));
             return hasShowtime ? cb.exists(subquery) : cb.not(cb.exists(subquery));
         };
     }

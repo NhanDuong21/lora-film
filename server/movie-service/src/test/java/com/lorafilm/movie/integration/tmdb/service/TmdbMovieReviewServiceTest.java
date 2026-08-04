@@ -20,7 +20,9 @@ import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieTranslationRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.movie.service.MovieLifecyclePolicy;
+import com.lorafilm.movie.movie.service.MovieApprovalPolicy;
 import com.lorafilm.movie.movie.service.MovieReadinessEvaluator;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,15 +53,18 @@ class TmdbMovieReviewServiceTest {
     @Mock private MovieTranslationRepository movieTranslationRepository;
     @Mock private TmdbProviderMovieService providerMovieService;
     @Mock private TmdbMovieMapper movieMapper;
+    @Mock private ShowtimeRepository showtimeRepository;
 
     private TmdbMovieReviewService service;
 
     @BeforeEach
     void setUp() {
+        MovieLifecyclePolicy lifecyclePolicy = new MovieLifecyclePolicy();
         service = new TmdbMovieReviewService(
                 movieRepository, movieGenreRepository, movieVersionRepository, movieMediaRepository,
                 movieCreditRepository, movieProductionCompanyRepository, movieTranslationRepository,
-                providerMovieService, movieMapper, new MovieReadinessEvaluator(), new MovieLifecyclePolicy());
+                providerMovieService, movieMapper, new MovieReadinessEvaluator(),
+                new MovieApprovalPolicy(lifecyclePolicy, showtimeRepository));
     }
 
     @Test
@@ -83,6 +88,7 @@ class TmdbMovieReviewServiceTest {
         assertEquals("PENDING", review.reviewStatus());
         assertEquals(MovieHealthStatus.READY, review.readiness().getHealthStatus());
         assertTrue(review.canApprove());
+        assertEquals(MovieStatus.UPCOMING, review.approvalTarget());
         assertTrue(review.approvalBlockers().isEmpty());
         assertTrue(review.scalarDiffs().stream().noneMatch(diff -> diff.changed()));
     }

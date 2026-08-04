@@ -9,6 +9,7 @@ import com.lorafilm.movie.movie.service.MovieServiceImpl;
 import com.lorafilm.movie.movie.service.AdminMovieProjectionService;
 import com.lorafilm.movie.movie.service.MovieHealthFacts;
 import com.lorafilm.movie.movie.service.MovieLifecyclePolicy;
+import com.lorafilm.movie.movie.service.MovieApprovalPolicy;
 import com.lorafilm.movie.movie.service.MovieReadinessEvaluator;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
 import com.lorafilm.movie.movie.domain.entity.Genre;
@@ -63,6 +64,9 @@ class MoviePublishValidationTest {
 
     @Mock
     private AdminMovieProjectionService projectionService;
+
+    @Mock
+    private MovieApprovalPolicy approvalPolicy;
 
     @InjectMocks
     private MovieServiceImpl movieService;

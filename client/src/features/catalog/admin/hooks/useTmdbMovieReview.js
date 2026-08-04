@@ -3,6 +3,7 @@ import adminMovieService from '@/features/catalog/admin/services/adminMovieServi
 import { normalizeApiError } from '@/utils/apiErrorHandler';
 
 const HEALTH_STATUSES = new Set(['READY', 'WARNING', 'BLOCKED']);
+const APPROVAL_TARGETS = new Set(['UPCOMING', 'NOW_SHOWING']);
 const INVALID_REVIEW_CONTRACT = 'TMDB_REVIEW_INVALID_RESPONSE';
 const TMDB_REVIEW_ENABLED = import.meta.env.VITE_TMDB_REVIEW_ENABLED === 'true';
 
@@ -94,6 +95,7 @@ const unwrapTmdbReview = envelope => {
     || !Number.isInteger(review.tmdbId)
     || typeof review.reviewStatus !== 'string'
     || typeof review.canApprove !== 'boolean'
+    || !(review.approvalTarget === null || APPROVAL_TARGETS.has(review.approvalTarget))
     || !isStringList(review.approvalBlockers)
     || !readiness
     || !HEALTH_STATUSES.has(readiness.healthStatus)

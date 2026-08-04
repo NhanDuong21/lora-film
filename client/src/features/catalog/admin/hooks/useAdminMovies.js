@@ -41,7 +41,8 @@ const unwrapTmdbQueueBreakdown = envelope => {
   if (
     envelope?.success !== true
     || !breakdown
-    || !['total', 'future', 'old', 'undated'].every(key => Number.isFinite(breakdown[key]))
+    || !['total', 'future', 'readyToShow', 'needsSchedule', 'undated']
+      .every(key => Number.isFinite(breakdown[key]))
   ) {
     throw new Error('Phản hồi phân loại hàng đợi TMDB không đúng định dạng.');
   }
@@ -65,11 +66,6 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
   const [totalPages, setTotalPages] = useState(0);
   const [searchInput, setSearchInput] = useState(query.keyword);
   const [bulkApproval, setBulkApproval] = useState({
-    isPending: false,
-    result: null,
-    error: '',
-  });
-  const [bulkArchive, setBulkArchive] = useState({
     isPending: false,
     result: null,
     error: '',
@@ -219,24 +215,6 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     }
   }, [query, refreshAll, triggerToast]);
 
-  const bulkArchiveOldTmdbMovies = useCallback(async (limit = 100) => {
-    setBulkArchive({ isPending: true, result: null, error: '' });
-    try {
-      const envelope = await adminMovieService.bulkArchiveOldTmdbMovies(toMovieApiParams(query), limit);
-      if (envelope?.success !== true || !envelope.data || !Array.isArray(envelope.data.results)) {
-        throw new Error('Phản hồi lưu trữ hàng loạt không đúng định dạng.');
-      }
-      setBulkArchive({ isPending: false, result: envelope.data, error: '' });
-      await refreshAll();
-      return envelope.data;
-    } catch (err) {
-      const message = parseApiError(err);
-      setBulkArchive({ isPending: false, result: null, error: message });
-      triggerToast?.(message, 'error');
-      return null;
-    }
-  }, [query, refreshAll, triggerToast]);
-
   const handleDelete = async (publicId, title) => {
     const shouldDelete = await triggerConfirm?.({
       title: `Xóa phim “${title}”?`,
@@ -277,8 +255,6 @@ export default function useAdminMovies({ triggerConfirm, triggerToast, onMutatio
     refreshAll,
     bulkApproval,
     bulkApproveTmdbMovies,
-    bulkArchive,
-    bulkArchiveOldTmdbMovies,
     queueBreakdown,
     handleDelete,
     defaults: ADMIN_MOVIE_QUERY_DEFAULTS,

@@ -14,10 +14,6 @@ public record MovieBulkApprovalResult(
         return new MovieBulkApprovalResult(publicId, title, "APPROVED", newStatus, null, null);
     }
 
-    public static MovieBulkApprovalResult archived(String publicId, String title, MovieStatus newStatus) {
-        return new MovieBulkApprovalResult(publicId, title, "ARCHIVED", newStatus, null, null);
-    }
-
     public static MovieBulkApprovalResult skipped(
             String publicId,
             String title,

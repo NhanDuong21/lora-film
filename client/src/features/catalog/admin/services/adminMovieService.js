@@ -67,13 +67,6 @@ const adminMovieService = {
     return response.data;
   },
 
-  bulkArchiveOldTmdbMovies: async (filter, limit = 100) => {
-    const response = await apiClient.post('/api/admin/movies/bulk-archive-old', filter, {
-      params: { limit }
-    });
-    return response.data;
-  },
-
   getTmdbQueueBreakdown: async (params) => {
     const response = await apiClient.get('/api/admin/movies/tmdb-queue-breakdown', { params });
     return response.data;

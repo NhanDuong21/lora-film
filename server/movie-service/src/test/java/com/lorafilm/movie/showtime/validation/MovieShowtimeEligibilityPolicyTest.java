@@ -63,16 +63,13 @@ class MovieShowtimeEligibilityPolicyTest {
     }
 
     @Test
-    void draftStatusIsRejectedInHelperAndSchedulingAuthority() {
+    void draftMovieCanHaveDraftShowtimesPreparedBeforeApproval() {
         movie.setStatus(MovieStatus.DRAFT);
 
         var issues = policy.evaluateRange(movie, List.of(version), null, null);
-        assertTrue(issues.stream().anyMatch(issue ->
+        assertFalse(issues.stream().anyMatch(issue ->
                 MovieShowtimeEligibilityPolicy.MOVIE_STATUS_NOT_ELIGIBLE.equals(issue.code())));
-
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> policy.validateMovieAndVersion(movie, version));
-        assertEquals(ErrorCode.MOVIE_NOT_AVAILABLE_FOR_SCHEDULING, ex.getErrorCode());
+        assertDoesNotThrow(() -> policy.validateMovieAndVersion(movie, version));
     }
 
     @Test

@@ -232,6 +232,11 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
               <p className={`mt-3 text-sm font-semibold ${review.canApprove ? 'text-emerald-300' : 'text-red-300'}`}>
                 {review.canApprove ? 'Đủ điều kiện phê duyệt' : 'Chưa thể phê duyệt'}
               </p>
+              {review.approvalTarget && (
+                <p className="mt-1 text-xs font-semibold text-sky-300">
+                  Trạng thái sau duyệt: {review.approvalTarget === 'NOW_SHOWING' ? 'Đang chiếu' : 'Sắp chiếu'}
+                </p>
+              )}
               <p className="mt-1 text-xs leading-5 text-zinc-500">
                 Kết quả này do máy chủ xác định. Khi xác nhận, vòng đời và tình trạng dữ liệu sẽ được kiểm tra lại trước khi lưu.
               </p>

@@ -107,23 +107,6 @@ class AdminMovieSummarySecurityTest {
     }
 
     @Test
-    void bulkArchiveRejectsAnonymousUsers() throws Exception {
-        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @WithMockUser(authorities = "ROLE_ADMIN")
-    void bulkArchiveAllowsAdminUsers() throws Exception {
-        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void queueBreakdownRejectsAnonymousUsers() throws Exception {
         mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
                         .param("status", "DRAFT")

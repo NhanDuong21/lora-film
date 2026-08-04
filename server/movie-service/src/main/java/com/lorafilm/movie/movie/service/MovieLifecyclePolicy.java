@@ -7,6 +7,7 @@ import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -90,9 +91,16 @@ public class MovieLifecyclePolicy {
         return LocalDate.now(clock);
     }
 
+    public Instant currentInstant() {
+        return Instant.now(clock);
+    }
+
     private static Map<MovieStatus, Set<MovieStatus>> buildTransitions() {
         Map<MovieStatus, Set<MovieStatus>> transitions = new EnumMap<>(MovieStatus.class);
-        transitions.put(MovieStatus.DRAFT, Set.of(MovieStatus.UPCOMING, MovieStatus.INACTIVE));
+        transitions.put(MovieStatus.DRAFT, Set.of(
+                MovieStatus.UPCOMING,
+                MovieStatus.NOW_SHOWING,
+                MovieStatus.INACTIVE));
         transitions.put(MovieStatus.UPCOMING, Set.of(MovieStatus.NOW_SHOWING, MovieStatus.INACTIVE));
         transitions.put(MovieStatus.NOW_SHOWING, Set.of(MovieStatus.ENDED, MovieStatus.INACTIVE));
         transitions.put(MovieStatus.ENDED, Set.of(MovieStatus.INACTIVE, MovieStatus.UPCOMING));

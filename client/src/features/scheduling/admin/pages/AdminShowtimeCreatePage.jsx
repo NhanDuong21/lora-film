@@ -45,12 +45,12 @@ const AdminShowtimeCreatePage = () => {
   }));
 
   const movieOptions = movies
-    .filter(m => m.status !== 'DRAFT')
+    .filter(m => ['DRAFT', 'UPCOMING', 'NOW_SHOWING'].includes(m.status))
     .map(m => {
       return {
         value: m.publicId,
         label: m.title,
-        subtitle: `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}`,
+        subtitle: `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}${m.status === 'DRAFT' ? ' • Chỉ lập lịch nháp' : ''}`,
         badge: m.status?.replace('_', ' '),
         badgeColor: 'text-blue-400 border-blue-500/20 bg-blue-500/10',
         disabled: false

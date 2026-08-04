@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.List;
+import java.util.Collection;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -18,6 +19,10 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             Long movieId,
             com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus status,
             Instant startTime);
+    boolean existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
+            Long movieId,
+            Collection<com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus> statuses,
+            Instant endTime);
 
     Optional<Showtime> findByPublicIdAndDeletedAtIsNull(String publicId);
 
