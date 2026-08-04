@@ -8,6 +8,7 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieMedia;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieVersionResponse;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
@@ -23,6 +24,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class AutoScheduleEligibilityServiceImpl implements AutoScheduleEligibilityService {
+
+    private static final List<MovieStatus> SCHEDULABLE_MOVIE_STATUSES =
+            List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING);
 
     private final MovieRepository movieRepository;
     private final MovieVersionRepository movieVersionRepository;
@@ -41,9 +45,7 @@ public class AutoScheduleEligibilityServiceImpl implements AutoScheduleEligibili
 
     @Override
     public List<EligibleMovieResponse> getEligibleMovies(LocalDate fromDate, LocalDate toDate) {
-        List<Movie> movies = movieRepository.findAll().stream()
-                .filter(movie -> movie.getDeletedAt() == null)
-                .toList();
+        List<Movie> movies = movieRepository.findByStatusInAndDeletedAtIsNull(SCHEDULABLE_MOVIE_STATUSES);
         Map<Long, MovieMedia> primaryPosters = movies.isEmpty()
                 ? Map.of()
                 : movieMediaRepository.findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(

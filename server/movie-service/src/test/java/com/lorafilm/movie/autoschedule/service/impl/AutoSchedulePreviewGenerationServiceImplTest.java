@@ -328,4 +328,19 @@ class AutoSchedulePreviewGenerationServiceImplTest {
                 any(), any(), org.mockito.ArgumentMatchers.eq(
                         AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3), any(), anyLong());
     }
+
+    @Test
+    void ineligibleMovieIsRejectedBeforePreviewPersistence() {
+        BusinessException statusError =
+                new BusinessException(ErrorCode.MOVIE_NOT_AVAILABLE_FOR_SCHEDULING);
+        doThrow(statusError).when(eligibilityPolicy)
+                .validateMovieAndVersion(any(Movie.class), any(MovieVersion.class));
+
+        BusinessException thrown = assertThrows(BusinessException.class,
+                () -> service.generatePreview(request, 10L));
+
+        assertEquals(ErrorCode.MOVIE_NOT_AVAILABLE_FOR_SCHEDULING, thrown.getErrorCode());
+        verify(lifecycleService, never()).createGeneratingPreview(any(), any(), any(), any(), anyLong());
+        verify(contextLoader, never()).load(any(), any(), any(), any(), any());
+    }
 }

@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,34 +41,11 @@ class AutoScheduleEligibilityServiceImplTest {
     private MovieShowtimeEligibilityPolicy eligibilityPolicy;
 
     @Test
-    void draftMovieIsReturnedAsEligibleForSchedulePreparation() {
-        Movie movie = new Movie();
-        movie.setId(8L);
-        movie.setPublicId("draft-tmdb-movie");
-        movie.setTitle("Phim TMDB chờ duyệt");
-        movie.setSlug("phim-tmdb-cho-duyet");
-        movie.setDurationMinutes(110);
-        movie.setReleaseDate(LocalDate.of(2026, 7, 20));
-        movie.setStatus(MovieStatus.DRAFT);
-
-        MovieVersion version = new MovieVersion();
-        version.setPublicId("draft-movie-version");
-        version.setMovie(movie);
-        version.setVersionName("2D Phụ đề Việt");
-        version.setFormat(MovieFormat.TWO_D);
-        version.setAudioLanguage("EN");
-        version.setSubtitleLanguage("VI");
-        version.setStatus(ActiveStatus.ACTIVE);
-
+    void onlyUpcomingAndNowShowingMoviesAreQueriedForSchedulingOptions() {
         LocalDate fromDate = LocalDate.of(2026, 7, 25);
         LocalDate toDate = LocalDate.of(2026, 7, 31);
-        when(movieRepository.findAll()).thenReturn(List.of(movie));
-        when(movieVersionRepository.findByMovieIdAndDeletedAtIsNull(8L)).thenReturn(List.of(version));
-        when(eligibilityPolicy.evaluateRange(movie, List.of(version), fromDate, toDate)).thenReturn(List.of());
-        when(movieMediaRepository.findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
-                List.of(8L),
-                MovieMediaType.POSTER,
-                ActiveStatus.ACTIVE)).thenReturn(List.of());
+        when(movieRepository.findByStatusInAndDeletedAtIsNull(
+                List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING))).thenReturn(List.of());
 
         AutoScheduleEligibilityServiceImpl service = new AutoScheduleEligibilityServiceImpl(
                 movieRepository,
@@ -77,12 +55,10 @@ class AutoScheduleEligibilityServiceImplTest {
 
         List<EligibleMovieResponse> result = service.getEligibleMovies(fromDate, toDate);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().getMoviePublicId()).isEqualTo("draft-tmdb-movie");
-        assertThat(result.getFirst().getStatus()).isEqualTo(MovieStatus.DRAFT);
-        assertThat(result.getFirst().isEligible()).isTrue();
-        assertThat(result.getFirst().getVersions()).hasSize(1);
-        verify(eligibilityPolicy).evaluateRange(movie, List.of(version), fromDate, toDate);
+        assertThat(result).isEmpty();
+        verify(movieRepository).findByStatusInAndDeletedAtIsNull(
+                List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING));
+        verifyNoInteractions(movieVersionRepository, movieMediaRepository, eligibilityPolicy);
     }
 
     @Test
@@ -112,7 +88,8 @@ class AutoScheduleEligibilityServiceImplTest {
         poster.setIsPrimary(true);
         poster.setStatus(ActiveStatus.ACTIVE);
 
-        when(movieRepository.findAll()).thenReturn(List.of(movie));
+        when(movieRepository.findByStatusInAndDeletedAtIsNull(
+                List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING))).thenReturn(List.of(movie));
         when(movieVersionRepository.findByMovieIdAndDeletedAtIsNull(7L)).thenReturn(List.of(version));
         when(eligibilityPolicy.evaluateRange(
                 movie,

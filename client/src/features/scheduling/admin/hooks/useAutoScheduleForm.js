@@ -7,6 +7,7 @@ import {
   buildAutoScheduleRequestFingerprint,
   validateAutoScheduleDateRange,
 } from '@/features/scheduling/admin/utils/autoScheduleForm';
+import { isSchedulableMovieStatus } from '@/features/scheduling/admin/utils/movieSchedulingEligibility';
 
 const createUuid = () => globalThis.crypto?.randomUUID?.()
   || `preview-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -94,11 +95,13 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
         if (requestId !== movieRequestSequence.current) return;
         if (!movieRes?.success) return;
 
-        const moviesData = (movieRes.data || []).map(movie => ({
-          ...movie,
-          publicId: movie.moviePublicId,
-          versions: movie.versions || [],
-        }));
+        const moviesData = (movieRes.data || [])
+          .filter(movie => isSchedulableMovieStatus(movie.status))
+          .map(movie => ({
+            ...movie,
+            publicId: movie.moviePublicId,
+            versions: movie.versions || [],
+          }));
         const nextVersionsByMovie = {};
         const selectableVersionIds = new Set();
         moviesData.forEach(movie => {

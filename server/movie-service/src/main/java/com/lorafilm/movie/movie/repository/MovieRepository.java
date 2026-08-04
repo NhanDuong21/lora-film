@@ -42,6 +42,8 @@ public interface MovieRepository extends JpaRepository<Movie, Long>, JpaSpecific
     
     Page<Movie> findByStatusAndDeletedAtIsNull(MovieStatus status, Pageable pageable);
 
+    List<Movie> findByStatusInAndDeletedAtIsNull(List<MovieStatus> statuses);
+
     @Query("SELECT m.status AS status, COUNT(m) AS total FROM Movie m WHERE m.deletedAt IS NULL GROUP BY m.status")
     List<MovieStatusCountProjection> countNonDeletedMoviesByStatus();
     

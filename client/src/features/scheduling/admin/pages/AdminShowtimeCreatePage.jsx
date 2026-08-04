@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Calendar, Clock, Loader2, MapPin, Film, Info } from 'l
 import useShowtimeForm from '@/features/scheduling/admin/hooks/useShowtimeForm';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import { isSchedulableMovieStatus } from '@/features/scheduling/admin/utils/movieSchedulingEligibility';
 
 const AdminShowtimeCreatePage = () => {
   const { triggerToast } = useOutletContext() || {};
@@ -45,12 +46,12 @@ const AdminShowtimeCreatePage = () => {
   }));
 
   const movieOptions = movies
-    .filter(m => ['DRAFT', 'UPCOMING', 'NOW_SHOWING'].includes(m.status))
+    .filter(m => isSchedulableMovieStatus(m.status))
     .map(m => {
       return {
         value: m.publicId,
         label: m.title,
-        subtitle: `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}${m.status === 'DRAFT' ? ' • Chỉ lập lịch nháp' : ''}`,
+        subtitle: `${m.durationMinutes} phút • ${m.releaseDate || 'N/A'}`,
         badge: m.status?.replace('_', ' '),
         badgeColor: 'text-blue-400 border-blue-500/20 bg-blue-500/10',
         disabled: false

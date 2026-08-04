@@ -40,7 +40,7 @@ public class MovieShowtimeEligibilityPolicy {
         if (!hasSchedulableStatus(movie)) {
             throw new BusinessException(
                     ErrorCode.MOVIE_NOT_AVAILABLE_FOR_SCHEDULING,
-                    "Movie must be DRAFT, UPCOMING or NOW_SHOWING");
+                    "Movie must be UPCOMING or NOW_SHOWING");
         }
 
         if (!hasValidDuration(movie)) {
@@ -113,7 +113,7 @@ public class MovieShowtimeEligibilityPolicy {
         if (!hasSchedulableStatus(movie)) {
             issues.add(new EligibilityIssue(
                     MOVIE_STATUS_NOT_ELIGIBLE,
-                    "Movie must be DRAFT, UPCOMING or NOW_SHOWING"));
+                    "Movie must be UPCOMING or NOW_SHOWING"));
         }
 
         if (!hasValidDuration(movie)) {
@@ -147,8 +147,7 @@ public class MovieShowtimeEligibilityPolicy {
     private boolean hasSchedulableStatus(Movie movie) {
         return movie != null
                 && movie.getDeletedAt() == null
-                && (movie.getStatus() == MovieStatus.DRAFT
-                    || movie.getStatus() == MovieStatus.UPCOMING
+                && (movie.getStatus() == MovieStatus.UPCOMING
                     || movie.getStatus() == MovieStatus.NOW_SHOWING);
     }
 
@@ -160,8 +159,7 @@ public class MovieShowtimeEligibilityPolicy {
         return movie != null
                 && !movie.missing()
                 && !movie.deleted()
-                && (movie.status() == MovieStatus.DRAFT
-                    || movie.status() == MovieStatus.UPCOMING
+                && (movie.status() == MovieStatus.UPCOMING
                     || movie.status() == MovieStatus.NOW_SHOWING);
     }
 
