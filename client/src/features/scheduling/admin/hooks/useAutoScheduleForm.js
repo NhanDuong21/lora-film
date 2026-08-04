@@ -160,7 +160,8 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess, initialDr
       try {
         const response = await adminCinemaService.getAdminCinemaDetail(selectedCinemaId);
         if (requestId === auditoriumRequestSequence.current && response?.success) {
-          const activeAuditoriums = response.data?.activeAuditoriums || [];
+          const activeAuditoriums = (response.data?.activeAuditoriums || [])
+            .filter(auditorium => auditorium.status === 'ACTIVE');
           setAuditoriums(activeAuditoriums);
           if (isInitialHydration) {
             const restoredIds = activeAuditoriums

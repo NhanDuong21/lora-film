@@ -65,6 +65,29 @@ describe('useAutoScheduleForm', () => {
     expect(result.current.selectedAuditoriumIds).toEqual([]);
   });
 
+  it('only exposes active auditoriums returned by the cinema detail API', async () => {
+    adminCinemaService.getAdminCinemaDetail.mockResolvedValue({
+      success: true,
+      data: {
+        ...cinema,
+        activeAuditoriums: [
+          auditorium,
+          { publicId: 'auditorium-draft', name: 'Draft room', status: 'DRAFT' },
+          { publicId: 'auditorium-maintenance', name: 'Maintenance room', status: 'MAINTENANCE' },
+          { publicId: 'auditorium-inactive', name: 'Inactive room', status: 'INACTIVE' },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+    await waitFor(() => expect(result.current.cinemas).toHaveLength(1));
+    act(() => result.current.setSelectedCinemaId('cinema-1'));
+
+    await waitFor(() => expect(result.current.auditoriums).toEqual([auditorium]));
+    act(() => result.current.selectAllActiveAuditoriums());
+    expect(result.current.selectedAuditoriumIds).toEqual(['auditorium-1']);
+  });
+
   it('restores an eligible schedule draft for recreation', async () => {
     const { result } = renderHook(() => useAutoScheduleForm({
       initialDraft: {
