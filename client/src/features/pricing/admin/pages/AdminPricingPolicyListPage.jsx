@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, CheckCircle2, ChevronRight, CircleAlert, Plus, RefreshCw, Search, Ticket } from 'lucide-react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, CircleAlert, Plus, RefreshCw, Search, Ticket } from 'lucide-react';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminPricingService from '../services/adminPricingService';
 
@@ -34,11 +34,32 @@ const formatDate = value => {
 
 export default function AdminPricingPolicyListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { triggerToast } = useOutletContext() || {};
   const [policies, setPolicies] = useState([]);
   const [cinemas, setCinemas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ cinema: '', status: '', effectiveDate: '' });
+  const [filters, setFilters] = useState(() => ({
+    cinema: searchParams.get('cinema') || '',
+    status: '',
+    effectiveDate: searchParams.get('effectiveDate') || '',
+  }));
+  const returnTo = useMemo(() => {
+    const value = searchParams.get('returnTo') || '';
+    return value.startsWith('/admin/') ? value : '';
+  }, [searchParams]);
+  const createPolicyPath = useMemo(() => {
+    const params = new URLSearchParams();
+    const cinema = filters.cinema || searchParams.get('cinema') || '';
+    const effectiveFrom = searchParams.get('effectiveFrom') || filters.effectiveDate || '';
+    const effectiveTo = searchParams.get('effectiveTo') || '';
+    if (cinema) params.set('cinema', cinema);
+    if (effectiveFrom) params.set('effectiveFrom', effectiveFrom);
+    if (effectiveTo) params.set('effectiveTo', effectiveTo);
+    if (returnTo) params.set('returnTo', returnTo);
+    const query = params.toString();
+    return `/admin/pricing/create${query ? `?${query}` : ''}`;
+  }, [filters.cinema, filters.effectiveDate, returnTo, searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,6 +96,12 @@ export default function AdminPricingPolicyListPage() {
 
   return (
     <div className="min-h-full space-y-6 bg-zinc-950 text-white">
+      {returnTo && (
+        <section className="flex flex-col gap-3 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100 sm:flex-row sm:items-center sm:justify-between" role="status">
+          <div><p className="font-black">Đang xử lý bảng giá để tiếp tục tạo lịch</p><p className="mt-1 text-blue-200/80">Rạp và ngày áp dụng đã được lọc sẵn. Sau khi kích hoạt bảng giá, bạn có thể quay lại đúng lịch đang kiểm tra.</p></div>
+          <button type="button" onClick={() => navigate(returnTo)} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-blue-300/30 px-4 font-black hover:bg-blue-500/10"><ArrowLeft className="h-4 w-4" />Quay lại lịch</button>
+        </section>
+      )}
       <header className="flex flex-col gap-5 border-b border-zinc-800 pb-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orange">Giá vé</p>
@@ -83,7 +110,7 @@ export default function AdminPricingPolicyListPage() {
             Tạo một bảng giá dễ hiểu cho từng rạp. Khi mở bán, hệ thống sẽ tự dùng bảng giá phù hợp.
           </p>
         </div>
-        <button type="button" onClick={() => navigate('/admin/pricing/create')} className="inline-flex min-h-11 items-center gap-2 self-start rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950 hover:bg-amber-400">
+        <button type="button" onClick={() => navigate(createPolicyPath)} className="inline-flex min-h-11 items-center gap-2 self-start rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950 hover:bg-amber-400">
           <Plus className="h-4 w-4" aria-hidden="true" />
           Tạo bảng giá
         </button>
@@ -124,7 +151,7 @@ export default function AdminPricingPolicyListPage() {
           <Ticket className="h-5 w-5 text-zinc-600" aria-hidden="true" />
         </div>
         {loading ? <div className="p-12 text-center text-sm text-zinc-500">Đang tải bảng giá…</div> : policies.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 px-6 py-16 text-center"><CalendarDays className="h-10 w-10 text-zinc-700" aria-hidden="true" /><h3 className="font-black text-zinc-200">Chưa có bảng giá</h3><p className="max-w-sm text-sm text-zinc-500">Tạo bảng giá đầu tiên để hệ thống có thể mở bán suất chiếu.</p><button type="button" onClick={() => navigate('/admin/pricing/create')} className="mt-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-zinc-950">Tạo bảng giá</button></div>
+          <div className="flex flex-col items-center gap-3 px-6 py-16 text-center"><CalendarDays className="h-10 w-10 text-zinc-700" aria-hidden="true" /><h3 className="font-black text-zinc-200">Chưa có bảng giá</h3><p className="max-w-sm text-sm text-zinc-500">Tạo bảng giá đầu tiên để hệ thống có thể tạo và mở bán suất chiếu cho rạp này.</p><button type="button" onClick={() => navigate(createPolicyPath)} className="mt-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-zinc-950">Tạo bảng giá cho rạp này</button></div>
         ) : (
           <div className="divide-y divide-zinc-800">
             {policies.map(policy => (

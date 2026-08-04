@@ -286,7 +286,7 @@ export default function AdminAutoScheduleCreatePage() {
                 </div>
               </div>
               <p className="mb-4 text-sm font-bold text-zinc-300">Đã chọn {selectedAuditoriumIds.length}/{activeRoomCount || auditoriums.length} phòng đang hoạt động</p>
-              {isLoadingAuditoriums ? <p className="py-10 text-center text-sm text-zinc-500">Đang tải phòng chiếu…</p> : auditoriums.length === 0 ? <p className="py-10 text-center text-sm text-zinc-500">Chưa có phòng đang hoạt động tại rạp này.</p> : (
+              {isLoadingAuditoriums ? <p className="py-10 text-center text-sm text-zinc-500">Đang tải phòng chiếu…</p> : auditoriums.length === 0 ? <div className="flex flex-col items-center gap-3 py-10 text-center"><p className="text-sm font-bold text-amber-200">Chưa có phòng đang hoạt động tại rạp này.</p><p className="max-w-md text-xs text-zinc-500">Bạn cần tạo hoặc kích hoạt ít nhất một phòng trước khi xếp lịch.</p><button type="button" onClick={() => navigate(`/admin/rooms/create?${new URLSearchParams({ cinemaId: selectedCinemaId, returnTo: location.pathname }).toString()}`)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">Tạo phòng cho rạp này <ChevronRight className="h-4 w-4" /></button></div> : (
                 <div className="grid gap-3 md:grid-cols-2">
                   {auditoriums.map(room => {
                     const selected = selectedAuditoriumIds.includes(room.publicId);
@@ -365,15 +365,16 @@ export default function AdminAutoScheduleCreatePage() {
                   <button type="button" onClick={retryMovies} className="mt-3 rounded-lg border border-rose-400/40 px-3 py-2 text-xs font-bold">Thử tải lại</button>
                 </div>
               ) : isLoadingMovies ? <p className="py-12 text-center text-sm text-zinc-500">Đang kiểm tra phim có thể chiếu…</p> : visibleMovies.length === 0 ? (
-                <p className="py-12 text-center text-sm text-zinc-500">
-                  {movieSearch.trim()
+                <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-zinc-500">
+                  <p>{movieSearch.trim()
                     ? `Không tìm thấy phim khớp từ khóa “${movieSearch.trim()}”.`
                     : selectedOnly
                       ? 'Chưa có định dạng nào được chọn để hiển thị.'
                       : movieFilter === 'eligible'
                         ? 'Chưa có phim đủ điều kiện trong khoảng ngày đã chọn.'
-                        : 'Không có phim bị loại trong khoảng ngày này.'}
-                </p>
+                        : 'Không có phim bị loại trong khoảng ngày này.'}</p>
+                  {!movieSearch.trim() && !selectedOnly && movieFilter === 'eligible' && <button type="button" onClick={() => navigate('/admin/movies')} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-zinc-700 px-4 text-sm font-black text-zinc-200 hover:bg-zinc-800">Quản lý nội dung phim <ChevronRight className="h-4 w-4" /></button>}
+                </div>
               ) : (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {visibleMovies.map(movie => {
@@ -401,6 +402,7 @@ export default function AdminAutoScheduleCreatePage() {
                           <div className="border-t border-rose-500/20 px-3 py-3 text-xs leading-5 text-rose-300">
                             {movie.reasons?.length > 0 && <p>{movie.reasons.map(getEligibilityReasonLabel).join(' ')}</p>}
                             <p className="mt-1 text-rose-200/75">Chỉ dùng để kiểm tra lý do, không thể chọn định dạng.</p>
+                            <button type="button" onClick={() => navigate(`/admin/movies/${encodeURIComponent(movie.publicId)}?${new URLSearchParams({ returnTo: location.pathname }).toString()}`)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-rose-300/30 px-3 font-black text-rose-100 hover:bg-rose-500/10">Mở phim để sửa <ChevronRight className="h-3.5 w-3.5" /></button>
                           </div>
                         )}
                         {expanded && (

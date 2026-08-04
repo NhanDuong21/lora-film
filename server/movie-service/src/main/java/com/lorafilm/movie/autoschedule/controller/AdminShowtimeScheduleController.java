@@ -1,13 +1,16 @@
 package com.lorafilm.movie.autoschedule.controller;
 
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
+import com.lorafilm.movie.autoschedule.dto.request.CheckAutoSchedulePricingRequest;
 import com.lorafilm.movie.autoschedule.dto.request.CancelShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery;
 import com.lorafilm.movie.autoschedule.dto.request.AutoSchedulePreviewHistoryQuery;
 import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePreviewHistoryItemResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
+import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePricingPreflightResponse;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewHistoryService;
+import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewPricingReadinessService;
 import com.lorafilm.movie.autoschedule.service.ShowtimeSchedulePreviewService;
 import com.lorafilm.movie.common.dto.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,19 +34,22 @@ public class AdminShowtimeScheduleController {
     private final com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService;
     private final com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider;
     private final com.lorafilm.movie.autoschedule.service.AutoScheduleEligibilityService eligibilityService;
+    private final AutoSchedulePreviewPricingReadinessService pricingReadinessService;
 
     public AdminShowtimeScheduleController(ShowtimeSchedulePreviewService service,
                                            AutoSchedulePreviewHistoryService historyService,
                                            com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService generationService,
                                            com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService applyService,
                                            com.lorafilm.movie.common.security.CurrentUserProvider currentUserProvider,
-                                           com.lorafilm.movie.autoschedule.service.AutoScheduleEligibilityService eligibilityService) {
+                                           com.lorafilm.movie.autoschedule.service.AutoScheduleEligibilityService eligibilityService,
+                                           AutoSchedulePreviewPricingReadinessService pricingReadinessService) {
         this.service = service;
         this.historyService = historyService;
         this.generationService = generationService;
         this.applyService = applyService;
         this.currentUserProvider = currentUserProvider;
         this.eligibilityService = eligibilityService;
+        this.pricingReadinessService = pricingReadinessService;
     }
 
     @Operation(summary = "Get preview history", description = "Retrieves a filtered page of auto schedule preview summaries without loading preview items.")
@@ -132,6 +138,30 @@ public class AdminShowtimeScheduleController {
     ) {
         ShowtimeSchedulePreviewSummaryResponse response = service.updateSelections(previewPublicId, request);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview selections updated successfully", response));
+    }
+
+    @Operation(
+        summary = "Check pricing readiness",
+        description = "Read-only pricing preflight for the currently selected preview candidates. No showtimes are created."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Pricing readiness checked"),
+        @ApiResponse(responseCode = "400", description = "Invalid request or no selected items"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden"),
+        @ApiResponse(responseCode = "404", description = "Preview not found"),
+        @ApiResponse(responseCode = "409", description = "Expired, stale, or non-applicable preview")
+    })
+    @PostMapping("/{previewPublicId}/pricing-readiness")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<AutoSchedulePricingPreflightResponse>> checkPricingReadiness(
+            @PathVariable String previewPublicId,
+            @Valid @RequestBody CheckAutoSchedulePricingRequest request
+    ) {
+        AutoSchedulePricingPreflightResponse response = pricingReadinessService.check(
+                previewPublicId, request.getExpectedVersion());
+        return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok(
+                "Auto schedule pricing readiness checked successfully", response));
     }
 
     @Operation(summary = "Cancel an un-applied auto schedule preview", description = "Discards a PREVIEWED schedule without creating or changing any showtimes.")

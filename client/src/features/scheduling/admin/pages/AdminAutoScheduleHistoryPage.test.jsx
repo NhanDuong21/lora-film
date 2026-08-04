@@ -81,7 +81,7 @@ describe('AdminAutoScheduleHistoryPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Lịch đang soạn' })).toBeInTheDocument();
     labels.forEach(label => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
-    expect(screen.getByText('Sẵn sàng tạo suất chiếu')).toBeInTheDocument();
+    expect(screen.getByText('Cần kiểm tra giá và lịch')).toBeInTheDocument();
     expect(screen.getByText('Auto schedule generation failed')).toBeInTheDocument();
     expect(screen.getByText('4 suất chiếu đã tạo')).toBeInTheDocument();
     expect(screen.getAllByText('Tiếp tục kiểm tra')).toHaveLength(1);

@@ -338,7 +338,7 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onSchedul
                   </td>
                   <td className="max-w-[250px] px-4 py-4">
                     <StatusBadge status={preview.displayStatus} />
-                    {preview.applicable && <p className="mt-2 text-[10px] font-bold text-emerald-400">Sẵn sàng tạo suất chiếu</p>}
+                    {preview.applicable && <p className="mt-2 text-[10px] font-bold text-blue-300">Cần kiểm tra giá và lịch</p>}
                     {preview.failureReasonSafe && <p className="mt-2 max-w-[220px] whitespace-normal text-[10px] text-red-300">{preview.failureReasonSafe}</p>}
                     <div className="mt-2 text-[10px] text-zinc-500">
                       {preview.displayStatus === 'APPLIED' ? (

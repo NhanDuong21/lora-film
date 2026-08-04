@@ -144,10 +144,13 @@ const AdminAutoSchedulePreviewPage = () => {
     loadingProgress,
     snapshotError,
     pricingPreflight,
+    pricingPreflightError,
+    isCheckingPricing,
     capabilities,
     isApplying,
     handleToggleSelection,
     handleApply,
+    checkPricingReadiness,
     fetchPreview,
   } = useAutoSchedulePreview(id, { triggerToast, onSuccess: handleSuccess });
   const existingSchedule = useExistingShowtimeSummary({
@@ -363,6 +366,32 @@ const AdminAutoSchedulePreviewPage = () => {
     || item.applyStatus === 'CONFLICT'
     || item.applyStatus === 'FAILED'
   )).length, [selectedCandidates]);
+  const pricingReady = Boolean(pricingPreflight?.complete);
+  const pricingNeedsAttention = Boolean(pricingPreflight && !pricingPreflight.complete);
+  const pricingHasAmbiguity = Boolean(pricingPreflight?.reasonGroups?.some(
+    group => group.reasonCode === 'PRICING_AMBIGUOUS',
+  ));
+  const pricingActionLabel = pricingHasAmbiguity
+    ? 'Sửa bảng giá bị trùng'
+    : 'Thiết lập bảng giá cho rạp này';
+  const pricingRepairPath = useMemo(() => {
+    if (!preview?.cinemaPublicId) return '/admin/pricing';
+    const params = new URLSearchParams({
+      cinema: preview.cinemaPublicId,
+      effectiveDate: preview.scheduleFrom || '',
+      effectiveFrom: preview.scheduleFrom || '',
+      effectiveTo: preview.scheduleTo || '',
+      returnTo: location.pathname,
+    });
+    return `/admin/pricing?${params.toString()}`;
+  }, [location.pathname, preview?.cinemaPublicId, preview?.scheduleFrom, preview?.scheduleTo]);
+  const readinessToneClass = capabilities.effectiveStatus === 'PREVIEWED'
+    ? pricingNeedsAttention
+      ? 'border-red-500/30 bg-red-500/10 text-red-200'
+      : pricingReady
+        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+        : 'border-blue-500/30 bg-blue-500/10 text-blue-200'
+    : (LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED);
   const viewCounts = useMemo(() => ({
     [CANDIDATE_VIEWS.RECOMMENDED]: candidateMetrics.selectedRecommendations,
     [CANDIDATE_VIEWS.UNSELECTED_VALID]: candidateMetrics.validUnselected,
@@ -515,15 +544,12 @@ const AdminAutoSchedulePreviewPage = () => {
             </>
           )}
           <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản lịch" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
-          {capabilities.isEditable && (
-            <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply} className="flex items-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 text-xs font-black text-zinc-950 disabled:opacity-50"><Save className="h-4 w-4" />Tạo {selectedItemIds.size} suất chiếu</button>
-          )}
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-[1700px] space-y-6 p-5 md:p-8">
-        <section className={`rounded-xl border p-4 ${LIFECYCLE_TONE_CLASSES[capabilities.effectiveStatus] || LIFECYCLE_TONE_CLASSES.CANCELLED}`} aria-live="polite">
-          <div className="flex gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0"><h2 className="font-bold">{getPreviewStatusPresentation(capabilities.effectiveStatus).label}</h2><p className="mt-1 text-sm opacity-90">{capabilities.lifecycleMessage}</p><details className="mt-2 text-xs opacity-80"><summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary><div className="mt-2 space-y-1 break-all font-mono"><p>status: {capabilities.effectiveStatus || preview.status}</p><p>previewPublicId: {preview.previewPublicId || id}</p><p>expiresAt: {preview.expiresAt || '—'}</p><button type="button" onClick={copyPreviewId} className="inline-flex items-center gap-1 rounded border border-current/30 px-2 py-1 font-sans font-bold"><Copy className="h-3 w-3" />Sao chép UUID</button></div></details></div></div>
+        <section className={`rounded-xl border p-4 ${readinessToneClass}`} aria-live="polite">
+          <div className="flex gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0"><h2 className="font-bold">{capabilities.effectiveStatus === 'PREVIEWED' ? (pricingNeedsAttention ? 'Chưa thể tạo suất chiếu' : pricingReady ? 'Sẵn sàng tạo suất chiếu' : 'Đang kiểm tra điều kiện tạo suất') : getPreviewStatusPresentation(capabilities.effectiveStatus).label}</h2><p className="mt-1 text-sm opacity-90">{capabilities.effectiveStatus === 'PREVIEWED' ? (pricingNeedsAttention ? 'Lịch không bị trùng, nhưng bảng giá chưa đủ. Hãy xử lý mục Giá vé bên dưới.' : pricingReady ? 'Lịch và bảng giá đã sẵn sàng. Bạn có thể tạo các suất chiếu ở trạng thái đang soạn.' : 'Hệ thống đang kiểm tra bảng giá cho toàn bộ suất đã chọn.') : capabilities.lifecycleMessage}</p><details className="mt-2 text-xs opacity-80"><summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary><div className="mt-2 space-y-1 break-all font-mono"><p>status: {capabilities.effectiveStatus || preview.status}</p><p>previewPublicId: {preview.previewPublicId || id}</p><p>expiresAt: {preview.expiresAt || '—'}</p><button type="button" onClick={copyPreviewId} className="inline-flex items-center gap-1 rounded border border-current/30 px-2 py-1 font-sans font-bold"><Copy className="h-3 w-3" />Sao chép UUID</button></div></details></div></div>
         </section>
 
         {(isRefreshing || isSnapshotUpdating) && (
@@ -533,27 +559,53 @@ const AdminAutoSchedulePreviewPage = () => {
           </section>
         )}
         {snapshotError && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert"><strong>Không thể cập nhật lịch mới nhất.</strong> {snapshotError.message}</section>}
+        {isCheckingPricing && capabilities.isEditable && (
+          <section className="flex items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-blue-100" role="status">
+            <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin" aria-hidden="true" />
+            <div><h2 className="font-black">Đang kiểm tra bảng giá</h2><p className="mt-1 text-sm text-blue-200/80">Hệ thống đang kiểm tra từng phòng, loại ghế và ngày chiếu đã chọn.</p></div>
+          </section>
+        )}
         {pricingPreflight && (
           <section className={`rounded-xl border p-4 ${pricingPreflight.complete ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-red-500/30 bg-red-500/10 text-red-100'}`} role={pricingPreflight.complete ? 'status' : 'alert'}>
             <h2 className="font-black">
-              Kiểm tra giá: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} suất đề xuất đã đủ giá
+              {pricingPreflight.complete
+                ? `Giá vé đã sẵn sàng cho ${pricingPreflight.totalCandidateCount} suất`
+                : `Chưa thể tạo ${pricingPreflight.totalCandidateCount} suất chiếu`}
             </h2>
+            {!pricingPreflight.complete && <p className="mt-1 text-sm">Chỉ {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} suất đã đủ giá. Không suất nào sẽ được tạo cho đến khi bạn sửa xong.</p>}
             {pricingPreflight.reasonGroups?.map(group => {
               const displayMessage = group.displayMessage
                 || 'Không xác định — xem chi tiết kỹ thuật';
               return (
                 <div key={group.reasonCode} className="mt-3 rounded-lg border border-current/20 p-3 text-sm">
                   <p className="font-bold">{group.count} suất · {displayMessage}</p>
-                  {group.affectedDates?.length > 0 && <p className="mt-1">Ngày: {group.affectedDates.join(', ')}</p>}
+                  {group.affectedDates?.length > 0 && <p className="mt-1">Ngày: {group.affectedDates.map(formatServiceDateKey).join(', ')}</p>}
                   {group.auditoriums?.length > 0 && <p className="mt-1">Phòng: {group.auditoriums.map(room => room.name).join(', ')}</p>}
                   {group.seatTypes?.length > 0 && <p className="mt-1">Loại ghế: {group.seatTypes.map(seat => seat.name).join(', ')}</p>}
                   <details className="mt-2 text-xs opacity-70"><summary className="cursor-pointer">Chi tiết kỹ thuật</summary><p className="mt-1 font-mono">{group.reasonCode}</p></details>
                 </div>
               );
             })}
+            {!pricingPreflight.complete && (
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link to={pricingRepairPath} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-red-200 px-4 text-sm font-black text-red-950 hover:bg-white">
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" /> {pricingActionLabel}
+                </Link>
+                <button type="button" onClick={() => checkPricingReadiness({ force: true })} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-200/30 px-4 text-sm font-bold text-red-100 hover:bg-red-500/10">
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" /> Kiểm tra lại giá
+                </button>
+              </div>
+            )}
           </section>
         )}
-        {timezoneResolution.usedFallback && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert">Cấu hình giờ của rạp đang bị lỗi; thời gian tạm hiển thị theo giờ chuẩn hệ thống.</section>}
+        {pricingPreflightError && capabilities.isEditable && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100" role="alert">
+            <h2 className="font-black">Chưa kiểm tra được bảng giá</h2>
+            <p className="mt-1 text-sm">{pricingPreflightError}</p>
+            <button type="button" onClick={() => checkPricingReadiness({ force: true })} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-300/30 px-4 text-sm font-bold text-amber-100 hover:bg-amber-500/10"><RefreshCw className="h-4 w-4" />Thử kiểm tra lại</button>
+          </section>
+        )}
+        {timezoneResolution.usedFallback && <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300" role="alert"><p>Cấu hình giờ của rạp đang bị lỗi; thời gian tạm hiển thị theo giờ chuẩn hệ thống.</p><Link to={`/admin/cinemas/${encodeURIComponent(preview.cinemaPublicId)}`} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-400/30 px-4 text-sm font-black hover:bg-amber-500/10"><ExternalLink className="h-4 w-4" />Sửa cấu hình rạp</Link></section>}
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Tóm tắt lịch đề xuất">
           {[
@@ -561,7 +613,7 @@ const AdminAutoSchedulePreviewPage = () => {
             ['Phim có suất đề xuất', `${overallMovieDistributionSummary.representedMovieCount}/${allMovieDistribution.length}`],
             ['Phòng được sử dụng', selectedRoomCount],
             ['Suất cần kiểm tra', candidateMetrics.issueCandidates],
-            ['Tổng suất hệ thống đã xét', preview.totalCandidateCount ?? candidateMetrics.totalGenerated],
+            ['Tình trạng giá', isCheckingPricing ? 'Đang kiểm tra' : pricingReady ? 'Đã đủ' : pricingNeedsAttention ? 'Cần xử lý' : 'Chưa kiểm tra'],
           ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
         </section>
 
@@ -854,10 +906,17 @@ const AdminAutoSchedulePreviewPage = () => {
         {capabilities.isEditable && (
           <section className="sticky bottom-4 z-30 flex flex-col gap-3 rounded-2xl border border-brand-orange/30 bg-zinc-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur md:flex-row md:items-center md:justify-between" aria-label="Tiến độ duyệt lịch">
             <div>
-              <p className="text-sm font-black text-white">Đã chọn {selectedItemIds.size} suất · {candidateMetrics.issueCandidates} suất cần kiểm tra</p>
-              <p className="mt-1 text-xs text-zinc-500">Kiểm tra ngoại lệ trên timeline trước khi tạo lịch vận hành.</p>
+              <p className="text-sm font-black text-white">Đã chọn {selectedItemIds.size} suất · Lịch {candidateMetrics.issueCandidates > 0 ? `còn ${candidateMetrics.issueCandidates} lỗi` : 'không bị trùng'}</p>
+              <p className={`mt-1 text-xs ${pricingNeedsAttention ? 'font-bold text-red-300' : pricingReady ? 'font-bold text-emerald-300' : 'text-zinc-500'}`}>{pricingNeedsAttention ? 'Bảng giá chưa sẵn sàng — cần xử lý trước khi tạo suất.' : pricingReady ? 'Bảng giá đã đủ — có thể tạo suất chiếu.' : 'Đang kiểm tra bảng giá cho các suất đã chọn.'}</p>
             </div>
-            <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 text-sm font-black text-zinc-950 disabled:opacity-50"><Save className="h-4 w-4" />Xác nhận lịch và tiếp tục</button>
+            {pricingNeedsAttention ? (
+              <Link to={pricingRepairPath} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-200 px-5 text-sm font-black text-red-950 hover:bg-white"><ExternalLink className="h-4 w-4" />{pricingActionLabel}</Link>
+            ) : (
+              <button type="button" onClick={() => setShowApplyModal(true)} disabled={!capabilities.canApply || !pricingReady || isCheckingPricing} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 text-sm font-black text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40">
+                {isCheckingPricing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isCheckingPricing ? 'Đang kiểm tra giá…' : `Tạo ${selectedItemIds.size} suất chiếu`}
+              </button>
+            )}
           </section>
         )}
       </main>
@@ -1001,7 +1060,7 @@ const AdminAutoSchedulePreviewPage = () => {
               </div>
             )}
             <div className="mt-5 space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-              <p>Hệ thống sẽ kiểm tra giá cho toàn bộ suất đã chọn trước khi tạo.</p>
+              <p><strong>Giá vé đã được kiểm tra.</strong> Hệ thống sẽ kiểm tra lần cuối khi bạn xác nhận để tránh dữ liệu vừa thay đổi.</p>
               <p>Nếu có suất thiếu giá hoặc bị trùng lịch, không suất nào được tạo để tránh lịch dở dang.</p>
               <p>Các suất mới chỉ ở trạng thái “Đang soạn”; khách chưa thể đặt vé cho đến khi bạn mở bán.</p>
               <details>
@@ -1017,13 +1076,14 @@ const AdminAutoSchedulePreviewPage = () => {
                     {group.count} suất · {group.displayMessage || 'Chưa xác định — xem thông tin kỹ thuật'}
                   </p>
                 ))}
+                <Link to={pricingRepairPath} onClick={() => setShowApplyModal(false)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg bg-red-200 px-3 font-black text-red-950 hover:bg-white"><ExternalLink className="h-3.5 w-3.5" />{pricingActionLabel}</Link>
               </div>
             )}
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" disabled={isApplying} onClick={() => setShowApplyModal(false)} className="rounded-xl px-4 py-2 text-zinc-400 disabled:opacity-50">Hủy</button>
               <button
                 type="button"
-                disabled={!capabilities.canApply || isApplying || (pricingPreflight && !pricingPreflight.complete)}
+                disabled={!capabilities.canApply || isApplying || !pricingReady}
                 onClick={() => handleApply()}
                 className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2 font-black text-zinc-950 disabled:opacity-50"
               >

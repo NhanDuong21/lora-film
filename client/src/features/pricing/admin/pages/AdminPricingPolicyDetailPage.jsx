@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Copy, Edit, Power, PowerOff, RefreshCw } from 'lucide-react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import adminPricingService from '../services/adminPricingService';
 import {
   getConflictPresentation,
@@ -29,7 +29,10 @@ const POLICY_STATUS_LABELS = {
 export default function AdminPricingPolicyDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { triggerToast, triggerConfirm, triggerPrompt } = useOutletContext() || {};
+  const requestedReturnTo = searchParams.get('returnTo') || '';
+  const returnTo = requestedReturnTo.startsWith('/admin/') ? requestedReturnTo : '';
   const [policy, setPolicy] = useState(null);
   const [usage, setUsage] = useState(null);
   const [usagePage, setUsagePage] = useState(0);
@@ -85,7 +88,8 @@ export default function AdminPricingPolicyDetailPage() {
         });
         if (!name?.trim()) return;
         response = await adminPricingService.copyPolicy(id, policy.version, name.trim());
-        navigate(`/admin/pricing/${response.data.publicId}/edit`);
+        const returnQuery = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : '';
+        navigate(`/admin/pricing/${response.data.publicId}/edit${returnQuery}`);
         return;
       }
       setPolicy(response.data);
@@ -112,6 +116,12 @@ export default function AdminPricingPolicyDetailPage() {
 
   return (
     <div className="space-y-6 bg-zinc-950 text-white">
+      {returnTo && (
+        <section className={`flex flex-col gap-3 rounded-2xl border p-4 text-sm sm:flex-row sm:items-center sm:justify-between ${policy.storedStatus === 'ACTIVE' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-blue-500/30 bg-blue-500/10 text-blue-100'}`} role="status">
+          <div><p className="font-black">{policy.storedStatus === 'ACTIVE' ? 'Bảng giá đã sẵn sàng' : 'Còn một bước: kích hoạt bảng giá'}</p><p className="mt-1 opacity-80">{policy.storedStatus === 'ACTIVE' ? 'Quay lại lịch đang kiểm tra; hệ thống sẽ tự kiểm tra giá lại cho toàn bộ suất.' : 'Bảng giá đang soạn chưa được dùng. Hãy kiểm tra rồi bấm “Kích hoạt bảng giá”.'}</p></div>
+          <button type="button" onClick={() => navigate(returnTo)} disabled={policy.storedStatus !== 'ACTIVE'} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-current/30 px-4 font-black disabled:cursor-not-allowed disabled:opacity-40"><ArrowLeft className="h-4 w-4" />Quay lại lịch</button>
+        </section>
+      )}
       <div className="flex flex-col gap-4 border-b border-zinc-800 pb-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => navigate('/admin/pricing')} className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800"><ArrowLeft className="h-5 w-5" /></button>
@@ -127,7 +137,7 @@ export default function AdminPricingPolicyDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={load} className="rounded-xl border border-zinc-700 p-2.5 text-zinc-400"><RefreshCw className="h-4 w-4" /></button>
-          {policy.storedStatus === 'DRAFT' && <button type="button" onClick={() => navigate(`/admin/pricing/${id}/edit`)} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm font-bold"><Edit className="h-4 w-4" /> Sửa</button>}
+          {policy.storedStatus === 'DRAFT' && <button type="button" onClick={() => navigate(`/admin/pricing/${id}/edit${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`)} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm font-bold"><Edit className="h-4 w-4" /> Sửa</button>}
           {policy.storedStatus === 'DRAFT' && <button disabled={busy || policy.conflicts?.length > 0} type="button" onClick={() => act('activate')} className="flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-black text-zinc-950 disabled:opacity-40"><Power className="h-4 w-4" /> Kích hoạt bảng giá</button>}
           {policy.storedStatus === 'ACTIVE' && <button disabled={busy} type="button" onClick={() => act('deactivate')} className="flex items-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-sm font-black text-white"><PowerOff className="h-4 w-4" /> Ngừng dùng</button>}
           <button disabled={busy} type="button" onClick={() => act('copy')} className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm font-bold"><Copy className="h-4 w-4" /> Tạo phiên bản mới</button>

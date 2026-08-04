@@ -19,6 +19,14 @@ const adminAutoScheduleService = {
     return response.data;
   },
 
+  checkPricingReadiness: async (previewPublicId, data) => {
+    const response = await apiClient.post(
+      `/api/admin/showtime-schedules/${previewPublicId}/pricing-readiness`,
+      data,
+    );
+    return response.data;
+  },
+
   applyPreview: async (previewPublicId, data) => {
     const response = await apiClient.post(`/api/admin/showtime-schedules/${previewPublicId}/apply`, data);
     return response.data;

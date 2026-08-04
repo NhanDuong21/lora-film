@@ -66,6 +66,16 @@ const hookValue = ({
   isRefreshing = false,
   isUpdatingSelection = false,
   snapshotError = null,
+  pricingPreflight = {
+    complete: true,
+    totalCandidateCount: selectedIds.size,
+    completeCandidateCount: selectedIds.size,
+    incompleteCandidateCount: 0,
+    ambiguousCandidateCount: 0,
+    reasonGroups: [],
+  },
+  pricingPreflightError = '',
+  isCheckingPricing = false,
 } = {}) => {
   const previewValue = preview(status, {
     totalCandidateCount: items.length,
@@ -92,12 +102,16 @@ const hookValue = ({
       ? { loadedPages: 2, totalPages: 4, loadedItems: 200, totalItems: 361 }
       : { loadedPages: 1, totalPages: 1, loadedItems: items.length, totalItems: items.length },
     snapshotError,
+    pricingPreflight,
+    pricingPreflightError,
+    isCheckingPricing,
     capabilities,
     isApplying: false,
     isUpdatingSelection,
     handleToggleSelection: vi.fn(),
     handleBulkSelection: vi.fn(),
     handleApply: vi.fn(),
+    checkPricingReadiness: vi.fn(),
     fetchPreview: vi.fn(),
   };
 };
@@ -158,6 +172,39 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(
       '/admin/showtime-schedules/create',
     ));
+  });
+
+  it('blocks creation and routes missing pricing to the prefilled pricing workflow', () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      pricingPreflight: {
+        complete: false,
+        totalCandidateCount: 1,
+        completeCandidateCount: 0,
+        incompleteCandidateCount: 1,
+        ambiguousCandidateCount: 0,
+        reasonGroups: [{
+          reasonCode: 'PRICING_MISSING',
+          count: 1,
+          displayMessage: 'Thiếu chính sách giá đang có hiệu lực.',
+          affectedDates: ['2026-07-24'],
+          auditoriums: [{ publicId: 'aud-1', name: 'Phòng 1' }],
+          seatTypes: [{ publicId: 'seat-vip', code: 'VIP', name: 'Ghế VIP' }],
+        }],
+      },
+    }));
+
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: 'Chưa thể tạo suất chiếu' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tạo 1 suất chiếu/i })).not.toBeInTheDocument();
+    const repairLinks = screen.getAllByRole('link', { name: /Thiết lập bảng giá cho rạp này/i });
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('cinema=cinema-1'));
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('effectiveFrom=2026-07-24'));
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('effectiveTo=2026-07-26'));
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('returnTo=%2Fadmin%2Fshowtime-schedules%2Fpreview-1'));
+
+    fireEvent.click(repairLinks[0]);
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/pricing?');
   });
 
   it('blocks replacement without changing any showtime when one batch item is no longer draft', async () => {
@@ -296,7 +343,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Cần kiểm tra/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Xem trên sơ đồ' }));
-    expect(screen.getByRole('status')).toHaveTextContent('bị trùng khoảng sử dụng phòng');
+    expect(screen.getByText(/Suất đang kiểm tra bị trùng khoảng sử dụng phòng/)).toBeInTheDocument();
     expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 2 phương án');
   });
 

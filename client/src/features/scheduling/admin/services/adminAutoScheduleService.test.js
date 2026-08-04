@@ -30,4 +30,15 @@ describe('adminAutoScheduleService.getPreview', () => {
       signal: controller.signal,
     });
   });
+
+  it('checks pricing readiness without applying the preview', async () => {
+    apiClient.post.mockResolvedValue({ data: { success: true } });
+
+    await adminAutoScheduleService.checkPricingReadiness('preview-1', { expectedVersion: 3 });
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/admin/showtime-schedules/preview-1/pricing-readiness',
+      { expectedVersion: 3 },
+    );
+  });
 });
