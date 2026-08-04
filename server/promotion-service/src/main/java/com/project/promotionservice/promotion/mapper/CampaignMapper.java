@@ -69,7 +69,7 @@ public class CampaignMapper {
 
         if (promotions != null) {
             response.setPromotions(promotions.stream()
-                    .map(promotionMapper::response)
+                    .map(promotion -> promotionMapper.response(promotion, entity))
                     .collect(Collectors.toList()));
         } else {
             response.setPromotions(new ArrayList<>());

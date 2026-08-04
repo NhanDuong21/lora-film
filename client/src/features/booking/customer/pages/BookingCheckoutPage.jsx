@@ -108,24 +108,14 @@ const promotionPreviewSelection = (
   ...overrides,
 });
 
-const isSystemPromotion = (promotion) =>
-  promotion?.promotionType === "AUTO" ||
-  promotion?.source === "SYSTEM_AUTO";
-
 const walletPromotionId = (promotion) =>
   promotion?.walletPublicId ||
   promotion?.selectionPublicId ||
   (promotion?.source === "CUSTOMER_WALLET" ? promotion?.publicId : null) ||
   "";
 
-const systemPromotionId = (promotion) =>
-  isSystemPromotion(promotion)
-    ? promotion?.promotionPublicId || promotion?.publicId || ""
-    : "";
-
 const promotionSelectionId = (promotion) =>
   walletPromotionId(promotion) ||
-  systemPromotionId(promotion) ||
   promotion?.publicId ||
   promotion?.voucherPublicId ||
   promotion?.id ||
@@ -136,9 +126,8 @@ const promotionRequestSelection = (promotion) => ({
   selectedUserPromotionPublicIds: walletPromotionId(promotion)
     ? [walletPromotionId(promotion)]
     : [],
-  selectedPromotionPublicIds: systemPromotionId(promotion)
-    ? [systemPromotionId(promotion)]
-    : [],
+  // AUTO promotions are selected by the Promotion Engine, never by customers.
+  selectedPromotionPublicIds: [],
 });
 
 const secondsUntil = (expiresAt) => {
@@ -392,8 +381,7 @@ export default function BookingCheckoutPage() {
     setPromotionLoading(true);
     setPromotionError("");
     try {
-      const [walletResult, publicResult, systemResult] =
-        await Promise.allSettled([
+      const [walletResult, publicResult] = await Promise.allSettled([
           customerPromotionService.getMyVouchers({
             page: 0,
             size: 100,
@@ -405,14 +393,9 @@ export default function BookingCheckoutPage() {
             size: 100,
             sort: "priority,asc",
           }),
-          customerPromotionService.getSystemPromotions({
-            page: 0,
-            size: 100,
-            sort: "priority,asc",
-          }),
         ]);
       if (
-        [walletResult, publicResult, systemResult].every(
+        [walletResult, publicResult].every(
           (result) => result.status === "rejected",
         )
       ) {
@@ -426,10 +409,6 @@ export default function BookingCheckoutPage() {
         publicResult.status === "fulfilled"
           ? (publicResult.value?.data ?? publicResult.value)
           : null;
-      const systemPayload =
-        systemResult.status === "fulfilled"
-          ? (systemResult.value?.data ?? systemResult.value)
-          : null;
       const walletItems = Array.isArray(walletPayload)
         ? walletPayload
         : walletPayload?.content || [];
@@ -439,9 +418,6 @@ export default function BookingCheckoutPage() {
       const publicItems = Array.isArray(publicPayload)
         ? publicPayload
         : publicPayload?.content || [];
-      const systemItems = Array.isArray(systemPayload)
-        ? systemPayload
-        : systemPayload?.content || [];
       const ownedPromotionIds = new Set(
         walletItems.map((item) => item.promotionPublicId).filter(Boolean),
       );
@@ -451,11 +427,10 @@ export default function BookingCheckoutPage() {
           (item) =>
             !ownedPromotionIds.has(item.promotionPublicId || item.publicId),
         ),
-        ...systemItems,
       ];
       setPromotionWallet(inventory);
       if (
-        [walletResult, publicResult, systemResult].some(
+        [walletResult, publicResult].some(
           (result) => result.status === "rejected",
         )
       ) {
@@ -894,7 +869,11 @@ export default function BookingCheckoutPage() {
           [item?.userPromotionPublicId, item?.promotionPublicId]
             .filter(Boolean)
             .some((id) =>
-              [walletPromotionId(promotion), systemPromotionId(promotion)]
+              [
+                walletPromotionId(promotion),
+                promotion?.promotionPublicId,
+                promotion?.publicId,
+              ]
                 .filter(Boolean)
                 .map(String)
                 .includes(String(id)),
@@ -1076,7 +1055,7 @@ export default function BookingCheckoutPage() {
             ? getOrCreateScoreRedemptionKey(bookingId, selectedScorePoints)
             : null,
         selectedUserPromotionPublicIds: selectedWalletPromotionIds,
-        selectedPromotionPublicIds: selectedSystemPromotionIds,
+        selectedPromotionPublicIds: [],
         couponCode: appliedCouponCode || null,
         paymentMethod: selectedPaymentMethod,
       });
@@ -1268,10 +1247,8 @@ export default function BookingCheckoutPage() {
   const promotionDiscountTotal =
     Number(booking.promotionDiscount || 0) +
     Number(promotionPreview?.discountAmount ?? booking.voucherDiscount ?? 0);
-  const {
-    selectedUserPromotionPublicIds: selectedWalletPromotionIds,
-    selectedPromotionPublicIds: selectedSystemPromotionIds,
-  } = promotionRequestSelection(selectedPromotion);
+  const { selectedUserPromotionPublicIds: selectedWalletPromotionIds } =
+    promotionRequestSelection(selectedPromotion);
   const selectedPromotionId = promotionSelectionId(selectedPromotion);
   const refreshPromotionPreviewForPaymentMethod = async (nextPaymentMethod) => {
     if (booking?.amountLockedAt) {
@@ -1282,7 +1259,7 @@ export default function BookingCheckoutPage() {
         bookingId,
         promotionPreviewSelection(promotionWallet, nextPaymentMethod, {
           selectedUserPromotionPublicIds: selectedWalletPromotionIds,
-          selectedPromotionPublicIds: selectedSystemPromotionIds,
+          selectedPromotionPublicIds: [],
           couponCode: appliedCouponCode || null,
         }),
       );

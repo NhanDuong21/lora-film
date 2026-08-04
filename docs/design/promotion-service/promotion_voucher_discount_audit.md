@@ -796,15 +796,15 @@ Promotion module không chỉ có lỗi UI nhỏ; có một số lỗi ở mức
 | Frontend | `npm test -- --run` | 391 test, 0 failure/error |
 | Frontend build | `npm run build` | Thành công |
 
-Các regression test trọng yếu bao phủ provider mismatch, verification fail-closed, global campaign capacity, quota độc lập của promotion clone, best-price protection, manual + AUTO stacking, exclusive campaign, chọn một AUTO tốt nhất, từ chối nhiều manual voucher, voucher lớn hơn đơn trả final amount 0đ, minimum order tường minh, ẩn promotion đã dùng khỏi chooser, free-checkout provider rule, confirmed reversal/adjustment ledger, Flyway/JPA validation, authoritative Booking promotion context, lifecycle event redelivery/order-only, trạng thái reconciliation và reservation ID mismatch.
+Các regression test trọng yếu bao phủ provider mismatch, verification fail-closed, global campaign capacity, quota độc lập của promotion clone, giữ lựa chọn voucher thủ công, manual + AUTO stacking, exclusive campaign, chọn một AUTO tốt nhất, từ chối nhiều manual voucher, voucher lớn hơn đơn trả final amount 0đ, minimum order tường minh, ẩn promotion đã dùng khỏi chooser, free-checkout provider rule, confirmed reversal/adjustment ledger, Flyway/JPA validation, authoritative Booking promotion context, lifecycle event redelivery/order-only, trạng thái reconciliation và reservation ID mismatch.
 
 ## 9.7. Single-select voucher và UX checkout
 
-- `BookingCheckoutPage` lưu đúng một promotion đã chọn và chỉ gửi tối đa một ID trong `selectedUserPromotionPublicIds` hoặc `selectedPromotionPublicIds` khi preview/finalize.
+- `BookingCheckoutPage` lưu đúng một voucher khách chọn và chỉ gửi tối đa một `selectedUserPromotionPublicIds` hoặc một `couponCode` khi preview/finalize. `selectedPromotionPublicIds` luôn rỗng vì AUTO do Promotion Engine quyết định.
 - Chọn thành công đóng modal; mở lại để đổi voucher, hoặc dùng nút xóa tại khối tóm tắt để bỏ lựa chọn hiện tại. Coupon và voucher loại trừ lẫn nhau.
 - Khối ưu đãi vẫn dùng container bo góc, item co giãn, text/code tự xuống dòng và hàng nhập coupon dùng grid `minmax(0,1fr)` để không tràn sidebar.
 - Form tạo/sửa campaign và promotion hiển thị riêng quyền cộng dồn. Backend lưu đúng `stackable` do admin chọn; mặc định vẫn là `false`.
-- Booking DTO, Promotion DTO và Reservation DTO tiếp tục từ chối hơn một lựa chọn thủ công. Runtime luôn so sánh AUTO, chọn mức giảm tốt nhất, và chỉ trả hai applied items khi một manual benefit tương thích với một AUTO benefit.
-- Nếu lựa chọn thủ công thua AUTO, checkout bỏ lựa chọn đó, giữ AUTO và thông báo voucher/coupon chưa bị sử dụng. Nếu cộng dồn, checkout liệt kê từng benefit và tổng giảm authoritative từ Engine.
+- Booking DTO, Promotion DTO và Reservation DTO tiếp tục từ chối hơn một lựa chọn thủ công. Khi khách không chọn voucher/coupon, runtime chọn một AUTO tốt nhất. Khi đã chọn, voucher/coupon đó được giữ lại và chỉ cộng thêm tối đa một AUTO tương thích.
+- Stacking yêu cầu cả hai promotion và cả hai campaign đều bật `stackable`; nếu khác campaign thì không bên nào được `exclusiveCampaign`. Nếu không đủ điều kiện, checkout chỉ áp dụng voucher/coupon khách đã chọn. Nếu cộng dồn, checkout liệt kê từng benefit và tổng giảm authoritative từ Engine.
 - Không còn trần giảm mặc định 50%. Voucher cố định 15.000đ trên đơn 10.000đ giảm thực tế 10.000đ và final amount bằng 0đ; chỉ `minimumOrderAmount` được cấu hình tường minh mới khóa voucher theo giá trị đơn. Checkout vẫn chỉ lưu lựa chọn khi voucher thực sự xuất hiện trong `appliedPromotions`.
 - Modal chỉ hiển thị promotion đang eligible hoặc đang hoạt động nhưng chưa thỏa điều kiện đơn/phim/rạp/tài khoản. Wallet `USED`/hết lượt và evaluation terminal như `USAGE_LIMIT_REACHED`, hết ngân sách, hết hiệu lực hoặc cấu hình lỗi đều bị loại khỏi danh sách và khỏi số đếm tab.

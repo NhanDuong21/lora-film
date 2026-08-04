@@ -43,6 +43,7 @@ import {
   promotionModelFor,
   voucherDiscountSummary,
 } from "../../shared/promotionPresentation";
+import { promotionStackingState } from "./promotionStackingState";
 
 const emptyPage = {
   content: [],
@@ -1059,6 +1060,42 @@ const effectivePromotionStatus = (promotion, campaign) => {
     : promotion.status;
 };
 
+function PromotionStackingStatus({ promotion, campaign }) {
+  const state = promotionStackingState(promotion, campaign);
+  const effectiveLabel = state.effective
+    ? "Cho phép"
+    : state.blockedReason === "CAMPAIGN_STACKING_DISABLED"
+      ? "Bị campaign chặn"
+      : state.blockedReason === "CAMPAIGN_NOT_AVAILABLE"
+        ? "Chưa xác định"
+        : "Không cho phép";
+
+  return (
+    <div className="space-y-1 text-[10px] leading-4">
+      <p className="text-zinc-400">
+        Cấu hình promotion:{" "}
+        <span className={state.configured ? "text-emerald-300" : "text-zinc-500"}>
+          {state.configured ? "Cho phép" : "Không cho phép"}
+        </span>
+      </p>
+      <p className="text-zinc-400">
+        Hiệu lực thực tế:{" "}
+        <span
+          className={
+            state.effective
+              ? "text-emerald-300"
+              : state.blockedReason === "CAMPAIGN_STACKING_DISABLED"
+                ? "text-amber-300"
+                : "text-zinc-500"
+          }
+        >
+          {effectiveLabel}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 function PromotionTable({
   rows,
   campaigns,
@@ -1074,13 +1111,14 @@ function PromotionTable({
     campaigns.map((item) => [item.value, item.item || { name: item.label }]),
   );
   return (
-    <table className="w-full min-w-[1120px] text-left text-sm">
+    <table className="w-full min-w-[1280px] text-left text-sm">
       <thead className="bg-zinc-950 text-[10px] font-bold uppercase text-zinc-500">
         <tr>
           {[
             "Ưu đãi",
             "Chiến dịch & phạm vi",
             "Trạng thái",
+            "Cộng dồn",
             "Hiệu lực",
             "Hạn mức",
             "Thao tác",
@@ -1148,6 +1186,12 @@ function PromotionTable({
                 <br />
                 Ưu tiên {row.priority ?? 0}
               </p>
+            </td>
+            <td className="px-4 py-4">
+              <PromotionStackingStatus
+                promotion={row}
+                campaign={campaignDetails.get(row.campaignPublicId)}
+              />
             </td>
             <td className="px-4 py-4 text-xs leading-5 text-zinc-400">
               <span className="text-zinc-600">Từ</span>{" "}
@@ -1491,9 +1535,10 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
           </DetailItem>
           <DetailItem label="Ưu tiên">{promotion.priority ?? 0}</DetailItem>
           <DetailItem label="Cộng dồn">
-            {promotion.stackable
-              ? "Cho phép khi chiến dịch và ưu đãi đi kèm cũng cho phép"
-              : "Không cho phép"}
+            <PromotionStackingStatus
+              promotion={promotion}
+              campaign={campaign}
+            />
           </DetailItem>
           <DetailItem label="Hiệu lực">
             <span>Từ {dateTime(promotion.validFrom)}</span>
@@ -1699,14 +1744,21 @@ function Field({ label, children, wide = false, required = false, hint = "" }) {
   );
 }
 
-function Toggle({ checked, onChange, label }) {
+function Toggle({ checked, onChange, label, disabled = false }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-300">
+    <label
+      className={`flex items-center gap-2 text-xs font-bold ${
+        disabled
+          ? "cursor-not-allowed text-zinc-600"
+          : "cursor-pointer text-zinc-300"
+      }`}
+    >
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-orange-500"
+        className="h-4 w-4 accent-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
       />
       {label}
     </label>
@@ -2338,6 +2390,9 @@ function PromotionModal({
   const currentCampaign = campaigns.find(
     (item) => item.value === form.campaignPublicId,
   )?.item;
+  const stackingBlockedByCampaign =
+    Boolean(currentCampaign) && !currentCampaign.stackable;
+  const stackingToggleDisabled = !currentCampaign || stackingBlockedByCampaign;
   const hasEditableCampaign = campaigns.some(isEditableCampaignOption);
   const steps = ["Thông tin", "Quyền lợi", "Phạm vi", "Hạn mức"];
   const chooseCampaign = (campaignPublicId) => {
@@ -2833,9 +2888,19 @@ function PromotionModal({
                   checked={form.stackable}
                   onChange={(value) => update("stackable", value)}
                   label="Cho phép cộng dồn với 1 ưu đãi AUTO"
+                  disabled={stackingToggleDisabled}
                 />
               </div>
-              {form.stackable && (
+              {stackingBlockedByCampaign && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-amber-500/25 bg-amber-500/[0.08] px-3 py-2 text-[11px] font-bold leading-5 text-amber-200 md:col-span-2"
+                >
+                  Campaign hiện không cho phép cộng dồn. Hãy bật stacking ở
+                  campaign trước.
+                </p>
+              )}
+              {form.stackable && !stackingBlockedByCampaign && (
                 <p className="text-[10px] leading-4 text-amber-300 md:col-span-2">
                   Chỉ cộng dồn khi cả hai ưu đãi và cả hai chiến dịch đều cho
                   phép. Chiến dịch độc quyền không được ghép với chiến dịch

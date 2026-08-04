@@ -96,9 +96,9 @@ public class PromotionEngineService {
             addCandidate(candidates, warnings, addedPromotions,
                     promotion, null, request, original, now, true);
         }
-        // AUTO promotions always remain in the comparison set. A customer-selected
-        // voucher/coupon must never replace a larger automatic discount merely
-        // because it was selected manually.
+        // AUTO promotions are system-controlled candidates. When a customer selects
+        // a voucher/coupon, that manual choice is authoritative and AUTO can only be
+        // added when the stacking policies of both benefits allow it.
         for (Promotion promotion : promotionRepository.findRuntimeCandidates(
                 PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
             addCandidate(candidates, warnings, addedPromotions,
@@ -358,11 +358,6 @@ public class PromotionEngineService {
 
     private List<Candidate> selectBest(
             List<Candidate> candidates, BigDecimal originalAmount) {
-        Selection best = Selection.empty();
-        for (Candidate candidate : candidates) {
-            best = better(best, selectionOf(List.of(candidate), originalAmount));
-        }
-
         List<Candidate> automaticCandidates = candidates.stream()
                 .filter(candidate -> candidate.promotion().getPromotionType()
                         == PromotionType.AUTO)
@@ -372,16 +367,26 @@ public class PromotionEngineService {
                         != PromotionType.AUTO)
                 .findFirst()
                 .orElse(null);
-        if (manualCandidate != null) {
+
+        if (manualCandidate == null) {
+            Selection bestAutomatic = Selection.empty();
             for (Candidate automaticCandidate : automaticCandidates) {
-                if (canStack(manualCandidate, automaticCandidate)) {
-                    best = better(best, selectionOf(
-                            List.of(automaticCandidate, manualCandidate),
-                            originalAmount));
-                }
+                bestAutomatic = better(bestAutomatic, selectionOf(
+                        List.of(automaticCandidate), originalAmount));
+            }
+            return bestAutomatic.candidates();
+        }
+
+        Selection bestWithManual = selectionOf(
+                List.of(manualCandidate), originalAmount);
+        for (Candidate automaticCandidate : automaticCandidates) {
+            if (canStack(manualCandidate, automaticCandidate)) {
+                bestWithManual = better(bestWithManual, selectionOf(
+                        List.of(automaticCandidate, manualCandidate),
+                        originalAmount));
             }
         }
-        return best.candidates();
+        return bestWithManual.candidates();
     }
 
     private boolean canStack(Candidate manual, Candidate automatic) {

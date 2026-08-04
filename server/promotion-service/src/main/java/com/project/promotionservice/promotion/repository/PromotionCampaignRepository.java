@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.List;
+import java.util.Collection;
 import java.math.BigDecimal;
 
 @Repository
@@ -19,6 +20,8 @@ public interface PromotionCampaignRepository extends JpaRepository<PromotionCamp
     Optional<PromotionCampaign> findByPublicId(String publicId);
 
     Optional<PromotionCampaign> findByPublicIdAndDeletedAtIsNull(String publicId);
+    List<PromotionCampaign> findByPublicIdInAndDeletedAtIsNull(
+            Collection<String> publicIds);
     Optional<PromotionCampaign> findByCode(String code);
     Optional<PromotionCampaign> findBySlug(String slug);
     boolean existsByCodeAndDeletedAtIsNull(String code);

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getCinemaBySlug,
@@ -110,14 +110,12 @@ describe("PromotionChooser", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows system vouchers in a separate selectable tab", () => {
+  it("does not expose AUTO promotions as customer-selectable vouchers", () => {
     const onSelect = vi.fn();
-    const onClose = vi.fn();
     render(
       <PromotionChooser
         {...defaultProps}
         onSelect={onSelect}
-        onClose={onClose}
         backendAppliedIds={["system-voucher"]}
         vouchers={[
           voucher({ publicId: "wallet-voucher", name: "Voucher ví" }),
@@ -151,16 +149,13 @@ describe("PromotionChooser", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /voucher hệ thống/i }));
-
-    expect(screen.getByText("Voucher hệ thống 50K")).toBeInTheDocument();
-    expect(screen.queryByText("Voucher ví")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /chọn cố định/i }));
-
-    expect(onSelect).toHaveBeenCalledWith(
-      expect.objectContaining({ publicId: "system-voucher" }),
-    );
-    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText("Voucher ví")).toBeInTheDocument();
+    expect(screen.queryByText("Voucher hệ thống 50K")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /voucher hệ thống/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/AUTO được hệ thống áp dụng riêng/i)).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("dims condition-mismatched vouchers and explains the mismatch", () => {
@@ -435,7 +430,7 @@ describe("PromotionChooser", () => {
     expect(screen.queryByText("Voucher het luot")).not.toBeInTheDocument();
   });
 
-  it("hides terminal promotions but keeps eligible and condition-mismatched options", () => {
+  it("hides AUTO and terminal promotions but keeps condition-mismatched vouchers", () => {
     render(
       <PromotionChooser
         {...defaultProps}
@@ -500,9 +495,7 @@ describe("PromotionChooser", () => {
     expect(screen.getByText("Voucher chua du don")).toBeInTheDocument();
     expect(screen.getByText("Voucher dung duoc")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /voucher hệ thống/i }));
-
     expect(screen.queryByText("Voucher he thong da dung")).not.toBeInTheDocument();
-    expect(screen.getByText("Voucher he thong dung duoc")).toBeInTheDocument();
+    expect(screen.queryByText("Voucher he thong dung duoc")).not.toBeInTheDocument();
   });
 });
