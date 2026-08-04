@@ -214,7 +214,7 @@ function HistoryFilters({ history }) {
   );
 }
 
-function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate }) {
+function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onScheduleAction, onCreate }) {
   const [copiedPreviewId, setCopiedPreviewId] = useState('');
   const {
     previews,
@@ -349,7 +349,7 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
                     </div>
                   </td>
                   <td className="px-4 py-4 text-xs text-zinc-300">
-                    <p><strong className="text-zinc-100">{preview.totalCandidateCount}</strong> giờ chiếu đã xét</p>
+                    <p><strong className="text-zinc-100">{preview.totalCandidateCount}</strong> phương án đã xét</p>
                     <p className="mt-1 text-[10px] text-zinc-500"><span className="text-emerald-400">{preview.validCandidateCount} dùng được</span> · <span className="text-red-400">{preview.rejectedCandidateCount} cần loại</span></p>
                     <p className="mt-1 text-[10px]"><span className="font-bold text-amber-400">{preview.selectedCandidateCount}</span> đã chọn</p>
                     <p className="mt-1 text-[10px] text-zinc-500">{validUnselected} suất dùng được chưa chọn</p>
@@ -359,14 +359,32 @@ function HistoryTable({ history, onOpenDetail, onViewCreatedShowtimes, onCreate 
                   </td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex flex-col items-end gap-2">
-                      {preview.displayStatus === 'APPLIED' && (
+                      {preview.displayStatus === 'PREVIEWED' && (
                         <button
                           type="button"
-                          onClick={() => onViewCreatedShowtimes(preview.previewPublicId)}
-                          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-violet-300 hover:bg-violet-500/20"
+                          onClick={() => onScheduleAction(preview.previewPublicId, 'DISCARD')}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-300 hover:bg-amber-500/20"
                         >
-                            <ExternalLink className="h-3.5 w-3.5" /> Xem suất chiếu đã tạo
+                          <RotateCcw className="h-3.5 w-3.5" /> Bỏ &amp; tạo lại
                         </button>
+                      )}
+                      {preview.displayStatus === 'APPLIED' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onScheduleAction(preview.previewPublicId, 'REPLACE')}
+                            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-300 hover:bg-amber-500/20"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" /> Thay lịch
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onViewCreatedShowtimes(preview.previewPublicId)}
+                            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-violet-300 hover:bg-violet-500/20"
+                          >
+                              <ExternalLink className="h-3.5 w-3.5" /> Xem suất chiếu đã tạo
+                          </button>
+                        </>
                       )}
                       <button
                         type="button"
@@ -460,6 +478,10 @@ export default function AdminAutoScheduleHistoryPage() {
         onCreate={() => navigate('/admin/showtime-schedules/create')}
         onOpenDetail={previewPublicId => navigate(`/admin/showtime-schedules/${previewPublicId}`)}
         onViewCreatedShowtimes={previewPublicId => navigate(`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(previewPublicId)}`)}
+        onScheduleAction={(previewPublicId, autoScheduleAction) => navigate(
+          `/admin/showtime-schedules/${previewPublicId}`,
+          { state: { autoScheduleAction } },
+        )}
       />
     </div>
   );

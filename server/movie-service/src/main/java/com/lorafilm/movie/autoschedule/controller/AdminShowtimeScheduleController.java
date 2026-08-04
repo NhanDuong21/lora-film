@@ -1,6 +1,7 @@
 package com.lorafilm.movie.autoschedule.controller;
 
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
+import com.lorafilm.movie.autoschedule.dto.request.CancelShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery;
 import com.lorafilm.movie.autoschedule.dto.request.AutoSchedulePreviewHistoryQuery;
 import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePreviewHistoryItemResponse;
@@ -131,6 +132,25 @@ public class AdminShowtimeScheduleController {
     ) {
         ShowtimeSchedulePreviewSummaryResponse response = service.updateSelections(previewPublicId, request);
         return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview selections updated successfully", response));
+    }
+
+    @Operation(summary = "Cancel an un-applied auto schedule preview", description = "Discards a PREVIEWED schedule without creating or changing any showtimes.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Preview cancelled"),
+        @ApiResponse(responseCode = "400", description = "Invalid request"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden"),
+        @ApiResponse(responseCode = "404", description = "Preview not found"),
+        @ApiResponse(responseCode = "409", description = "Expired, stale version, or non-cancellable state")
+    })
+    @PostMapping("/{previewPublicId}/cancel")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<com.lorafilm.movie.common.api.ApiResponse<ShowtimeSchedulePreviewSummaryResponse>> cancelPreview(
+            @PathVariable String previewPublicId,
+            @Valid @RequestBody CancelShowtimeSchedulePreviewRequest request
+    ) {
+        ShowtimeSchedulePreviewSummaryResponse response = service.cancelPreview(previewPublicId, request);
+        return ResponseEntity.ok(com.lorafilm.movie.common.api.ApiResponse.ok("Auto schedule preview cancelled successfully", response));
     }
 
     @Operation(summary = "Apply an auto schedule preview", description = "Atomically revalidate selected preview candidates and create real showtimes using ALL_OR_NOTHING semantics.")

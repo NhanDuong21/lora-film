@@ -7,6 +7,7 @@ import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
+import com.lorafilm.movie.autoschedule.dto.request.CancelShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper;
@@ -132,6 +133,43 @@ class ShowtimeSchedulePreviewServiceTest {
     }
 
     // --- PUT SELECTION TESTS ---
+
+    @Test
+    void cancelPreview_shouldCancelOnlyCurrentPreviewVersion() throws Exception {
+        ReflectionTestUtils.setField(preview, "version", 2L);
+        CancelShowtimeSchedulePreviewRequest request = new CancelShowtimeSchedulePreviewRequest();
+        request.setExpectedVersion(2L);
+        ShowtimeSchedulePreviewSummaryResponse mapped = new ShowtimeSchedulePreviewSummaryResponse();
+        mapped.setStatus(SchedulePreviewStatus.CANCELLED);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(99L);
+        when(previewRepository.findByPublicIdForUpdate("preview-1")).thenReturn(Optional.of(preview));
+        when(previewRepository.saveAndFlush(preview)).thenReturn(preview);
+        when(mapper.toSummaryResponse(preview)).thenReturn(mapped);
+
+        ShowtimeSchedulePreviewSummaryResponse response = service.cancelPreview("preview-1", request);
+
+        assertThat(response.getStatus()).isEqualTo(SchedulePreviewStatus.CANCELLED);
+        assertThat(preview.getStatus()).isEqualTo(SchedulePreviewStatus.CANCELLED);
+        verify(previewRepository).saveAndFlush(preview);
+    }
+
+    @Test
+    void cancelPreview_shouldRejectAppliedPreviewWithoutChangingIt() throws Exception {
+        ReflectionTestUtils.setField(preview, "version", 2L);
+        preview.setStatus(SchedulePreviewStatus.APPLIED);
+        CancelShowtimeSchedulePreviewRequest request = new CancelShowtimeSchedulePreviewRequest();
+        request.setExpectedVersion(2L);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(99L);
+        when(previewRepository.findByPublicIdForUpdate("preview-1")).thenReturn(Optional.of(preview));
+
+        assertThatThrownBy(() -> service.cancelPreview("preview-1", request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTO_SCHEDULE_PREVIEW_CANNOT_BE_CANCELLED);
+        verify(previewRepository, never()).saveAndFlush(any());
+    }
 
     @Test
     void updateSelections_shouldValidateThenBulkUpdateAndIncrementVersion_whenHappyPath() throws Exception {

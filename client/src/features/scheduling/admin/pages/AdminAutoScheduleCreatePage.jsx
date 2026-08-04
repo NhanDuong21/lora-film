@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
@@ -70,6 +70,7 @@ const Step = ({ number, title, active, complete, disabled, onClick }) => (
 export default function AdminAutoScheduleCreatePage() {
   const { triggerToast } = useOutletContext() || {};
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeStep, setActiveStep] = useState(1);
   const [movieSearch, setMovieSearch] = useState('');
   const [movieFilter, setMovieFilter] = useState('eligible');
@@ -78,7 +79,12 @@ export default function AdminAutoScheduleCreatePage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const handleSuccess = previewPublicId => navigate(`/admin/showtime-schedules/${previewPublicId}`);
-  const form = useAutoScheduleForm({ triggerToast, onSuccess: handleSuccess });
+  const recreateContext = location.state?.autoScheduleRecreate || null;
+  const form = useAutoScheduleForm({
+    triggerToast,
+    onSuccess: handleSuccess,
+    initialDraft: recreateContext?.draft,
+  });
   const {
     cinemas,
     movies,
@@ -189,6 +195,15 @@ export default function AdminAutoScheduleCreatePage() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Chọn vài thông tin cơ bản, hệ thống sẽ tự xếp giờ và cho bạn kiểm tra trước khi mở bán.</p>
         </div>
       </header>
+
+      {recreateContext && (
+        <section className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100" role="status">
+          <p className="font-black">Đang tạo lại từ lịch {recreateContext.sourceShortCode}</p>
+          <p className="mt-1 text-blue-200/80">
+            Rạp, khoảng ngày, phòng và phim cũ đã được điền lại. Hãy kiểm tra các lựa chọn trước khi tạo bản đề xuất mới.
+          </p>
+        </section>
+      )}
 
       <nav className="flex flex-col gap-2 lg:flex-row" aria-label="Các bước tạo lịch">
         {steps.map(step => (

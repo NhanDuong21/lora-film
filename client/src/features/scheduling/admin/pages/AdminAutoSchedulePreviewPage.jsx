@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   AlertCircle,
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
   Loader2,
   MapPin,
   RefreshCw,
+  RotateCcw,
   Save,
   X,
 } from 'lucide-react';
@@ -20,6 +21,8 @@ import AutoScheduleCandidateDrawer from '@/features/scheduling/admin/components/
 import AutoScheduleTimeline from '@/features/scheduling/admin/components/AutoScheduleTimeline';
 import useAutoSchedulePreview from '@/features/scheduling/admin/hooks/useAutoSchedulePreview';
 import useExistingShowtimeSummary from '@/features/scheduling/admin/hooks/useExistingShowtimeSummary';
+import adminAutoScheduleService from '@/features/scheduling/admin/services/adminAutoScheduleService';
+import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
 import {
   CANDIDATE_PAGE_SIZES,
   CANDIDATE_VIEWS,
@@ -43,6 +46,7 @@ import {
   SELECTION_BLOCK_TYPES,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewSelection';
 import { getDailyOperationalSummaries } from '@/features/scheduling/admin/utils/autoScheduleOperationalInsights';
+import { buildAutoScheduleRecreateDraft } from '@/features/scheduling/admin/utils/autoScheduleRecreateDraft';
 import {
   buildCandidateViewModels,
   getDefaultActiveServiceDate,
@@ -119,6 +123,7 @@ const AdminAutoSchedulePreviewPage = () => {
   const { id } = useParams();
   const { triggerToast } = useOutletContext() || {};
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSuccess = result => {
     navigate(`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(id)}`, {
@@ -132,6 +137,7 @@ const AdminAutoSchedulePreviewPage = () => {
     preview,
     items,
     selectedItemIds,
+    expectedVersion,
     isLoading,
     isRefreshing,
     isSnapshotUpdating,
@@ -166,6 +172,103 @@ const AdminAutoSchedulePreviewPage = () => {
   const [zoomMode, setZoomMode] = useState(TIMELINE_ZOOM_MODES.FIT);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [distributionDate, setDistributionDate] = useState('');
+  const [scheduleActionDialog, setScheduleActionDialog] = useState(null);
+  const [isScheduleActionLoading, setIsScheduleActionLoading] = useState(false);
+  const requestedScheduleActionRef = useRef(location.state?.autoScheduleAction || '');
+
+  const prepareReplacement = useCallback(async () => {
+    setScheduleActionDialog({ type: 'REPLACE', phase: 'checking', summary: null });
+    setIsScheduleActionLoading(true);
+    try {
+      const response = await adminShowtimeService.previewBatchStatus(id, 'CANCELLED');
+      if (!response?.success || !response.data) {
+        throw new Error('Không nhận được kết quả kiểm tra an toàn.');
+      }
+      setScheduleActionDialog({
+        type: 'REPLACE',
+        phase: response.data.actionAllowed ? 'confirm' : 'blocked',
+        summary: response.data,
+      });
+    } catch (error) {
+      setScheduleActionDialog({
+        type: 'REPLACE',
+        phase: 'error',
+        summary: null,
+        message: error?.response?.data?.message || error?.message || 'Không thể kiểm tra điều kiện thay lịch.',
+      });
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
+  }, [id]);
+
+  const openScheduleAction = useCallback((type) => {
+    if (type === 'DISCARD') {
+      setScheduleActionDialog({ type: 'DISCARD', phase: 'confirm', summary: null });
+      return;
+    }
+    prepareReplacement();
+  }, [prepareReplacement]);
+
+  useEffect(() => {
+    if (!preview || !requestedScheduleActionRef.current) return;
+    const requestedAction = requestedScheduleActionRef.current;
+    requestedScheduleActionRef.current = '';
+    if (requestedAction === 'DISCARD' && preview.status === 'PREVIEWED') {
+      openScheduleAction('DISCARD');
+    }
+    if (requestedAction === 'REPLACE' && preview.status === 'APPLIED') {
+      openScheduleAction('REPLACE');
+    }
+  }, [openScheduleAction, preview]);
+
+  const confirmScheduleAction = async () => {
+    if (!scheduleActionDialog || scheduleActionDialog.phase !== 'confirm') return;
+    const draft = buildAutoScheduleRecreateDraft(preview, items);
+    setIsScheduleActionLoading(true);
+    try {
+      if (scheduleActionDialog.type === 'DISCARD') {
+        const response = await adminAutoScheduleService.cancelPreview(id, { expectedVersion });
+        if (!response?.success) throw new Error('Không thể bỏ bản đề xuất.');
+      } else {
+        const response = await adminShowtimeService.transitionBatchStatus(id, {
+          status: 'CANCELLED',
+          reason: 'Thay thế bằng một lịch tự động mới',
+        });
+        if (!response?.success || !response.data?.actionAllowed) {
+          setScheduleActionDialog({
+            type: 'REPLACE',
+            phase: 'blocked',
+            summary: response?.data || scheduleActionDialog.summary,
+          });
+          return;
+        }
+      }
+
+      triggerToast?.(
+        scheduleActionDialog.type === 'DISCARD'
+          ? 'Đã bỏ bản đề xuất cũ. Bạn có thể điều chỉnh và tạo lại.'
+          : 'Đã hủy toàn bộ suất nháp cũ. Bạn có thể tạo lịch thay thế.',
+        'success',
+      );
+      navigate('/admin/showtime-schedules/create', {
+        state: {
+          autoScheduleRecreate: {
+            draft,
+            sourcePreviewId: preview.previewPublicId || id,
+            sourceShortCode: getPreviewShortCode(preview.previewPublicId || id),
+          },
+        },
+      });
+    } catch (error) {
+      setScheduleActionDialog(previous => ({
+        ...previous,
+        phase: 'error',
+        message: error?.response?.data?.message || error?.message || 'Không thể chuẩn bị tạo lại lịch.',
+      }));
+    } finally {
+      setIsScheduleActionLoading(false);
+    }
+  };
 
   const lifecycleKey = `${preview?.previewPublicId || id}:${capabilities?.effectiveStatus || 'UNKNOWN'}`;
   const previewKey = preview?.previewPublicId || id;
@@ -384,13 +487,34 @@ const AdminAutoSchedulePreviewPage = () => {
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
-          {capabilities.effectiveStatus === 'APPLIED' && (
-            <Link
-              to={`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(preview.previewPublicId || id)}`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-black uppercase text-violet-200 hover:bg-violet-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+          {capabilities.effectiveStatus === 'PREVIEWED' && (
+            <button
+              type="button"
+              onClick={() => openScheduleAction('DISCARD')}
+              disabled={isSnapshotUpdating || isScheduleActionLoading}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-black uppercase text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
             >
-              <ExternalLink className="h-4 w-4" aria-hidden="true" /> Xem các suất chiếu đã tạo
-            </Link>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" /> Bỏ bản đề xuất &amp; tạo lại
+            </button>
+          )}
+          {capabilities.effectiveStatus === 'APPLIED' && (
+            <>
+              <button
+                type="button"
+                onClick={() => openScheduleAction('REPLACE')}
+                disabled={isScheduleActionLoading}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-black uppercase text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+              >
+                {isScheduleActionLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCcw className="h-4 w-4" aria-hidden="true" />}
+                Thay lịch
+              </button>
+              <Link
+                to={`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(preview.previewPublicId || id)}`}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-black uppercase text-violet-200 hover:bg-violet-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" /> Xem các suất chiếu đã tạo
+              </Link>
+            </>
           )}
           <button type="button" onClick={fetchPreview} disabled={!capabilities.canRefresh} aria-label="Làm mới bản lịch" className="rounded-xl border border-zinc-800 p-2.5 text-zinc-300 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSnapshotUpdating ? 'animate-spin' : ''}`} /></button>
           {capabilities.isEditable && (
@@ -752,6 +876,106 @@ const AdminAutoSchedulePreviewPage = () => {
         onClose={closeDrawer}
         returnFocusElement={drawerReturnFocusElement}
       />
+
+      {scheduleActionDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="schedule-action-title" className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              {scheduleActionDialog.phase === 'checking'
+                ? <Loader2 className="mt-0.5 h-6 w-6 shrink-0 animate-spin text-blue-300" aria-hidden="true" />
+                : <RotateCcw className={`mt-0.5 h-6 w-6 shrink-0 ${scheduleActionDialog.phase === 'blocked' || scheduleActionDialog.phase === 'error' ? 'text-red-300' : 'text-amber-300'}`} aria-hidden="true" />}
+              <div>
+                <h2 id="schedule-action-title" className="text-lg font-black">
+                  {scheduleActionDialog.phase === 'error'
+                    ? 'Không thể chuẩn bị tạo lại lịch'
+                    : scheduleActionDialog.type === 'DISCARD'
+                      ? 'Bỏ bản đề xuất và tạo lại?'
+                      : scheduleActionDialog.phase === 'checking'
+                        ? 'Đang kiểm tra lịch cũ…'
+                        : scheduleActionDialog.phase === 'blocked'
+                          ? 'Không thể thay lịch an toàn'
+                          : 'Hủy suất nháp cũ và tạo lại?'}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  {scheduleActionDialog.type === 'DISCARD' && scheduleActionDialog.phase === 'confirm'
+                    && 'Bản này chưa tạo suất chiếu thật nên không chiếm phòng và không gây chồng lịch. Hệ thống chỉ đánh dấu bỏ bản đề xuất rồi điền lại cấu hình cũ.'}
+                  {scheduleActionDialog.type === 'REPLACE' && scheduleActionDialog.phase === 'checking'
+                    && 'Hệ thống đang kiểm tra toàn bộ suất trong bản lịch. Chưa có suất nào bị thay đổi.'}
+                  {scheduleActionDialog.type === 'REPLACE' && scheduleActionDialog.phase === 'confirm'
+                    && `Cả ${scheduleActionDialog.summary?.totalCount || 0} suất vẫn đang soạn và chưa từng mở bán. Hệ thống sẽ hủy tất cả cùng lúc rồi điền lại cấu hình cũ.`}
+                  {scheduleActionDialog.type === 'REPLACE' && scheduleActionDialog.phase === 'blocked'
+                    && 'Có ít nhất một suất không còn ở trạng thái đang soạn hoặc không thuộc lịch tự động. Để tránh ảnh hưởng vé và vận hành, hệ thống không hủy bất kỳ suất nào.'}
+                  {scheduleActionDialog.phase === 'error' && scheduleActionDialog.message}
+                </p>
+              </div>
+            </div>
+
+            {scheduleActionDialog.type === 'REPLACE' && scheduleActionDialog.summary && (
+              <dl className="mt-5 grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm">
+                <dt className="text-zinc-500">Tổng suất trong lịch</dt>
+                <dd className="text-right font-bold text-zinc-100">{scheduleActionDialog.summary.totalCount || 0}</dd>
+                <dt className="text-zinc-500">Suất vẫn đang soạn</dt>
+                <dd className="text-right font-bold text-emerald-300">{scheduleActionDialog.summary.eligibleCount || 0}</dd>
+                <dt className="text-zinc-500">Đang chặn thay lịch</dt>
+                <dd className="text-right font-bold text-red-300">{scheduleActionDialog.summary.skippedCount || 0}</dd>
+              </dl>
+            )}
+
+            {scheduleActionDialog.phase === 'blocked' && scheduleActionDialog.summary?.reasonGroups?.length > 0 && (
+              <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-100">
+                {scheduleActionDialog.summary.reasonGroups.map(group => (
+                  <p key={group.reasonCode} className="mt-1 first:mt-0">
+                    <strong>{group.count} suất:</strong>{' '}
+                    {group.reasonCode === 'SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT'
+                      ? 'đã mở bán, đã đóng/hủy, hoặc không thuộc bản lịch tự động này.'
+                      : (group.reason || 'không đủ điều kiện thay lịch.')}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {scheduleActionDialog.phase === 'confirm' && (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
+                Lưu ý: sau khi xác nhận, lịch cũ sẽ được đánh dấu đã hủy ngay. Nếu bạn rời trang tạo mới, lịch cũ vẫn giữ trạng thái đã hủy.
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                disabled={isScheduleActionLoading}
+                onClick={() => setScheduleActionDialog(null)}
+                className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                {scheduleActionDialog.phase === 'confirm'
+                  ? (scheduleActionDialog.type === 'DISCARD' ? 'Giữ bản hiện tại' : 'Giữ lịch cũ')
+                  : 'Đóng'}
+              </button>
+              {scheduleActionDialog.phase === 'error' && scheduleActionDialog.type === 'REPLACE' && (
+                <button type="button" onClick={prepareReplacement} className="rounded-xl border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-200 hover:bg-zinc-800">
+                  Thử kiểm tra lại
+                </button>
+              )}
+              {scheduleActionDialog.phase === 'blocked' && (
+                <Link to={`/admin/showtimes?source=AUTO&batchId=${encodeURIComponent(preview.previewPublicId || id)}`} className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm font-bold text-violet-200 hover:bg-violet-500/20">
+                  Xem suất đang chặn
+                </Link>
+              )}
+              {scheduleActionDialog.phase === 'confirm' && (
+                <button
+                  type="button"
+                  disabled={isScheduleActionLoading}
+                  onClick={confirmScheduleAction}
+                  className="inline-flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2 text-sm font-black text-zinc-950 disabled:opacity-50"
+                >
+                  {isScheduleActionLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {scheduleActionDialog.type === 'DISCARD' ? 'Bỏ bản cũ và tạo lại' : 'Hủy toàn bộ suất cũ và tạo lại'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showApplyModal && capabilities.isEditable && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">

@@ -118,6 +118,7 @@ public enum ErrorCode {
     SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
     SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
     SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE("Batch cancellation safety cannot be verified", 409),
+    SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT("Only an all-draft automatic schedule can be replaced", 409),
     
     // --- Auto Scheduling ---
     AUTO_SCHEDULE_PREVIEW_NOT_FOUND("Auto schedule preview not found", 404),
@@ -128,6 +129,7 @@ public enum ErrorCode {
     AUTO_SCHEDULE_PREVIEW_ALREADY_APPLIED("Auto schedule preview has already been applied", 409),
     AUTO_SCHEDULE_PREVIEW_APPLY_IN_PROGRESS("Auto schedule preview is currently being applied", 409),
     AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT("Auto schedule preview was modified by another request", 409),
+    AUTO_SCHEDULE_PREVIEW_CANNOT_BE_CANCELLED("Auto schedule preview cannot be cancelled in its current state", 409),
     IDEMPOTENCY_KEY_REUSED("Idempotency key was reused with a different request", 409),
     AUTO_SCHEDULE_ITEM_NOT_BELONG_TO_PREVIEW("Preview item does not belong to the preview", 400),
     AUTO_SCHEDULE_REJECTED_ITEM_CANNOT_BE_SELECTED("Rejected preview item cannot be selected", 400),

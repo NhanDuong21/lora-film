@@ -199,6 +199,14 @@ public class ShowtimeSchedulePreview {
         this.status = SchedulePreviewStatus.EXPIRED;
     }
 
+    public void markCancelled() {
+        if (this.status != SchedulePreviewStatus.PREVIEWED
+                && this.status != SchedulePreviewStatus.APPLIED) {
+            throw new IllegalStateException("Preview must be PREVIEWED or APPLIED to mark as CANCELLED");
+        }
+        this.status = SchedulePreviewStatus.CANCELLED;
+    }
+
     public void markFailed(String reason) {
         this.status = SchedulePreviewStatus.FAILED;
         this.failureReason = reason;

@@ -1,11 +1,15 @@
 package com.lorafilm.movie.showtime.service.impl;
 
+import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
+import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
+import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
@@ -39,6 +43,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     private final Clock clock;
     private final ShowtimeRefundOutboxService refundOutboxService;
     private final ShowtimeOpeningPolicy openingPolicy;
+    private final ShowtimeSchedulePreviewRepository schedulePreviewRepository;
 
     public ShowtimeStatusTransitionServiceImpl(ShowtimeRepository showtimeRepository,
                                                ShowtimeStatusHistoryService historyService,
@@ -46,7 +51,8 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
                                                AdminShowtimeMapper adminShowtimeMapper,
                                                Clock clock,
                                                ShowtimeRefundOutboxService refundOutboxService,
-                                               ShowtimeOpeningPolicy openingPolicy) {
+                                               ShowtimeOpeningPolicy openingPolicy,
+                                               ShowtimeSchedulePreviewRepository schedulePreviewRepository) {
         this.showtimeRepository = showtimeRepository;
         this.historyService = historyService;
         this.currentUserProvider = currentUserProvider;
@@ -54,6 +60,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         this.clock = clock;
         this.refundOutboxService = refundOutboxService;
         this.openingPolicy = openingPolicy;
+        this.schedulePreviewRepository = schedulePreviewRepository;
     }
 
     @Override
@@ -92,7 +99,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         Showtime savedShowtime = showtimeRepository.saveAndFlush(showtime);
         historyService.recordTransitionHistory(
                 savedShowtime, currentStatus, newStatus, reason, currentUserId, now);
-        if (newStatus == ShowtimeStatus.CANCELLED) {
+        if (newStatus == ShowtimeStatus.CANCELLED && currentStatus != ShowtimeStatus.DRAFT) {
             refundOutboxService.enqueueCancellation(
                     savedShowtime.getPublicId(), reason);
         }
@@ -164,6 +171,13 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     @Transactional(readOnly = true)
     public BatchStatusActionSummary previewBatchStatus(String batchId, ShowtimeStatus targetStatus) {
         validateBatchRequest(batchId, targetStatus);
+        if (targetStatus == ShowtimeStatus.CANCELLED) {
+            ShowtimeSchedulePreview sourcePreview = schedulePreviewRepository.findByPublicId(batchId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
+            if (sourcePreview.getStatus() != SchedulePreviewStatus.APPLIED) {
+                throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_CANNOT_BE_CANCELLED);
+            }
+        }
         List<Showtime> showtimes =
                 showtimeRepository.findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc(batchId);
         ensureBatchExists(batchId, showtimes);
@@ -185,6 +199,18 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         if (currentUserId == null) {
             throw new BusinessException(ErrorCode.CURRENT_USER_NOT_AVAILABLE, "Current user not available");
         }
+        if (targetStatus == ShowtimeStatus.CANCELLED) {
+            normalizeReason(request.getReason(), targetStatus);
+        }
+
+        ShowtimeSchedulePreview sourcePreview = null;
+        if (targetStatus == ShowtimeStatus.CANCELLED) {
+            sourcePreview = schedulePreviewRepository.findByPublicIdForApply(batchId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
+            if (sourcePreview.getStatus() != SchedulePreviewStatus.APPLIED) {
+                throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_CANNOT_BE_CANCELLED);
+            }
+        }
 
         List<Showtime> showtimes = showtimeRepository.findAllByBatchIdForUpdate(batchId);
         ensureBatchExists(batchId, showtimes);
@@ -202,6 +228,10 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         for (Showtime showtime : classification.eligible()) {
             applyTransition(showtime, targetStatus, request.getReason(), currentUserId, now);
         }
+        if (sourcePreview != null) {
+            sourcePreview.markCancelled();
+            schedulePreviewRepository.saveAndFlush(sourcePreview);
+        }
         summary.setAffectedCount(classification.eligible().size());
         return summary;
     }
@@ -213,15 +243,11 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         if (targetStatus == null) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Target status is required");
         }
-        if (targetStatus == ShowtimeStatus.CANCELLED) {
-            throw new BusinessException(
-                    ErrorCode.SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE,
-                    "Batch cancellation is disabled until booking safety can be verified");
-        }
-        if (targetStatus != ShowtimeStatus.OPEN_FOR_BOOKING) {
+        if (targetStatus != ShowtimeStatus.OPEN_FOR_BOOKING
+                && targetStatus != ShowtimeStatus.CANCELLED) {
             throw new BusinessException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Only OPEN_FOR_BOOKING is supported for batch status actions");
+                    "Only OPEN_FOR_BOOKING and safe draft CANCELLED are supported for batch status actions");
         }
     }
 
@@ -241,6 +267,18 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         Map<String, ReasonAccumulator> reasons = new LinkedHashMap<>();
 
         for (Showtime showtime : showtimes) {
+            if (targetStatus == ShowtimeStatus.CANCELLED
+                    && (showtime.getStatus() != ShowtimeStatus.DRAFT
+                    || showtime.getSource() != ShowtimeSource.AUTO)) {
+                ErrorCode errorCode = ErrorCode.SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT;
+                String code = errorCode.name();
+                String safeReason = errorCode.getMessage();
+                reasons.computeIfAbsent(code, ignored -> new ReasonAccumulator(safeReason))
+                        .add(showtime.getPublicId());
+                blockedShowtimes.add(new BatchStatusBlockedShowtime(
+                        showtime.getPublicId(), code, safeReason));
+                continue;
+            }
             if (showtime.getStatus() == targetStatus) {
                 alreadyTargetCount++;
                 continue;

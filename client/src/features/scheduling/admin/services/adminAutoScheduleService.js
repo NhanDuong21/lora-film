@@ -24,6 +24,11 @@ const adminAutoScheduleService = {
     return response.data;
   },
 
+  cancelPreview: async (previewPublicId, data) => {
+    const response = await apiClient.post(`/api/admin/showtime-schedules/${previewPublicId}/cancel`, data);
+    return response.data;
+  },
+
   getPreviewHistory: async (params) => {
     const response = await apiClient.get('/api/admin/showtime-schedules', { params });
     return response.data;

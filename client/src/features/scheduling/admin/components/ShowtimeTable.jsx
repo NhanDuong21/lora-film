@@ -1,4 +1,4 @@
-import { Calendar, CheckCircle2, ChevronRight, Filter, Play, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronRight, Filter, Play, Plus, RefreshCw, RotateCcw, Sparkles, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import SearchableSelect from '@/components/common/SearchableSelect';
@@ -169,15 +169,15 @@ export default function ShowtimeTable({
                 Kiểm tra để mở bán
               </button>
               <div>
-                <button
-                  type="button"
-                  disabled
-                  title="Chưa thể xác minh an toàn đặt vé"
-                  className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-rose-500/30 px-4 text-sm font-bold text-rose-300 opacity-60"
+                <Link
+                  to={`/admin/showtime-schedules/${encodeURIComponent(batchId)}`}
+                  state={{ autoScheduleAction: 'REPLACE' }}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 text-sm font-bold text-amber-200 hover:bg-amber-500/20"
                 >
-                  Hủy cả bản lịch
-                </button>
-                <span className="mt-1 block text-[10px] font-semibold text-rose-300/80">Chưa thể xác minh an toàn đặt vé</span>
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  Thay lịch
+                </Link>
+                <span className="mt-1 block text-[10px] font-semibold text-amber-200/80">Chỉ hủy khi toàn bộ suất còn đang soạn</span>
               </div>
               <button
                 type="button"

@@ -69,6 +69,32 @@ describe('AdminAutoScheduleCreatePage', () => {
     });
   });
 
+  it('passes the previous schedule draft into the form and explains the recreate context', () => {
+    const draft = {
+      cinemaPublicId: 'cinema-1',
+      scheduleFrom: '2099-08-22',
+      scheduleTo: '2099-08-28',
+      auditoriumPublicIds: ['aud-1'],
+      movieVersionPublicIds: ['version-1'],
+    };
+
+    render(
+      <MemoryRouter initialEntries={[{
+        pathname: '/admin/showtime-schedules/create',
+        state: {
+          autoScheduleRecreate: { draft, sourceShortCode: 'PREVIEW1' },
+        },
+      }]}
+      >
+        <AdminAutoScheduleCreatePage />
+      </MemoryRouter>,
+    );
+
+    expect(useAutoScheduleForm).toHaveBeenCalledWith(expect.objectContaining({ initialDraft: draft }));
+    expect(screen.getByRole('status')).toHaveTextContent('Đang tạo lại từ lịch PREVIEW1');
+    expect(screen.getByRole('status')).toHaveTextContent('đã được điền lại');
+  });
+
   it('keeps an oversized range, explains it inline, and blocks submission', () => {
     useAutoScheduleForm.mockReturnValue({
       ...baseForm(),

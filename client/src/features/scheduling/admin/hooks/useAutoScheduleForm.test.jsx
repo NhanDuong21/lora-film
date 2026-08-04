@@ -65,6 +65,28 @@ describe('useAutoScheduleForm', () => {
     expect(result.current.selectedAuditoriumIds).toEqual([]);
   });
 
+  it('restores an eligible schedule draft for recreation', async () => {
+    const { result } = renderHook(() => useAutoScheduleForm({
+      initialDraft: {
+        cinemaPublicId: 'cinema-1',
+        scheduleFrom: '2099-08-22',
+        scheduleTo: '2099-08-28',
+        slotGranularityMinutes: 30,
+        auditoriumPublicIds: ['auditorium-1'],
+        movieVersionPublicIds: ['version-1'],
+      },
+    }));
+
+    await waitFor(() => expect(result.current.auditoriums).toHaveLength(1));
+    await waitFor(() => expect(result.current.movies).toHaveLength(1));
+    expect(result.current.selectedCinemaId).toBe('cinema-1');
+    expect(result.current.scheduleFrom).toBe('2099-08-22');
+    expect(result.current.scheduleTo).toBe('2099-08-28');
+    expect(result.current.slotGranularityMinutes).toBe(30);
+    expect(result.current.selectedAuditoriumIds).toEqual(['auditorium-1']);
+    expect(result.current.selectedMovieVersionIds).toEqual(['version-1']);
+  });
+
   it('retains ineligible movies and removes stale selected versions after date changes', async () => {
     const { result } = renderHook(() => useAutoScheduleForm({}));
     await waitFor(() => expect(result.current.movies).toHaveLength(1));

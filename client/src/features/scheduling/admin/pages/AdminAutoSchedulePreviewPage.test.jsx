@@ -4,10 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { derivePreviewCapabilities } from '../utils/autoSchedulePreviewLifecycle';
 import useAutoSchedulePreview from '../hooks/useAutoSchedulePreview';
 import useExistingShowtimeSummary from '../hooks/useExistingShowtimeSummary';
+import adminAutoScheduleService from '../services/adminAutoScheduleService';
+import adminShowtimeService from '../services/adminShowtimeService';
 import AdminAutoSchedulePreviewPage from './AdminAutoSchedulePreviewPage';
 
 vi.mock('../hooks/useAutoSchedulePreview');
 vi.mock('../hooks/useExistingShowtimeSummary');
+vi.mock('../services/adminAutoScheduleService', () => ({
+  default: { cancelPreview: vi.fn() },
+}));
+vi.mock('../services/adminShowtimeService', () => ({
+  default: { previewBatchStatus: vi.fn(), transitionBatchStatus: vi.fn() },
+}));
 
 const candidate = (index = 1, overrides = {}) => ({
   itemPublicId: `item-${index}`,
@@ -37,6 +45,7 @@ const preview = (status = 'PREVIEWED', overrides = {}) => ({
   status,
   timezoneSnapshot: 'UTC',
   cinemaName: 'Lora Cinema',
+  cinemaPublicId: 'cinema-1',
   scheduleFrom: '2026-07-24',
   scheduleTo: '2026-07-26',
   generatedAt: '2026-07-23T10:00:00Z',
@@ -118,6 +127,83 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
       error: null,
       retry: vi.fn(),
     });
+    adminAutoScheduleService.cancelPreview.mockResolvedValue({ success: true, data: {} });
+    adminShowtimeService.previewBatchStatus.mockResolvedValue({
+      success: true,
+      data: {
+        totalCount: 1,
+        eligibleCount: 1,
+        skippedCount: 0,
+        actionAllowed: true,
+        reasonGroups: [],
+      },
+    });
+    adminShowtimeService.transitionBatchStatus.mockResolvedValue({
+      success: true,
+      data: { actionAllowed: true, affectedCount: 1 },
+    });
+  });
+
+  it('discards an unapplied preview and opens a prefilled recreate flow', async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ bản đề xuất & tạo lại' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('chưa tạo suất chiếu thật');
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ bản cũ và tạo lại' }));
+
+    await waitFor(() => expect(adminAutoScheduleService.cancelPreview).toHaveBeenCalledWith(
+      'preview-1',
+      { expectedVersion: 3 },
+    ));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(
+      '/admin/showtime-schedules/create',
+    ));
+  });
+
+  it('blocks replacement without changing any showtime when one batch item is no longer draft', async () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({ status: 'APPLIED' }));
+    adminShowtimeService.previewBatchStatus.mockResolvedValue({
+      success: true,
+      data: {
+        totalCount: 2,
+        eligibleCount: 1,
+        skippedCount: 1,
+        actionAllowed: false,
+        reasonGroups: [{
+          reasonCode: 'SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT',
+          count: 1,
+        }],
+      },
+    });
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thay lịch' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('Không thể thay lịch an toàn'));
+    expect(screen.getByRole('dialog')).toHaveTextContent('không hủy bất kỳ suất nào');
+    expect(adminShowtimeService.transitionBatchStatus).not.toHaveBeenCalled();
+  });
+
+  it('atomically cancels an all-draft batch before opening the recreate form', async () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({ status: 'APPLIED' }));
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thay lịch' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Cả 1 suất vẫn đang soạn và chưa từng mở bán',
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy toàn bộ suất cũ và tạo lại' }));
+
+    await waitFor(() => expect(adminShowtimeService.transitionBatchStatus).toHaveBeenCalledWith(
+      'preview-1',
+      {
+        status: 'CANCELLED',
+        reason: 'Thay thế bằng một lịch tự động mới',
+      },
+    ));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(
+      '/admin/showtime-schedules/create',
+    ));
   });
 
   it('defaults to the earliest service date containing a selected recommendation', () => {

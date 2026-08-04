@@ -101,6 +101,21 @@ describe('AdminAutoScheduleHistoryPage', () => {
     expect(screen.getByTestId('location')).not.toHaveTextContent('status=DRAFT');
   });
 
+  it('exposes recreate actions for previewed and applied schedules', () => {
+    const { unmount } = renderPage();
+
+    expect(screen.getAllByText((_, element) => (
+      element.tagName === 'P' && element.textContent === '10 phương án đã xét'
+    ))).toHaveLength(statuses.length);
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ & tạo lại' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/showtime-schedules/preview-1');
+    unmount();
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Thay lịch' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/showtime-schedules/preview-3');
+  });
+
   it('uses five compact information groups without the 1450px table floor', () => {
     renderPage();
 
