@@ -73,6 +73,26 @@ class MovieShowtimeEligibilityPolicyTest {
     }
 
     @Test
+    void draftMovieShowtimeCannotOpenForBookingBeforeApproval() {
+        movie.setStatus(MovieStatus.DRAFT);
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> policy.validateMovieCanOpenForBooking(movie));
+
+        assertEquals(ErrorCode.MOVIE_NOT_AVAILABLE_FOR_SCHEDULING, ex.getErrorCode());
+    }
+
+    @Test
+    void approvedMovieShowtimeCanOpenForBooking() {
+        movie.setStatus(MovieStatus.UPCOMING);
+        assertDoesNotThrow(() -> policy.validateMovieCanOpenForBooking(movie));
+
+        movie.setStatus(MovieStatus.NOW_SHOWING);
+        assertDoesNotThrow(() -> policy.validateMovieCanOpenForBooking(movie));
+    }
+
+    @Test
     void inactiveVersionIsRejectedInHelperAndSchedulingAuthority() {
         version.setStatus(ActiveStatus.INACTIVE);
 

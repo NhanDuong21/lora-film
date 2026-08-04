@@ -359,6 +359,11 @@ export default function AdminAutoScheduleCreatePage() {
                           <MoviePoster src={movie.primaryPoster} title={movie.title} />
                           <span className="min-w-0 flex-1">
                             <span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-bold ${movie.eligible ? 'border-emerald-500/30 text-emerald-300' : 'border-rose-500/30 text-rose-300'}`}>{movie.eligible ? 'Có thể chiếu' : 'Chưa thể chiếu'}</span>
+                            {movie.status === 'DRAFT' && (
+                              <span className="ml-2 inline-flex rounded-md border border-amber-500/30 px-2 py-1 text-[10px] font-bold text-amber-300">
+                                Phim nháp · chỉ lập lịch chuẩn bị
+                              </span>
+                            )}
                             <span className="mt-2 block truncate text-base font-black text-white">{movie.title}</span>
                             <span className="mt-1 block text-xs text-zinc-500">{movie.durationMinutes || '—'} phút · {versions.length} định dạng</span>
                             {selectedCount > 0 && <span className="mt-2 block text-xs font-bold text-brand-orange">{selectedCount} định dạng đã chọn</span>}

@@ -40,6 +40,52 @@ class AutoScheduleEligibilityServiceImplTest {
     private MovieShowtimeEligibilityPolicy eligibilityPolicy;
 
     @Test
+    void draftMovieIsReturnedAsEligibleForSchedulePreparation() {
+        Movie movie = new Movie();
+        movie.setId(8L);
+        movie.setPublicId("draft-tmdb-movie");
+        movie.setTitle("Phim TMDB chờ duyệt");
+        movie.setSlug("phim-tmdb-cho-duyet");
+        movie.setDurationMinutes(110);
+        movie.setReleaseDate(LocalDate.of(2026, 7, 20));
+        movie.setStatus(MovieStatus.DRAFT);
+
+        MovieVersion version = new MovieVersion();
+        version.setPublicId("draft-movie-version");
+        version.setMovie(movie);
+        version.setVersionName("2D Phụ đề Việt");
+        version.setFormat(MovieFormat.TWO_D);
+        version.setAudioLanguage("EN");
+        version.setSubtitleLanguage("VI");
+        version.setStatus(ActiveStatus.ACTIVE);
+
+        LocalDate fromDate = LocalDate.of(2026, 7, 25);
+        LocalDate toDate = LocalDate.of(2026, 7, 31);
+        when(movieRepository.findAll()).thenReturn(List.of(movie));
+        when(movieVersionRepository.findByMovieIdAndDeletedAtIsNull(8L)).thenReturn(List.of(version));
+        when(eligibilityPolicy.evaluateRange(movie, List.of(version), fromDate, toDate)).thenReturn(List.of());
+        when(movieMediaRepository.findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                List.of(8L),
+                MovieMediaType.POSTER,
+                ActiveStatus.ACTIVE)).thenReturn(List.of());
+
+        AutoScheduleEligibilityServiceImpl service = new AutoScheduleEligibilityServiceImpl(
+                movieRepository,
+                movieVersionRepository,
+                movieMediaRepository,
+                eligibilityPolicy);
+
+        List<EligibleMovieResponse> result = service.getEligibleMovies(fromDate, toDate);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getMoviePublicId()).isEqualTo("draft-tmdb-movie");
+        assertThat(result.getFirst().getStatus()).isEqualTo(MovieStatus.DRAFT);
+        assertThat(result.getFirst().isEligible()).isTrue();
+        assertThat(result.getFirst().getVersions()).hasSize(1);
+        verify(eligibilityPolicy).evaluateRange(movie, List.of(version), fromDate, toDate);
+    }
+
+    @Test
     void eligibleMoviesIncludeActivePrimaryPosterFromBatchLookup() {
         Movie movie = new Movie();
         movie.setId(7L);

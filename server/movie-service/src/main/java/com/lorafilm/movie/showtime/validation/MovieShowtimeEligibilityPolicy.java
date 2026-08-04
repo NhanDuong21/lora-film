@@ -62,6 +62,17 @@ public class MovieShowtimeEligibilityPolicy {
         }
     }
 
+    public void validateMovieCanOpenForBooking(Movie movie) {
+        if (movie == null
+                || movie.getDeletedAt() != null
+                || (movie.getStatus() != MovieStatus.UPCOMING
+                    && movie.getStatus() != MovieStatus.NOW_SHOWING)) {
+            throw new BusinessException(
+                    ErrorCode.MOVIE_NOT_AVAILABLE_FOR_SCHEDULING,
+                    "Movie must be UPCOMING or NOW_SHOWING before its showtime can open for booking");
+        }
+    }
+
     public void validateReleaseWindow(Movie movie, Instant startTime, ZoneId cinemaZone) {
         Objects.requireNonNull(movie, "movie");
         validateReleaseWindow(new MovieFacts(

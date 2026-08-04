@@ -8,7 +8,6 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieMedia;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
-import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieVersionResponse;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
@@ -43,7 +42,7 @@ public class AutoScheduleEligibilityServiceImpl implements AutoScheduleEligibili
     @Override
     public List<EligibleMovieResponse> getEligibleMovies(LocalDate fromDate, LocalDate toDate) {
         List<Movie> movies = movieRepository.findAll().stream()
-                .filter(movie -> movie.getDeletedAt() == null && movie.getStatus() != MovieStatus.DRAFT)
+                .filter(movie -> movie.getDeletedAt() == null)
                 .toList();
         Map<Long, MovieMedia> primaryPosters = movies.isEmpty()
                 ? Map.of()

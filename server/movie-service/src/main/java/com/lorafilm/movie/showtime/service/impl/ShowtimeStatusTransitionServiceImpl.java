@@ -17,6 +17,7 @@ import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeRefundOutboxService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
+import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +40,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     private final Clock clock;
     private final ShowtimePricingService showtimePricingService;
     private final ShowtimeRefundOutboxService refundOutboxService;
+    private final MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
 
     public ShowtimeStatusTransitionServiceImpl(ShowtimeRepository showtimeRepository,
                                                ShowtimeStatusHistoryService historyService,
@@ -46,7 +48,8 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
                                                AdminShowtimeMapper adminShowtimeMapper,
                                                Clock clock,
                                                ShowtimePricingService showtimePricingService,
-                                               ShowtimeRefundOutboxService refundOutboxService) {
+                                               ShowtimeRefundOutboxService refundOutboxService,
+                                               MovieShowtimeEligibilityPolicy movieEligibilityPolicy) {
         this.showtimeRepository = showtimeRepository;
         this.historyService = historyService;
         this.currentUserProvider = currentUserProvider;
@@ -54,6 +57,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         this.clock = clock;
         this.showtimePricingService = showtimePricingService;
         this.refundOutboxService = refundOutboxService;
+        this.movieEligibilityPolicy = movieEligibilityPolicy;
     }
 
     @Override
@@ -141,6 +145,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
             if (!showtime.getStartTime().isAfter(now)) {
                 throw new BusinessException(ErrorCode.SHOWTIME_CANNOT_OPEN_AFTER_START, "Cannot open showtime for booking after it has started");
             }
+            movieEligibilityPolicy.validateMovieCanOpenForBooking(showtime.getMovie());
             showtimePricingService.validateCompleteness(showtime);
         }
         

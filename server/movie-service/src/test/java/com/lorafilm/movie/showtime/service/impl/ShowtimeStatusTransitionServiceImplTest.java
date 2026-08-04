@@ -12,6 +12,7 @@ import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeRefundOutboxService;
+import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +49,8 @@ class ShowtimeStatusTransitionServiceImplTest {
     private ShowtimePricingService showtimePricingService;
     @Mock
     private ShowtimeRefundOutboxService refundOutboxService;
+    @Mock
+    private MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
 
     private Clock fixedClock;
 
@@ -59,7 +62,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         transitionService = new ShowtimeStatusTransitionServiceImpl(
                 showtimeRepository, historyService, currentUserProvider,
                 adminShowtimeMapper, fixedClock, showtimePricingService,
-                refundOutboxService);
+                refundOutboxService, movieEligibilityPolicy);
     }
 
     @Test
@@ -83,6 +86,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         assertEquals(ShowtimeStatus.OPEN_FOR_BOOKING, showtime.getStatus());
         assertEquals(Instant.parse("2026-07-10T10:00:00Z"), showtime.getBookingOpenTime());
         verify(showtimePricingService).validateCompleteness(showtime);
+        verify(movieEligibilityPolicy).validateMovieCanOpenForBooking(showtime.getMovie());
         verify(historyService).recordTransitionHistory(eq(showtime), eq(ShowtimeStatus.DRAFT), eq(ShowtimeStatus.OPEN_FOR_BOOKING), isNull(), eq(1L), eq(fixedClock.instant()));
     }
 
