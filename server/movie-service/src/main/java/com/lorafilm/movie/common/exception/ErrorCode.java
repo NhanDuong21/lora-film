@@ -22,6 +22,7 @@ public enum ErrorCode {
     MOVIE_NOT_AVAILABLE_FOR_SCHEDULING("Movie is not available for showtime scheduling", 400),
     MOVIE_VERSION_NOT_ACTIVE("Movie version is not active", 400),
     MOVIE_VERSION_NOT_BELONG_TO_MOVIE("Movie version does not belong to the movie", 400),
+    MOVIE_OPERATIONAL_DATA_IMMUTABLE("Movie data used by future showtimes cannot be changed", 409),
     INVALID_MOVIE_DURATION("Invalid movie duration", 400),
     INVALID_MOVIE_STATUS_TRANSITION("Invalid movie status transition", 400),
     TMDB_IMPORT_INVALID_PAYLOAD("TMDB import payload is invalid", 400),

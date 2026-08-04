@@ -20,6 +20,7 @@ import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieCredit;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
@@ -64,6 +65,8 @@ public class MovieServiceImpl implements MovieService {
     private final AdminMovieProjectionService projectionService;
     private final MovieLifecyclePolicy lifecyclePolicy;
     private final MovieApprovalPolicy approvalPolicy;
+    private final MovieStatusHistoryService statusHistoryService;
+    private final CurrentUserProvider currentUserProvider;
 
     public MovieServiceImpl(MovieRepository movieRepository,
             MovieGenreRepository movieGenreRepository,
@@ -75,7 +78,9 @@ public class MovieServiceImpl implements MovieService {
             MovieReadinessEvaluator readinessEvaluator,
             AdminMovieProjectionService projectionService,
             MovieLifecyclePolicy lifecyclePolicy,
-            MovieApprovalPolicy approvalPolicy) {
+            MovieApprovalPolicy approvalPolicy,
+            MovieStatusHistoryService statusHistoryService,
+            CurrentUserProvider currentUserProvider) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMediaRepository = movieMediaRepository;
@@ -87,6 +92,8 @@ public class MovieServiceImpl implements MovieService {
         this.projectionService = projectionService;
         this.lifecyclePolicy = lifecyclePolicy;
         this.approvalPolicy = approvalPolicy;
+        this.statusHistoryService = statusHistoryService;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Override
@@ -124,7 +131,7 @@ public class MovieServiceImpl implements MovieService {
             String publicId = candidate.getPublicId();
             String title = candidate.getTitle();
             try {
-                Movie freshMovie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId).orElse(null);
+                Movie freshMovie = movieRepository.findByPublicIdForUpdate(publicId).orElse(null);
                 if (freshMovie == null) {
                     results.add(MovieBulkApprovalResult.skipped(
                             publicId,
@@ -160,7 +167,8 @@ public class MovieServiceImpl implements MovieService {
                     continue;
                 }
 
-                MovieDto approved = transitionMovieStatus(freshMovie, decision.targetStatus());
+                MovieDto approved = transitionMovieStatus(
+                        freshMovie, decision.targetStatus(), "Bulk TMDB approval");
                 results.add(MovieBulkApprovalResult.approved(
                         publicId,
                         freshMovie.getTitle(),
@@ -427,13 +435,23 @@ public class MovieServiceImpl implements MovieService {
     @Override
     @Transactional
     public MovieDto updateMovieStatus(String moviePublicId, MovieStatus targetStatus) {
-        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+        return updateMovieStatus(moviePublicId, targetStatus, null);
+    }
+
+    @Override
+    @Transactional
+    public MovieDto updateMovieStatus(String moviePublicId, MovieStatus targetStatus, String reason) {
+        Movie movie = movieRepository.findByPublicIdForUpdate(moviePublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
-        return transitionMovieStatus(movie, targetStatus);
+        return transitionMovieStatus(movie, targetStatus, reason);
     }
 
     private MovieDto transitionMovieStatus(Movie movie, MovieStatus targetStatus) {
+        return transitionMovieStatus(movie, targetStatus, null);
+    }
+
+    private MovieDto transitionMovieStatus(Movie movie, MovieStatus targetStatus, String reason) {
         MovieStatus previousStatus = movie.getStatus();
         lifecyclePolicy.validateTransition(movie, targetStatus);
         if (previousStatus == MovieStatus.DRAFT
@@ -448,6 +466,12 @@ public class MovieServiceImpl implements MovieService {
 
         movie.setStatus(targetStatus);
         Movie savedMovie = movieRepository.save(movie);
+        statusHistoryService.record(
+                savedMovie,
+                previousStatus,
+                targetStatus,
+                reason,
+                currentUserProvider.getCurrentUserId());
         log.info("Movie lifecycle transition applied: publicId={}, from={}, to={}",
                 movie.getPublicId(), previousStatus, targetStatus);
 
@@ -462,7 +486,7 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = BusinessException.class)
     public void validatePublishConditions(Long movieId) {
         Optional<Movie> movie = movieRepository.findById(movieId);
         validatePublishConditions(movie.orElse(null), movieId);

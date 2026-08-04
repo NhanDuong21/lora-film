@@ -128,6 +128,7 @@ class AdminShowtimeScheduleE2ETest {
         movieConstructor.setAccessible(true);
         Object movie = movieConstructor.newInstance();
         ReflectionTestUtils.setField(movie, "id", 9999L);
+        ReflectionTestUtils.setField(movie, "version", 0L);
 
         Constructor<?> movieVersionConstructor = Class.forName("com.lorafilm.movie.movie.domain.entity.MovieVersion").getDeclaredConstructor();
         movieVersionConstructor.setAccessible(true);

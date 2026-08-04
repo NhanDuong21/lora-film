@@ -9,10 +9,9 @@ import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeRefundOutboxService;
-import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
+import com.lorafilm.movie.showtime.validation.ShowtimeOpeningPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,11 +45,9 @@ class ShowtimeStatusTransitionServiceImplTest {
     private AdminShowtimeMapper adminShowtimeMapper;
 
     @Mock
-    private ShowtimePricingService showtimePricingService;
-    @Mock
     private ShowtimeRefundOutboxService refundOutboxService;
     @Mock
-    private MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
+    private ShowtimeOpeningPolicy openingPolicy;
 
     private Clock fixedClock;
 
@@ -61,8 +58,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         fixedClock = Clock.fixed(Instant.parse("2026-07-10T10:00:00Z"), ZoneId.of("UTC"));
         transitionService = new ShowtimeStatusTransitionServiceImpl(
                 showtimeRepository, historyService, currentUserProvider,
-                adminShowtimeMapper, fixedClock, showtimePricingService,
-                refundOutboxService, movieEligibilityPolicy);
+                adminShowtimeMapper, fixedClock, refundOutboxService, openingPolicy);
     }
 
     @Test
@@ -85,8 +81,7 @@ class ShowtimeStatusTransitionServiceImplTest {
 
         assertEquals(ShowtimeStatus.OPEN_FOR_BOOKING, showtime.getStatus());
         assertEquals(Instant.parse("2026-07-10T10:00:00Z"), showtime.getBookingOpenTime());
-        verify(showtimePricingService).validateCompleteness(showtime);
-        verify(movieEligibilityPolicy).validateMovieCanOpenForBooking(showtime.getMovie());
+        verify(openingPolicy).validateCanOpen(showtime, fixedClock.instant());
         verify(historyService).recordTransitionHistory(eq(showtime), eq(ShowtimeStatus.DRAFT), eq(ShowtimeStatus.OPEN_FOR_BOOKING), isNull(), eq(1L), eq(fixedClock.instant()));
     }
 
@@ -99,6 +94,8 @@ class ShowtimeStatusTransitionServiceImplTest {
         showtime.setStartTime(Instant.parse("2026-07-10T09:00:00Z")); // past
 
         when(showtimeRepository.findByPublicIdForUpdate("pub-id")).thenReturn(Optional.of(showtime));
+        doThrow(new BusinessException(ErrorCode.SHOWTIME_CANNOT_OPEN_AFTER_START))
+                .when(openingPolicy).validateCanOpen(showtime, fixedClock.instant());
 
         UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
         request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
@@ -212,7 +209,7 @@ class ShowtimeStatusTransitionServiceImplTest {
                 throw new BusinessException(ErrorCode.SHOWTIME_PRICE_MISSING, "missing");
             }
             return null;
-        }).when(showtimePricingService).validateCompleteness(any(Showtime.class));
+        }).when(openingPolicy).validateCanOpen(any(Showtime.class), eq(fixedClock.instant()));
         when(currentUserProvider.getCurrentUserId()).thenReturn(7L);
 
         var summary = transitionService.previewBatchStatus(
@@ -242,7 +239,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         when(showtimeRepository.findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc("batch-1"))
                 .thenReturn(List.of(firstMissing, secondMissing, invalidStatus));
         doThrow(new BusinessException(ErrorCode.PRICING_INCOMPLETE, "diagnostic details"))
-                .when(showtimePricingService).validateCompleteness(any(Showtime.class));
+                .when(openingPolicy).validateCanOpen(any(Showtime.class), eq(fixedClock.instant()));
 
         var summary = transitionService.previewBatchStatus(
                 "batch-1", ShowtimeStatus.OPEN_FOR_BOOKING);
@@ -272,6 +269,12 @@ class ShowtimeStatusTransitionServiceImplTest {
         Showtime started = showtime("started", ShowtimeStatus.DRAFT, "2026-07-10T09:00:00Z");
         when(showtimeRepository.findAllByBatchIdForUpdate("batch-1"))
                 .thenReturn(List.of(eligible, started));
+        doAnswer(invocation -> {
+            if (invocation.getArgument(0) == started) {
+                throw new BusinessException(ErrorCode.SHOWTIME_CANNOT_OPEN_AFTER_START);
+            }
+            return null;
+        }).when(openingPolicy).validateCanOpen(any(Showtime.class), eq(fixedClock.instant()));
         when(currentUserProvider.getCurrentUserId()).thenReturn(9L);
         UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
         request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);

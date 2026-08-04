@@ -72,6 +72,59 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
     List<Showtime> findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc(String batchId);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+            "movie", "movieVersion", "cinema", "auditorium"})
+    List<Showtime> findByMovieIdAndStatusInAndStartTimeAfterAndDeletedAtIsNullOrderByStartTimeAsc(
+            Long movieId,
+            Collection<com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus> statuses,
+            Instant startTime);
+
+    @org.springframework.data.jpa.repository.Query("""
+            select s.publicId from Showtime s
+            where s.movie.id = :movieId
+              and s.deletedAt is null
+              and s.status <> com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.CANCELLED
+              and s.startTime > :now
+            order by s.startTime asc
+            """)
+    List<String> findFutureOperationalPublicIdsByMovieId(
+            @org.springframework.data.repository.query.Param("movieId") Long movieId,
+            @org.springframework.data.repository.query.Param("now") Instant now);
+
+    @org.springframework.data.jpa.repository.Query("""
+            select case when count(s) > 0 then true else false end from Showtime s
+            where s.movieVersion.id = :movieVersionId
+              and s.deletedAt is null
+              and s.status <> com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.CANCELLED
+              and s.startTime > :now
+            """)
+    boolean existsFutureOperationalByMovieVersionId(
+            @org.springframework.data.repository.query.Param("movieVersionId") Long movieVersionId,
+            @org.springframework.data.repository.query.Param("now") Instant now);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
+    @org.springframework.data.jpa.repository.Query("""
+            select s from Showtime s
+            where s.movie.id in :movieIds
+              and s.deletedAt is null
+              and s.status = com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.OPEN_FOR_BOOKING
+              and s.startTime > :now
+            order by s.startTime asc
+            """)
+    List<Showtime> findCustomerAvailableByMovieIds(
+            @org.springframework.data.repository.query.Param("movieIds") Collection<Long> movieIds,
+            @org.springframework.data.repository.query.Param("now") Instant now);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    List<Showtime> findByStatusAndStartTimeLessThanEqualAndDeletedAtIsNullOrderByIdAsc(
+            com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus status,
+            Instant cutoff);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    List<Showtime> findByStatusAndEndTimeLessThanEqualAndDeletedAtIsNullOrderByIdAsc(
+            com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus status,
+            Instant cutoff);
+
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"movie", "movieVersion", "cinema", "auditorium"})
     Optional<Showtime> findByIdAndDeletedAtIsNull(Long id);
 

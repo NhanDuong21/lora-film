@@ -13,6 +13,7 @@ public interface MovieService {
     PageResponse<MovieDto> getMovies(AdminMovieListQuery query);
     MovieDetailDto getMovieByIdentifier(String identifier);
     MovieDto updateMovieStatus(String moviePublicId, MovieStatus targetStatus);
+    MovieDto updateMovieStatus(String moviePublicId, MovieStatus targetStatus, String reason);
     MovieBulkApprovalResponse bulkApproveTmdbMovies(AdminMovieListQuery filter, int limit);
     TmdbQueueBreakdownResponse getTmdbQueueBreakdown(AdminMovieListQuery filter);
     void validatePublishConditions(Long movieId);

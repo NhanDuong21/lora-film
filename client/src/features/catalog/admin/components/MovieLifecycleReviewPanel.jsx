@@ -22,6 +22,7 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
   const [selectedTransition, setSelectedTransition] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [warningAcknowledged, setWarningAcknowledged] = useState(false);
+  const [transitionReason, setTransitionReason] = useState('');
   const { triggerToast } = useOutletContext() || {};
 
   const handleSuccess = async () => {
@@ -61,11 +62,12 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
     resetError();
     setSelectedTransition(transition);
     setWarningAcknowledged(false);
+    setTransitionReason('');
     setIsDialogOpen(true);
   };
 
   const handleConfirmTransition = async () => {
-    if (selectedTransition) await transitionStatus(selectedTransition.target);
+    if (selectedTransition) await transitionStatus(selectedTransition.target, transitionReason);
   };
 
   const renderChecklistStatus = status => {
@@ -249,6 +251,8 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
         error={error}
         warningAcknowledged={warningAcknowledged}
         onWarningAcknowledged={setWarningAcknowledged}
+        reason={transitionReason}
+        onReasonChange={setTransitionReason}
         onConfirm={handleConfirmTransition}
       />
     </>

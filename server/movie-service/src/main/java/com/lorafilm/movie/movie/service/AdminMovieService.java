@@ -33,12 +33,14 @@ public class AdminMovieService {
     private final com.lorafilm.movie.movie.repository.ProductionCompanyRepository productionCompanyRepository;
     private final com.lorafilm.movie.movie.repository.MovieCreditRepository movieCreditRepository;
     private final com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository movieProductionCompanyRepository;
+    private final MovieOperationalGuard operationalGuard;
 
     public AdminMovieService(MovieRepository movieRepository, GenreRepository genreRepository, MovieGenreRepository movieGenreRepository, MovieMapper movieMapper, com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository,
                              com.lorafilm.movie.movie.repository.PersonRepository personRepository,
                              com.lorafilm.movie.movie.repository.ProductionCompanyRepository productionCompanyRepository,
                              com.lorafilm.movie.movie.repository.MovieCreditRepository movieCreditRepository,
-                             com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository movieProductionCompanyRepository) {
+                             com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository movieProductionCompanyRepository,
+                             MovieOperationalGuard operationalGuard) {
         this.movieRepository = movieRepository;
         this.genreRepository = genreRepository;
         this.movieGenreRepository = movieGenreRepository;
@@ -48,6 +50,7 @@ public class AdminMovieService {
         this.productionCompanyRepository = productionCompanyRepository;
         this.movieCreditRepository = movieCreditRepository;
         this.movieProductionCompanyRepository = movieProductionCompanyRepository;
+        this.operationalGuard = operationalGuard;
     }
 
     @Transactional
@@ -79,6 +82,8 @@ public class AdminMovieService {
 
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+
+        operationalGuard.assertSchedulingFieldsEditable(movie, request);
 
         if (!movie.getTitle().equals(request.getTitle())) {
             movie.setSlug(generateUniqueSlug(request.getTitle()));

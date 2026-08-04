@@ -5,6 +5,7 @@ import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -23,10 +24,11 @@ public class MovieLifecyclePolicy {
     private final Clock clock;
 
     public MovieLifecyclePolicy() {
-        this(Clock.systemDefaultZone());
+        this(Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 
-    MovieLifecyclePolicy(Clock clock) {
+    @Autowired
+    public MovieLifecyclePolicy(Clock clock) {
         this.clock = clock;
     }
 

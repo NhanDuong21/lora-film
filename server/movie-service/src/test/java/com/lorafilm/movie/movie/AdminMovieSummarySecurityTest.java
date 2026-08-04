@@ -47,6 +47,8 @@ class AdminMovieSummarySecurityTest {
     @MockBean private MovieService movieService;
     @MockBean private MovieSummaryQueryService movieSummaryQueryService;
     @MockBean private TmdbMovieReviewService tmdbMovieReviewService;
+    @MockBean private com.lorafilm.movie.movie.service.MovieStatusHistoryService movieStatusHistoryService;
+    @MockBean private com.lorafilm.movie.movie.service.MovieLaunchReadinessService movieLaunchReadinessService;
     @MockBean private com.lorafilm.movie.common.security.JwtProvider jwtProvider;
 
     @Test

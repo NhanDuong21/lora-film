@@ -32,6 +32,9 @@ const peopleNames = (people, includeCharacter = false) => sortedPeople(people)
   })
   .filter(Boolean);
 const companyNames = companies => (companies || []).map(company => company.name).filter(Boolean);
+const formatPrice = (value, currency = 'VND') => value == null
+  ? null
+  : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currency || 'VND' }).format(value);
 
 function CreditLine({ label, values }) {
   if (!values.length) return null;
@@ -387,9 +390,14 @@ export default function MovieDetailPage() {
                               key={showtime.showtimePublicId}
                               onClick={() => navigate(seatSelectionPath(showtime.showtimePublicId))}
                               aria-label={`Chọn suất ${formatLocalClock(showtime.localStartTime)} tại ${cinema.cinemaName}`}
-                              className={`rounded-xl border border-white/15 bg-zinc-900 px-5 py-2.5 font-black text-white transition-colors hover:border-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange ${focus}`}
+                              className={`rounded-xl border border-white/15 bg-zinc-900 px-5 py-2.5 text-left font-black text-white transition-colors hover:border-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange ${focus}`}
                             >
-                              {formatLocalClock(showtime.localStartTime)}
+                              <span className="block">{formatLocalClock(showtime.localStartTime)}</span>
+                              {showtime.priceFrom != null && (
+                                <span className="mt-0.5 block text-[10px] font-semibold text-zinc-500">
+                                  từ {formatPrice(showtime.priceFrom, showtime.currency)}
+                                </span>
+                              )}
                             </button>
                           ))}
                         </div>

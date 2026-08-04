@@ -13,12 +13,17 @@ import com.lorafilm.movie.movie.service.AdminMovieService;
 import com.lorafilm.movie.movie.service.MovieService;
 import com.lorafilm.movie.movie.service.MovieSummaryQueryService;
 import com.lorafilm.movie.movie.dto.MovieSummaryResponse;
+import com.lorafilm.movie.movie.dto.MovieStatusHistoryResponse;
+import com.lorafilm.movie.movie.service.MovieStatusHistoryService;
+import com.lorafilm.movie.movie.dto.MovieLaunchReadinessResponse;
+import com.lorafilm.movie.movie.service.MovieLaunchReadinessService;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieReviewResponse;
 import com.lorafilm.movie.integration.tmdb.service.TmdbMovieReviewService;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -33,16 +38,22 @@ public class AdminMovieController {
     private final MovieService movieService;
     private final MovieSummaryQueryService movieSummaryQueryService;
     private final TmdbMovieReviewService tmdbMovieReviewService;
+    private final MovieStatusHistoryService movieStatusHistoryService;
+    private final MovieLaunchReadinessService movieLaunchReadinessService;
 
     public AdminMovieController(
             AdminMovieService adminMovieService,
             MovieService movieService,
             MovieSummaryQueryService movieSummaryQueryService,
-            TmdbMovieReviewService tmdbMovieReviewService) {
+            TmdbMovieReviewService tmdbMovieReviewService,
+            MovieStatusHistoryService movieStatusHistoryService,
+            MovieLaunchReadinessService movieLaunchReadinessService) {
         this.adminMovieService = adminMovieService;
         this.movieService = movieService;
         this.movieSummaryQueryService = movieSummaryQueryService;
         this.tmdbMovieReviewService = tmdbMovieReviewService;
+        this.movieStatusHistoryService = movieStatusHistoryService;
+        this.movieLaunchReadinessService = movieLaunchReadinessService;
     }
 
     @PostMapping
@@ -160,7 +171,22 @@ public class AdminMovieController {
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<MovieDto>> updateMovieStatus(
             @PathVariable("publicId") String publicId,
-            @RequestParam("status") MovieStatus status) {
-        return ResponseEntity.ok(ApiResponse.ok(movieService.updateMovieStatus(publicId, status)));
+            @RequestParam("status") MovieStatus status,
+            @RequestParam(value = "reason", required = false) @Size(max = 500) String reason) {
+        return ResponseEntity.ok(ApiResponse.ok(movieService.updateMovieStatus(publicId, status, reason)));
+    }
+
+    @GetMapping("/{publicId}/status-history")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<java.util.List<MovieStatusHistoryResponse>>> getStatusHistory(
+            @PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(ApiResponse.ok(movieStatusHistoryService.getHistory(publicId)));
+    }
+
+    @GetMapping("/{publicId}/launch-readiness")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<MovieLaunchReadinessResponse>> getLaunchReadiness(
+            @PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(ApiResponse.ok(movieLaunchReadinessService.get(publicId)));
     }
 }

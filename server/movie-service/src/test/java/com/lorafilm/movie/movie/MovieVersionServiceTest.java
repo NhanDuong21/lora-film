@@ -13,6 +13,7 @@ import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.movie.service.MovieVersionServiceImpl;
+import com.lorafilm.movie.movie.service.MovieOperationalGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -37,6 +38,9 @@ class MovieVersionServiceTest {
 
     @Mock
     private CurrentUserProvider currentUserProvider;
+
+    @Mock
+    private MovieOperationalGuard operationalGuard;
 
     @InjectMocks
     private MovieVersionServiceImpl movieVersionService;

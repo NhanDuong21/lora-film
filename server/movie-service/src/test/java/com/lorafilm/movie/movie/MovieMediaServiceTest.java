@@ -14,6 +14,7 @@ import com.lorafilm.movie.movie.dto.UpdateMovieMediaRequest;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.service.MovieMediaServiceImpl;
+import com.lorafilm.movie.movie.service.MovieOperationalGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -37,6 +38,9 @@ class MovieMediaServiceTest {
 
     @Mock
     private CurrentUserProvider currentUserProvider;
+
+    @Mock
+    private MovieOperationalGuard operationalGuard;
 
     @InjectMocks
     private MovieMediaServiceImpl movieMediaService;

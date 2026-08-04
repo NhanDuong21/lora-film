@@ -15,6 +15,10 @@ import {
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2318181b'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='24' fill='%2352525b'>LORA FILM</text><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%233f3f46'>Không có ảnh bìa</text></svg>";
 
+const formatPrice = (value, currency = 'VND') => value == null
+  ? null
+  : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currency || 'VND' }).format(value);
+
 export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propActiveTab, onChangeActiveTab, onBuyTicket }) {
   const navigate = useNavigate();
   // Internal tab state as fallback
@@ -130,6 +134,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 px-6 md:px-12 py-10 transition-opacity duration-300 ${isRefreshing ? 'opacity-40 pointer-events-none' : ''}`}>
               {activeMovies.map((movie) => {
                 const ratingMeta = getAgeRatingLabel(movie.ageRating);
+                const canBook = movie.status === 'NOW_SHOWING' && movie.bookable !== false;
                 return (
                   <div
                     key={movie.publicId || movie.id}
@@ -195,12 +200,15 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                           <span>•</span>
                           <span>{formatDate(movie.releaseDate)}</span>
                         </div>
+                        {movie.priceFrom != null && (
+                          <p className="mt-2 text-xs font-bold text-amber-300">Từ {formatPrice(movie.priceFrom, movie.currency)}</p>
+                        )}
                       </div>
 
                       {/* Animated Poster Hover Overlay Architecture */}
                       <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-40 p-4 rounded-2xl">
                         {/* Nút "Mua Vé" */}
-                        {movie.status === 'NOW_SHOWING' && (
+                        {canBook && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -217,6 +225,11 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                             <Ticket className="w-4 h-4" />
                             Chọn suất
                           </button>
+                        )}
+                        {movie.status === 'NOW_SHOWING' && movie.bookable === false && (
+                          <span className="w-full max-w-[160px] rounded-full border border-zinc-600 bg-zinc-900/80 px-4 py-2 text-center text-sm font-medium text-zinc-400">
+                            Sắp mở bán
+                          </span>
                         )}
 
                         {/* Nút "Xem Trailer" */}

@@ -13,11 +13,10 @@ import com.lorafilm.movie.showtime.dto.response.BatchStatusActionSummary;
 import com.lorafilm.movie.showtime.dto.response.BatchStatusBlockedShowtime;
 import com.lorafilm.movie.showtime.dto.response.BatchStatusReasonGroup;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeRefundOutboxService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
-import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
+import com.lorafilm.movie.showtime.validation.ShowtimeOpeningPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,26 +37,23 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     private final CurrentUserProvider currentUserProvider;
     private final AdminShowtimeMapper adminShowtimeMapper;
     private final Clock clock;
-    private final ShowtimePricingService showtimePricingService;
     private final ShowtimeRefundOutboxService refundOutboxService;
-    private final MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
+    private final ShowtimeOpeningPolicy openingPolicy;
 
     public ShowtimeStatusTransitionServiceImpl(ShowtimeRepository showtimeRepository,
                                                ShowtimeStatusHistoryService historyService,
                                                CurrentUserProvider currentUserProvider,
                                                AdminShowtimeMapper adminShowtimeMapper,
                                                Clock clock,
-                                               ShowtimePricingService showtimePricingService,
                                                ShowtimeRefundOutboxService refundOutboxService,
-                                               MovieShowtimeEligibilityPolicy movieEligibilityPolicy) {
+                                               ShowtimeOpeningPolicy openingPolicy) {
         this.showtimeRepository = showtimeRepository;
         this.historyService = historyService;
         this.currentUserProvider = currentUserProvider;
         this.adminShowtimeMapper = adminShowtimeMapper;
         this.clock = clock;
-        this.showtimePricingService = showtimePricingService;
         this.refundOutboxService = refundOutboxService;
-        this.movieEligibilityPolicy = movieEligibilityPolicy;
+        this.openingPolicy = openingPolicy;
     }
 
     @Override
@@ -142,11 +138,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
 
     private void validateTimingRules(Showtime showtime, ShowtimeStatus current, ShowtimeStatus target, Instant now) {
         if (current == ShowtimeStatus.DRAFT && target == ShowtimeStatus.OPEN_FOR_BOOKING) {
-            if (!showtime.getStartTime().isAfter(now)) {
-                throw new BusinessException(ErrorCode.SHOWTIME_CANNOT_OPEN_AFTER_START, "Cannot open showtime for booking after it has started");
-            }
-            movieEligibilityPolicy.validateMovieCanOpenForBooking(showtime.getMovie());
-            showtimePricingService.validateCompleteness(showtime);
+            openingPolicy.validateCanOpen(showtime, now);
         }
         
         if (current == ShowtimeStatus.CLOSED && target == ShowtimeStatus.FINISHED) {

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,10 +96,15 @@ public class BulkSeatConcurrencyIntegrationTest {
 
     @Test
     void shouldPreventConcurrentBulkSeatCreation() throws InterruptedException {
+        int numberOfThreads = 3;
         Auditorium lockedAuditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(auditoriumPublicId).orElseThrow();
         java.util.concurrent.atomic.AtomicBoolean lockAcquired = new java.util.concurrent.atomic.AtomicBoolean(false);
+        CountDownLatch contendersObserved = new CountDownLatch(numberOfThreads - 1);
         org.mockito.Mockito.doAnswer(invocation -> {
             if (lockAcquired.compareAndSet(false, true)) {
+                if (!contendersObserved.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Concurrent lock contenders did not arrive in time");
+                }
                 if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
                     org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
                         new org.springframework.transaction.support.TransactionSynchronization() {
@@ -113,11 +119,11 @@ public class BulkSeatConcurrencyIntegrationTest {
                 }
                 return java.util.Optional.of(lockedAuditorium);
             } else {
+                contendersObserved.countDown();
                 throw new org.springframework.dao.CannotAcquireLockException("Lock acquisition timeout");
             }
         }).when(auditoriumRepository).findByPublicIdAndDeletedAtIsNullForUpdate(org.mockito.ArgumentMatchers.anyString());
 
-        int numberOfThreads = 3;
         ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(numberOfThreads);

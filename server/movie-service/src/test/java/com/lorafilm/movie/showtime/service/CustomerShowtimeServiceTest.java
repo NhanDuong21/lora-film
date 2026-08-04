@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,7 +40,8 @@ class CustomerShowtimeServiceTest {
         ShowtimeRepository repository = mock(ShowtimeRepository.class);
         CustomerShowtimeService service = new CustomerShowtimeService(
                 repository, mock(ShowtimePriceRepository.class),
-                mock(ShowtimeBlockedSeatRepository.class), mock(SeatService.class));
+                mock(ShowtimeBlockedSeatRepository.class), mock(SeatService.class),
+                Clock.systemUTC());
         LocalDate persistedDate = LocalDate.of(2026, 7, 24);
 
         Cinema cinema = new Cinema();
@@ -87,7 +89,8 @@ class CustomerShowtimeServiceTest {
                 mock(ShowtimeBlockedSeatRepository.class);
         SeatService seatService = mock(SeatService.class);
         CustomerShowtimeService service = new CustomerShowtimeService(
-                repository, priceRepository, blockedSeatRepository, seatService);
+                repository, priceRepository, blockedSeatRepository, seatService,
+                Clock.systemUTC());
 
         Cinema cinema = new Cinema();
         cinema.setPublicId("cinema-public");
