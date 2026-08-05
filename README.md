@@ -36,33 +36,56 @@ hcm26_cpl_java_05_group3/
 ```
 *(For more details, see [Project Structure Documentation](docs/project-structure.md))*
 
-## 🛠 Clone Instructions
+## Quy trình clone/pull và chạy local trên Windows
 
-1. Clone the repository to your local machine:
-   ```bash
-   git clone <repository_url>
-   cd hcm26_cpl_java_05_group3
-   ```
-2. Checkout the `develop` branch (main integration branch):
-   ```bash
-   git checkout develop
-   ```
+### 1. Chuẩn bị máy
 
-## Run the complete project on Windows
+Cài Java 21, Maven 3.9+, Node.js/npm, Docker Desktop và MySQL Workbench (hoặc
+MySQL client). Mọi lệnh dưới đây chạy trong PowerShell tại thư mục gốc project.
 
-Prerequisites: Java 21, Maven 3.9+, Node.js/npm, Docker Desktop, and a MySQL
-client such as MySQL Workbench.
-
-From PowerShell at the repository root, copy the Docker Compose environment
-template. Change its MySQL credentials only when the defaults do not match the
-account you want Docker to create:
+### 2. Clone lần đầu
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up -d
+git clone <repository_url>
+cd hcm26_cpl_java_05_group3
+git checkout develop
 ```
 
-Copy every checked-in application template before starting the Java services:
+### 3. Quy trình pull code hằng ngày
+
+Nếu đang sửa dở code, lưu thay đổi trước khi pull. Sau đó chạy đúng thứ tự:
+
+```powershell
+git status
+git fetch origin
+git checkout develop
+git pull --ff-only origin develop
+```
+
+Nếu `git status` còn file đang sửa và chưa muốn commit, có thể cất tạm rồi lấy
+lại sau khi pull:
+
+```powershell
+git stash push -u -m "wip-before-pull"
+git pull --ff-only origin develop
+git stash pop
+```
+
+Nếu pull báo conflict, xử lý từng file, chạy `git add`, rồi tiếp tục theo hướng
+dẫn Git; không dùng `reset --hard` nếu chưa chắc chắn vì có thể mất thay đổi.
+
+Các file `application.properties` và `.env` là file local bị ignore nên Git không
+tự cập nhật chúng. Sau mỗi lần pull có thay đổi cấu hình, copy lại 11 file mẫu:
+
+Tạo file môi trường cho Docker và khởi động MySQL, Redis, Kafka:
+
+```powershell
+Copy-Item .env.example .env -Force
+docker compose up -d
+docker compose ps
+```
+
+Copy 11 file cấu hình mẫu trước khi chạy Java service:
 
 ```powershell
 $applications = @(
@@ -73,34 +96,38 @@ $applications = @(
 )
 foreach ($application in $applications) {
   Copy-Item "$application/src/main/resources/application.example.properties" `
-            "$application/src/main/resources/application.properties"
+            "$application/src/main/resources/application.properties" -Force
 }
 ```
 
-The Spring Boot processes do not automatically read the root `.env`; each copied
-properties file is a self-contained local configuration. When using a different
-MySQL account, change only `spring.datasource.username` and
-`spring.datasource.password` in the nine data-service properties files. Their
-database names, MySQL port `3307`, Eureka URL, Redis/Kafka endpoints, JWT secret,
-internal tokens and safe optional-feature defaults already match one another.
+Spring Boot không tự đọc `.env` ở thư mục gốc; mỗi file được copy là cấu hình độc
+lập. Các key JWT, token nội bộ, Cloudinary, TMDB, mail, VNPay/MoMo đã có sẵn trong
+file example và vẫn cho phép ghi đè bằng biến môi trường. Nếu dùng tài khoản MySQL
+khác, chỉ sửa `spring.datasource.username` và `spring.datasource.password` trong
+9 file dưới `server/*-service`; không cần sửa Eureka hay API Gateway.
 
-All nine data services use `spring.jpa.hibernate.ddl-auto=validate`. Before the
-first startup, execute the nine canonical `*-service-schema.sql` files directly
-under `docs/database/mysql/`. Use a fresh or empty local database set: the
-Notification and Promotion scripts intentionally drop and recreate their own
-databases, while the other scripts are fresh-install schemas and can fail when
-their tables already exist. Back up any local data that must be kept first.
+Tất cả 9 service dùng `spring.jpa.hibernate.ddl-auto=validate`, nên phải Execute 9
+schema trong `docs/database/mysql/` trước lần chạy đầu tiên. Kết nối Workbench tới
+`127.0.0.1:3307` bằng tài khoản trong `.env`, rồi chạy các file:
 
-Start Eureka first, then the nine services, and finally API Gateway. Run
-`mvn spring-boot:run` from each corresponding directory in a separate terminal.
+```text
+analytics-service-schema.sql    auth-service-schema.sql
+booking-service-schema.sql      movie-service-schema.sql
+notification-service-schema.sql payment-service-schema.sql
+promotion-service-schema.sql    score-service-schema.sql
+user-service-schema.sql
+```
 
-- Frontend: `http://localhost:5173`
-- API Gateway: `http://localhost:8080`
-- Eureka dashboard: `http://localhost:8761`
+Notification và Promotion có lệnh drop/recreate database; chỉ chạy trên database
+local mới hoặc sao lưu dữ liệu trước. Các schema còn lại cũng nên chạy trên database
+trống để tránh lỗi bảng đã tồn tại.
 
-## Frontend Run Instructions
+Khởi động theo thứ tự: `eureka-server` (8761), 9 service (8081–8089), rồi
+`api-gateway` (8080). Mỗi module chạy ở một terminal riêng bằng `mvn spring-boot:run`.
 
-Open a new terminal and run the following commands:
+## Chạy frontend
+
+Mở terminal mới:
 
 ```bash
 cd client
@@ -108,104 +135,99 @@ npm install
 npm run dev
 ```
 
-## Backend Run Instructions
+## Chạy backend và kiểm tra nhanh
 
-The backend uses a microservices architecture. Docker Compose creates the nine
-service databases and grants the configured application user access. Manual SQL
-schemas must still be executed as described above.
-
-Open a terminal in each service directory and run them independently. You can use the commands:
+Docker Compose chỉ cung cấp MySQL, Redis, Zookeeper và Kafka; các service Java
+chạy ngoài Docker. Trong từng thư mục service, có thể biên dịch trước rồi chạy:
 
 ```bash
 mvn clean compile
 mvn spring-boot:run
 ```
 
-**Recommended Startup Order:**
-1. Docker infrastructure: MySQL, Redis, Kafka
-2. `eureka-server` (8761)
-3. Backend services: `auth-service` (8081) through `analytics-service` (8089)
-4. `api-gateway` (8080)
-5. React frontend (5173)
+Thứ tự cổng: Eureka `8761`; auth `8081`, movie `8082`, booking `8083`, payment
+`8084`, notification `8085`, user `8086`, promotion `8087`, score `8088`, analytics
+`8089`; Gateway `8080`. Kiểm tra Eureka tại `http://localhost:8761`, Gateway tại
+`http://localhost:8080`, frontend tại `http://localhost:5173`.
 
-## Docker Compose Local Development
+## Docker Compose — hạ tầng dùng chung local
 
-A base local environment is available at the repository root with:
+File `docker-compose.yml` ở thư mục gốc cung cấp:
 
 - MySQL 8
 - Redis
 - Zookeeper
 - Kafka
 
-Application services run as local Java processes. Docker Compose supplies the
-shared infrastructure and initializes the service databases.
+Các application service vẫn chạy bằng Java ở máy local. Compose chỉ chạy hạ tầng
+và tạo database; schema phải Execute thủ công như hướng dẫn ở trên.
 
-### Prerequisites
+### Yêu cầu
 
-- Docker Desktop or Docker Engine installed
-- Docker Compose support enabled
-- `docker` and `docker compose` available in your terminal
+- Đã cài Docker Desktop hoặc Docker Engine
+- Đã bật Docker Compose
+- Lệnh `docker` và `docker compose` chạy được trong terminal
 
-### Setup
+### Thiết lập
 
-1. Copy the sample environment file:
+1. Copy file môi trường (PowerShell dùng `Copy-Item .env.example .env`):
 
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env -Force
 ```
 
-2. Edit `.env` and add your values for:
+2. Chỉ sửa các biến sau nếu muốn đổi tài khoản MySQL Docker:
 
 - `MYSQL_ROOT_PASSWORD`
 - `MYSQL_USER`
 - `MYSQL_PASSWORD`
 
-### Start services
+### Khởi động hạ tầng
 
 ```bash
 docker compose up -d
 ```
 
-### Stop services
+### Dừng hạ tầng, giữ dữ liệu
 
 ```bash
 docker compose down
 ```
 
-### Check logs
+### Xem log
 
 ```bash
 docker compose logs -f
 ```
 
-Or check logs for a single service:
+Hoặc xem riêng MySQL:
 
 ```bash
 docker compose logs -f mysql
 ```
 
-### Remove containers and volumes
+### Xóa container và volume (mất dữ liệu local)
 
 ```bash
 docker compose down -v
 ```
 
-### Verify services are running
+### Kiểm tra hạ tầng
 
 - MySQL: `localhost:3307`
 - Redis: `localhost:6379`
 - Zookeeper: `localhost:2181`
 - Kafka: `localhost:9092`
 
-You can also check Docker status directly:
+Kiểm tra trạng thái trực tiếp:
 
 ```bash
 docker compose ps
 ```
-Check the health status via the `GET /health` endpoint for each service (e.g., `http://localhost:8081/health`, `http://localhost:8086/health`). 
+Sau khi Java service đã chạy, kiểm tra thêm `GET /health` (ví dụ
+`http://localhost:8081/health`, `http://localhost:8086/health`).
 
-The Gateway discovers the Java services through Eureka and exposes their APIs
-through `http://localhost:8080`.
+Gateway tìm service qua Eureka và expose API tại `http://localhost:8080`.
 
 ## Basic Branching Rules
 
