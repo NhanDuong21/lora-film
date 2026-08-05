@@ -70,7 +70,11 @@ public class DbFoodCatalogClientImpl implements FoodCatalogClient {
                     }
                     existing.setName(updated.getName());
                     existing.setType(updated.getType());
-                    existing.setImageUrl(updated.getImageUrl());
+                    // A multipart update without a new image must not erase
+                    // the image that is already stored for the product.
+                    if (updated.getImageUrl() != null && !updated.getImageUrl().isBlank()) {
+                        existing.setImageUrl(updated.getImageUrl());
+                    }
                     existing.setPrice(updated.getPrice());
                     existing.setActive(updated.isActive());
                     existing.setSellable(updated.isSellable());

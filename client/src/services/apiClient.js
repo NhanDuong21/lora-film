@@ -13,6 +13,19 @@ const apiClient = axios.create({
 // Request Interceptor
 apiClient.interceptors.request.use(
     (config) => {
+        // Axios inherits the JSON default header from the client instance. That
+        // header is invalid for multipart requests because it prevents the
+        // browser from adding the required multipart boundary. Let the browser
+        // set Content-Type whenever the payload is FormData.
+        if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+            if (config.headers?.delete) {
+                config.headers.delete("Content-Type");
+            } else if (config.headers) {
+                delete config.headers["Content-Type"];
+                delete config.headers["content-type"];
+            }
+        }
+
         const isPublicAuthEndpoint = config.url && (
             config.url.includes("/api/auth/login") ||
             config.url.includes("/api/auth/register") ||

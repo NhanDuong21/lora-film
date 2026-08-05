@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,6 +95,15 @@ public class GlobalExceptionHandler {
         ErrorResponse errorResponse = new ErrorResponse(
                 "MALFORMED_REQUEST_BODY",
                 "Request body is malformed or contains an unsupported value");
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ErrorResponse> handleMultipartException(MultipartException ex) {
+        log.warn("Malformed multipart request: {}", ex.getMessage(), ex);
+        ErrorResponse errorResponse = new ErrorResponse(
+                "INVALID_MULTIPART_REQUEST",
+                "Dữ liệu tải lên không đúng định dạng multipart. Vui lòng thử lại.");
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 

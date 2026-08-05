@@ -83,6 +83,8 @@ const getCatalogErrorMessage = (error, fallback) => {
     CONCESSION_CODE_IMMUTABLE: 'Mã sản phẩm không thể thay đổi sau khi tạo.',
     INVALID_CONCESSION_IMAGE: 'Ảnh không hợp lệ. Chỉ chấp nhận JPG, PNG hoặc WEBP, tối đa 5 MB.',
     CONCESSION_IMAGE_STORAGE_UNAVAILABLE: 'Kho lưu trữ ảnh chưa được cấu hình. Hãy nhập đường dẫn ảnh HTTPS hoặc cấu hình Cloudinary rồi thử lại.',
+    CONCESSION_IMAGE_UPLOAD_FAILED: 'Không thể tải ảnh lên kho lưu trữ. Vui lòng thử lại hoặc dùng đường dẫn ảnh HTTPS.',
+    INVALID_MULTIPART_REQUEST: 'Dữ liệu tải lên không đúng định dạng. Vui lòng chọn lại ảnh và thử lại.',
     VALIDATION_FAILED: 'Thông tin sản phẩm chưa hợp lệ. Vui lòng kiểm tra lại các trường bắt buộc.',
     MALFORMED_REQUEST_BODY: 'Dữ liệu sản phẩm không đúng định dạng. Vui lòng thử lại.',
     INTERNAL_SERVER_ERROR: 'Hệ thống chưa thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.'
@@ -190,12 +192,10 @@ export default function AdminConcessionInventoryPage() {
     setSaving(true);
     try {
       const formData = buildCatalogFormData(formValue);
-      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
-
       if (editingItem) {
-        await apiClient.put(`/api/admin/foods/${editingItem.id}`, formData, config);
+        await apiClient.put(`/api/admin/foods/${editingItem.id}`, formData);
       } else {
-        await apiClient.post('/api/admin/foods', formData, config);
+        await apiClient.post('/api/admin/foods', formData);
       }
 
       setFormOpen(false);
