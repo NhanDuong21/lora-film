@@ -286,6 +286,38 @@ export default function SeatSelectionPage() {
     [seatRows]
   );
 
+  // Calculate the real occupied span for every row. The previous layout forced
+  // every row into 16 columns, which left unused columns on the right and made
+  // shorter rows appear shifted to the left of the projector screen.
+  const seatGridMetrics = useMemo(() => {
+    const rowMetrics = new Map();
+    let columnCount = 1;
+
+    rows.forEach(([label, seatUnits]) => {
+      const occupiedColumns = seatUnits.map(seatUnit => {
+        const start = Number(seatUnit.positionColumn ?? 0);
+        const span = Math.max(1, Number(seatUnit.columnSpan ?? 1));
+        return {
+          start: Number.isFinite(start) ? start : 0,
+          end: (Number.isFinite(start) ? start : 0) + span - 1
+        };
+      });
+
+      const firstColumn = occupiedColumns.length > 0
+        ? Math.min(...occupiedColumns.map(column => column.start))
+        : 0;
+      const lastColumn = occupiedColumns.length > 0
+        ? Math.max(...occupiedColumns.map(column => column.end))
+        : 0;
+      const span = Math.max(1, lastColumn - firstColumn + 1);
+
+      rowMetrics.set(label, { firstColumn, span });
+      columnCount = Math.max(columnCount, span);
+    });
+
+    return { columnCount, rowMetrics };
+  }, [rows]);
+
   const selectedSeatUnits = useMemo(
     () => buildSeatUnits(selectedSeats),
     [selectedSeats]
@@ -600,21 +632,22 @@ export default function SeatSelectionPage() {
               </p>
             </div>
 
-            <div className="mx-auto max-w-5xl space-y-4">
+            <div className="mx-auto max-w-4xl space-y-4">
               {rows.map(([label, seatUnits]) => {
-                const columnCount = Math.max(
-                  16,
-                  ...seatUnits.map(unit => (
-                    (unit.positionColumn ?? 0) + (unit.columnSpan ?? 1)
-                  ))
+                const rowMetric = seatGridMetrics.rowMetrics.get(label) || {
+                  firstColumn: 0,
+                  span: seatGridMetrics.columnCount
+                };
+                const rowOffset = Math.floor(
+                  (seatGridMetrics.columnCount - rowMetric.span) / 2
                 );
                 return (
                   <div key={label} className="flex items-center gap-3">
                     <span className="sticky left-0 z-10 w-8 rounded bg-zinc-900 py-1 text-center text-xs font-black text-zinc-500">{label}</span>
                     <div
-                      className="grid flex-1 gap-2"
+                      className="grid w-full max-w-3xl flex-1 gap-2"
                       style={{
-                        gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`
+                        gridTemplateColumns: `repeat(${seatGridMetrics.columnCount}, minmax(0, 1fr))`
                       }}
                     >
                       {seatUnits.map(seatUnit => {
@@ -622,7 +655,10 @@ export default function SeatSelectionPage() {
                         const isSelected = seatUnit.seats.every(seat =>
                           selectedSeats.some(selected => selected.publicId === seat.publicId)
                         );
-                        const column = (seatUnit.positionColumn ?? 0) + 1;
+                        const column = rowOffset
+                          + Number(seatUnit.positionColumn ?? 0)
+                          - rowMetric.firstColumn
+                          + 1;
                         const reason = seatUnit.pairValid
                           ? presentation.reason
                           : 'cấu hình ghế đôi không hợp lệ';
