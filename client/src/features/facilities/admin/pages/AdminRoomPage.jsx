@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  Clock3,
   CirclePause,
   DoorOpen,
+  ExternalLink,
   PlusCircle,
   Search,
   Settings2,
@@ -12,12 +14,24 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/ui/uiKit';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
+import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
+import {
+  formatCinemaTime,
+  formatServiceDateKey,
+  getCinemaDateKey,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 import {
   getAuditoriumReadiness,
   getAuditoriumStatus,
   SCREEN_TYPE_LABELS,
   SOUND_TYPE_LABELS,
 } from '@/features/facilities/admin/utils/facilityPresentation';
+import {
+  addDaysToDateKey,
+  getNextShowtimeForAuditorium,
+  getShowtimeDateKeys,
+  getShowtimeState,
+} from '@/features/facilities/admin/utils/roomShowtimePresentation';
 
 const PAGE_SIZE = 8;
 
@@ -33,6 +47,10 @@ export default function AdminRoomPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [page, setPage] = useState(0);
   const [isMutating, setIsMutating] = useState(false);
+  const [showtimes, setShowtimes] = useState([]);
+  const [isShowtimesLoading, setIsShowtimesLoading] = useState(false);
+  const [showtimesError, setShowtimesError] = useState(null);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     const fetchCinemas = async () => {
@@ -85,6 +103,65 @@ export default function AdminRoomPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRooms();
   }, [fetchRooms]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const selectedCinema = useMemo(
+    () => cinemas.find(cinema => cinema.publicId === selectedCinemaId),
+    [cinemas, selectedCinemaId],
+  );
+
+  useEffect(() => {
+    let isCurrentRequest = true;
+
+    const fetchUpcomingShowtimes = async () => {
+      if (!selectedCinema?.slug) {
+        setShowtimes([]);
+        setShowtimesError(null);
+        setIsShowtimesLoading(false);
+        return;
+      }
+
+      setIsShowtimesLoading(true);
+      setShowtimesError(null);
+      const dateKeys = getShowtimeDateKeys(new Date(), selectedCinema.timezone, 7);
+
+      try {
+        const responses = await Promise.all(
+          dateKeys.map(date => adminShowtimeService.getShowtimes({
+            cinemaSlug: selectedCinema.slug,
+            date,
+            page: 0,
+            size: 100,
+          })),
+        );
+        if (!isCurrentRequest) return;
+
+        const rows = responses.flatMap(response => (
+          response?.success && Array.isArray(response.data?.data) ? response.data.data : []
+        ));
+        setShowtimes(rows);
+      } catch (requestError) {
+        if (!isCurrentRequest) return;
+        setShowtimes([]);
+        setShowtimesError(
+          requestError.response?.data?.message
+            || requestError.message
+            || 'Không thể tải lịch chiếu',
+        );
+      } finally {
+        if (isCurrentRequest) setIsShowtimesLoading(false);
+      }
+    };
+
+    fetchUpcomingShowtimes();
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [selectedCinema]);
 
   const filteredRooms = useMemo(() => {
     const keyword = searchTerm.trim().toLocaleLowerCase('vi');
@@ -233,6 +310,19 @@ export default function AdminRoomPage() {
                 const roomName = room.name || room.auditoriumName || 'Phòng chiếu';
                 const status = getAuditoriumStatus(room.status);
                 const readiness = getAuditoriumReadiness(room);
+                const nextShowtime = getNextShowtimeForAuditorium(showtimes, room.publicId, now);
+                const showtimeState = nextShowtime ? getShowtimeState(nextShowtime, now) : null;
+                const showtimeTimezone = nextShowtime?.cinema?.timezone || selectedCinema?.timezone;
+                const todayKey = getCinemaDateKey(now, showtimeTimezone);
+                const showtimeDateKey = nextShowtime?.serviceDate || getCinemaDateKey(
+                  nextShowtime?.startTime,
+                  showtimeTimezone,
+                );
+                const showtimeDateLabel = showtimeDateKey === todayKey
+                  ? 'Hôm nay'
+                  : showtimeDateKey === addDaysToDateKey(todayKey, 1)
+                    ? 'Ngày mai'
+                    : formatServiceDateKey(showtimeDateKey);
                 return (
                   <article
                     key={room.publicId}
@@ -273,9 +363,60 @@ export default function AdminRoomPage() {
                       <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                         Suất chiếu kế tiếp
                       </p>
-                      <p className="mt-1 text-xs leading-5 text-zinc-400">
-                        Chưa có dữ liệu trên API phòng. Kiểm tra tại Lịch vận hành.
-                      </p>
+                      {isShowtimesLoading ? (
+                        <p className="mt-2 inline-flex items-center gap-2 text-xs text-zinc-500">
+                          <Clock3 className="h-3.5 w-3.5 animate-pulse" />
+                          Đang cập nhật lịch...
+                        </p>
+                      ) : showtimesError ? (
+                        <p className="mt-1 text-xs leading-5 text-rose-300">
+                          Không thể tải lịch chiếu. Mở Lịch chiếu để kiểm tra.
+                        </p>
+                      ) : nextShowtime ? (
+                        <div className="mt-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-black ${
+                              showtimeState === 'SHOWING'
+                                ? 'border-brand-orange/30 bg-brand-orange/10 text-brand-orange'
+                                : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                            }`}>
+                              {showtimeState === 'SHOWING' ? 'Đang chiếu' : 'Sắp chiếu'}
+                            </span>
+                            <span className="text-xs font-bold text-zinc-500">{showtimeDateLabel}</span>
+                          </div>
+                          <p className="mt-1 flex items-baseline gap-2">
+                            <span className="text-lg font-black text-white">
+                              {formatCinemaTime(nextShowtime.startTime, showtimeTimezone)}
+                            </span>
+                            <span className="text-[11px] text-zinc-500">
+                              {nextShowtime.endTime
+                                ? `– ${formatCinemaTime(nextShowtime.endTime, showtimeTimezone)}`
+                                : ''}
+                            </span>
+                          </p>
+                          <p className="truncate text-xs font-bold text-zinc-300" title={nextShowtime.movie?.title}>
+                            {nextShowtime.movie?.title || 'Phim chưa xác định'}
+                          </p>
+                          <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+                            {nextShowtime.movieVersion?.format || nextShowtime.movieVersion?.versionName || 'Chưa rõ định dạng'}
+                            {nextShowtime.movieVersion?.subtitleLanguage
+                              ? ` · ${nextShowtime.movieVersion.subtitleLanguage}`
+                              : ''}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs leading-5 text-zinc-500">
+                          Chưa có suất chiếu trong 7 ngày tới.
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/admin/showtimes?cinemaSlug=${encodeURIComponent(selectedCinema?.slug || '')}${showtimeDateKey ? `&date=${showtimeDateKey}` : ''}`)}
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] font-black text-brand-orange hover:text-orange-300"
+                      >
+                        Xem lịch chiếu
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
                       <button
