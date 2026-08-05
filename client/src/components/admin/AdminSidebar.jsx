@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Award,
@@ -34,6 +34,22 @@ import {
   Armchair,
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
+
+const sidebarStateStorageKey = 'lorafilm.admin.sidebar.sections.v1';
+
+const readSidebarState = () => {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const savedState = window.localStorage.getItem(sidebarStateStorageKey);
+    const parsedState = savedState ? JSON.parse(savedState) : {};
+    return parsedState && typeof parsedState === 'object' && !Array.isArray(parsedState)
+      ? parsedState
+      : {};
+  } catch {
+    return {};
+  }
+};
 
 export default function AdminSidebar({
   activeTab,
@@ -171,7 +187,18 @@ export default function AdminSidebar({
   const activeSectionKey = sections.find(section =>
     section.items.some(item => item.key === activeTab),
   )?.key;
-  const [collapsedSections, setCollapsedSections] = useState({});
+  const [collapsedSections, setCollapsedSections] = useState(readSidebarState);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        sidebarStateStorageKey,
+        JSON.stringify(collapsedSections),
+      );
+    } catch {
+      // Sidebar state persistence is optional when storage is unavailable.
+    }
+  }, [collapsedSections]);
 
   const isSectionCollapsed = sectionKey => (
     Object.prototype.hasOwnProperty.call(collapsedSections, sectionKey)

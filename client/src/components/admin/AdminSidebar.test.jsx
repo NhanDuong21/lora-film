@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminSidebar from './AdminSidebar';
 
 const renderSidebar = (user = { role: 'ADMIN', permissions: [] }, activeTab = 'dashboard') => render(
@@ -18,6 +18,10 @@ const renderSidebar = (user = { role: 'ADMIN', permissions: [] }, activeTab = 'd
 const openSection = name => fireEvent.click(screen.getByRole('button', { name }));
 
 describe('AdminSidebar', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('groups movie operations into readable admin sections', () => {
     renderSidebar({ role: 'ADMIN', permissions: [] }, 'auto-schedule-history');
 
