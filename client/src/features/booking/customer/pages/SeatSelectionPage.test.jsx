@@ -92,6 +92,9 @@ describe('SeatSelectionPage customer errors', () => {
       </MemoryRouter>
     );
 
+    expect(await screen.findByRole('img', { name: 'Loa trái' })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: 'Loa phải' })).toBeInTheDocument();
+
     fireEvent.click(await screen.findByRole('button', { name: /Ghế A1/i }));
     fireEvent.click(screen.getByRole('button', { name: /Tiếp tục/i }));
 

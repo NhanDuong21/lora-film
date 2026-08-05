@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, Projector, ShieldAlert
+  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, Projector, ShieldAlert, Volume2
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
@@ -644,6 +644,9 @@ export default function SeatSelectionPage() {
               />
             </div>
 
+            <SpeakerStack side="left" />
+            <SpeakerStack side="right" />
+
             <div className="mx-auto max-w-3xl mb-12">
               <div className="h-2 rounded-[100%] bg-gradient-to-r from-transparent via-brand-orange to-transparent shadow-[0_8px_28px_rgba(255,122,0,0.35)]" />
               <p className="mt-3 flex items-center justify-center gap-2 text-center text-[10px] font-black tracking-[.35em] text-zinc-500">
@@ -855,5 +858,34 @@ export default function SeatSelectionPage() {
         </div>
       )}
     </main>
+  );
+}
+
+function SpeakerStack({ side }) {
+  const isLeft = side === 'left';
+  const label = isLeft ? 'trái' : 'phải';
+
+  return (
+    <div
+      role="img"
+      aria-label={`Loa ${label}`}
+      className={`pointer-events-none absolute top-[47%] z-10 hidden h-36 w-12 -translate-y-1/2 flex-col items-center justify-between rounded-2xl border border-orange-300/20 bg-zinc-950/90 px-2 py-3 text-orange-200 shadow-[0_0_24px_rgba(249,115,22,0.16)] lg:flex ${
+        isLeft ? 'left-2' : 'right-2'
+      }`}
+    >
+      <div className="absolute inset-1 rounded-xl border border-orange-400/10" aria-hidden="true" />
+      <div className="relative flex flex-col gap-2" aria-hidden="true">
+        {[0, 1, 2].map(driver => (
+          <span
+            key={driver}
+            className="h-4 w-4 rounded-full border border-orange-300/50 bg-orange-400/10 shadow-[inset_0_0_0_3px_rgba(24,24,27,0.85),0_0_8px_rgba(249,115,22,0.18)]"
+          />
+        ))}
+      </div>
+      <Volume2 className="relative h-4 w-4 animate-pulse text-orange-300" aria-hidden="true" />
+      <span className="relative text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">
+        {isLeft ? 'L' : 'R'}
+      </span>
+    </div>
   );
 }
