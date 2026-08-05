@@ -435,6 +435,7 @@ export default function CustomerProfileView({
                           src={avatarUrl}
                           alt={fullName}
                           className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
                           onError={(e) => {
                             e.target.onerror = null;
                             e.target.src =
@@ -1070,6 +1071,7 @@ export default function CustomerProfileView({
                         src={tempAvatarUrl}
                         alt="Preview avatar"
                         className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src =

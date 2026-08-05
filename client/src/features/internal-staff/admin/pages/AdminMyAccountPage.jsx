@@ -394,7 +394,12 @@ export default function AdminMyAccountPage() {
           <div className="flex items-center gap-4 border-b border-zinc-800 pb-5">
             <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-brand-orange bg-zinc-950">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={`Ảnh đại diện của ${displayName}`} className="h-full w-full object-cover" />
+                <img
+                  src={avatarUrl}
+                  alt={`Ảnh đại diện của ${displayName}`}
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
                 <UserRound className="h-full w-full p-4 text-zinc-600" />
               )}

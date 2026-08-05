@@ -79,6 +79,7 @@ function NavDropdown({
 
 export default function Header() {
   const { user, userRole, isAuthenticated, logout } = useAuth();
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const headerRef = useRef(null);
@@ -95,6 +96,10 @@ export default function Header() {
   const normalizedRole = (userRole || '').replace(/^ROLE_/, '');
   const isCustomer = normalizedRole === 'CUSTOMER';
   const brandPath = isAuthenticated && normalizedRole === 'ADMIN' ? '/admin' : '/';
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [user?.avatarUrl]);
 
   const loadCinemaMenu = useCallback(async () => {
     setCinemaMenuLoading(true);
@@ -389,11 +394,13 @@ export default function Header() {
                     }}
                     className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-brand-orange/50 bg-brand-orange/10 text-sm font-black uppercase text-brand-orange transition hover:bg-brand-orange/20 ${focusRingClass}`}
                   >
-                    {user?.avatarUrl ? (
+                    {user?.avatarUrl && !avatarLoadFailed ? (
                       <img
                         src={resolveMediaUrl(user.avatarUrl)}
                         alt={user?.fullName || 'Ảnh đại diện'}
                         className="h-full w-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={() => setAvatarLoadFailed(true)}
                       />
                     ) : (
                       user?.fullName?.charAt(0) || 'U'
