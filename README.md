@@ -53,9 +53,9 @@ hcm26_cpl_java_05_group3/
 Prerequisites: Java 21, Maven 3.9+, Node.js/npm, Docker Desktop, and a MySQL
 client such as MySQL Workbench.
 
-From PowerShell at the repository root, copy the shared environment template,
-then update only the MySQL credentials when the defaults do not match your
-local database:
+From PowerShell at the repository root, copy the Docker Compose environment
+template. Change its MySQL credentials only when the defaults do not match the
+account you want Docker to create:
 
 ```powershell
 Copy-Item .env.example .env
@@ -66,7 +66,7 @@ Copy every checked-in application template before starting the Java services:
 
 ```powershell
 $applications = @(
-  'api-gateway',
+  'eureka-server', 'api-gateway',
   'server/auth-service', 'server/movie-service', 'server/booking-service',
   'server/payment-service', 'server/notification-service', 'server/user-service',
   'server/promotion-service', 'server/score-service', 'server/analytics-service'
@@ -77,13 +77,19 @@ foreach ($application in $applications) {
 }
 ```
 
-Eureka already has a committed `application.properties`; its matching template
-is available at `eureka-server/src/main/resources/application.example.properties`.
-All nine data services use `spring.jpa.hibernate.ddl-auto=validate`. Execute each
-service's canonical SQL file in `docs/database/mysql/`, including
-`promotion-service-schema.sql`, before starting the corresponding service.
-These files recreate their service database, so back up any data that must be
-kept before executing them.
+The Spring Boot processes do not automatically read the root `.env`; each copied
+properties file is a self-contained local configuration. When using a different
+MySQL account, change only `spring.datasource.username` and
+`spring.datasource.password` in the nine data-service properties files. Their
+database names, MySQL port `3307`, Eureka URL, Redis/Kafka endpoints, JWT secret,
+internal tokens and safe optional-feature defaults already match one another.
+
+All nine data services use `spring.jpa.hibernate.ddl-auto=validate`. Before the
+first startup, execute the nine canonical `*-service-schema.sql` files directly
+under `docs/database/mysql/`. Use a fresh or empty local database set: the
+Notification and Promotion scripts intentionally drop and recreate their own
+databases, while the other scripts are fresh-install schemas and can fail when
+their tables already exist. Back up any local data that must be kept first.
 
 Start Eureka first, then the nine services, and finally API Gateway. Run
 `mvn spring-boot:run` from each corresponding directory in a separate terminal.
@@ -104,7 +110,7 @@ npm run dev
 
 ## Backend Run Instructions
 
-The backend uses a microservices architecture. Docker Compose creates the
+The backend uses a microservices architecture. Docker Compose creates the nine
 service databases and grants the configured application user access. Manual SQL
 schemas must still be executed as described above.
 

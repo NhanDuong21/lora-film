@@ -15,7 +15,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
 
     ports:
-      - "3307:3306"
+      - "${MYSQL_PORT:-3307}:3306"
 
     volumes:
       - mysql_data:/var/lib/mysql
@@ -89,7 +89,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
 
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_PORT:-9092}
 
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1

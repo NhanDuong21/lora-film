@@ -11,6 +11,7 @@ server/promotion-service/target/
 server/score-service/target/
 
 # Local application config per service (do not push)
+eureka-server/src/main/resources/application.properties
 api-gateway/src/main/resources/application.properties
 server/auth-service/src/main/resources/application.properties
 server/movie-service/src/main/resources/application.properties
