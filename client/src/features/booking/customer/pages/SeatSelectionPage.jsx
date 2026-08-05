@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, ShieldAlert
+  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, Projector, ShieldAlert
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
@@ -624,7 +624,22 @@ export default function SeatSelectionPage() {
 
         {/* Projector Screen & Seating Map */}
         <section className="mb-8 overflow-x-auto rounded-3xl border border-white/10 bg-zinc-900/70 p-4 shadow-2xl shadow-black/20 md:p-6">
-          <div className="mx-auto min-w-[680px]">
+          <div className="relative mx-auto min-w-[680px]">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-16 top-8 z-0 overflow-hidden opacity-80"
+            >
+              <div
+                className="absolute inset-0 animate-pulse bg-gradient-to-t from-transparent via-amber-400/[0.025] to-orange-300/[0.14] blur-[1px]"
+                style={{
+                  clipPath: 'polygon(18% 0%, 82% 0%, 55% 100%, 45% 100%)'
+                }}
+              />
+              <div
+                className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-gradient-to-b from-orange-300/30 via-brand-orange/10 to-transparent"
+              />
+            </div>
+
             <div className="mx-auto max-w-3xl mb-12">
               <div className="h-2 rounded-[100%] bg-gradient-to-r from-transparent via-brand-orange to-transparent shadow-[0_8px_28px_rgba(255,122,0,0.35)]" />
               <p className="mt-3 flex items-center justify-center gap-2 text-center text-[10px] font-black tracking-[.35em] text-zinc-500">
@@ -706,6 +721,19 @@ export default function SeatSelectionPage() {
                   </div>
                 );
               })}
+            </div>
+
+            <div className="relative z-20 mt-10 flex flex-col items-center justify-center pb-2">
+              <div className="absolute -top-5 h-20 w-40 rounded-full bg-orange-500/10 blur-2xl animate-pulse" aria-hidden="true" />
+              <div className="relative flex items-center gap-2 rounded-2xl border border-orange-400/25 bg-zinc-950/95 px-4 py-2.5 shadow-[0_0_28px_rgba(249,115,22,0.16)]">
+                <Projector className="h-5 w-5 text-orange-300" aria-hidden="true" />
+                <span className="text-[10px] font-black uppercase tracking-[.22em] text-orange-200">
+                  Máy chiếu
+                </span>
+              </div>
+              <span className="mt-2 text-[9px] font-bold uppercase tracking-[.28em] text-zinc-600">
+                Hướng về màn hình
+              </span>
             </div>
           </div>
         </section>
