@@ -614,6 +614,10 @@ export default function SeatSelectionPage() {
                 <span className="h-5 w-5 rounded border-2 border-brand-orange bg-white" aria-hidden="true" />
                 <span className="text-[10px] font-bold text-zinc-300">Đang chọn</span>
               </div>
+              <div className="flex items-center gap-2 rounded-lg border border-fuchsia-400/30 bg-black/20 px-2.5 py-2">
+                <span className="h-5 w-5 rounded border border-fuchsia-300 bg-fuchsia-950" aria-hidden="true" />
+                <span className="text-[10px] font-bold text-zinc-300">Đang được giữ</span>
+              </div>
               <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
                 <span className="h-5 w-5 rounded border border-zinc-700 bg-zinc-900 opacity-60" aria-hidden="true" />
                 <span className="text-[10px] font-bold text-zinc-300">Không khả dụng</span>
@@ -667,6 +671,7 @@ export default function SeatSelectionPage() {
                     >
                       {seatUnits.map(seatUnit => {
                         const presentation = seatPresentation(seatUnit);
+                        const isHeld = seatUnit.reservationStatus === 'HELD';
                         const isSelected = seatUnit.seats.every(seat =>
                           selectedSeats.some(selected => selected.publicId === seat.publicId)
                         );
@@ -699,13 +704,21 @@ export default function SeatSelectionPage() {
                                 ? 'border-brand-orange bg-white text-zinc-950 ring-2 ring-brand-orange/80 shadow-[0_0_14px_rgba(255,122,0,0.45)] scale-105'
                                 : presentation.className
                             } ${
-                              seatUnit.sellable && !seatUnit.blockedForShowtime
-                                ? 'cursor-pointer hover:scale-105'
-                                : 'cursor-not-allowed opacity-40'
+                            seatUnit.sellable && !seatUnit.blockedForShowtime
+                              ? 'cursor-pointer hover:scale-105'
+                              : isHeld
+                                ? 'cursor-not-allowed'
+                                : seatUnit.reservationStatus === 'BOOKED'
+                                  ? 'cursor-not-allowed opacity-75'
+                                  : 'cursor-not-allowed opacity-40'
                             }`}
                           >
                             <span aria-hidden="true">{seatUnit.seatCode}</span>
-                            {(seatUnit.blockedForShowtime
+                            {isHeld ? (
+                              <span className="absolute -right-1 -top-1 rounded-full bg-fuchsia-950 p-0.5 text-fuchsia-200" aria-hidden="true">
+                                <Clock3 size={10} />
+                              </span>
+                            ) : (seatUnit.blockedForShowtime
                               || seatUnit.operationalStatus !== 'ACTIVE'
                               || !seatUnit.priced
                               || !seatUnit.pairValid) && (
