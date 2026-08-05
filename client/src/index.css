@@ -69,3 +69,60 @@
   @apply rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm transition-all;
 }
 
+/* Ambient sound visualization for the cinema seat map. */
+@keyframes cinema-sound-wave {
+  0% {
+    opacity: 0;
+    transform: scale(0.55, 0.6);
+  }
+  18% {
+    opacity: 0.42;
+  }
+  72% {
+    opacity: 0.16;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18, 1.08);
+  }
+}
+
+.cinema-sound-wave {
+  animation: cinema-sound-wave 3.4s ease-out infinite;
+  border: 1px solid rgba(251, 146, 60, 0.42);
+  border-top-color: rgba(251, 146, 60, 0.08);
+  border-bottom-color: rgba(251, 146, 60, 0.08);
+  border-radius: 50%;
+  filter: drop-shadow(0 0 7px rgba(249, 115, 22, 0.22));
+  transform-origin: left center;
+}
+
+.cinema-sound-wave-right {
+  animation-name: cinema-sound-wave-right;
+  transform-origin: right center;
+}
+
+@keyframes cinema-sound-wave-right {
+  0% {
+    opacity: 0;
+    transform: scale(0.55, 0.6);
+  }
+  18% {
+    opacity: 0.42;
+  }
+  72% {
+    opacity: 0.16;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18, 1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinema-sound-wave {
+    animation: none;
+    opacity: 0.18;
+  }
+}
+

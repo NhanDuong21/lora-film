@@ -644,6 +644,8 @@ export default function SeatSelectionPage() {
               />
             </div>
 
+            <SoundWaveField side="left" />
+            <SoundWaveField side="right" />
             <SpeakerStack side="left" />
             <SpeakerStack side="right" />
 
@@ -869,23 +871,51 @@ function SpeakerStack({ side }) {
     <div
       role="img"
       aria-label={`Loa ${label}`}
-      className={`pointer-events-none absolute top-[47%] z-10 hidden h-36 w-12 -translate-y-1/2 flex-col items-center justify-between rounded-2xl border border-orange-300/20 bg-zinc-950/90 px-2 py-3 text-orange-200 shadow-[0_0_24px_rgba(249,115,22,0.16)] lg:flex ${
+      className={`pointer-events-none absolute top-[47%] z-10 hidden h-40 w-14 -translate-y-1/2 [perspective:700px] lg:flex ${
         isLeft ? 'left-2' : 'right-2'
       }`}
     >
-      <div className="absolute inset-1 rounded-xl border border-orange-400/10" aria-hidden="true" />
-      <div className="relative flex flex-col gap-2" aria-hidden="true">
+      <div
+        className="absolute inset-y-0 left-1/2 flex w-12 -translate-x-1/2 flex-col items-center justify-between overflow-hidden rounded-[18px] border border-orange-300/35 bg-gradient-to-br from-zinc-700 via-zinc-950 to-black px-2.5 py-3 text-orange-200 shadow-[inset_5px_0_10px_rgba(255,255,255,0.08),inset_-8px_-5px_16px_rgba(0,0,0,0.85),0_0_28px_rgba(249,115,22,0.2)]"
+        style={{ transform: `translateX(-50%) rotateY(${isLeft ? '10deg' : '-10deg'})` }}
+        aria-hidden="true"
+      >
+        <div className="absolute inset-1 rounded-[13px] border border-orange-300/15" />
+        <div className="relative flex flex-col gap-2" aria-hidden="true">
         {[0, 1, 2].map(driver => (
           <span
             key={driver}
-            className="h-4 w-4 rounded-full border border-orange-300/50 bg-orange-400/10 shadow-[inset_0_0_0_3px_rgba(24,24,27,0.85),0_0_8px_rgba(249,115,22,0.18)]"
+            className="h-5 w-5 rounded-full border border-orange-300/55 bg-[radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.28),transparent_18%,rgba(249,115,22,0.16)_45%,rgba(9,9,11,0.95)_68%)] shadow-[inset_0_0_0_3px_rgba(24,24,27,0.9),inset_2px_2px_4px_rgba(255,255,255,0.12),0_0_9px_rgba(249,115,22,0.24)]"
           />
         ))}
+        </div>
+        <Volume2 className="relative h-4 w-4 animate-pulse text-orange-300" aria-hidden="true" />
+        <span className="relative text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">
+          {isLeft ? 'L' : 'R'}
+        </span>
       </div>
-      <Volume2 className="relative h-4 w-4 animate-pulse text-orange-300" aria-hidden="true" />
-      <span className="relative text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">
-        {isLeft ? 'L' : 'R'}
-      </span>
+    </div>
+  );
+}
+
+function SoundWaveField({ side }) {
+  const isLeft = side === 'left';
+
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute top-[47%] z-0 hidden h-52 w-72 -translate-y-1/2 overflow-visible lg:block ${
+        isLeft ? 'left-10' : 'right-10'
+      }`}
+    >
+      {[0, 1, 2].map(index => (
+        <span
+          key={index}
+          className={`cinema-sound-wave absolute inset-0 ${isLeft ? '' : 'cinema-sound-wave-right'}`}
+          style={{ animationDelay: `${index * 1.1}s` }}
+        />
+      ))}
+      <span className={`absolute top-1/2 h-px w-full -translate-y-1/2 from-orange-300/0 via-orange-300/20 to-orange-300/0 ${isLeft ? 'bg-gradient-to-r' : 'bg-gradient-to-l'}`} />
     </div>
   );
 }
