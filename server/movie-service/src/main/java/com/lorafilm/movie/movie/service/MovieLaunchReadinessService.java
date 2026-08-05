@@ -92,20 +92,22 @@ public class MovieLaunchReadinessService {
                 && !approvalPolicy.hasOperationalShowtime(movie.getId())) {
             warnings.add(new MovieLaunchReadinessResponse.LaunchIssue(
                     "RELEASE_DATE_REACHED_WITHOUT_SHOWTIME",
-                    "Release date has arrived, but no operational showtime is available to start the movie.",
+                    "Đã đến ngày khởi chiếu nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.",
                     "CREATE_SHOWTIME", null));
         }
 
         if ((movie.getStatus() == MovieStatus.UPCOMING || movie.getStatus() == MovieStatus.NOW_SHOWING)
                 && showtimes.isEmpty()) {
             warnings.add(new MovieLaunchReadinessResponse.LaunchIssue(
-                    "NO_FUTURE_SHOWTIME", "No future draft or open showtime is available.",
+                    "NO_FUTURE_SHOWTIME",
+                    "Phim chưa có suất chiếu nháp hoặc suất đã mở bán trong tương lai. Hãy tạo suất chiếu hoặc mở một suất nháp.",
                     "CREATE_SHOWTIME", null));
         }
 
         if (movie.getStatus() == MovieStatus.NOW_SHOWING && openCount == 0) {
             blockers.add(new MovieLaunchReadinessResponse.LaunchIssue(
-                    "NO_OPEN_SHOWTIME", "Movie is now showing but has no showtime open for booking.",
+                    "NO_OPEN_SHOWTIME",
+                    "Phim đang ở trạng thái đang chiếu nhưng chưa có suất nào mở bán. Hãy mở một suất chiếu.",
                     "OPEN_SHOWTIME", null));
         }
 

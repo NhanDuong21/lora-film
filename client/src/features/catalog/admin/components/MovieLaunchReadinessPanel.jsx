@@ -13,6 +13,17 @@ const actionLabel = {
   REVIEW_MOVIE: 'Kiểm tra hồ sơ',
 };
 
+const issueMessages = {
+  RELEASE_DATE_REACHED_WITHOUT_SHOWTIME:
+    'Đã đến ngày khởi chiếu nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.',
+  NO_FUTURE_SHOWTIME:
+    'Phim chưa có suất chiếu nháp hoặc suất đã mở bán trong tương lai. Hãy tạo suất chiếu hoặc mở một suất nháp.',
+  NO_OPEN_SHOWTIME:
+    'Phim đang ở trạng thái đang chiếu nhưng chưa có suất nào mở bán. Hãy mở một suất chiếu.',
+};
+
+const getIssueMessage = issue => issueMessages[issue?.code] || issue?.message;
+
 const issueLink = issue => {
   if (issue?.action === 'CREATE_SHOWTIME') return '/admin/showtimes/create';
   if (issue?.action === 'OPEN_SHOWTIME' && !issue?.showtimePublicId) {
@@ -116,7 +127,7 @@ export default function MovieLaunchReadinessPanel({ movie }) {
                   <div key={`${issue.code}-${issue.showtimePublicId || index}`} className="flex flex-col gap-2 rounded-xl border border-amber-500/15 bg-amber-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-2 text-sm text-amber-100">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                      <span>{issue.message}</span>
+                      <span>{getIssueMessage(issue)}</span>
                     </div>
                     {link ? (
                       <Link to={link} className="flex shrink-0 items-center gap-1 text-xs font-bold text-orange-300 hover:text-orange-200">
