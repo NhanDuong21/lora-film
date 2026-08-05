@@ -12,15 +12,16 @@ const optimizeUnsplashUrl = (url, width, height, quality) => {
   return optimized.toString();
 };
 
-const optimizeCloudinaryUrl = (url, width, height, quality) => {
+const optimizeCloudinaryUrl = (url, width, height, quality, gravity) => {
   const uploadMarker = '/image/upload/';
   const markerIndex = url.indexOf(uploadMarker);
   if (markerIndex < 0) return url;
 
   const transformation = [
     'f_auto',
-    `q_auto:${quality <= 60 ? 'eco' : 'good'}`,
+    `q_auto:${quality <= 60 ? 'eco' : quality >= 85 ? 'best' : 'good'}`,
     'c_fill',
+    gravity ? `g_${gravity}` : null,
     `w_${width}`,
     height ? `h_${height}` : null
   ].filter(Boolean).join(',');
@@ -36,7 +37,7 @@ const optimizeCloudinaryUrl = (url, width, height, quality) => {
  */
 export const getOptimizedImageUrl = (
   imageUrl,
-  { width = 320, height, quality = DEFAULT_QUALITY } = {}
+  { width = 320, height, quality = DEFAULT_QUALITY, gravity } = {}
 ) => {
   if (!imageUrl || typeof imageUrl !== 'string') return '';
 
@@ -50,7 +51,13 @@ export const getOptimizedImageUrl = (
       return optimizeUnsplashUrl(imageUrl, normalizedWidth, normalizedHeight, normalizedQuality);
     }
     if (parsed.hostname.endsWith('res.cloudinary.com')) {
-      return optimizeCloudinaryUrl(imageUrl, normalizedWidth, normalizedHeight, normalizedQuality);
+      return optimizeCloudinaryUrl(
+        imageUrl,
+        normalizedWidth,
+        normalizedHeight,
+        normalizedQuality,
+        gravity,
+      );
     }
   } catch {
     return imageUrl;

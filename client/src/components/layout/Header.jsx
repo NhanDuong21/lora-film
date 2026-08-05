@@ -14,6 +14,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getCinemas } from '@/features/catalog/customer/services/movieService';
 import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 const resolveMediaUrl = value => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
@@ -396,7 +397,12 @@ export default function Header() {
                   >
                     {user?.avatarUrl && !avatarLoadFailed ? (
                       <img
-                        src={resolveMediaUrl(user.avatarUrl)}
+                        src={getOptimizedImageUrl(resolveMediaUrl(user.avatarUrl), {
+                          width: 192,
+                          height: 192,
+                          quality: 90,
+                          gravity: 'face',
+                        })}
                         alt={user?.fullName || 'Ảnh đại diện'}
                         className="h-full w-full object-cover"
                         referrerPolicy="no-referrer"

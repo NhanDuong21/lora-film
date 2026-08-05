@@ -34,6 +34,7 @@ import {
   Armchair,
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const sidebarStateStorageKey = 'lorafilm.admin.sidebar.sections.v1';
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
@@ -41,6 +42,13 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 const resolveMediaUrl = value => (
   value?.startsWith('/') ? `${apiBaseUrl}${value}` : value
 );
+
+const getAvatarUrl = value => getOptimizedImageUrl(resolveMediaUrl(value), {
+  width: 256,
+  height: 256,
+  quality: 90,
+  gravity: 'face',
+});
 
 function SidebarAvatar({ avatarUrl, alt, fallback }) {
   const [failedUrl, setFailedUrl] = useState('');
@@ -109,7 +117,7 @@ export default function AdminSidebar({
     ? 'Finance'
     : (isFullAdmin ? 'Admin' : normalizedRole.replaceAll('_', ' ') || 'Staff');
   const adminHomePath = getAdminLandingPath(normalizedRole, permissions);
-  const avatarUrl = resolveMediaUrl(user?.avatarUrl);
+  const avatarUrl = getAvatarUrl(user?.avatarUrl);
 
   const sections = [
     {

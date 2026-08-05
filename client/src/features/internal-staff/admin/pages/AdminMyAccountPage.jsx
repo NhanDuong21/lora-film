@@ -30,6 +30,7 @@ import {
   revokeSession
 } from '@/features/auth/services/authService';
 import { updateUserProfile, uploadAvatar } from '@/features/auth/services/userService';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const accountTabs = new Set(['profile', 'password', 'email', 'sessions']);
 const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$/;
@@ -149,7 +150,12 @@ export default function AdminMyAccountPage() {
 
   const displayName = profile?.fullName || user?.fullName || email?.split('@')[0] || 'Tài khoản LoraFilm';
   const displayRole = roleName(userRole || user?.role);
-  const avatarUrl = resolveMediaUrl(profile?.avatarUrl || user?.avatarUrl);
+  const avatarUrl = getOptimizedImageUrl(resolveMediaUrl(profile?.avatarUrl || user?.avatarUrl), {
+    width: 256,
+    height: 256,
+    quality: 90,
+    gravity: 'face',
+  });
 
   const tabs = useMemo(() => ([
     { id: 'profile', label: 'Thông tin cá nhân', icon: UserRound },

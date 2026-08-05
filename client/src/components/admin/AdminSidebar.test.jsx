@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminSidebar from './AdminSidebar';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const renderSidebar = (user = { role: 'ADMIN', permissions: [] }, activeTab = 'dashboard') => render(
   <MemoryRouter>
@@ -72,7 +73,12 @@ describe('AdminSidebar', () => {
     });
 
     expect(screen.getByRole('img', { name: 'Ảnh đại diện LoraFilm Administrator' }))
-      .toHaveAttribute('src', avatarUrl);
+      .toHaveAttribute('src', getOptimizedImageUrl(avatarUrl, {
+        width: 256,
+        height: 256,
+        quality: 90,
+        gravity: 'face',
+      }));
   });
 
   it('shows notification administration links for full administrators', () => {
