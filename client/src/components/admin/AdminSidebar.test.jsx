@@ -62,6 +62,19 @@ describe('AdminSidebar', () => {
     expect(screen.queryByText('Bảo mật')).not.toBeInTheDocument();
   });
 
+  it('renders the current avatar in the admin account card', () => {
+    const avatarUrl = 'https://res.cloudinary.com/demo/image/upload/avatar.jpg';
+    renderSidebar({
+      role: 'ADMIN',
+      permissions: [],
+      fullName: 'LoraFilm Administrator',
+      avatarUrl,
+    });
+
+    expect(screen.getByRole('img', { name: 'Ảnh đại diện LoraFilm Administrator' }))
+      .toHaveAttribute('src', avatarUrl);
+  });
+
   it('shows notification administration links for full administrators', () => {
     renderSidebar();
     openSection('Hệ thống & thông báo');
