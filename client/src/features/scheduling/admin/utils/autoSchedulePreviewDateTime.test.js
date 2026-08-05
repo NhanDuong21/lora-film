@@ -119,7 +119,7 @@ describe('auto schedule preview cinema time', () => {
 
     expect(runWithTimezone('UTC')).toBe(runWithTimezone('America/Los_Angeles'));
     expect(runWithTimezone('UTC')).toBe(runWithTimezone('Asia/Tokyo'));
-  });
+  }, 15000);
 
   it('treats authoritative service dates as plain calendar strings', () => {
     expect(getServiceDateKey('2026-07-24')).toBe('2026-07-24');

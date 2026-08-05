@@ -22,6 +22,7 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
   const [selectedTransition, setSelectedTransition] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [warningAcknowledged, setWarningAcknowledged] = useState(false);
+  const [transitionReason, setTransitionReason] = useState('');
   const { triggerToast } = useOutletContext() || {};
 
   const handleSuccess = async () => {
@@ -40,7 +41,15 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
   if (!movie) return null;
 
   const currentStatus = movie.status || 'UNKNOWN';
-  const allowedTransitions = MOVIE_TRANSITIONS[currentStatus] || [];
+  const releaseDate = movie.releaseDate ? new Date(`${movie.releaseDate}T00:00:00`) : null;
+  const inferredApprovalTarget = tmdbReview?.approvalTarget
+    || (releaseDate && releaseDate <= new Date() ? 'NOW_SHOWING' : 'UPCOMING');
+  const configuredTransitions = MOVIE_TRANSITIONS[currentStatus] || [];
+  const allowedTransitions = currentStatus === 'DRAFT'
+    ? configuredTransitions.filter(transition => (
+        !transition.requiresPublishChecklist || transition.target === inferredApprovalTarget
+      ))
+    : configuredTransitions;
   const readiness = getMovieReadinessView(movie);
   const checklist = getPublishChecklist(readiness);
   const isDraft = currentStatus === 'DRAFT';
@@ -53,11 +62,12 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
     resetError();
     setSelectedTransition(transition);
     setWarningAcknowledged(false);
+    setTransitionReason('');
     setIsDialogOpen(true);
   };
 
   const handleConfirmTransition = async () => {
-    if (selectedTransition) await transitionStatus(selectedTransition.target);
+    if (selectedTransition) await transitionStatus(selectedTransition.target, transitionReason);
   };
 
   const renderChecklistStatus = status => {
@@ -96,7 +106,9 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
               </h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
                 {isDraft
-                  ? 'Hoàn thiện các mục bắt buộc bên dưới. Khi tất cả đều đạt, bạn có thể đưa phim sang trạng thái sắp chiếu.'
+                  ? inferredApprovalTarget === 'NOW_SHOWING'
+                    ? 'Phim đã tới ngày phát hành. Hãy hoàn thiện dữ liệu và lập ít nhất một suất chiếu hợp lệ trước khi duyệt sang Đang chiếu.'
+                    : 'Phim chưa tới ngày phát hành. Khi đủ dữ liệu bắt buộc, phim sẽ được duyệt sang Sắp chiếu.'
                   : 'Các thao tác bên dưới thay đổi việc phim có được hiển thị và nhận lịch chiếu hay không.'}
               </p>
             </div>
@@ -181,7 +193,10 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
                 let isDisabled = false;
                 let disableReason = '';
                 if (transition.requiresPublishChecklist) {
-                  if (readiness.healthStatus === 'BLOCKED') {
+                  if (currentStatus === 'DRAFT' && !movie.releaseDate) {
+                    isDisabled = true;
+                    disableReason = 'Cần bổ sung ngày khởi chiếu tại hệ thống trước khi duyệt.';
+                  } else if (readiness.healthStatus === 'BLOCKED') {
                     isDisabled = true;
                     disableReason = 'Còn mục bắt buộc chưa hoàn thiện.';
                   } else if (readiness.healthStatus === 'UNKNOWN') {
@@ -191,6 +206,13 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
                   if (movie.source === 'TMDB' && currentStatus === 'DRAFT' && tmdbReview?.canApprove === false) {
                     isDisabled = true;
                     disableReason = tmdbReview.approvalBlockers?.[0] || 'Phim nhập tự động chưa đủ điều kiện duyệt.';
+                  }
+                  if (currentStatus === 'DRAFT'
+                    && transition.target === 'NOW_SHOWING'
+                    && !tmdbReview
+                    && !(movie.showtimeCount > 0)) {
+                    isDisabled = true;
+                    disableReason = 'Cần lập ít nhất một suất chiếu hiện tại hoặc tương lai trước khi duyệt.';
                   }
                 }
 
@@ -229,6 +251,8 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
         error={error}
         warningAcknowledged={warningAcknowledged}
         onWarningAcknowledged={setWarningAcknowledged}
+        reason={transitionReason}
+        onReasonChange={setTransitionReason}
         onConfirm={handleConfirmTransition}
       />
     </>

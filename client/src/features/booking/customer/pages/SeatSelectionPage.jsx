@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, ShieldAlert
+  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, Projector, ShieldAlert, Volume2
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
@@ -285,6 +285,38 @@ export default function SeatSelectionPage() {
     () => seatRows.map(([label, seats]) => [label, buildSeatUnits(seats)]),
     [seatRows]
   );
+
+  // Calculate the real occupied span for every row. The previous layout forced
+  // every row into 16 columns, which left unused columns on the right and made
+  // shorter rows appear shifted to the left of the projector screen.
+  const seatGridMetrics = useMemo(() => {
+    const rowMetrics = new Map();
+    let columnCount = 1;
+
+    rows.forEach(([label, seatUnits]) => {
+      const occupiedColumns = seatUnits.map(seatUnit => {
+        const start = Number(seatUnit.positionColumn ?? 0);
+        const span = Math.max(1, Number(seatUnit.columnSpan ?? 1));
+        return {
+          start: Number.isFinite(start) ? start : 0,
+          end: (Number.isFinite(start) ? start : 0) + span - 1
+        };
+      });
+
+      const firstColumn = occupiedColumns.length > 0
+        ? Math.min(...occupiedColumns.map(column => column.start))
+        : 0;
+      const lastColumn = occupiedColumns.length > 0
+        ? Math.max(...occupiedColumns.map(column => column.end))
+        : 0;
+      const span = Math.max(1, lastColumn - firstColumn + 1);
+
+      rowMetrics.set(label, { firstColumn, span });
+      columnCount = Math.max(columnCount, span);
+    });
+
+    return { columnCount, rowMetrics };
+  }, [rows]);
 
   const selectedSeatUnits = useMemo(
     () => buildSeatUnits(selectedSeats),
@@ -582,6 +614,10 @@ export default function SeatSelectionPage() {
                 <span className="h-5 w-5 rounded border-2 border-brand-orange bg-white" aria-hidden="true" />
                 <span className="text-[10px] font-bold text-zinc-300">Đang chọn</span>
               </div>
+              <div className="flex items-center gap-2 rounded-lg border border-fuchsia-400/30 bg-black/20 px-2.5 py-2">
+                <span className="h-5 w-5 rounded border border-fuchsia-300 bg-fuchsia-950" aria-hidden="true" />
+                <span className="text-[10px] font-bold text-zinc-300">Đang được giữ</span>
+              </div>
               <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
                 <span className="h-5 w-5 rounded border border-zinc-700 bg-zinc-900 opacity-60" aria-hidden="true" />
                 <span className="text-[10px] font-bold text-zinc-300">Không khả dụng</span>
@@ -592,7 +628,27 @@ export default function SeatSelectionPage() {
 
         {/* Projector Screen & Seating Map */}
         <section className="mb-8 overflow-x-auto rounded-3xl border border-white/10 bg-zinc-900/70 p-4 shadow-2xl shadow-black/20 md:p-6">
-          <div className="mx-auto min-w-[680px]">
+          <div className="relative mx-auto min-w-[680px]">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-16 top-8 z-0 overflow-hidden opacity-80"
+            >
+              <div
+                className="absolute inset-0 animate-pulse bg-gradient-to-t from-transparent via-amber-400/[0.025] to-orange-300/[0.14] blur-[1px]"
+                style={{
+                  clipPath: 'polygon(18% 0%, 82% 0%, 55% 100%, 45% 100%)'
+                }}
+              />
+              <div
+                className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-gradient-to-b from-orange-300/30 via-brand-orange/10 to-transparent"
+              />
+            </div>
+
+            <SoundWaveField side="left" />
+            <SoundWaveField side="right" />
+            <SpeakerStack side="left" />
+            <SpeakerStack side="right" />
+
             <div className="mx-auto max-w-3xl mb-12">
               <div className="h-2 rounded-[100%] bg-gradient-to-r from-transparent via-brand-orange to-transparent shadow-[0_8px_28px_rgba(255,122,0,0.35)]" />
               <p className="mt-3 flex items-center justify-center gap-2 text-center text-[10px] font-black tracking-[.35em] text-zinc-500">
@@ -600,29 +656,34 @@ export default function SeatSelectionPage() {
               </p>
             </div>
 
-            <div className="mx-auto max-w-5xl space-y-4">
+            <div className="mx-auto max-w-4xl space-y-4">
               {rows.map(([label, seatUnits]) => {
-                const columnCount = Math.max(
-                  16,
-                  ...seatUnits.map(unit => (
-                    (unit.positionColumn ?? 0) + (unit.columnSpan ?? 1)
-                  ))
+                const rowMetric = seatGridMetrics.rowMetrics.get(label) || {
+                  firstColumn: 0,
+                  span: seatGridMetrics.columnCount
+                };
+                const rowOffset = Math.floor(
+                  (seatGridMetrics.columnCount - rowMetric.span) / 2
                 );
                 return (
                   <div key={label} className="flex items-center gap-3">
                     <span className="sticky left-0 z-10 w-8 rounded bg-zinc-900 py-1 text-center text-xs font-black text-zinc-500">{label}</span>
                     <div
-                      className="grid flex-1 gap-2"
+                      className="grid w-full max-w-3xl flex-1 gap-2"
                       style={{
-                        gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`
+                        gridTemplateColumns: `repeat(${seatGridMetrics.columnCount}, minmax(0, 1fr))`
                       }}
                     >
                       {seatUnits.map(seatUnit => {
                         const presentation = seatPresentation(seatUnit);
+                        const isHeld = seatUnit.reservationStatus === 'HELD';
                         const isSelected = seatUnit.seats.every(seat =>
                           selectedSeats.some(selected => selected.publicId === seat.publicId)
                         );
-                        const column = (seatUnit.positionColumn ?? 0) + 1;
+                        const column = rowOffset
+                          + Number(seatUnit.positionColumn ?? 0)
+                          - rowMetric.firstColumn
+                          + 1;
                         const reason = seatUnit.pairValid
                           ? presentation.reason
                           : 'cấu hình ghế đôi không hợp lệ';
@@ -648,13 +709,21 @@ export default function SeatSelectionPage() {
                                 ? 'border-brand-orange bg-white text-zinc-950 ring-2 ring-brand-orange/80 shadow-[0_0_14px_rgba(255,122,0,0.45)] scale-105'
                                 : presentation.className
                             } ${
-                              seatUnit.sellable && !seatUnit.blockedForShowtime
-                                ? 'cursor-pointer hover:scale-105'
-                                : 'cursor-not-allowed opacity-40'
+                            seatUnit.sellable && !seatUnit.blockedForShowtime
+                              ? 'cursor-pointer hover:scale-105'
+                              : isHeld
+                                ? 'cursor-not-allowed'
+                                : seatUnit.reservationStatus === 'BOOKED'
+                                  ? 'cursor-not-allowed opacity-75'
+                                  : 'cursor-not-allowed opacity-40'
                             }`}
                           >
                             <span aria-hidden="true">{seatUnit.seatCode}</span>
-                            {(seatUnit.blockedForShowtime
+                            {isHeld ? (
+                              <span className="absolute -right-1 -top-1 rounded-full bg-fuchsia-950 p-0.5 text-fuchsia-200" aria-hidden="true">
+                                <Clock3 size={10} />
+                              </span>
+                            ) : (seatUnit.blockedForShowtime
                               || seatUnit.operationalStatus !== 'ACTIVE'
                               || !seatUnit.priced
                               || !seatUnit.pairValid) && (
@@ -670,6 +739,19 @@ export default function SeatSelectionPage() {
                   </div>
                 );
               })}
+            </div>
+
+            <div className="relative z-20 mt-10 flex flex-col items-center justify-center pb-2">
+              <div className="absolute -top-5 h-20 w-40 rounded-full bg-orange-500/10 blur-2xl animate-pulse" aria-hidden="true" />
+              <div className="relative flex items-center gap-2 rounded-2xl border border-orange-400/25 bg-zinc-950/95 px-4 py-2.5 shadow-[0_0_28px_rgba(249,115,22,0.16)]">
+                <Projector className="h-5 w-5 text-orange-300" aria-hidden="true" />
+                <span className="text-[10px] font-black uppercase tracking-[.22em] text-orange-200">
+                  Máy chiếu
+                </span>
+              </div>
+              <span className="mt-2 text-[9px] font-bold uppercase tracking-[.28em] text-zinc-600">
+                Hướng về màn hình
+              </span>
             </div>
           </div>
         </section>
@@ -778,5 +860,62 @@ export default function SeatSelectionPage() {
         </div>
       )}
     </main>
+  );
+}
+
+function SpeakerStack({ side }) {
+  const isLeft = side === 'left';
+  const label = isLeft ? 'trái' : 'phải';
+
+  return (
+    <div
+      role="img"
+      aria-label={`Loa ${label}`}
+      className={`pointer-events-none absolute top-[47%] z-10 hidden h-40 w-14 -translate-y-1/2 [perspective:700px] lg:flex ${
+        isLeft ? 'left-2' : 'right-2'
+      }`}
+    >
+      <div
+        className="absolute inset-y-0 left-1/2 flex w-12 -translate-x-1/2 flex-col items-center justify-between overflow-hidden rounded-[18px] border border-orange-300/35 bg-gradient-to-br from-zinc-700 via-zinc-950 to-black px-2.5 py-3 text-orange-200 shadow-[inset_5px_0_10px_rgba(255,255,255,0.08),inset_-8px_-5px_16px_rgba(0,0,0,0.85),0_0_28px_rgba(249,115,22,0.2)]"
+        style={{ transform: `translateX(-50%) rotateY(${isLeft ? '10deg' : '-10deg'})` }}
+        aria-hidden="true"
+      >
+        <div className="absolute inset-1 rounded-[13px] border border-orange-300/15" />
+        <div className="relative flex flex-col gap-2" aria-hidden="true">
+        {[0, 1, 2].map(driver => (
+          <span
+            key={driver}
+            className="h-5 w-5 rounded-full border border-orange-300/55 bg-[radial-gradient(circle_at_35%_30%,rgba(255,255,255,0.28),transparent_18%,rgba(249,115,22,0.16)_45%,rgba(9,9,11,0.95)_68%)] shadow-[inset_0_0_0_3px_rgba(24,24,27,0.9),inset_2px_2px_4px_rgba(255,255,255,0.12),0_0_9px_rgba(249,115,22,0.24)]"
+          />
+        ))}
+        </div>
+        <Volume2 className="relative h-4 w-4 animate-pulse text-orange-300" aria-hidden="true" />
+        <span className="relative text-[8px] font-black uppercase tracking-[0.18em] text-zinc-500">
+          {isLeft ? 'L' : 'R'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SoundWaveField({ side }) {
+  const isLeft = side === 'left';
+
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute top-[47%] z-0 hidden h-52 w-72 -translate-y-1/2 overflow-visible lg:block ${
+        isLeft ? 'left-10' : 'right-10'
+      }`}
+    >
+      {[0, 1, 2].map(index => (
+        <span
+          key={index}
+          className={`cinema-sound-wave absolute inset-0 ${isLeft ? '' : 'cinema-sound-wave-right'}`}
+          style={{ animationDelay: `${index * 1.1}s` }}
+        />
+      ))}
+      <span className={`absolute top-1/2 h-px w-full -translate-y-1/2 from-orange-300/0 via-orange-300/20 to-orange-300/0 ${isLeft ? 'bg-gradient-to-r' : 'bg-gradient-to-l'}`} />
+    </div>
   );
 }

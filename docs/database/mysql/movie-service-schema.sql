@@ -43,6 +43,7 @@ CREATE TABLE movies (
     end_date DATE NULL COMMENT 'Null nghĩa là chưa xác định ngày ngừng chiếu',
     country VARCHAR(100),
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, UPCOMING, NOW_SHOWING, ENDED, INACTIVE',
+    version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
@@ -58,6 +59,18 @@ CREATE TABLE movies (
     INDEX idx_movies_status_release_date (status, release_date),
     INDEX idx_movies_public_id (public_id),
     INDEX idx_movies_deleted_at (deleted_at)
+);
+
+CREATE TABLE movie_status_history (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    movie_id BIGINT NOT NULL,
+    previous_status VARCHAR(30) NULL,
+    new_status VARCHAR(30) NOT NULL,
+    reason VARCHAR(500) NULL,
+    changed_at TIMESTAMP(6) NOT NULL,
+    changed_by BIGINT NULL,
+    CONSTRAINT fk_movie_status_history_movie FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
+    INDEX idx_movie_status_history_order (movie_id, changed_at, id)
 );
 
 CREATE TABLE movie_translations (
@@ -387,6 +400,8 @@ CREATE TABLE auditoriums (
     deleted_by BIGINT NULL,
     CONSTRAINT fk_auditoriums_cinema FOREIGN KEY (cinema_id) REFERENCES cinemas (id) ON DELETE RESTRICT,
     CONSTRAINT uk_auditoriums_cinema_name UNIQUE (cinema_id, name),
+    CONSTRAINT chk_auditorium_screen_type CHECK (screen_type IN ('STANDARD', 'IMAX', '4DX', 'SCREENX')),
+    CONSTRAINT chk_auditorium_sound_type CHECK (sound_type IN ('STANDARD', 'DOLBY_ATMOS')),
     CONSTRAINT chk_auditorium_capacity CHECK (capacity > 0),
     CONSTRAINT chk_auditorium_cleaning_buffer CHECK (cleaning_buffer_minutes >= 0),
     INDEX idx_auditoriums_cinema_status (cinema_id, status),

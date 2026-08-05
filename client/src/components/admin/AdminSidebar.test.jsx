@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminSidebar from './AdminSidebar';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const renderSidebar = (user = { role: 'ADMIN', permissions: [] }, activeTab = 'dashboard') => render(
   <MemoryRouter>
@@ -18,6 +19,10 @@ const renderSidebar = (user = { role: 'ADMIN', permissions: [] }, activeTab = 'd
 const openSection = name => fireEvent.click(screen.getByRole('button', { name }));
 
 describe('AdminSidebar', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('groups movie operations into readable admin sections', () => {
     renderSidebar({ role: 'ADMIN', permissions: [] }, 'auto-schedule-history');
 
@@ -56,6 +61,24 @@ describe('AdminSidebar', () => {
     expect(screen.getByRole('button', { name: 'Tài khoản của tôi' })).toBeInTheDocument();
     expect(screen.queryByText('Hồ sơ của tôi')).not.toBeInTheDocument();
     expect(screen.queryByText('Bảo mật')).not.toBeInTheDocument();
+  });
+
+  it('renders the current avatar in the admin account card', () => {
+    const avatarUrl = 'https://res.cloudinary.com/demo/image/upload/avatar.jpg';
+    renderSidebar({
+      role: 'ADMIN',
+      permissions: [],
+      fullName: 'LoraFilm Administrator',
+      avatarUrl,
+    });
+
+    expect(screen.getByRole('img', { name: 'Ảnh đại diện LoraFilm Administrator' }))
+      .toHaveAttribute('src', getOptimizedImageUrl(avatarUrl, {
+        width: 256,
+        height: 256,
+        quality: 90,
+        gravity: 'face',
+      }));
   });
 
   it('shows notification administration links for full administrators', () => {

@@ -9,7 +9,6 @@ import com.lorafilm.movie.movie.domain.enums.AgeRating;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
-import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
 import com.lorafilm.movie.movie.dto.TmdbQueueBreakdownResponse;
@@ -19,6 +18,8 @@ import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,21 +53,27 @@ class MovieServiceImplLifecycleTest {
     @Mock private MovieVersionRepository movieVersionRepository;
     @Mock private MovieMapper movieMapper;
     @Mock private AdminMovieProjectionService projectionService;
+    @Mock private ShowtimeRepository showtimeRepository;
+    @Mock private MovieStatusHistoryService statusHistoryService;
+    @Mock private CurrentUserProvider currentUserProvider;
 
     private MovieServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        MovieLifecyclePolicy lifecyclePolicy = new MovieLifecyclePolicy();
         service = new MovieServiceImpl(
                 movieRepository, movieGenreRepository, movieMediaRepository, movieCreditRepository,
                 movieProductionCompanyRepository, movieVersionRepository, movieMapper,
-                new MovieReadinessEvaluator(), projectionService, new MovieLifecyclePolicy());
+                new MovieReadinessEvaluator(), projectionService, lifecyclePolicy,
+                new MovieApprovalPolicy(lifecyclePolicy, showtimeRepository),
+                statusHistoryService, currentUserProvider);
     }
 
     @Test
     void rejectsIllegalApiTransitionBeforeSaving() {
         Movie movie = movie(1L, MovieStatus.DRAFT, 120);
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-1")).thenReturn(Optional.of(movie));
+        when(movieRepository.findByPublicIdForUpdate("movie-1")).thenReturn(Optional.of(movie));
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -79,7 +86,7 @@ class MovieServiceImplLifecycleTest {
     @Test
     void blockedDraftCannotBeApproved() {
         Movie movie = movie(2L, MovieStatus.DRAFT, 120);
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-2")).thenReturn(Optional.of(movie));
+        when(movieRepository.findByPublicIdForUpdate("movie-2")).thenReturn(Optional.of(movie));
         when(movieGenreRepository.findByMovieId(2L)).thenReturn(List.of());
         when(movieVersionRepository.existsActiveVersion(2L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(2L)).thenReturn(true);
@@ -98,7 +105,7 @@ class MovieServiceImplLifecycleTest {
         MovieGenre genreLink = genreLink(movie);
         MovieDto expected = new MovieDto();
         expected.setStatus(MovieStatus.UPCOMING);
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-3")).thenReturn(Optional.of(movie));
+        when(movieRepository.findByPublicIdForUpdate("movie-3")).thenReturn(Optional.of(movie));
         when(movieGenreRepository.findByMovieId(3L)).thenReturn(List.of(genreLink));
         when(movieVersionRepository.existsActiveVersion(3L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(3L)).thenReturn(true);
@@ -115,6 +122,46 @@ class MovieServiceImplLifecycleTest {
     }
 
     @Test
+    void releasedDraftCanBeApprovedToNowShowingWhenItHasAnOperationalShowtime() {
+        Movie movie = movie(30L, MovieStatus.DRAFT, 120);
+        movie.setReleaseDate(LocalDate.now());
+        MovieDto expected = new MovieDto();
+        expected.setStatus(MovieStatus.NOW_SHOWING);
+        when(movieRepository.findByPublicIdForUpdate("movie-30")).thenReturn(Optional.of(movie));
+        when(showtimeRepository.existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
+                any(), any(), any())).thenReturn(true);
+        when(movieGenreRepository.findByMovieId(30L)).thenReturn(List.of(genreLink(movie)));
+        when(movieVersionRepository.existsActiveVersion(30L)).thenReturn(true);
+        when(movieMediaRepository.existsPrimaryPoster(30L)).thenReturn(true);
+        when(movieRepository.save(movie)).thenReturn(movie);
+        when(movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                any(), any(), any())).thenReturn(Optional.empty());
+        when(movieMapper.toDto(any(), anyList(), isNull())).thenReturn(expected);
+
+        MovieDto result = service.updateMovieStatus("movie-30", MovieStatus.NOW_SHOWING);
+
+        assertEquals(MovieStatus.NOW_SHOWING, movie.getStatus());
+        assertEquals(MovieStatus.NOW_SHOWING, result.getStatus());
+    }
+
+    @Test
+    void releasedDraftStaysDraftWithoutAnOperationalShowtime() {
+        Movie movie = movie(31L, MovieStatus.DRAFT, 120);
+        movie.setReleaseDate(LocalDate.now());
+        when(movieRepository.findByPublicIdForUpdate("movie-31")).thenReturn(Optional.of(movie));
+        when(showtimeRepository.existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
+                any(), any(), any())).thenReturn(false);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.updateMovieStatus("movie-31", MovieStatus.NOW_SHOWING));
+
+        assertEquals(ErrorCode.INVALID_MOVIE_STATUS_TRANSITION, exception.getErrorCode());
+        assertEquals(MovieStatus.DRAFT, movie.getStatus());
+        verify(movieRepository, never()).save(movie);
+    }
+
+    @Test
     void bulkApprovalRevalidatesEveryCandidateAndReturnsPerMovieResults() {
         Movie ready = movie(4L, MovieStatus.DRAFT, 120);
         Movie blocked = movie(5L, MovieStatus.DRAFT, 120);
@@ -123,8 +170,8 @@ class MovieServiceImplLifecycleTest {
 
         when(movieRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(ready, blocked)));
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-4")).thenReturn(Optional.of(ready));
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-5")).thenReturn(Optional.of(blocked));
+        when(movieRepository.findByPublicIdForUpdate("movie-4")).thenReturn(Optional.of(ready));
+        when(movieRepository.findByPublicIdForUpdate("movie-5")).thenReturn(Optional.of(blocked));
         when(movieGenreRepository.findByMovieId(4L)).thenReturn(List.of(genreLink(ready)));
         when(movieGenreRepository.findByMovieId(5L)).thenReturn(List.of());
         when(movieVersionRepository.existsActiveVersion(4L)).thenReturn(true);
@@ -171,64 +218,20 @@ class MovieServiceImplLifecycleTest {
     }
 
     @Test
-    void bulkArchiveMovesOnlyOldTmdbDraftsToInactiveAndRevalidates() {
-        Movie old = movie(6L, MovieStatus.DRAFT, 120);
-        old.setTmdbId(1006L);
-        old.setReleaseDate(LocalDate.now().minusDays(1));
-
-        when(movieRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(old)));
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie-6")).thenReturn(Optional.of(old));
-        when(movieGenreRepository.findByMovieId(6L)).thenReturn(List.of());
-        when(movieRepository.save(old)).thenReturn(old);
-        when(movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
-                any(), any(), any())).thenReturn(Optional.empty());
-        MovieDto archivedDto = new MovieDto();
-        archivedDto.setStatus(MovieStatus.INACTIVE);
-        when(movieMapper.toDto(any(), anyList(), isNull())).thenReturn(archivedDto);
-
-        AdminMovieListQuery filter = new AdminMovieListQuery();
-        filter.setStatus("DRAFT");
-        filter.setSource("TMDB");
-
-        MovieBulkArchiveResponse response = service.bulkArchiveOldTmdbMovies(filter, 100);
-
-        assertEquals(1, response.requested());
-        assertEquals(1, response.archived());
-        assertEquals(0, response.skipped());
-        assertEquals("ARCHIVED", response.results().get(0).outcome());
-        assertEquals(MovieStatus.INACTIVE, old.getStatus());
-        verify(movieRepository).save(old);
-    }
-
-    @Test
-    void bulkArchiveRejectsAFilterOutsideTheTmdbDraftQueue() {
-        AdminMovieListQuery filter = new AdminMovieListQuery();
-        filter.setStatus("DRAFT");
-        filter.setSource("MANUAL");
-
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> service.bulkArchiveOldTmdbMovies(filter, 100));
-
-        assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
-        verify(movieRepository, never()).findAll(any(Specification.class), any(Pageable.class));
-    }
-
-    @Test
     void tmdbQueueBreakdownReturnsFutureOldAndUndatedCounts() {
         AdminMovieListQuery filter = new AdminMovieListQuery();
         filter.setStatus("DRAFT");
         filter.setSource("TMDB");
 
         when(movieRepository.count(any(Specification.class)))
-                .thenReturn(17L, 6L, 8L, 3L);
+                .thenReturn(17L, 8L, 4L, 2L, 3L);
 
         TmdbQueueBreakdownResponse response = service.getTmdbQueueBreakdown(filter);
 
         assertEquals(17L, response.total());
         assertEquals(8L, response.future());
-        assertEquals(6L, response.old());
+        assertEquals(4L, response.readyToShow());
+        assertEquals(2L, response.needsSchedule());
         assertEquals(3L, response.undated());
     }
 

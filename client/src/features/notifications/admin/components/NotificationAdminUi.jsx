@@ -14,7 +14,7 @@ export function PageHeading({ eyebrow, title, description, actions }) {
     );
 }
 
-export function LoadingState({ label = 'Loading notification data…' }) {
+export function LoadingState({ label = 'Đang tải dữ liệu thông báo…' }) {
     return (
         <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-zinc-800 bg-zinc-900/40 text-zinc-400">
             <LoaderCircle className="mb-3 h-6 w-6 animate-spin text-orange-400" />
@@ -27,11 +27,11 @@ export function ErrorState({ message, onRetry }) {
     return (
         <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-red-500/20 bg-red-500/5 px-6 text-center">
             <AlertTriangle className="mb-3 h-7 w-7 text-red-400" />
-            <h2 className="text-base font-bold text-white">Unable to load notification data</h2>
+            <h2 className="text-base font-bold text-white">Không thể tải dữ liệu thông báo</h2>
             <p className="mt-2 max-w-xl text-sm text-zinc-400">{message}</p>
             {onRetry && (
                 <button type="button" onClick={onRetry} className="mt-5 rounded-xl bg-white px-4 py-2 text-xs font-bold text-zinc-950">
-                    Try again
+                    Thử lại
                 </button>
             )}
         </div>
@@ -62,13 +62,29 @@ const statusStyles = {
     ARCHIVED: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
 };
 
+const statusLabels = {
+    AVAILABLE: 'Sẵn sàng',
+    UNAVAILABLE: 'Không khả dụng',
+    DELIVERED: 'Đã nhận',
+    SENT: 'Đã gửi',
+    COMPLETED: 'Hoàn tất',
+    PUBLISHED: 'Đã phát hành',
+    FAILED: 'Thất bại',
+    DEAD_LETTERED: 'Cần xử lý thủ công',
+    RETRY_SCHEDULED: 'Chờ gửi lại',
+    PROCESSING: 'Đang xử lý',
+    PENDING: 'Đang chờ',
+    DRAFT: 'Bản nháp',
+    ARCHIVED: 'Đã lưu trữ',
+};
+
 export function StatusPill({ value }) {
     const normalized = String(value || 'UNKNOWN').toUpperCase();
     return (
         <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
             statusStyles[normalized] || 'border-zinc-700 bg-zinc-800 text-zinc-300'
         }`}>
-            {normalized.replaceAll('_', ' ')}
+            {statusLabels[normalized] || normalized.replaceAll('_', ' ')}
         </span>
     );
 }

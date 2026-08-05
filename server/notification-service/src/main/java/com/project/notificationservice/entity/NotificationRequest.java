@@ -4,6 +4,7 @@ import com.project.notificationservice.domain.NotificationTypes.Category;
 import com.project.notificationservice.domain.NotificationTypes.Priority;
 import com.project.notificationservice.domain.NotificationTypes.RequestStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -52,8 +53,7 @@ public class NotificationRequest {
     private String templateVersion;
     @Column(nullable = false, length = 20)
     private String locale;
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Convert(converter = NotificationCategoryConverter.class)
     @Column(nullable = false, length = 30)
     private Category category;
     @Enumerated(EnumType.STRING)

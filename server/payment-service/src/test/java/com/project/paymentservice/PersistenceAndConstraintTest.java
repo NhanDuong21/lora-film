@@ -3,15 +3,19 @@ package com.project.paymentservice;
 import com.project.paymentservice.entity.*;
 import com.project.paymentservice.enumtype.*;
 import com.project.paymentservice.repository.*;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -36,6 +40,38 @@ public class PersistenceAndConstraintTest {
 
     @Autowired
     private PaymentOutboxEventRepository outboxRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    @Test
+    @Transactional
+    void legacyPaymentSuccessLogCanBeHydratedForAdminDetail() {
+        Payment payment = new Payment();
+        payment.setPaymentTransactionCode("TXN-LEGACY-SUCCESS");
+        payment.setBookingId(501L);
+        payment.setAccountId(10L);
+        payment.setAttemptNumber(1);
+        payment.setAmount(new BigDecimal("100000"));
+        payment.setPaymentMethod(PaymentMethod.CASH);
+        payment.setExpiresAt(Instant.now().plusSeconds(900));
+        Payment savedPayment = paymentRepository.saveAndFlush(TestFixtures.complete(payment));
+
+        jdbcTemplate.update("""
+                INSERT INTO payment_logs
+                    (payment_id, event_type, source, actor_type, current_status)
+                VALUES (?, 'PAYMENT_SUCCESS', 'LEGACY_IMPORT', 'SYSTEM', 'SUCCESS')
+                """, savedPayment.getId());
+        entityManager.clear();
+
+        List<PaymentLog> logs = logRepository.findByPaymentIdOrderByCreatedAtAsc(savedPayment.getId());
+
+        assertEquals(1, logs.size());
+        assertEquals(PaymentLogEventType.PAYMENT_SUCCESS, logs.getFirst().getEventType());
+    }
 
     @Test
     @Transactional

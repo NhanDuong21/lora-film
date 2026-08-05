@@ -25,6 +25,9 @@ import java.util.stream.Collectors;
 @Service
 public class AutoScheduleEligibilityServiceImpl implements AutoScheduleEligibilityService {
 
+    private static final List<MovieStatus> SCHEDULABLE_MOVIE_STATUSES =
+            List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING);
+
     private final MovieRepository movieRepository;
     private final MovieVersionRepository movieVersionRepository;
     private final MovieMediaRepository movieMediaRepository;
@@ -42,9 +45,7 @@ public class AutoScheduleEligibilityServiceImpl implements AutoScheduleEligibili
 
     @Override
     public List<EligibleMovieResponse> getEligibleMovies(LocalDate fromDate, LocalDate toDate) {
-        List<Movie> movies = movieRepository.findAll().stream()
-                .filter(movie -> movie.getDeletedAt() == null && movie.getStatus() != MovieStatus.DRAFT)
-                .toList();
+        List<Movie> movies = movieRepository.findByStatusInAndDeletedAtIsNull(SCHEDULABLE_MOVIE_STATUSES);
         Map<Long, MovieMedia> primaryPosters = movies.isEmpty()
                 ? Map.of()
                 : movieMediaRepository.findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(

@@ -1,5 +1,6 @@
 package com.project.promotionservice.promotion.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.integration.client.UserRecipientValidationClient;
@@ -91,7 +92,7 @@ public class PromotionCatalogService {
         promotion.setCreatedBy(actor);
         promotion.setUpdatedBy(actor);
         Promotion saved = promotionRepository.save(promotion);
-        PromotionResponse response = mapper.response(saved);
+        PromotionResponse response = mapper.response(saved, campaign);
         eventService.record("PROMOTION", saved.getPublicId(),
                 "PROMOTION_CREATED", response, actor);
         if (request.clonedFromPublicId() != null
@@ -118,7 +119,7 @@ public class PromotionCatalogService {
         mapper.apply(promotion, request);
         promotion.setUpdatedBy(actor);
         Promotion saved = promotionRepository.save(promotion);
-        PromotionResponse response = mapper.response(saved);
+        PromotionResponse response = mapper.response(saved, campaign);
         eventService.record("PROMOTION", saved.getPublicId(),
                 "PROMOTION_UPDATED", response, actor);
         return response;
@@ -126,7 +127,9 @@ public class PromotionCatalogService {
 
     @Transactional(readOnly = true)
     public PromotionResponse detail(String publicId) {
-        return mapper.response(requirePromotion(publicId));
+        Promotion promotion = requirePromotion(publicId);
+        return mapper.response(
+                promotion, requireCampaign(promotion.getCampaignPublicId()));
     }
 
     @Transactional(readOnly = true)
@@ -141,7 +144,7 @@ public class PromotionCatalogService {
                 PromotionSpecifications.filter(
                         campaignPublicId, type, status, publicVisible, keyword),
                 pageable);
-        return page(result.map(mapper::response));
+        return promotionPage(result);
     }
 
     @Transactional(readOnly = true)
@@ -163,7 +166,7 @@ public class PromotionCatalogService {
         boolean editable = campaignPolicy.isEditable(sourceCampaign);
         ValidityWindow window = suggestValidity(
                 source, editable ? sourceCampaign : null);
-        PromotionResponse sourceData = mapper.response(source);
+        PromotionResponse sourceData = mapper.response(source, sourceCampaign);
         String suggestedCode = source.getPromotionType() == PromotionType.COUPON
                 ? generatedCouponCode() : null;
         return new PromotionCloneDraftResponse(
@@ -211,7 +214,10 @@ public class PromotionCatalogService {
         promotion.setUpdatedBy(actor);
         promotionRepository.save(promotion);
         eventService.record("PROMOTION", promotion.getPublicId(),
-                "PROMOTION_DELETED", mapper.response(promotion), actor);
+                "PROMOTION_DELETED",
+                mapper.response(
+                        promotion, requireCampaign(promotion.getCampaignPublicId())),
+                actor);
     }
 
     @Transactional(readOnly = true)
@@ -220,19 +226,15 @@ public class PromotionCatalogService {
         Page<Promotion> result = promotionRepository.findPublicPromotions(
                 PromotionType.VOUCHER, PromotionStatus.ACTIVE,
                 CampaignStatus.ACTIVE, LegalStatus.PASSED, now, pageable);
-        List<PromotionResponse> visible = result.getContent().stream()
-                .map(mapper::response)
-                .toList();
-        return new PagedResponse<>(visible, result.getNumber(), result.getSize(),
-                result.getTotalElements(), result.getTotalPages(), result.isLast());
+        return promotionPage(result);
     }
 
     @Transactional(readOnly = true)
     public PagedResponse<PromotionResponse> systemPromotions(Pageable pageable) {
         Instant now = Instant.now();
-        return page(promotionRepository.findSystemPromotions(
+        return promotionPage(promotionRepository.findSystemPromotions(
                 PromotionType.AUTO, PromotionStatus.ACTIVE, CampaignStatus.ACTIVE,
-                LegalStatus.PASSED, now, pageable).map(mapper::response));
+                LegalStatus.PASSED, now, pageable));
     }
 
     @Transactional
@@ -245,21 +247,23 @@ public class PromotionCatalogService {
                     "PROMOTION_NOT_CLAIMABLE", "Promotion is not a public voucher",
                     HttpStatus.BAD_REQUEST);
         }
-        requireRuntimeActive(promotion, Instant.now());
+        PromotionCampaign campaign = requireRuntimeActive(promotion, Instant.now());
         UserPromotion existing = walletRepository
                 .findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
                         userPublicId, promotionPublicId)
                 .orElse(null);
         if (existing != null) {
             refreshWalletStatus(existing, Instant.now());
-            return mapper.wallet(existing, promotion);
+            return mapper.wallet(existing, promotion, campaign);
         }
         if (promotion.getMaxRedemptions() != null
                 && walletRepository.countByPromotionPublicIdAndDeletedAtIsNull(
                 promotionPublicId) >= promotion.getMaxRedemptions()) {
             throw conflict("Voucher claim capacity has been reached");
         }
-        return mapper.wallet(createGrant(promotion, userPublicId, actor), promotion);
+        return mapper.wallet(
+                createGrant(promotion, campaign, userPublicId, actor),
+                promotion, campaign);
     }
 
     @Transactional
@@ -271,7 +275,7 @@ public class PromotionCatalogService {
                     "PROMOTION_NOT_ISSUABLE", "AUTO promotion does not use the customer wallet",
                     HttpStatus.BAD_REQUEST);
         }
-        requireRuntimeActive(promotion, Instant.now());
+        PromotionCampaign campaign = requireRuntimeActive(promotion, Instant.now());
         LinkedHashSet<String> uniqueUsers = new LinkedHashSet<>();
         for (String user : users) {
             if (user != null && !user.isBlank()) {
@@ -299,18 +303,11 @@ public class PromotionCatalogService {
                 alreadyOwned++;
                 continue;
             }
-            UserPromotion grant = createGrant(promotion, user, actor);
+            UserPromotion grant = createGrant(promotion, campaign, user, actor);
             issuedCount++;
-            if (promotion.getPromotionType() == PromotionType.COUPON) {
-                eventService.record("USER_PROMOTION", grant.getPublicId(),
-                        "COUPON_ISSUED", Map.of(
-                                "userPublicId", user,
-                                "couponCode", promotion.getCode(),
-                                "promotionName", promotion.getName(),
-                                "validTo", promotion.getValidTo().toString(),
-                                "deepLink", "/booking"), actor);
-            } else {
-                issued.add(mapper.wallet(grant, promotion));
+            recordVoucherGranted(grant, promotion, campaign, user, actor);
+            if (promotion.getPromotionType() != PromotionType.COUPON) {
+                issued.add(mapper.wallet(grant, promotion, campaign));
             }
         }
         PromotionIssueResponse response = new PromotionIssueResponse(
@@ -425,7 +422,8 @@ public class PromotionCatalogService {
     }
 
     private UserPromotion createGrant(
-            Promotion promotion, String userPublicId, String actor) {
+            Promotion promotion, PromotionCampaign campaign,
+            String userPublicId, String actor) {
         UserPromotion wallet = new UserPromotion();
         wallet.setUserPublicId(userPublicId);
         wallet.setPromotionPublicId(promotion.getPublicId());
@@ -440,9 +438,60 @@ public class PromotionCatalogService {
         if (promotion.getPromotionType() != PromotionType.COUPON) {
             eventService.record("USER_PROMOTION", saved.getPublicId(),
                     "PROMOTION_ADDED_TO_WALLET",
-                    mapper.wallet(saved, promotion), actor);
+                    mapper.wallet(saved, promotion, campaign), actor);
         }
         return saved;
+    }
+
+    private void recordVoucherGranted(
+            UserPromotion grant, Promotion promotion, PromotionCampaign campaign,
+            String userPublicId, String actor) {
+        PromotionResponse details = mapper.response(promotion, campaign);
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("userPublicId", userPublicId);
+        payload.put("voucherCode", promotion.getCode());
+        payload.put("voucherName", promotion.getName());
+        payload.put("promotionType", promotion.getPromotionType().name());
+        payload.put("validTo", promotion.getValidTo().toString());
+        payload.put("deepLink", "/booking");
+
+        JsonNode action = details.actionsJson();
+        if (action != null && action.isArray() && !action.isEmpty()) {
+            action = action.get(0);
+        }
+        putJsonValue(payload, action, "discountType",
+                "discountType", "type", "actionType");
+        putJsonValue(payload, action, "discountValue",
+                "discountValue", "value", "amount", "percentage");
+        putJsonValue(payload, action, "maxDiscountAmount",
+                "maxDiscountAmount", "maximumDiscountAmount", "maxAmount");
+        putJsonValue(payload, details.conditionsJson(), "minimumOrderAmount",
+                "minimumOrderAmount", "minOrderAmount");
+
+        eventService.record("USER_PROMOTION", grant.getPublicId(),
+                "VOUCHER_GRANTED", payload, actor);
+    }
+
+    private void putJsonValue(
+            Map<String, Object> target, JsonNode source,
+            String targetField, String... sourceFields) {
+        if (source == null || !source.isObject()) {
+            return;
+        }
+        for (String sourceField : sourceFields) {
+            JsonNode value = source.get(sourceField);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+            if (value.isNumber()) {
+                target.put(targetField, value.decimalValue());
+            } else if (value.isBoolean()) {
+                target.put(targetField, value.booleanValue());
+            } else if (!value.asText().isBlank()) {
+                target.put(targetField, value.asText());
+            }
+            return;
+        }
     }
 
     private void requireTemplateMutable(Promotion promotion) {
@@ -477,7 +526,8 @@ public class PromotionCatalogService {
         }
     }
 
-    private void requireRuntimeActive(Promotion promotion, Instant now) {
+    private PromotionCampaign requireRuntimeActive(
+            Promotion promotion, Instant now) {
         PromotionCampaign campaign = requireCampaign(promotion.getCampaignPublicId());
         if (promotion.getStatus() != PromotionStatus.ACTIVE
                 || now.isBefore(promotion.getValidFrom())
@@ -485,6 +535,7 @@ public class PromotionCatalogService {
                 || !isRuntimeCampaignActive(campaign, now)) {
             throw conflict("Promotion is not active");
         }
+        return campaign;
     }
 
     private boolean isRuntimeCampaignActive(PromotionCampaign campaign, Instant now) {
@@ -544,6 +595,9 @@ public class PromotionCatalogService {
 
     private WalletPromotionResponse walletResponse(
             UserPromotion wallet, Promotion promotion, Instant now) {
+        PromotionCampaign campaign = campaignRepository
+                .findByPublicIdAndDeletedAtIsNull(promotion.getCampaignPublicId())
+                .orElse(null);
         String reasonCode = null;
         String reason = null;
         if (!isUsableWalletItem(wallet, now)) {
@@ -555,9 +609,6 @@ public class PromotionCatalogService {
             reasonCode = "PROMOTION_NOT_ACTIVE";
             reason = "Voucher chua hoat dong hoac da het hieu luc";
         } else {
-            PromotionCampaign campaign = campaignRepository
-                    .findByPublicIdAndDeletedAtIsNull(promotion.getCampaignPublicId())
-                    .orElse(null);
             if (!isRuntimeCampaignActive(campaign, now)) {
                 reasonCode = campaign != null && Boolean.TRUE.equals(campaign.getKillSwitch())
                         ? "CAMPAIGN_KILL_SWITCHED" : "CAMPAIGN_NOT_ACTIVE";
@@ -592,7 +643,7 @@ public class PromotionCatalogService {
                 wallet.getPublicId(), wallet.getUserPublicId(), wallet.getStatus(),
                 wallet.getClaimedAt(), wallet.getValidFrom(), wallet.getValidTo(),
                 wallet.getUsageCount(), wallet.getMaxUsage(), reasonCode == null,
-                reasonCode, reason, mapper.response(promotion));
+                reasonCode, reason, mapper.response(promotion, campaign));
     }
 
     private int customerPromotionLimit(
@@ -662,8 +713,25 @@ public class PromotionCatalogService {
     private record ValidityWindow(Instant from, Instant to, boolean shifted) {
     }
 
-    private <T> PagedResponse<T> page(Page<T> result) {
-        return new PagedResponse<>(result.getContent(), result.getNumber(),
+    private PagedResponse<PromotionResponse> promotionPage(
+            Page<Promotion> result) {
+        List<Promotion> promotions = result.getContent();
+        List<String> campaignIds = promotions.stream()
+                .map(Promotion::getCampaignPublicId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<String, PromotionCampaign> campaigns = new HashMap<>();
+        if (!campaignIds.isEmpty()) {
+            campaignRepository.findByPublicIdInAndDeletedAtIsNull(campaignIds)
+                    .forEach(campaign -> campaigns.put(
+                            campaign.getPublicId(), campaign));
+        }
+        List<PromotionResponse> content = promotions.stream()
+                .map(promotion -> mapper.response(
+                        promotion, campaigns.get(promotion.getCampaignPublicId())))
+                .toList();
+        return new PagedResponse<>(content, result.getNumber(),
                 result.getSize(), result.getTotalElements(), result.getTotalPages(),
                 result.isLast());
     }

@@ -6,11 +6,11 @@ export default function useMovieStatusTransition(moviePublicId, onSuccess) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState(null);
 
-  const transitionStatus = async (targetStatus) => {
+  const transitionStatus = async (targetStatus, reason) => {
     setIsPending(true);
     setError(null);
     try {
-      await adminMovieService.updateMovieStatus(moviePublicId, targetStatus);
+      await adminMovieService.updateMovieStatus(moviePublicId, targetStatus, reason);
       if (onSuccess) {
         await onSuccess();
       }

@@ -160,6 +160,36 @@ class PromotionCatalogServiceTest {
     }
 
     @Test
+    void createPersistsExplicitPromotionStackingPolicy() {
+        Instant now = Instant.now();
+        PromotionCampaign campaign = campaign(
+                CampaignStatus.DRAFT, CampaignApprovalStatus.DRAFT,
+                now.minusSeconds(3600), now.plusSeconds(172800));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-1"))
+                .thenReturn(Optional.of(campaign));
+        when(promotionRepository.save(any(Promotion.class)))
+                .thenAnswer(invocation -> {
+                    Promotion saved = invocation.getArgument(0);
+                    saved.setPublicId("promotion-stackable");
+                    return saved;
+                });
+        PromotionUpsertRequest base = upsert("STACKABLE", now, null);
+        PromotionUpsertRequest stackable = new PromotionUpsertRequest(
+                base.campaignPublicId(), base.promotionType(), base.code(),
+                base.name(), base.description(), base.publicVisible(),
+                base.priority(), true, base.conditionsJson(), base.actionsJson(),
+                base.metadataJson(), base.maxRedemptions(),
+                base.maxRedemptionsPerUser(), base.validFrom(), base.validTo(),
+                base.clonedFromPublicId());
+
+        service.create(stackable, "admin");
+
+        ArgumentCaptor<Promotion> captor = ArgumentCaptor.forClass(Promotion.class);
+        verify(promotionRepository).save(captor.capture());
+        assertThat(captor.getValue().getStackable()).isTrue();
+    }
+
+    @Test
     void createCloneIsBlockedWhenTargetCampaignIsNotEditable() {
         Instant now = Instant.now();
         PromotionCampaign campaign = campaign(
@@ -229,12 +259,15 @@ class PromotionCatalogServiceTest {
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         verify(eventService).record(eq("USER_PROMOTION"), eq("grant-1"),
-                eq("COUPON_ISSUED"), payloadCaptor.capture(), eq("admin"));
+                eq("VOUCHER_GRANTED"), payloadCaptor.capture(), eq("admin"));
         assertThat(payloadCaptor.getValue())
                 .isInstanceOfSatisfying(Map.class, payload -> {
                     assertThat(payload).containsEntry("userPublicId", "user-1");
-                    assertThat(payload).containsEntry("couponCode", "CPN-PRIVATE");
-                    assertThat(payload).containsEntry("promotionName", "Private coupon");
+                    assertThat(payload).containsEntry("voucherCode", "CPN-PRIVATE");
+                    assertThat(payload).containsEntry("voucherName", "Private coupon");
+                    assertThat(payload).containsEntry("discountType", "FIXED_AMOUNT");
+                    assertThat(String.valueOf(payload.get("discountValue")))
+                            .isEqualTo("50000");
                     assertThat(payload).containsEntry("deepLink", "/booking");
                 });
     }

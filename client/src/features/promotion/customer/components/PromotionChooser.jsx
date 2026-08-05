@@ -4,7 +4,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Gift,
-  Globe2,
   Loader2,
   RefreshCw,
   Search,
@@ -245,6 +244,9 @@ const conditionNotes = (promotion, scopeLabels = {}) => {
   if (conditions?.requiresVerification) {
     notes.push("Yêu cầu tài khoản đã xác thực");
   }
+  if (promotion?.stackable) {
+    notes.push("Có thể cộng dồn với 1 ưu đãi AUTO khi chiến dịch cho phép");
+  }
   return notes;
 };
 
@@ -262,11 +264,8 @@ const contextualReason = (evaluation, bookingContext = {}) => {
   return evaluation?.reason;
 };
 
-const promotionTab = (promotion) => {
-  if (promotion.promotionType === "COUPON") return "hidden";
-  if (promotion.promotionType === "AUTO") return "system";
-  return "wallet";
-};
+const isCustomerSelectableVoucher = (promotion) =>
+  !["AUTO", "COUPON"].includes(promotion?.promotionType);
 
 const walletGroupKey = (item) => {
   if (!item.evaluation.eligible) return "unavailable";
@@ -312,7 +311,6 @@ export default function PromotionChooser({
   onRefresh,
 }) {
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("wallet");
   const [claimingId, setClaimingId] = useState("");
   const [scopeLabels, setScopeLabels] = useState({ movies: {}, cinemas: {} });
   const searchRef = useRef(null);
@@ -373,8 +371,8 @@ export default function PromotionChooser({
     };
   }, [
     open,
-    scopeIds.movieIds.join("|"),
-    scopeIds.cinemaIds.join("|"),
+    scopeIds.movieIds,
+    scopeIds.cinemaIds,
     scopeLabels.movies,
     scopeLabels.cinemas,
   ]);
@@ -399,6 +397,7 @@ export default function PromotionChooser({
     const normalizedQuery = query.trim().toLocaleLowerCase("vi-VN");
     return vouchers
       .filter((promotion) => isWalletPromotionUsable(promotion))
+      .filter(isCustomerSelectableVoucher)
       .map((promotion) => {
         const id = promotionId(promotion);
         const walletId =
@@ -450,21 +449,8 @@ export default function PromotionChooser({
       );
   }, [bookingContext, evaluationMap, loading, query, scopeLabels, vouchers]);
 
-  const tabCounts = useMemo(
-    () => ({
-      wallet: catalog.filter(
-        (item) => promotionTab(item.promotion) === "wallet",
-      ).length,
-      system: catalog.filter(
-        (item) => promotionTab(item.promotion) === "system",
-      ).length,
-    }),
-    [catalog],
-  );
-
   const grouped = useMemo(() => {
     const visible = catalog
-      .filter((item) => promotionTab(item.promotion) === activeTab)
       .sort(
         (first, second) =>
           Number(second.evaluation.eligible) -
@@ -474,16 +460,6 @@ export default function PromotionChooser({
             String(second.promotion.validTo || ""),
           ),
       );
-    if (activeTab === "system") {
-      return [
-        {
-          key: "system",
-          label: "Voucher hệ thống",
-          icon: Globe2,
-          items: visible,
-        },
-      ].filter((group) => group.items.length > 0);
-    }
     return ["wallet", "claimable", "unavailable"]
       .map((key) => ({
         key,
@@ -500,7 +476,7 @@ export default function PromotionChooser({
           ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [activeTab, catalog]);
+  }, [catalog]);
 
   const claimAndSelect = async (promotion) => {
     if (!onClaim) return;
@@ -541,7 +517,7 @@ export default function PromotionChooser({
                 Chọn ưu đãi
               </h2>
               <p className="mt-1 text-xs text-zinc-500">
-                {catalog.length} voucher và ưu đãi hệ thống
+                Chọn tối đa 1 trong {catalog.length} voucher khả dụng
               </p>
             </div>
           </div>
@@ -570,26 +546,6 @@ export default function PromotionChooser({
         </header>
 
         <div className="border-b border-zinc-800 px-5 py-3">
-          <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-zinc-950 p-1">
-            {[
-              { key: "wallet", label: "Voucher ví", icon: WalletCards },
-              { key: "system", label: "Voucher hệ thống", icon: Globe2 },
-            ].map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key)}
-                className={`flex min-h-10 items-center justify-center gap-2 rounded-md px-2 text-[10px] font-black transition-colors ${
-                  activeTab === key
-                    ? "bg-emerald-500 text-zinc-950"
-                    : "text-zinc-500 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label} ({tabCounts[key] || 0})
-              </button>
-            ))}
-          </div>
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
             <input
@@ -624,16 +580,12 @@ export default function PromotionChooser({
               <p className="mt-3 text-sm font-black text-zinc-300">
                 {query
                   ? "Không tìm thấy ưu đãi phù hợp"
-                  : activeTab === "system"
-                    ? "Chưa có voucher hệ thống phù hợp"
-                    : "Chưa có voucher ví để lựa chọn"}
+                  : "Chưa có voucher ví để lựa chọn"}
               </p>
               <p className="mt-1 text-xs leading-5 text-zinc-600">
                 {query
                   ? "Thử tìm bằng tên hoặc mã khác."
-                  : activeTab === "system"
-                    ? "Voucher hệ thống đang chạy sẽ xuất hiện tại tab này."
-                    : "Voucher đã nhận sẽ xuất hiện tại đây."}
+                  : "Voucher đã nhận sẽ xuất hiện tại đây."}
               </p>
             </div>
           ) : (
@@ -661,7 +613,7 @@ export default function PromotionChooser({
                           const active = selected || applied;
                           const claimable = group.key === "claimable";
                           const recommended =
-                            ["wallet", "system"].includes(group.key) &&
+                            group.key === "wallet" &&
                             itemIndex === 0 &&
                             evaluation.eligible;
                           return (
@@ -801,8 +753,8 @@ export default function PromotionChooser({
             <p className="flex min-w-0 gap-2 text-[10px] leading-4 text-zinc-500">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
-                Trạng thái và mức giảm được Promotion Engine kiểm tra theo đơn
-                hàng hiện tại.
+                AUTO được hệ thống áp dụng riêng. Chỉ cộng với voucher đã chọn
+                khi chính sách của cả hai chương trình cho phép.
               </span>
             </p>
             {selectedPromotionId && (

@@ -10,6 +10,8 @@ export default function MovieStatusTransitionDialog({
   error,
   warningAcknowledged,
   onWarningAcknowledged,
+  reason,
+  onReasonChange,
   onConfirm
 }) {
   if (!isOpen || !config) return null;
@@ -85,6 +87,19 @@ export default function MovieStatusTransitionDialog({
               </div>
             </div>
           )}
+
+          <label className="mb-6 block text-sm text-zinc-300">
+            <span className="mb-2 block font-medium">Ghi chú vận hành (không bắt buộc)</span>
+            <textarea
+              value={reason || ''}
+              onChange={event => onReasonChange?.(event.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="Ví dụ: Đã kiểm tra nội dung và lịch chiếu tuần đầu."
+              className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-orange"
+            />
+            <span className="mt-1 block text-right text-xs text-zinc-600">{reason?.length || 0}/500</span>
+          </label>
 
           <div className="flex justify-end gap-3 mt-8">
             <button

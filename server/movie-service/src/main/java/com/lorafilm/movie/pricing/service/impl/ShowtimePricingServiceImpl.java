@@ -273,19 +273,21 @@ public class ShowtimePricingServiceImpl implements ShowtimePricingService {
     private ShowtimePricesResponse buildResponse(Showtime showtime,
                                                   List<ShowtimePrice> prices,
                                                   PriceResolutionResult resolution) {
-        List<ShowtimePriceDto> lines = prices.stream().map(this::toDto).toList();
         List<String> requiredIds =
                 seatRepository.findActiveSeatTypePublicIdsByAuditoriumId(showtime.getAuditorium().getId());
-        Set<String> configuredIds = prices.stream()
+        List<SeatType> requiredSeatTypes = seatTypeRepository
+                .findAllByPublicIdInAndDeletedAtIsNull(requiredIds);
+        List<ShowtimePrice> effectivePrices = withLegacyAccessibleSeatFallback(
+                showtime, prices, requiredSeatTypes);
+        List<ShowtimePriceDto> lines = effectivePrices.stream().map(this::toDto).toList();
+        Set<String> configuredIds = effectivePrices.stream()
                 .map(price -> price.getSeatType().getPublicId())
                 .collect(Collectors.toSet());
 
         List<PriceSeatTypeDiagnosticDto> missing;
         List<PriceSeatTypeDiagnosticDto> ambiguous;
         if (resolution == null) {
-            Map<String, SeatType> seatTypes = seatTypeRepository
-                    .findAllByPublicIdInAndDeletedAtIsNull(requiredIds)
-                    .stream()
+            Map<String, SeatType> seatTypes = requiredSeatTypes.stream()
                     .collect(Collectors.toMap(SeatType::getPublicId, seatType -> seatType));
             missing = requiredIds.stream()
                     .filter(id -> !configuredIds.contains(id))
@@ -305,16 +307,16 @@ public class ShowtimePricingServiceImpl implements ShowtimePricingService {
         }
 
         ShowtimePricesResponse response =
-                new ShowtimePricesResponse(prices.isEmpty() ? SUPPORTED_CURRENCY : prices.get(0).getCurrency(), lines);
+                new ShowtimePricesResponse(effectivePrices.isEmpty() ? SUPPORTED_CURRENCY : effectivePrices.get(0).getCurrency(), lines);
         response.setMissingSeatTypes(missing);
         response.setAmbiguousSeatTypes(ambiguous);
-        Set<String> currencies = prices.stream()
+        Set<String> currencies = effectivePrices.stream()
                 .map(ShowtimePrice::getCurrency)
                 .collect(Collectors.toSet());
-        boolean validRows = prices.size() == configuredIds.size()
+        boolean validRows = effectivePrices.size() == configuredIds.size()
                 && currencies.size() == 1
                 && currencies.contains(SUPPORTED_CURRENCY)
-                && prices.stream().allMatch(price ->
+                && effectivePrices.stream().allMatch(price ->
                         price.getPrice() != null
                         && price.getPrice().signum() > 0
                         && (price.getPricingSource() == null
@@ -329,6 +331,54 @@ public class ShowtimePricingServiceImpl implements ShowtimePricingService {
                 && configuredIds.equals(new HashSet<>(requiredIds))
                 && validRows);
         return response;
+    }
+
+    private List<ShowtimePrice> withLegacyAccessibleSeatFallback(
+            Showtime showtime,
+            List<ShowtimePrice> prices,
+            List<SeatType> requiredSeatTypes) {
+        if (showtime.getStatus() == ShowtimeStatus.DRAFT) {
+            return prices;
+        }
+        Set<Long> configuredSeatTypeIds = prices.stream()
+                .map(price -> price.getSeatType().getId())
+                .collect(Collectors.toSet());
+        ShowtimePrice standard = prices.stream()
+                .filter(price -> price.getSeatType().getCode()
+                        == com.lorafilm.movie.seat.domain.enums.SeatTypeCode.STANDARD)
+                .findFirst()
+                .orElse(null);
+        if (standard == null) {
+            return prices;
+        }
+
+        List<ShowtimePrice> effective = new java.util.ArrayList<>(prices);
+        requiredSeatTypes.stream()
+                .filter(seatType -> seatType.getCode()
+                        == com.lorafilm.movie.seat.domain.enums.SeatTypeCode.DISABLED)
+                .filter(seatType -> !configuredSeatTypeIds.contains(seatType.getId()))
+                .map(seatType -> accessibleFallbackSnapshot(showtime, seatType, standard))
+                .forEach(effective::add);
+        return List.copyOf(effective);
+    }
+
+    private ShowtimePrice accessibleFallbackSnapshot(
+            Showtime showtime,
+            SeatType seatType,
+            ShowtimePrice standard) {
+        ShowtimePrice fallback = new ShowtimePrice();
+        fallback.setShowtime(showtime);
+        fallback.setSeatType(seatType);
+        fallback.setSeatTypeNameSnapshot(seatType.getName());
+        fallback.setSeatTypeCodeSnapshot(seatType.getCode().name());
+        fallback.setPrice(standard.getPrice());
+        fallback.setCurrency(standard.getCurrency());
+        fallback.setPricingSource(standard.getPricingSource());
+        fallback.setSourcePolicy(standard.getSourcePolicy());
+        fallback.setSourceRule(standard.getSourceRule());
+        fallback.setResolvedAt(standard.getResolvedAt());
+        fallback.setResolutionTimezone(standard.getResolutionTimezone());
+        return fallback;
     }
 
     private ShowtimePriceDto toDto(ShowtimePrice snapshot) {

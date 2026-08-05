@@ -27,13 +27,16 @@ public class MovieMediaServiceImpl implements MovieMediaService {
     private final MovieMediaRepository movieMediaRepository;
     private final MovieRepository movieRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final MovieOperationalGuard operationalGuard;
 
     public MovieMediaServiceImpl(MovieMediaRepository movieMediaRepository,
                                  MovieRepository movieRepository,
-                                 CurrentUserProvider currentUserProvider) {
+                                 CurrentUserProvider currentUserProvider,
+                                 MovieOperationalGuard operationalGuard) {
         this.movieMediaRepository = movieMediaRepository;
         this.movieRepository = movieRepository;
         this.currentUserProvider = currentUserProvider;
+        this.operationalGuard = operationalGuard;
     }
 
     @Override
@@ -48,7 +51,9 @@ public class MovieMediaServiceImpl implements MovieMediaService {
             throw new BusinessException(ErrorCode.MOVIE_PRIMARY_MEDIA_INVALID);
         }
 
-        if (Boolean.TRUE.equals(request.getIsPrimary()) && request.getStatus() == ActiveStatus.ACTIVE) {
+        ActiveStatus targetStatus = request.getStatus() != null
+                ? request.getStatus() : ActiveStatus.ACTIVE;
+        if (Boolean.TRUE.equals(request.getIsPrimary()) && targetStatus == ActiveStatus.ACTIVE) {
             movieMediaRepository.resetPrimaryMedia(movie.getId(), request.getMediaType());
         }
 
@@ -60,7 +65,7 @@ public class MovieMediaServiceImpl implements MovieMediaService {
         media.setTitle(request.getTitle() != null ? request.getTitle().trim() : null);
         media.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0);
         media.setIsPrimary(request.getIsPrimary() != null ? request.getIsPrimary() : false);
-        media.setStatus(request.getStatus() != null ? request.getStatus() : ActiveStatus.ACTIVE);
+        media.setStatus(targetStatus);
 
         MovieMedia savedMedia = movieMediaRepository.save(media);
         return mapToResponse(savedMedia);
@@ -72,13 +77,17 @@ public class MovieMediaServiceImpl implements MovieMediaService {
         MovieMedia media = movieMediaRepository.findByPublicIdAndDeletedAtIsNull(mediaPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_MEDIA_NOT_FOUND));
 
+        operationalGuard.assertPrimaryPosterPreserved(media, request);
+
         if (Boolean.TRUE.equals(request.getIsPrimary()) &&
                 request.getMediaType() != MovieMediaType.POSTER &&
                 request.getMediaType() != MovieMediaType.BANNER) {
             throw new BusinessException(ErrorCode.MOVIE_PRIMARY_MEDIA_INVALID);
         }
 
-        if (Boolean.TRUE.equals(request.getIsPrimary()) && request.getStatus() == ActiveStatus.ACTIVE) {
+        ActiveStatus targetStatus = request.getStatus() != null
+                ? request.getStatus() : ActiveStatus.ACTIVE;
+        if (Boolean.TRUE.equals(request.getIsPrimary()) && targetStatus == ActiveStatus.ACTIVE) {
             movieMediaRepository.resetPrimaryMedia(media.getMovie().getId(), request.getMediaType());
         }
 
@@ -87,7 +96,7 @@ public class MovieMediaServiceImpl implements MovieMediaService {
         media.setTitle(request.getTitle() != null ? request.getTitle().trim() : null);
         media.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0);
         media.setIsPrimary(request.getIsPrimary() != null ? request.getIsPrimary() : false);
-        media.setStatus(request.getStatus() != null ? request.getStatus() : ActiveStatus.ACTIVE);
+        media.setStatus(targetStatus);
 
         MovieMedia savedMedia = movieMediaRepository.save(media);
         return mapToResponse(savedMedia);
@@ -98,6 +107,8 @@ public class MovieMediaServiceImpl implements MovieMediaService {
     public void deleteMedia(String mediaPublicId) {
         MovieMedia media = movieMediaRepository.findByPublicIdAndDeletedAtIsNull(mediaPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_MEDIA_NOT_FOUND));
+
+        operationalGuard.assertPrimaryPosterCanBeRemoved(media);
 
         media.performSoftDelete(currentUserProvider.getCurrentUserId());
         movieMediaRepository.save(media);

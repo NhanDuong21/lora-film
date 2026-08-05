@@ -58,6 +58,10 @@ public class Movie extends BaseAuditableEntity {
     @Column(name = "status", nullable = false)
     private MovieStatus status = MovieStatus.DRAFT;
 
+    @Version
+    @Column(name = "version", nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private Long version;
+
     public Movie() {}
 
     public Long getId() {
@@ -178,5 +182,13 @@ public class Movie extends BaseAuditableEntity {
 
     public void setStatus(MovieStatus status) {
         this.status = status;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }

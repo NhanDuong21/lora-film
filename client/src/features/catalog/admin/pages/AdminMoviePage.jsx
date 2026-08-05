@@ -85,28 +85,19 @@ export default function AdminMoviePage() {
   };
 
   const handleBulkApprove = async () => {
-    const count = Math.min(adminMovies.totalElements, 100);
+    const eligibleCount = (adminMovies.queueBreakdown.data?.future || 0)
+      + (adminMovies.queueBreakdown.data?.readyToShow || 0);
+    const count = Math.min(eligibleCount, 100);
     if (count <= 0) return;
 
     const confirmed = await triggerConfirm?.({
       title: `Duyệt tối đa ${count} phim mới?`,
-      message: 'Hệ thống sẽ kiểm tra từng phim và chỉ đưa vào phục vụ những phim đã đủ nội dung bắt buộc.',
+      message: 'Phim tương lai sẽ sang Sắp chiếu. Phim đã tới ngày chỉ sang Đang chiếu khi có suất chiếu hợp lệ. Mỗi phim vẫn được kiểm tra lại trước khi lưu.',
       confirmLabel: 'Kiểm tra và duyệt',
     });
     if (!confirmed) return;
 
     await adminMovies.bulkApproveTmdbMovies(100);
-  };
-
-  const handleBulkArchive = async () => {
-    const confirmed = await triggerConfirm?.({
-      title: 'Lưu trữ các phim đã cũ?',
-      message: 'Phim nhập tự động đã qua ngày phát hành và chưa được duyệt sẽ chuyển sang trạng thái tạm ngừng khai thác.',
-      confirmLabel: 'Lưu trữ phim',
-    });
-    if (!confirmed) return;
-
-    await adminMovies.bulkArchiveOldTmdbMovies(100);
   };
 
   return (
@@ -297,9 +288,7 @@ export default function AdminMoviePage() {
                   isBreakdownLoading={adminMovies.queueBreakdown.isLoading}
                   breakdownError={adminMovies.queueBreakdown.error}
                   approval={adminMovies.bulkApproval}
-                  archive={adminMovies.bulkArchive}
                   onApprove={handleBulkApprove}
-                  onArchive={handleBulkArchive}
                 />
               </div>
             </details>

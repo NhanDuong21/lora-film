@@ -25,13 +25,16 @@ public class MovieVersionServiceImpl implements MovieVersionService {
     private final MovieVersionRepository movieVersionRepository;
     private final MovieRepository movieRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final MovieOperationalGuard operationalGuard;
 
     public MovieVersionServiceImpl(MovieVersionRepository movieVersionRepository,
                                    MovieRepository movieRepository,
-                                   CurrentUserProvider currentUserProvider) {
+                                   CurrentUserProvider currentUserProvider,
+                                   MovieOperationalGuard operationalGuard) {
         this.movieVersionRepository = movieVersionRepository;
         this.movieRepository = movieRepository;
         this.currentUserProvider = currentUserProvider;
+        this.operationalGuard = operationalGuard;
     }
 
     @Override
@@ -75,6 +78,8 @@ public class MovieVersionServiceImpl implements MovieVersionService {
     public MovieVersionResponse updateVersion(String versionPublicId, UpdateMovieVersionRequest request) {
         MovieVersion version = movieVersionRepository.findByPublicIdAndDeletedAtIsNull(versionPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_VERSION_NOT_FOUND, ErrorCode.MOVIE_VERSION_NOT_FOUND.getMessage()));
+
+        operationalGuard.assertVersionEditable(version);
 
         String audioLanguage = normalizeLanguage(request.getAudioLanguage());
         String subtitleLanguage = normalizeLanguage(request.getSubtitleLanguage());
@@ -159,6 +164,8 @@ public class MovieVersionServiceImpl implements MovieVersionService {
     public void deleteVersion(String versionPublicId) {
         MovieVersion version = movieVersionRepository.findByPublicIdAndDeletedAtIsNull(versionPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_VERSION_NOT_FOUND, ErrorCode.MOVIE_VERSION_NOT_FOUND.getMessage()));
+
+        operationalGuard.assertVersionEditable(version);
 
         version.performSoftDelete(currentUserProvider.getCurrentUserId());
         movieVersionRepository.save(version);

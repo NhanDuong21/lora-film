@@ -9,7 +9,10 @@ import com.lorafilm.movie.movie.service.MovieServiceImpl;
 import com.lorafilm.movie.movie.service.AdminMovieProjectionService;
 import com.lorafilm.movie.movie.service.MovieHealthFacts;
 import com.lorafilm.movie.movie.service.MovieLifecyclePolicy;
+import com.lorafilm.movie.movie.service.MovieApprovalPolicy;
 import com.lorafilm.movie.movie.service.MovieReadinessEvaluator;
+import com.lorafilm.movie.movie.service.MovieStatusHistoryService;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
 import com.lorafilm.movie.movie.domain.entity.Genre;
 import com.lorafilm.movie.movie.domain.entity.Movie;
@@ -63,6 +66,15 @@ class MoviePublishValidationTest {
 
     @Mock
     private AdminMovieProjectionService projectionService;
+
+    @Mock
+    private MovieApprovalPolicy approvalPolicy;
+
+    @Mock
+    private MovieStatusHistoryService statusHistoryService;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private MovieServiceImpl movieService;
@@ -156,7 +168,7 @@ class MoviePublishValidationTest {
         movie.setStatus(MovieStatus.ENDED);
         movie.setReleaseDate(LocalDate.now().plusDays(1));
         
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie123")).thenReturn(Optional.of(movie));
+        when(movieRepository.findByPublicIdForUpdate("movie123")).thenReturn(Optional.of(movie));
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(false);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(true);
         when(movieGenreRepository.findByMovieId(1L)).thenReturn(List.of(new MovieGenre()));
@@ -176,7 +188,7 @@ class MoviePublishValidationTest {
         movie.setStatus(MovieStatus.ENDED);
         movie.setReleaseDate(LocalDate.now().plusDays(1));
         
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie123")).thenReturn(Optional.of(movie));
+        when(movieRepository.findByPublicIdForUpdate("movie123")).thenReturn(Optional.of(movie));
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(false);
         when(movieGenreRepository.findByMovieId(1L)).thenReturn(List.of(new MovieGenre()));
@@ -201,7 +213,7 @@ class MoviePublishValidationTest {
         g.setName("Action");
         mg.setGenre(g);
         
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie123")).thenReturn(Optional.of(movie));
+        when(movieRepository.findByPublicIdForUpdate("movie123")).thenReturn(Optional.of(movie));
         when(movieVersionRepository.existsActiveVersion(1L)).thenReturn(true);
         when(movieMediaRepository.existsPrimaryPoster(1L)).thenReturn(true);
         when(movieGenreRepository.findByMovieId(1L)).thenReturn(List.of(mg));
@@ -295,7 +307,7 @@ class MoviePublishValidationTest {
     }
 
     private void stubMovieForStatusUpdate(Movie movie) {
-        when(movieRepository.findByPublicIdAndDeletedAtIsNull("movie123"))
+        when(movieRepository.findByPublicIdForUpdate("movie123"))
                 .thenReturn(Optional.of(movie));
     }
 

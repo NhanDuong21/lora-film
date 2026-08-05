@@ -33,7 +33,7 @@ export default function NotificationTemplateListPage() {
             const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ''));
             setTemplates(await notificationAdminService.templates(params) || []);
         } catch (requestError) {
-            setError(requestError?.message || 'Templates could not be read from the Git registry.');
+            setError(requestError?.message || 'Không thể đọc danh sách mẫu từ kho Git.');
         } finally {
             setLoading(false);
         }
@@ -55,7 +55,7 @@ export default function NotificationTemplateListPage() {
                 draft.templateKey.trim().toUpperCase(), draft.content);
             navigate(`/admin/notification-templates/${created.templateKey}?draftId=${created.draftId}`);
         } catch (requestError) {
-            setError(requestError?.message || 'Draft could not be created.');
+            setError(requestError?.message || 'Không thể tạo bản nháp.');
             setCreating(false);
         }
     };
@@ -63,12 +63,12 @@ export default function NotificationTemplateListPage() {
     return (
         <div className="mx-auto max-w-[1500px] space-y-6 pb-10">
             <PageHeading
-                eyebrow="Git-backed content"
-                title="Notification templates"
-                description="Published content is loaded from the protected Git branch. Draft branches use commit-SHA concurrency checks, and no content is persisted in the notification database."
+                eyebrow="Nội dung thông báo"
+                title="Mẫu thông báo"
+                description="Mẫu đã phát hành được đọc từ nhánh Git bảo vệ; bản nháp dùng mã phiên bản để tránh ghi đè đồng thời."
                 actions={
                     <button type="button" onClick={() => setCreating('modal')} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white hover:bg-orange-400">
-                        <FilePlus2 className="h-4 w-4" /> Create draft
+                        <FilePlus2 className="h-4 w-4" /> Tạo bản nháp
                     </button>
                 }
             />
@@ -77,33 +77,33 @@ export default function NotificationTemplateListPage() {
                 <div className="grid gap-3 md:grid-cols-[1fr_180px_160px_160px]">
                     <label className="relative">
                         <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
-                        <input aria-label="Search templates" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} placeholder="Search key or display name" className="w-full rounded-xl border border-zinc-700 bg-zinc-950 py-2.5 pl-10 pr-3 text-sm text-white outline-none focus:border-orange-400" />
+                        <input aria-label="Tìm mẫu thông báo" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} placeholder="Tìm theo mã hoặc tên hiển thị" className="w-full rounded-xl border border-zinc-700 bg-zinc-950 py-2.5 pl-10 pr-3 text-sm text-white outline-none focus:border-orange-400" />
                     </label>
                     <select aria-label="Channel filter" value={filters.channel} onChange={event => setFilters(current => ({ ...current, channel: event.target.value }))} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200">
-                        <option value="">All channels</option>
+                        <option value="">Tất cả kênh</option>
                         {['EMAIL', 'IN_APP', 'WEB_PUSH', 'SMS'].map(value => <option key={value}>{value}</option>)}
                     </select>
                     <select aria-label="Locale filter" value={filters.locale} onChange={event => setFilters(current => ({ ...current, locale: event.target.value }))} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200">
-                        <option value="">All locales</option>
+                        <option value="">Tất cả ngôn ngữ</option>
                         {locales.map(value => <option key={value}>{value}</option>)}
                     </select>
                     <select aria-label="Archive filter" value={filters.archived} onChange={event => setFilters(current => ({ ...current, archived: event.target.value }))} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200">
-                        <option value="">Published + archived</option>
-                        <option value="false">Published only</option>
-                        <option value="true">Archived only</option>
+                        <option value="">Đã phát hành và lưu trữ</option>
+                        <option value="false">Chỉ đã phát hành</option>
+                        <option value="true">Chỉ đã lưu trữ</option>
                     </select>
                 </div>
             </section>
 
             {error && <ErrorState message={error} onRetry={load} />}
-            {!error && loading && <LoadingState label="Reading template manifests from Git…" />}
+            {!error && loading && <LoadingState label="Đang đọc danh sách mẫu từ Git…" />}
             {!error && !loading && templates.length === 0 && (
-                <EmptyState title="No templates match this view" description="Adjust the filters or create the first draft. Template bodies will be committed only to the external registry." />
+                <EmptyState title="Không có mẫu phù hợp" description="Điều chỉnh bộ lọc hoặc tạo bản nháp đầu tiên." />
             )}
             {!error && !loading && templates.length > 0 && (
                 <div className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50">
                     <div className="hidden grid-cols-[1.4fr_0.65fr_0.55fr_0.45fr_0.7fr_44px] gap-4 border-b border-zinc-800 px-5 py-3 text-[10px] font-black uppercase tracking-wider text-zinc-500 lg:grid">
-                        <span>Template</span><span>Channel</span><span>Locale</span><span>Status</span><span>Git revision</span><span />
+                        <span>Mẫu</span><span>Kênh</span><span>Ngôn ngữ</span><span>Trạng thái</span><span>Phiên bản Git</span><span />
                     </div>
                     {templates.map(item => (
                         <button key={`${item.templateKey}-${item.channel}-${item.locale}`} type="button" onClick={() => navigate(`/admin/notification-templates/${item.templateKey}?channel=${item.channel}&locale=${item.locale}`)} className="grid w-full gap-3 border-b border-zinc-800/70 px-5 py-5 text-left transition hover:bg-zinc-800/40 last:border-0 lg:grid-cols-[1.4fr_0.65fr_0.55fr_0.45fr_0.7fr_44px] lg:items-center lg:gap-4">
@@ -129,31 +129,31 @@ export default function NotificationTemplateListPage() {
                     <form onSubmit={createDraft} className="w-full max-w-xl rounded-3xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
                         <div className="flex items-start justify-between">
                             <div>
-                                <p className="text-xs font-black uppercase tracking-widest text-orange-400">New Git branch</p>
-                                <h2 className="mt-2 text-xl font-black text-white">Create template draft</h2>
+                                <p className="text-xs font-black uppercase tracking-widest text-orange-400">Nhánh Git mới</p>
+                                <h2 className="mt-2 text-xl font-black text-white">Tạo bản nháp mẫu</h2>
                             </div>
                             <button type="button" aria-label="Close" onClick={() => setCreating(false)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-white"><X className="h-4 w-4" /></button>
                         </div>
                         <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                            <label className="sm:col-span-2 text-xs font-bold text-zinc-400">Template key
+                            <label className="sm:col-span-2 text-xs font-bold text-zinc-400">Mã mẫu
                                 <input required pattern="[A-Za-z0-9_]{3,100}" value={draft.templateKey} onChange={event => setDraft(current => ({ ...current, templateKey: event.target.value.toUpperCase() }))} placeholder="TICKET_PURCHASED" className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 font-mono text-sm text-white outline-none focus:border-orange-400" />
                             </label>
-                            <label className="sm:col-span-2 text-xs font-bold text-zinc-400">Display name
+                            <label className="sm:col-span-2 text-xs font-bold text-zinc-400">Tên hiển thị
                                 <input required value={draft.content.displayName} onChange={event => setDraft(current => ({ ...current, content: { ...current.content, displayName: event.target.value } }))} className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-white outline-none focus:border-orange-400" />
                             </label>
-                            <label className="text-xs font-bold text-zinc-400">Channel
+                            <label className="text-xs font-bold text-zinc-400">Kênh gửi
                                 <select value={draft.content.channel} onChange={event => setDraft(current => ({ ...current, content: { ...current.content, channel: event.target.value } }))} className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-white">
                                     {['EMAIL', 'IN_APP', 'WEB_PUSH', 'SMS'].map(value => <option key={value}>{value}</option>)}
                                 </select>
                             </label>
-                            <label className="text-xs font-bold text-zinc-400">Locale
+                            <label className="text-xs font-bold text-zinc-400">Ngôn ngữ
                                 <input required pattern="[a-z]{2}-[A-Z]{2}" value={draft.content.locale} onChange={event => setDraft(current => ({ ...current, content: { ...current.content, locale: event.target.value } }))} className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 font-mono text-sm text-white" />
                             </label>
                         </div>
-                        <p className="mt-4 flex items-center gap-2 text-xs text-zinc-500"><Archive className="h-4 w-4" /> Content starts empty; nothing is copied into the application bundle.</p>
+                        <p className="mt-4 flex items-center gap-2 text-xs text-zinc-500"><Archive className="h-4 w-4" /> Nội dung bắt đầu trống và chỉ được lưu trong kho mẫu.</p>
                         <div className="mt-6 flex justify-end gap-3">
-                            <button type="button" onClick={() => setCreating(false)} className="rounded-xl border border-zinc-700 px-4 py-2.5 text-xs font-bold text-zinc-300">Cancel</button>
-                            <button disabled={creating === true} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">{creating === true ? 'Creating…' : 'Create draft'}</button>
+                            <button type="button" onClick={() => setCreating(false)} className="rounded-xl border border-zinc-700 px-4 py-2.5 text-xs font-bold text-zinc-300">Hủy</button>
+                            <button disabled={creating === true} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">{creating === true ? 'Đang tạo…' : 'Tạo bản nháp'}</button>
                         </div>
                     </form>
                 </div>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Clock, AlertTriangle, CheckCircle2, Calendar, ShieldCheck, Flame } from 'lucide-react';
 
 export default function ExpiringPointsSection({ expiringPoints = [], isLoading = false }) {

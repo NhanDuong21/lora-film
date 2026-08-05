@@ -7,6 +7,7 @@ vi.mock('../services/adminAutoScheduleService', () => ({
   default: {
     getPreview: vi.fn(),
     updateSelections: vi.fn(),
+    checkPricingReadiness: vi.fn(),
     applyPreview: vi.fn(),
   },
 }));
@@ -82,6 +83,18 @@ describe('useAutoSchedulePreview bounded loading', () => {
     adminAutoScheduleService.updateSelections.mockResolvedValue({
       success: true,
       data: summary(4),
+    });
+    adminAutoScheduleService.checkPricingReadiness.mockResolvedValue({
+      success: true,
+      data: {
+        complete: true,
+        totalCandidateCount: 1,
+        completeCandidateCount: 1,
+        incompleteCandidateCount: 0,
+        ambiguousCandidateCount: 0,
+        reasonGroups: [],
+        candidates: [],
+      },
     });
     adminAutoScheduleService.applyPreview.mockResolvedValue({ success: true });
   });
@@ -351,6 +364,7 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     const randomUuid = vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('idempotency-1');
     const { result } = renderHook(() => useAutoSchedulePreview('preview-1', {}));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.pricingPreflight?.complete).toBe(true));
 
     await act(async () => result.current.handleApply());
 
@@ -382,6 +396,7 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     });
     const { result } = renderHook(() => useAutoSchedulePreview('preview-1', {}));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.pricingPreflight?.complete).toBe(true));
 
     await act(async () => result.current.handleApply());
 
@@ -409,6 +424,7 @@ describe('useAutoSchedulePreview selection compatibility', () => {
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { onSuccess }));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.pricingPreflight?.complete).toBe(true));
 
     await act(async () => result.current.handleApply());
     await act(async () => result.current.handleApply());

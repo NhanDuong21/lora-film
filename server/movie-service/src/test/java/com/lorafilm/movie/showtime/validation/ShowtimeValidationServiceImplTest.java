@@ -126,7 +126,7 @@ class ShowtimeValidationServiceImplTest {
 
     @Test
     void validateForScheduling_invalidMovieStatus_shouldThrowException() {
-        movie.setStatus(MovieStatus.DRAFT);
+        movie.setStatus(MovieStatus.INACTIVE);
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> showtimeValidationService.validateScheduling(context));

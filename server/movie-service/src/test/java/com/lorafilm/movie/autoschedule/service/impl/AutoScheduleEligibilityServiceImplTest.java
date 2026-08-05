@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +39,27 @@ class AutoScheduleEligibilityServiceImplTest {
 
     @Mock
     private MovieShowtimeEligibilityPolicy eligibilityPolicy;
+
+    @Test
+    void onlyUpcomingAndNowShowingMoviesAreQueriedForSchedulingOptions() {
+        LocalDate fromDate = LocalDate.of(2026, 7, 25);
+        LocalDate toDate = LocalDate.of(2026, 7, 31);
+        when(movieRepository.findByStatusInAndDeletedAtIsNull(
+                List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING))).thenReturn(List.of());
+
+        AutoScheduleEligibilityServiceImpl service = new AutoScheduleEligibilityServiceImpl(
+                movieRepository,
+                movieVersionRepository,
+                movieMediaRepository,
+                eligibilityPolicy);
+
+        List<EligibleMovieResponse> result = service.getEligibleMovies(fromDate, toDate);
+
+        assertThat(result).isEmpty();
+        verify(movieRepository).findByStatusInAndDeletedAtIsNull(
+                List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING));
+        verifyNoInteractions(movieVersionRepository, movieMediaRepository, eligibilityPolicy);
+    }
 
     @Test
     void eligibleMoviesIncludeActivePrimaryPosterFromBatchLookup() {
@@ -66,7 +88,8 @@ class AutoScheduleEligibilityServiceImplTest {
         poster.setIsPrimary(true);
         poster.setStatus(ActiveStatus.ACTIVE);
 
-        when(movieRepository.findAll()).thenReturn(List.of(movie));
+        when(movieRepository.findByStatusInAndDeletedAtIsNull(
+                List.of(MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING))).thenReturn(List.of(movie));
         when(movieVersionRepository.findByMovieIdAndDeletedAtIsNull(7L)).thenReturn(List.of(version));
         when(eligibilityPolicy.evaluateRange(
                 movie,

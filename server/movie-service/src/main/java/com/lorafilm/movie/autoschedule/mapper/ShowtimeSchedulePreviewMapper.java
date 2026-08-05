@@ -101,6 +101,7 @@ public class ShowtimeSchedulePreviewMapper {
         summary.setPreviewPublicId(preview.getPublicId());
         summary.setVersion(preview.getVersion());
         summary.setCinemaPublicId(preview.getCinema() != null ? preview.getCinema().getPublicId() : null);
+        summary.setCinemaSlug(preview.getCinema() != null ? preview.getCinema().getSlug() : null);
         summary.setCinemaName(preview.getCinema() != null ? preview.getCinema().getName() : null);
         summary.setScheduleFrom(preview.getScheduleFrom());
         summary.setScheduleTo(preview.getScheduleTo());

@@ -9,6 +9,7 @@ import {
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import BookingCheckoutPage from "./BookingCheckoutPage";
+import { promotionDecision } from "../utils/promotionDecision";
 import {
   cancelBooking,
   finalizeCheckout,
@@ -68,6 +69,65 @@ vi.mock(
 vi.mock("../components/BookingStepper", () => ({
   default: () => <div>Booking stepper</div>,
 }));
+
+describe("promotionDecision", () => {
+  const walletVoucher = {
+    publicId: "wallet-1",
+    walletPublicId: "wallet-1",
+    promotionPublicId: "voucher-1",
+    source: "CUSTOMER_WALLET",
+    promotionType: "VOUCHER",
+    name: "WELCOME10K",
+  };
+
+  it("treats a missing selected voucher as an invalid backend result", () => {
+    const decision = promotionDecision(
+      {
+        discountAmount: 21000,
+        appliedPromotions: [
+          {
+            promotionPublicId: "auto-1",
+            promotionType: "AUTO",
+            name: "Giảm 10% ngày thường",
+            discountAmount: 21000,
+          },
+        ],
+      },
+      { promotion: walletVoucher },
+    );
+
+    expect(decision.applied).toBe(false);
+    expect(decision.notice).toBeNull();
+  });
+
+  it("reports the combined total when voucher and AUTO are both applied", () => {
+    const decision = promotionDecision(
+      {
+        discountAmount: 51000,
+        appliedPromotions: [
+          {
+            promotionPublicId: "auto-1",
+            promotionType: "AUTO",
+            name: "Giảm 10% ngày thường",
+            discountAmount: 21000,
+          },
+          {
+            promotionPublicId: "voucher-1",
+            userPromotionPublicId: "wallet-1",
+            promotionType: "VOUCHER",
+            name: "Voucher gia đình",
+            discountAmount: 30000,
+          },
+        ],
+      },
+      { promotion: walletVoucher },
+    );
+
+    expect(decision.applied).toBe(true);
+    expect(decision.notice?.variant).toBe("stacked");
+    expect(decision.notice?.message).toMatch(/tổng giảm 51\.000đ/i);
+  });
+});
 
 describe("BookingCheckoutPage cancellation", () => {
   beforeEach(() => {
@@ -495,7 +555,7 @@ describe("BookingCheckoutPage cancellation", () => {
     expect(screen.queryByText("Bắp nước 1")).not.toBeInTheDocument();
   });
 
-  it("loads and selects a system voucher alongside the customer wallet", async () => {
+  it("applies AUTO in preview without exposing it as a selectable voucher", async () => {
     customerPromotionService.getMyVouchers.mockResolvedValue({
       content: [
         {
@@ -538,38 +598,23 @@ describe("BookingCheckoutPage cancellation", () => {
       totalElements: 2,
       totalPages: 1,
     });
-    customerPromotionService.getSystemPromotions.mockResolvedValue({
-      content: [
-        {
-          publicId: "system-promotion-id",
-          promotionPublicId: "system-promotion-id",
-          source: "SYSTEM_AUTO",
-          ownershipType: "SYSTEM",
-          promotionType: "AUTO",
-          name: "Voucher hệ thống 30K",
-          status: "ACTIVE",
-          validFrom: "2020-01-01T00:00:00Z",
-          validTo: "2099-12-31T23:59:59Z",
-          conditionsJson: {},
-          actionsJson: {
-            discountType: "FIXED_AMOUNT",
-            discountValue: 30000,
-          },
-        },
-      ],
-      page: 0,
-      totalElements: 1,
-      totalPages: 1,
-    });
 
     previewBookingPromotions.mockReset();
     previewBookingPromotions.mockResolvedValue({
-      eligible: false,
+      eligible: true,
       originalAmount: 335000,
-      discountAmount: 0,
-      finalAmount: 335000,
+      discountAmount: 30000,
+      finalAmount: 305000,
       currency: "VND",
-      appliedPromotions: [],
+      appliedPromotions: [
+        {
+          promotionPublicId: "system-promotion-id",
+          userPromotionPublicId: null,
+          promotionType: "AUTO",
+          name: "Ưu đãi tự động 30K",
+          discountAmount: 30000,
+        },
+      ],
       promotionEvaluations: [
         {
           promotionPublicId: "promotion-public-id",
@@ -611,14 +656,7 @@ describe("BookingCheckoutPage cancellation", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(
-        screen.getByText((text) =>
-          /^3\s+/.test(text) &&
-          (text.includes("ưu đãi") || text.includes("Æ°u Ä‘Ã£i")),
-        ),
-      ).toBeInTheDocument();
-    });
+    expect(await screen.findByText("Ưu đãi tự động 30K")).toBeInTheDocument();
     expect(customerPromotionService.getMyVouchers).toHaveBeenCalledWith({
       page: 0,
       size: 100,
@@ -630,113 +668,31 @@ describe("BookingCheckoutPage cancellation", () => {
       size: 100,
       sort: "priority,asc",
     });
-    expect(customerPromotionService.getSystemPromotions).toHaveBeenCalledWith({
-      page: 0,
-      size: 100,
-      sort: "priority,asc",
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /chọn ưu đãi/i }));
-    const dialog = screen.getByRole("dialog", { name: /chọn ưu đãi/i });
-    expect(within(dialog).getByText("Voucher chào mừng")).toBeInTheDocument();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /voucher hệ thống/i }),
-    );
-    expect(
-      within(dialog).getByText("Voucher hệ thống 30K"),
-    ).toBeInTheDocument();
-    const systemVoucher = within(dialog)
-      .getByText("Voucher hệ thống 30K")
-      .closest("article");
-    previewBookingPromotions.mockResolvedValueOnce({
-      eligible: false,
-      originalAmount: 335000,
-      discountAmount: 0,
-      finalAmount: 335000,
-      currency: "VND",
-      appliedPromotions: [],
-      promotionEvaluations: [
-        {
-          promotionPublicId: "system-promotion-id",
-          promotionType: "AUTO",
-          eligible: false,
-          discountAmount: 0,
-          reasonCode: "PROMOTION_CONDITION_NOT_MET",
-          reason: "Voucher chưa tạo ra mức giảm cho đơn hàng hiện tại",
-        },
-      ],
-      warnings: [],
-    });
-    fireEvent.click(
-      within(systemVoucher).getByRole("button", { name: /^chọn$/i }),
-    );
-    expect(
-      await within(dialog).findByText(/chưa tạo ra mức giảm/i),
-    ).toBeInTheDocument();
-
-    previewBookingPromotions.mockResolvedValueOnce({
-      eligible: true,
-      originalAmount: 335000,
-      discountAmount: 30000,
-      finalAmount: 305000,
-      currency: "VND",
-      appliedPromotions: [
-        {
-          promotionPublicId: "system-promotion-id",
-          userPromotionPublicId: null,
-          promotionType: "AUTO",
-          name: "Voucher hệ thống 30K",
-          discountAmount: 30000,
-        },
-      ],
-      promotionEvaluations: [
-        {
-          promotionPublicId: "promotion-public-id",
-          userPromotionPublicId: "voucher-public-id",
-          eligible: true,
-          discountAmount: 50000,
-          reasonCode: "ELIGIBLE",
-          reason: "Có thể sử dụng cho đơn hiện tại",
-        },
-        {
-          promotionPublicId: "promotion-public-id-2",
-          userPromotionPublicId: "voucher-public-id-2",
-          eligible: true,
-          discountAmount: 20000,
-          reasonCode: "ELIGIBLE",
-          reason: "Có thể sử dụng cho đơn hiện tại",
-        },
-        {
-          promotionPublicId: "system-promotion-id",
-          promotionType: "AUTO",
-          eligible: true,
-          discountAmount: 30000,
-          reasonCode: "ELIGIBLE",
-          reason: "Có thể sử dụng cho đơn hiện tại",
-        },
-      ],
-      warnings: [],
-    });
-    fireEvent.click(
-      within(systemVoucher).getByRole("button", { name: /^chọn$/i }),
-    );
-
-    expect(
-      await screen.findByText(/engine xác nhận giảm/i),
-    ).toBeInTheDocument();
-    expect(previewBookingPromotions).toHaveBeenLastCalledWith(
+    expect(customerPromotionService.getSystemPromotions).not.toHaveBeenCalled();
+    expect(previewBookingPromotions).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       {
-        selectedUserPromotionPublicIds: [],
-        selectedPromotionPublicIds: ["system-promotion-id"],
         evaluationUserPromotionPublicIds: [
           "voucher-public-id",
           "voucher-public-id-2",
         ],
-        evaluationPromotionPublicIds: ["system-promotion-id"],
+        evaluationPromotionPublicIds: [],
         paymentMethod: "VNPAY",
       },
     );
+
+    fireEvent.click(screen.getByRole("button", { name: /chọn ưu đãi/i }));
+    const dialog = screen.getByRole("dialog", { name: /chọn ưu đãi/i });
+    expect(within(dialog).getByText("Voucher chào mừng")).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText("Ưu đãi tự động 30K"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: /voucher hệ thống/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/AUTO được hệ thống áp dụng riêng/i),
+    ).toBeInTheDocument();
 
     expect(finalizeCheckout).not.toHaveBeenCalled();
   });

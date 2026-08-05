@@ -34,7 +34,8 @@ class NotificationEventConsumerTest {
         applicationService = mock(NotificationApplicationService.class);
         userRecipientClient = mock(UserRecipientClient.class);
         consumer = new NotificationEventConsumer(
-                objectMapper, inboxRepository, applicationService, userRecipientClient);
+                objectMapper, inboxRepository, applicationService, userRecipientClient,
+                "http://localhost:5173");
         when(inboxRepository.findBySourceServiceAndSourceEventId(anyString(), anyString()))
                 .thenReturn(Optional.empty());
         when(userRecipientClient.findByUserPublicId(anyString())).thenReturn(Optional.empty());
@@ -131,23 +132,36 @@ class NotificationEventConsumerTest {
     }
 
     @Test
-    void couponIssuedCreatesAnInAppNotificationForTheAssignedCustomer() throws Exception {
+    void voucherGrantedResolvesCustomerAndCreatesEmailAndInAppNotification() throws Exception {
+        when(userRecipientClient.findByUserPublicId("customer-42"))
+                .thenReturn(Optional.of(new UserRecipientClient.ResolvedRecipient(
+                        "customer@example.com", "Nguyen Van A")));
         String event = objectMapper.writeValueAsString(Map.of(
-                "eventId", "coupon-event",
-                "eventType", "COUPON_ISSUED",
+                "eventId", "voucher-event",
+                "eventType", "VOUCHER_GRANTED",
                 "data", Map.of(
                         "userPublicId", "customer-42",
-                        "couponCode", "CPN-1234",
-                        "promotionName", "Member offer",
+                        "voucherCode", "CPN-1234",
+                        "voucherName", "Member offer",
+                        "discountType", "FIXED_AMOUNT",
+                        "discountValue", 50000,
+                        "minimumOrderAmount", 150000,
                         "validTo", "2099-12-31T23:59:59Z",
                         "deepLink", "/booking")));
 
         consumer.consumePromotionEvent(event);
 
-        ArgumentCaptor<NotificationCommands.CouponIssuedNotification> captor =
-                ArgumentCaptor.forClass(NotificationCommands.CouponIssuedNotification.class);
-        verify(applicationService).acceptCouponIssued(captor.capture());
+        ArgumentCaptor<NotificationCommands.VoucherGrantedNotification> captor =
+                ArgumentCaptor.forClass(NotificationCommands.VoucherGrantedNotification.class);
+        verify(applicationService).acceptVoucherGranted(captor.capture());
         assertThat(captor.getValue().userPublicId()).isEqualTo("customer-42");
-        assertThat(captor.getValue().couponCode()).isEqualTo("CPN-1234");
+        assertThat(captor.getValue().email()).isEqualTo("customer@example.com");
+        assertThat(captor.getValue().userName()).isEqualTo("Nguyen Van A");
+        assertThat(captor.getValue().voucherCode()).isEqualTo("CPN-1234");
+        assertThat(captor.getValue().discountValue()).contains("50.000");
+        assertThat(captor.getValue().minimumOrderAmount()).contains("150.000");
+        assertThat(captor.getValue().expiryDate()).isEqualTo("01/01/2100 06:59");
+        assertThat(captor.getValue().useNowLink())
+                .isEqualTo("http://localhost:5173/booking");
     }
 }

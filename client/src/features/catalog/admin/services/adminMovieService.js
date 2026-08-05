@@ -53,22 +53,27 @@ const adminMovieService = {
     return response.data;
   },
 
-  updateMovieStatus: async (publicId, targetStatus) => {
+  updateMovieStatus: async (publicId, targetStatus, reason) => {
+    const params = { status: targetStatus };
+    if (reason?.trim()) params.reason = reason.trim();
     const response = await apiClient.put(`/api/admin/movies/${publicId}/status`, null, {
-      params: { status: targetStatus }
+      params
     });
+    return response.data;
+  },
+
+  getMovieLaunchReadiness: async (publicId) => {
+    const response = await apiClient.get(`/api/admin/movies/${publicId}/launch-readiness`);
+    return response.data;
+  },
+
+  getMovieStatusHistory: async (publicId) => {
+    const response = await apiClient.get(`/api/admin/movies/${publicId}/status-history`);
     return response.data;
   },
 
   bulkApproveTmdbMovies: async (filter, limit = 100) => {
     const response = await apiClient.post('/api/admin/movies/bulk-approve', filter, {
-      params: { limit }
-    });
-    return response.data;
-  },
-
-  bulkArchiveOldTmdbMovies: async (filter, limit = 100) => {
-    const response = await apiClient.post('/api/admin/movies/bulk-archive-old', filter, {
       params: { limit }
     });
     return response.data;

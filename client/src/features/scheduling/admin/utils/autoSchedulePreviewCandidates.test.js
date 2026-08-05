@@ -118,4 +118,43 @@ describe('bounded candidate views', () => {
       isHighlyConcentrated: true,
     });
   });
+
+  it('explains a zero-show movie and supports a per-day distribution', () => {
+    const candidates = [
+      {
+        movieKey: 'movie-ice-cream',
+        movieTitle: 'Gã Bán Kem',
+        serviceDate: '2026-08-04',
+        validationStatus: 'REJECTED',
+        rejectionCode: 'SHOWTIME_OUTSIDE_RELEASE_WINDOW',
+        applyStatus: 'PENDING',
+        selected: false,
+      },
+      {
+        movieKey: 'movie-ice-cream',
+        movieTitle: 'Gã Bán Kem',
+        serviceDate: '2026-08-05',
+        validationStatus: 'REJECTED',
+        rejectionCode: 'SHOWTIME_OVERLAP_CONFLICT',
+        applyStatus: 'PENDING',
+        selected: false,
+      },
+    ];
+
+    const augustFourth = getMovieDistribution(candidates, '2026-08-04');
+    expect(augustFourth).toHaveLength(1);
+    expect(augustFourth[0]).toMatchObject({
+      generatedCount: 1,
+      validCount: 0,
+      scheduledCount: 0,
+      operationalState: {
+        code: 'RELEASE_WINDOW',
+        label: 'Ngoài thời gian phát hành',
+      },
+    });
+    expect(getMovieDistributionSummary(augustFourth)).toMatchObject({
+      hasBlockedMovies: true,
+      blockedMovies: [expect.objectContaining({ movieTitle: 'Gã Bán Kem' })],
+    });
+  });
 });

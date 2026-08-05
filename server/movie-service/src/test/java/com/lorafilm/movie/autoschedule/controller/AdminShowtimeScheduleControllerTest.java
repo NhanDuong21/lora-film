@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -121,6 +122,23 @@ class AdminShowtimeScheduleControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andDo(print());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void cancelPreview_returnsCancelledSummary() throws Exception {
+        ShowtimeSchedulePreviewSummaryResponse response = new ShowtimeSchedulePreviewSummaryResponse();
+        response.setPreviewPublicId(previewId);
+        response.setVersion(2L);
+        response.setStatus(SchedulePreviewStatus.CANCELLED);
+        when(service.cancelPreview(eq(previewId), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/admin/showtime-schedules/{id}/cancel", previewId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.data.version").value(2));
     }
 
     @Test

@@ -154,7 +154,7 @@ Dưới đây là các kịch bản kiểm thử tích hợp chi tiết được
   3. Nhấn nút "Xác nhận đăng nhập".
 - **Dữ liệu đầu vào**:
   - Email: nhan@gmail.com
-  - Mật khẩu: Nhan@123
+  - Mật khẩu: <DEMO_PASSWORD_FROM_ENV>
 - **Kết quả mong đợi**:
   - Máy chủ trả về mã trạng thái HTTP 200 OK.
   - Phản hồi chứa các dữ liệu mã thông báo bao gồm accessToken, refreshToken, expiresIn, email và vai trò role của người dùng.

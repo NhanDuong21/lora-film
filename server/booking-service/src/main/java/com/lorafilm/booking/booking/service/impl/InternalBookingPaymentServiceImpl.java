@@ -10,10 +10,12 @@ import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
+import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingSnapshotRepository;
 import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.InternalBookingPaymentService;
@@ -67,6 +69,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     private final BookingReconciliationTaskRepository reconciliationTaskRepository;
     private final BookingRefundRepository refundRepository;
     private final BookingLifecycleService lifecycleService;
+    private BookingSnapshotRepository bookingSnapshotRepository;
     private ScoreRedemptionClient scoreRedemptionClient;
     private PromotionReservationClient promotionReservationClient;
 
@@ -137,6 +140,11 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
     @Autowired(required = false)
     public void setPromotionReservationClient(PromotionReservationClient service) {
         this.promotionReservationClient = service;
+    }
+
+    @Autowired(required = false)
+    public void setBookingSnapshotRepository(BookingSnapshotRepository repository) {
+        this.bookingSnapshotRepository = repository;
     }
 
     @Override
@@ -240,20 +248,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 booking.getAmountLockedAt(),
                 booking.getExpiresAt(),
                 booking.getPaymentMethodSnapshot(),
-                new InternalPaymentContextResponse.AnalyticsSnapshot(
-                        snapshot.movieId(),
-                        snapshot.moviePublicId(),
-                        snapshot.movieTitle(),
-                        booking.getShowtimePublicId(),
-                        snapshot.cinemaPublicId(),
-                        snapshot.seats().size(),
-                        booking.getTicketAmount(),
-                        booking.getFoodAmount(),
-                        defaultAmount(booking.getPromotionDiscount())
-                                .add(defaultAmount(booking.getVoucherDiscount()))
-                                .add(defaultAmount(booking.getScoreDiscount())),
-                        booking.getFinalAmount(),
-                        normalizeCurrency(booking.getCurrency())));
+                buildAnalyticsSnapshot(booking, snapshot));
     }
 
     private InternalPaymentContextResponse buildScoreRedemptionContext(Booking booking) {
@@ -291,20 +286,7 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 booking.getAmountLockedAt(),
                 booking.getExpiresAt(),
                 booking.getPaymentMethodSnapshot(),
-                new InternalPaymentContextResponse.AnalyticsSnapshot(
-                        snapshot.movieId(),
-                        snapshot.moviePublicId(),
-                        snapshot.movieTitle(),
-                        booking.getShowtimePublicId(),
-                        snapshot.cinemaPublicId(),
-                        snapshot.seats().size(),
-                        booking.getTicketAmount(),
-                        booking.getFoodAmount(),
-                        defaultAmount(booking.getPromotionDiscount())
-                                .add(defaultAmount(booking.getVoucherDiscount()))
-                                .add(defaultAmount(booking.getScoreDiscount())),
-                        booking.getFinalAmount(),
-                        normalizeCurrency(booking.getCurrency())));
+                buildAnalyticsSnapshot(booking, snapshot));
     }
 
     private BigDecimal defaultAmount(BigDecimal value) {
@@ -914,6 +896,57 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                     "Authoritative Booking price snapshot is unreadable",
                     HttpStatus.CONFLICT);
         }
+    }
+
+    private InternalPaymentContextResponse.AnalyticsSnapshot buildAnalyticsSnapshot(
+            Booking booking,
+            BookingPriceSnapshotPayload priceSnapshot) {
+        BookingSnapshot presentationSnapshot = bookingSnapshotRepository == null
+                ? null
+                : bookingSnapshotRepository.findByBookingId(booking.getId()).orElse(null);
+
+        Long movieId = priceSnapshot.movieId() != null
+                ? priceSnapshot.movieId()
+                : presentationSnapshot != null && presentationSnapshot.getMovieId() != null
+                        ? presentationSnapshot.getMovieId()
+                        : booking.getMovieId();
+        String movieTitle = blankToNull(priceSnapshot.movieTitle());
+        if (movieTitle == null && presentationSnapshot != null) {
+            movieTitle = blankToNull(presentationSnapshot.getMovieTitle());
+        }
+        if (movieTitle == null) {
+            movieTitle = "Phim đã đặt";
+        }
+
+        int ticketCount = priceSnapshot.seats() == null ? 0 : priceSnapshot.seats().size();
+        if (ticketCount <= 0 && presentationSnapshot != null
+                && presentationSnapshot.getSeatCount() != null) {
+            ticketCount = presentationSnapshot.getSeatCount();
+        }
+        if (ticketCount <= 0 && reservationRepository != null) {
+            ticketCount = reservationRepository.findAllByBookingId(booking.getId()).size();
+        }
+        if (ticketCount <= 0) {
+            throw new BusinessException(
+                    "BOOKING_PRESENTATION_SNAPSHOT_INVALID",
+                    "Booking ticket count is unavailable",
+                    HttpStatus.CONFLICT);
+        }
+
+        return new InternalPaymentContextResponse.AnalyticsSnapshot(
+                movieId,
+                priceSnapshot.moviePublicId(),
+                movieTitle,
+                booking.getShowtimePublicId(),
+                priceSnapshot.cinemaPublicId(),
+                ticketCount,
+                booking.getTicketAmount(),
+                booking.getFoodAmount(),
+                defaultAmount(booking.getPromotionDiscount())
+                        .add(defaultAmount(booking.getVoucherDiscount()))
+                        .add(defaultAmount(booking.getScoreDiscount())),
+                booking.getFinalAmount(),
+                normalizeCurrency(booking.getCurrency()));
     }
 
     private boolean hasLiveHeldReservations(Long bookingId, Instant now) {

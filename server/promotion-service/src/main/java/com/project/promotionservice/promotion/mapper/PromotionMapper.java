@@ -8,7 +8,9 @@ import com.project.promotionservice.promotion.dto.request.PromotionUpsertRequest
 import com.project.promotionservice.promotion.dto.response.PromotionResponse;
 import com.project.promotionservice.promotion.dto.response.WalletPromotionResponse;
 import com.project.promotionservice.promotion.entity.Promotion;
+import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.entity.UserPromotion;
+import com.project.promotionservice.promotion.enums.PromotionStackingBlockedReason;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -35,7 +37,7 @@ public class PromotionMapper {
         promotion.setDescription(blankToNull(request.description()));
         promotion.setPublicVisible(request.publicVisible());
         promotion.setPriority(request.priority());
-        promotion.setStackable(false);
+        promotion.setStackable(request.stackable());
         promotion.setConditionsJson(write(request.conditionsJson()));
         promotion.setActionsJson(write(request.actionsJson()));
         promotion.setMetadataJson(writeNullable(request.metadataJson()));
@@ -45,26 +47,41 @@ public class PromotionMapper {
         promotion.setValidTo(request.validTo());
     }
 
-    public PromotionResponse response(Promotion promotion) {
+    public PromotionResponse response(
+            Promotion promotion, PromotionCampaign campaign) {
+        boolean promotionStackable = Boolean.TRUE.equals(promotion.getStackable());
+        boolean campaignStackable = campaign != null
+                && Boolean.TRUE.equals(campaign.getStackable());
+        PromotionStackingBlockedReason blockedReason = null;
+        if (!promotionStackable) {
+            blockedReason = PromotionStackingBlockedReason.PROMOTION_STACKING_DISABLED;
+        } else if (campaign == null) {
+            blockedReason = PromotionStackingBlockedReason.CAMPAIGN_NOT_AVAILABLE;
+        } else if (!campaignStackable) {
+            blockedReason = PromotionStackingBlockedReason.CAMPAIGN_STACKING_DISABLED;
+        }
         return new PromotionResponse(
                 promotion.getPublicId(), promotion.getCampaignPublicId(),
                 promotion.getClonedFromPublicId(),
                 promotion.getPromotionType(), promotion.getCode(), promotion.getName(),
                 promotion.getDescription(), promotion.getStatus(),
                 Boolean.TRUE.equals(promotion.getPublicVisible()), promotion.getPriority(),
-                Boolean.TRUE.equals(promotion.getStackable()), read(promotion.getConditionsJson()),
+                promotionStackable, campaignStackable,
+                promotionStackable && campaignStackable, blockedReason,
+                read(promotion.getConditionsJson()),
                 read(promotion.getActionsJson()), readNullable(promotion.getMetadataJson()),
                 promotion.getMaxRedemptions(), promotion.getRedemptionCount(),
                 promotion.getMaxRedemptionsPerUser(), promotion.getValidFrom(),
                 promotion.getValidTo(), promotion.getCreatedAt(), promotion.getUpdatedAt());
     }
 
-    public WalletPromotionResponse wallet(UserPromotion wallet, Promotion promotion) {
+    public WalletPromotionResponse wallet(
+            UserPromotion wallet, Promotion promotion, PromotionCampaign campaign) {
         return new WalletPromotionResponse(
                 wallet.getPublicId(), wallet.getUserPublicId(), wallet.getStatus(),
                 wallet.getClaimedAt(), wallet.getValidFrom(), wallet.getValidTo(),
                 wallet.getUsageCount(), wallet.getMaxUsage(), true, null, null,
-                response(promotion));
+                response(promotion, campaign));
     }
 
     private String normalizeCode(String code) {

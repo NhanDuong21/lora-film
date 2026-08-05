@@ -1,6 +1,8 @@
 package com.lorafilm.movie.movie.dto;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.List;
 
 import com.lorafilm.movie.movie.domain.enums.AgeRating;
@@ -31,6 +33,12 @@ public class MovieDto {
     private Long mediaCount;
     private Long showtimeCount;
     private MovieReadinessDto readiness;
+    private Boolean catalogVisible;
+    private Boolean bookable;
+    private Long bookableShowtimeCount;
+    private Instant nextShowtimeAt;
+    private BigDecimal priceFrom;
+    private String currency;
 
     public MovieDto() {
     }
@@ -167,4 +175,22 @@ public class MovieDto {
 
     public MovieReadinessDto getReadiness() { return readiness; }
     public void setReadiness(MovieReadinessDto readiness) { this.readiness = readiness; }
+
+    public Boolean getCatalogVisible() { return catalogVisible; }
+    public void setCatalogVisible(Boolean catalogVisible) { this.catalogVisible = catalogVisible; }
+
+    public Boolean getBookable() { return bookable; }
+    public void setBookable(Boolean bookable) { this.bookable = bookable; }
+
+    public Long getBookableShowtimeCount() { return bookableShowtimeCount; }
+    public void setBookableShowtimeCount(Long bookableShowtimeCount) { this.bookableShowtimeCount = bookableShowtimeCount; }
+
+    public Instant getNextShowtimeAt() { return nextShowtimeAt; }
+    public void setNextShowtimeAt(Instant nextShowtimeAt) { this.nextShowtimeAt = nextShowtimeAt; }
+
+    public BigDecimal getPriceFrom() { return priceFrom; }
+    public void setPriceFrom(BigDecimal priceFrom) { this.priceFrom = priceFrom; }
+
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
 }

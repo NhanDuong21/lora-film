@@ -16,6 +16,12 @@ const lazyPage = (Page) => (
     </Suspense>
 );
 
+const protectedPage = Page => (
+    <ProtectedRoute>
+        {lazyPage(Page)}
+    </ProtectedRoute>
+);
+
 export const customerBookingRoutes = [
     { path: '/booking', element: lazyPage(MasterBookingFunnelPage) },
     {
@@ -26,10 +32,10 @@ export const customerBookingRoutes = [
             </ProtectedRoute>
         )
     },
-    { path: '/bookings/checkout', element: lazyPage(BookingCheckoutPage) },
-    { path: '/bookings/success', element: lazyPage(BookingSuccessPage) },
-    { path: '/bookings/failed', element: lazyPage(BookingFailedPage) },
-    { path: '/bookings', element: lazyPage(BookingHistoryPage) },
-    { path: '/bookings/history', element: lazyPage(BookingHistoryPage) },
-    { path: '/bookings/:bookingId', element: lazyPage(BookingDetailPage) }
+    { path: '/bookings/checkout', element: protectedPage(BookingCheckoutPage) },
+    { path: '/bookings/success', element: protectedPage(BookingSuccessPage) },
+    { path: '/bookings/failed', element: protectedPage(BookingFailedPage) },
+    { path: '/bookings', element: protectedPage(BookingHistoryPage) },
+    { path: '/bookings/history', element: protectedPage(BookingHistoryPage) },
+    { path: '/bookings/:bookingId', element: protectedPage(BookingDetailPage) }
 ];

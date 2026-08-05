@@ -6,6 +6,7 @@ import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemApplyStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.dto.request.ShowtimeSchedulePreviewItemQuery;
+import com.lorafilm.movie.autoschedule.dto.request.CancelShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionRequest;
 import com.lorafilm.movie.autoschedule.dto.request.UpdatePreviewItemSelectionsRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewPageResponse;
@@ -224,6 +225,38 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
         log.info("Auto schedule selection updated. previewPublicId={}, changedItemCount={}, newSelectedCount={}",
                 previewPublicId, changedItemCount, finalSelectedValidCount);
         return mapper.toSummaryResponse(updatedPreview);
+    }
+
+    @Override
+    @Transactional
+    public ShowtimeSchedulePreviewSummaryResponse cancelPreview(
+            String previewPublicId,
+            CancelShowtimeSchedulePreviewRequest request) {
+        Long currentUserId = currentUserProvider.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BusinessException(ErrorCode.CURRENT_USER_NOT_AVAILABLE);
+        }
+
+        Instant now = Instant.now(clock);
+        expiryService.expireIfNecessary(previewPublicId, now);
+        ShowtimeSchedulePreview preview = previewRepository.findByPublicIdForUpdate(previewPublicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_FOUND));
+
+        if (preview.getStatus() == SchedulePreviewStatus.EXPIRED) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_EXPIRED);
+        }
+        if (preview.getStatus() != SchedulePreviewStatus.PREVIEWED) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_CANNOT_BE_CANCELLED);
+        }
+        if (!Objects.equals(preview.getVersion(), request.getExpectedVersion())) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT);
+        }
+
+        preview.markCancelled();
+        ShowtimeSchedulePreview cancelled = previewRepository.saveAndFlush(preview);
+        log.info("Auto schedule preview cancelled. previewPublicId={}, actorId={}",
+                previewPublicId, currentUserId);
+        return mapper.toSummaryResponse(cancelled);
     }
 
     private Set<String> validateRequestAndCollectIds(UpdatePreviewItemSelectionsRequest request) {

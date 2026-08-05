@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository("pricingShowtimePriceRepository")
 public interface ShowtimePriceRepository extends JpaRepository<ShowtimePrice, Long> {
@@ -18,6 +19,11 @@ public interface ShowtimePriceRepository extends JpaRepository<ShowtimePrice, Lo
            "LEFT JOIN FETCH sp.sourcePolicy LEFT JOIN FETCH sp.sourceRule " +
            "WHERE sp.showtime.id = :showtimeId ORDER BY sp.seatType.publicId")
     List<ShowtimePrice> findByShowtimeIdWithSeatType(@Param("showtimeId") Long showtimeId);
+
+    @Query("SELECT sp FROM ShowtimePrice sp JOIN FETCH sp.showtime JOIN FETCH sp.seatType " +
+           "WHERE sp.showtime.id IN :showtimeIds")
+    List<ShowtimePrice> findByShowtimeIdInWithSeatType(
+            @Param("showtimeIds") Collection<Long> showtimeIds);
 
     Optional<ShowtimePrice> findByShowtimeIdAndSeatTypeId(Long showtimeId, Long seatTypeId);
 

@@ -5,8 +5,10 @@ import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -22,10 +24,11 @@ public class MovieLifecyclePolicy {
     private final Clock clock;
 
     public MovieLifecyclePolicy() {
-        this(Clock.systemDefaultZone());
+        this(Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 
-    MovieLifecyclePolicy(Clock clock) {
+    @Autowired
+    public MovieLifecyclePolicy(Clock clock) {
         this.clock = clock;
     }
 
@@ -90,9 +93,16 @@ public class MovieLifecyclePolicy {
         return LocalDate.now(clock);
     }
 
+    public Instant currentInstant() {
+        return Instant.now(clock);
+    }
+
     private static Map<MovieStatus, Set<MovieStatus>> buildTransitions() {
         Map<MovieStatus, Set<MovieStatus>> transitions = new EnumMap<>(MovieStatus.class);
-        transitions.put(MovieStatus.DRAFT, Set.of(MovieStatus.UPCOMING, MovieStatus.INACTIVE));
+        transitions.put(MovieStatus.DRAFT, Set.of(
+                MovieStatus.UPCOMING,
+                MovieStatus.NOW_SHOWING,
+                MovieStatus.INACTIVE));
         transitions.put(MovieStatus.UPCOMING, Set.of(MovieStatus.NOW_SHOWING, MovieStatus.INACTIVE));
         transitions.put(MovieStatus.NOW_SHOWING, Set.of(MovieStatus.ENDED, MovieStatus.INACTIVE));
         transitions.put(MovieStatus.ENDED, Set.of(MovieStatus.INACTIVE, MovieStatus.UPCOMING));

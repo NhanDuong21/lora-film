@@ -3,7 +3,9 @@ import adminMovieService from '@/features/catalog/admin/services/adminMovieServi
 import { normalizeApiError } from '@/utils/apiErrorHandler';
 
 const HEALTH_STATUSES = new Set(['READY', 'WARNING', 'BLOCKED']);
+const APPROVAL_TARGETS = new Set(['UPCOMING', 'NOW_SHOWING']);
 const INVALID_REVIEW_CONTRACT = 'TMDB_REVIEW_INVALID_RESPONSE';
+const TMDB_REVIEW_ENABLED = import.meta.env.VITE_TMDB_REVIEW_ENABLED === 'true';
 
 const REVIEW_ERROR_MESSAGES = {
   PROVIDER_UNAVAILABLE: 'Không thể kết nối tới dịch vụ dữ liệu TMDB.',
@@ -93,6 +95,7 @@ const unwrapTmdbReview = envelope => {
     || !Number.isInteger(review.tmdbId)
     || typeof review.reviewStatus !== 'string'
     || typeof review.canApprove !== 'boolean'
+    || !(review.approvalTarget === null || APPROVAL_TARGETS.has(review.approvalTarget))
     || !isStringList(review.approvalBlockers)
     || !readiness
     || !HEALTH_STATUSES.has(readiness.healthStatus)
@@ -128,6 +131,19 @@ export default function useTmdbMovieReview(movie) {
       setHasRequested(false);
       hasLoaded.current = false;
       loadedMovieId.current = null;
+      return;
+    }
+
+    if (!TMDB_REVIEW_ENABLED) {
+      setReviewState({ moviePublicId, data: null });
+      setHasRequested(true);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      setError({
+        type: 'FEATURE_DISABLED',
+        message: 'Đối chiếu TMDB đang tắt trong môi trường này. Dữ liệu phim đã lưu vẫn dùng bình thường.',
+        technicalDetail: 'Bật VITE_TMDB_REVIEW_ENABLED=true khi dịch vụ TMDB helper đã sẵn sàng.',
+      });
       return;
     }
 

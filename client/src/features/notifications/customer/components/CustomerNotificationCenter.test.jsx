@@ -100,4 +100,49 @@ describe('CustomerNotificationCenter', () => {
     expect(await screen.findByText('Điểm thưởng vừa được cộng')).toBeInTheDocument();
     expect(screen.queryByText('Vé xem phim')).not.toBeInTheDocument();
   });
+
+  it('copies a granted voucher code without opening the notification action', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    });
+    notificationCustomerService.list.mockResolvedValue({
+      content: [{
+        publicId: 'notification-voucher',
+        title: 'Bạn có voucher mới',
+        body: 'Nhập mã tại checkout để sử dụng.',
+        notificationType: 'VOUCHER_GRANTED',
+        category: 'MARKETING',
+        actionUrl: '/booking',
+        data: {
+          voucherCode: 'CPN-1234',
+          voucherName: 'Ưu đãi thành viên'
+        },
+        readAt: null,
+        createdAt: '2026-08-04T08:00:00Z'
+      }],
+      totalPages: 1
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/profile?tab=notifications']}>
+        <Routes>
+          <Route path="/profile" element={<CustomerNotificationCenter />} />
+          <Route path="/booking" element={<div>Trang đặt vé</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Sao chép mã voucher CPN-1234'
+    }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('CPN-1234');
+      expect(screen.getByText('Đã sao chép')).toBeInTheDocument();
+    });
+    expect(notificationCustomerService.markRead).not.toHaveBeenCalled();
+    expect(screen.queryByText('Trang đặt vé')).not.toBeInTheDocument();
+  });
 });

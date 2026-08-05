@@ -52,12 +52,18 @@ public final class NotificationCommands {
             int deliveryCount) {
     }
 
-    public record CouponIssuedNotification(
+    public record VoucherGrantedNotification(
             String sourceEventId,
             String userPublicId,
-            String couponCode,
-            String promotionName,
+            String email,
+            String userName,
+            String voucherCode,
+            String voucherName,
+            String discountValue,
+            String minimumOrderAmount,
+            String expiryDate,
             Instant expiresAt,
-            String deepLink) {
+            String deepLink,
+            String useNowLink) {
     }
 }

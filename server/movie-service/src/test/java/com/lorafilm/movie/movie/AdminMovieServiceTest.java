@@ -11,6 +11,7 @@ import com.lorafilm.movie.movie.repository.GenreRepository;
 import com.lorafilm.movie.movie.repository.MovieGenreRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.service.AdminMovieService;
+import com.lorafilm.movie.movie.service.MovieOperationalGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,8 @@ public class AdminMovieServiceTest {
     private MovieMapper movieMapper;
     @Mock
     private com.lorafilm.movie.showtime.repository.ShowtimeRepository showtimeRepository;
+    @Mock
+    private MovieOperationalGuard operationalGuard;
 
     @InjectMocks
     private AdminMovieService adminMovieService;

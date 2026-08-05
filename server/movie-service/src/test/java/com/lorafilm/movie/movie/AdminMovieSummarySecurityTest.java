@@ -47,6 +47,8 @@ class AdminMovieSummarySecurityTest {
     @MockBean private MovieService movieService;
     @MockBean private MovieSummaryQueryService movieSummaryQueryService;
     @MockBean private TmdbMovieReviewService tmdbMovieReviewService;
+    @MockBean private com.lorafilm.movie.movie.service.MovieStatusHistoryService movieStatusHistoryService;
+    @MockBean private com.lorafilm.movie.movie.service.MovieLaunchReadinessService movieLaunchReadinessService;
     @MockBean private com.lorafilm.movie.common.security.JwtProvider jwtProvider;
 
     @Test
@@ -101,23 +103,6 @@ class AdminMovieSummarySecurityTest {
     @WithMockUser(authorities = "ROLE_ADMIN")
     void bulkApprovalAllowsAdminUsers() throws Exception {
         mockMvc.perform(post("/api/admin/movies/bulk-approve")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void bulkArchiveRejectsAnonymousUsers() throws Exception {
-        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @WithMockUser(authorities = "ROLE_ADMIN")
-    void bulkArchiveAllowsAdminUsers() throws Exception {
-        mockMvc.perform(post("/api/admin/movies/bulk-archive-old")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"DRAFT\",\"source\":\"TMDB\"}"))
                 .andExpect(status().isOk());

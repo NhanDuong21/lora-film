@@ -79,7 +79,7 @@ public record PromotionCloneDraftResponse(
         String description,
         Boolean publicVisible,              // kế thừa nguồn; admin có thể tắt trước khi lưu
         Integer priority,
-        Boolean stackable,                  // legacy; create/update luôn lưu false
+        Boolean stackable,                  // kế thừa; admin có thể đổi trước khi lưu
         JsonNode conditionsJson,
         JsonNode actionsJson,
         JsonNode metadataJson,

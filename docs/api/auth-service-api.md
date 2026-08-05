@@ -829,7 +829,7 @@ Content-Type: application/json
 ```json
 {
   "email": "nhan@gmail.com",
-  "password": "Nhan@123"
+  "password": "<DEMO_PASSWORD_FROM_ENV>"
 }
 ```
 

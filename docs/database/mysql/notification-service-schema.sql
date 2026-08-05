@@ -39,6 +39,9 @@ CREATE TABLE notification_requests (
     KEY ix_notification_request_status_schedule (status, scheduled_at),
     KEY ix_notification_request_correlation (correlation_id),
     KEY ix_notification_request_template_created (template_key, created_at),
+    CONSTRAINT ck_notification_request_status CHECK (status IN (
+        'ACCEPTED', 'PROCESSING', 'COMPLETED', 'PARTIALLY_FAILED', 'FAILED', 'CANCELLED'
+    )),
     CONSTRAINT ck_notification_request_payload_json CHECK (JSON_VALID(payload_json)),
     CONSTRAINT ck_notification_request_locale CHECK (locale REGEXP '^[a-z]{2}-[A-Z]{2}$')
 ) ENGINE=InnoDB;

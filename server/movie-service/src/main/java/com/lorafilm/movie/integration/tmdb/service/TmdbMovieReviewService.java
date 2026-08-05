@@ -27,7 +27,7 @@ import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieTranslationRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.movie.service.MovieHealthFacts;
-import com.lorafilm.movie.movie.service.MovieLifecyclePolicy;
+import com.lorafilm.movie.movie.service.MovieApprovalPolicy;
 import com.lorafilm.movie.movie.service.MovieReadinessEvaluator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,7 +55,7 @@ public class TmdbMovieReviewService {
     private final TmdbProviderMovieService providerMovieService;
     private final TmdbMovieMapper movieMapper;
     private final MovieReadinessEvaluator readinessEvaluator;
-    private final MovieLifecyclePolicy lifecyclePolicy;
+    private final MovieApprovalPolicy approvalPolicy;
 
     public TmdbMovieReviewService(
             MovieRepository movieRepository,
@@ -68,7 +68,7 @@ public class TmdbMovieReviewService {
             TmdbProviderMovieService providerMovieService,
             TmdbMovieMapper movieMapper,
             MovieReadinessEvaluator readinessEvaluator,
-            MovieLifecyclePolicy lifecyclePolicy) {
+            MovieApprovalPolicy approvalPolicy) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieVersionRepository = movieVersionRepository;
@@ -79,7 +79,7 @@ public class TmdbMovieReviewService {
         this.providerMovieService = providerMovieService;
         this.movieMapper = movieMapper;
         this.readinessEvaluator = readinessEvaluator;
-        this.lifecyclePolicy = lifecyclePolicy;
+        this.approvalPolicy = approvalPolicy;
     }
 
     @Transactional(readOnly = true)
@@ -99,8 +99,10 @@ public class TmdbMovieReviewService {
 
         List<String> approvalBlockers = new ArrayList<>();
         readiness.getBlockers().forEach(issue -> approvalBlockers.add(issue.getMessage()));
-        approvalBlockers.addAll(lifecyclePolicy.getTransitionViolations(movie, MovieStatus.UPCOMING));
+        MovieApprovalPolicy.ApprovalDecision approvalDecision = approvalPolicy.evaluate(movie);
+        approvalBlockers.addAll(approvalDecision.blockers());
         boolean canApprove = movie.getStatus() == MovieStatus.DRAFT
+                && approvalDecision.targetStatus() != null
                 && readiness.getHealthStatus() != MovieHealthStatus.BLOCKED
                 && approvalBlockers.isEmpty();
 
@@ -114,6 +116,7 @@ public class TmdbMovieReviewService {
                 movie.getTmdbId(),
                 reviewStatus(movie.getStatus()),
                 canApprove,
+                approvalDecision.targetStatus(),
                 List.copyOf(approvalBlockers),
                 readiness,
                 movie.getTmdbLastUpdated(),

@@ -7,6 +7,7 @@ import {
   buildAutoScheduleRequestFingerprint,
   validateAutoScheduleDateRange,
 } from '@/features/scheduling/admin/utils/autoScheduleForm';
+import { isSchedulableMovieStatus } from '@/features/scheduling/admin/utils/movieSchedulingEligibility';
 
 const createUuid = () => globalThis.crypto?.randomUUID?.()
   || `preview-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -18,18 +19,18 @@ const mapFieldErrors = (fieldErrors = {}) => ({
   versions: fieldErrors.movieVersionPublicIds || fieldErrors.versions,
 });
 
-export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
-  const [selectedCinemaId, setSelectedCinemaId] = useState('');
-  const [scheduleFrom, setScheduleFrom] = useState('');
-  const [scheduleTo, setScheduleTo] = useState('');
-  const [slotGranularityMinutes, setSlotGranularityMinutes] = useState(15);
+export default function useAutoScheduleForm({ triggerToast, onSuccess, initialDraft = {} }) {
+  const [selectedCinemaId, setSelectedCinemaId] = useState(initialDraft.cinemaPublicId || '');
+  const [scheduleFrom, setScheduleFrom] = useState(initialDraft.scheduleFrom || '');
+  const [scheduleTo, setScheduleTo] = useState(initialDraft.scheduleTo || '');
+  const [slotGranularityMinutes, setSlotGranularityMinutes] = useState(initialDraft.slotGranularityMinutes || 15);
   const [previewTtlMinutes, setPreviewTtlMinutes] = useState(60);
 
   const [auditoriums, setAuditoriums] = useState([]);
-  const [selectedAuditoriumIds, setSelectedAuditoriumIds] = useState([]);
+  const [selectedAuditoriumIds, setSelectedAuditoriumIds] = useState(initialDraft.auditoriumPublicIds || []);
   const [movies, setMovies] = useState([]);
   const [versionsByMovie, setVersionsByMovie] = useState({});
-  const [selectedMovieVersionIds, setSelectedMovieVersionIds] = useState([]);
+  const [selectedMovieVersionIds, setSelectedMovieVersionIds] = useState(initialDraft.movieVersionPublicIds || []);
   const [selectionNotice, setSelectionNotice] = useState('');
 
   const [cinemas, setCinemas] = useState([]);
@@ -44,6 +45,8 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
   const idempotencyRef = useRef({ fingerprint: '', key: '' });
   const movieRequestSequence = useRef(0);
   const auditoriumRequestSequence = useRef(0);
+  const initialCinemaIdRef = useRef(initialDraft.cinemaPublicId || '');
+  const initialAuditoriumIdsRef = useRef(new Set(initialDraft.auditoriumPublicIds || []));
 
   const selectedCinema = useMemo(
     () => cinemas.find(cinema => cinema.publicId === selectedCinemaId),
@@ -94,11 +97,13 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
         if (requestId !== movieRequestSequence.current) return;
         if (!movieRes?.success) return;
 
-        const moviesData = (movieRes.data || []).map(movie => ({
-          ...movie,
-          publicId: movie.moviePublicId,
-          versions: movie.versions || [],
-        }));
+        const moviesData = (movieRes.data || [])
+          .filter(movie => isSchedulableMovieStatus(movie.status))
+          .map(movie => ({
+            ...movie,
+            publicId: movie.moviePublicId,
+            versions: movie.versions || [],
+          }));
         const nextVersionsByMovie = {};
         const selectableVersionIds = new Set();
         moviesData.forEach(movie => {
@@ -135,13 +140,19 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
 
   useEffect(() => {
     const requestId = ++auditoriumRequestSequence.current;
+    const isInitialHydration = Boolean(selectedCinemaId)
+      && initialCinemaIdRef.current === selectedCinemaId;
     setAuditoriums([]);
-    setSelectedAuditoriumIds(previous => {
-      if (previous.length > 0) {
-        setSelectionNotice('Đã xóa lựa chọn phòng chiếu vì cụm rạp đã thay đổi.');
-      }
-      return [];
-    });
+    if (!isInitialHydration) {
+      initialCinemaIdRef.current = '';
+      initialAuditoriumIdsRef.current.clear();
+      setSelectedAuditoriumIds(previous => {
+        if (previous.length > 0) {
+          setSelectionNotice('Đã xóa lựa chọn phòng chiếu vì cụm rạp đã thay đổi.');
+        }
+        return [];
+      });
+    }
     if (!selectedCinemaId) return;
 
     const fetchAuditoriums = async () => {
@@ -149,7 +160,21 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess }) {
       try {
         const response = await adminCinemaService.getAdminCinemaDetail(selectedCinemaId);
         if (requestId === auditoriumRequestSequence.current && response?.success) {
-          setAuditoriums(response.data?.activeAuditoriums || []);
+          const activeAuditoriums = (response.data?.activeAuditoriums || [])
+            .filter(auditorium => auditorium.status === 'ACTIVE');
+          setAuditoriums(activeAuditoriums);
+          if (isInitialHydration) {
+            const restoredIds = activeAuditoriums
+              .filter(auditorium => initialAuditoriumIdsRef.current.has(auditorium.publicId))
+              .map(auditorium => auditorium.publicId);
+            const removedCount = initialAuditoriumIdsRef.current.size - restoredIds.length;
+            setSelectedAuditoriumIds(restoredIds);
+            if (removedCount > 0) {
+              setSelectionNotice(`Đã bỏ ${removedCount} phòng chiếu không còn hoạt động.`);
+            }
+            initialCinemaIdRef.current = '';
+            initialAuditoriumIdsRef.current.clear();
+          }
         }
       } catch {
         if (requestId !== auditoriumRequestSequence.current) return;

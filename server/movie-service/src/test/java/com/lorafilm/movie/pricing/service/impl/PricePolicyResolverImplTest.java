@@ -155,6 +155,35 @@ class PricePolicyResolverImplTest {
     }
 
     @Test
+    void accessibleSeatUsesStandardPriceWhenNoDedicatedRuleExists() {
+        SeatType standard = new SeatType();
+        standard.setId(4L);
+        standard.setPublicId("standard-1");
+        standard.setCode(SeatTypeCode.STANDARD);
+        standard.setName("Standard");
+        SeatType accessible = new SeatType();
+        accessible.setId(5L);
+        accessible.setPublicId("accessible-1");
+        accessible.setCode(SeatTypeCode.DISABLED);
+        accessible.setName("Ghế hỗ trợ");
+        PricePolicyRule standardRule = rule("standard-rule", null, null,
+                PriceDayType.ALL_DAYS, null, null, "75000");
+        standardRule.setSeatType(standard);
+        PricePolicy policy = policy("accessible-default", 0, standardRule);
+        when(seatRepository.findActiveSeatTypesByAuditoriumId(2L))
+                .thenReturn(List.of(standard, accessible));
+        when(policyRepository.findEffectiveActivePolicies(1L, LocalDate.of(2026, 7, 25)))
+                .thenReturn(List.of(policy));
+
+        PriceResolutionResult result = resolver.resolve(showtime);
+
+        assertTrue(result.isComplete());
+        assertEquals(2, result.resolvedPrices().size());
+        assertEquals(new BigDecimal("75000"), result.resolvedPrices().get(1).price());
+        assertEquals(SeatTypeCode.DISABLED, result.resolvedPrices().get(1).seatType().getCode());
+    }
+
+    @Test
     void bulkResolutionLoadsOnePolicyRangePerCinemaAndFiltersByLocalDate() {
         Showtime nextDay = new Showtime();
         nextDay.setCinema(showtime.getCinema());

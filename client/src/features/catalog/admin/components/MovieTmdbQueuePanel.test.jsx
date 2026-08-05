@@ -3,37 +3,34 @@ import { describe, expect, it, vi } from 'vitest';
 import MovieTmdbQueuePanel from './MovieTmdbQueuePanel';
 
 describe('MovieTmdbQueuePanel', () => {
-  it('shows separated future, old and undated counts', () => {
+  it('shows future, ready-to-show, needs-schedule and undated counts', () => {
     render(
       <MovieTmdbQueuePanel
-        breakdown={{ total: 17, future: 8, old: 6, undated: 3 }}
+        breakdown={{ total: 17, future: 8, readyToShow: 4, needsSchedule: 2, undated: 3 }}
         onApprove={vi.fn()}
-        onArchive={vi.fn()}
       />,
     );
 
     expect(screen.getByText('Phim sắp phát hành')).toBeInTheDocument();
-    expect(screen.getByText('Đã quá ngày phát hành')).toBeInTheDocument();
+    expect(screen.getByText('Đủ lịch để đang chiếu')).toBeInTheDocument();
+    expect(screen.getByText('Cần lập lịch chiếu')).toBeInTheDocument();
     expect(screen.getByText('Chưa có ngày khởi chiếu')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
-    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
-  it('routes each action to its matching handler', () => {
+  it('runs one approval flow for all currently eligible movies', () => {
     const onApprove = vi.fn();
-    const onArchive = vi.fn();
     render(
       <MovieTmdbQueuePanel
-        breakdown={{ total: 2, future: 1, old: 1, undated: 0 }}
+        breakdown={{ total: 3, future: 1, readyToShow: 1, needsSchedule: 1, undated: 0 }}
         onApprove={onApprove}
-        onArchive={onArchive}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Duyệt 1 phim' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Tạm ngừng 1 phim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duyệt tối đa 2 phim đủ điều kiện' }));
     expect(onApprove).toHaveBeenCalledTimes(1);
-    expect(onArchive).toHaveBeenCalledTimes(1);
   });
 });

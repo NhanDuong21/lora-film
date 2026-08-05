@@ -96,9 +96,9 @@
 |---|---|
 | BR-VOU-01 | Vé tặng (voucher 0đ, nguồn `BIRTHDAY`/`TIER_UPGRADE`) **không áp dụng** cho: suất chiếu sớm (trước ngày công chiếu chính thức), suất chiếu đặc biệt (IMAX/4DX/ScreenX/Gold Class), ngày Lễ/Tết, và các phim thuộc diện `isPremiere = true` từ movie-service. |
 | BR-VOU-02 | Voucher sinh nhật có hạn sử dụng **4 tháng** 🟡*theo thực tế Galaxy* kể từ ngày phát hành (`issued_at + 120 ngày`), tự động chuyển `EXPIRED` sau đó, không gia hạn. |
-| BR-VOU-03 | Mỗi booking chỉ được áp dụng **tối đa 1 voucher/system promotion/coupon**. API từ chối request có nhiều lựa chọn; `stackable` và `allowMultipleVoucherPerOrder` chỉ còn là metadata tương thích dữ liệu cũ. |
+| BR-VOU-03 | Customer chỉ được gửi **tối đa 1 lựa chọn thủ công**: voucher trong ví, coupon hoặc một system promotion cụ thể. Runtime được áp dụng tối đa 1 voucher/coupon cùng tối đa 1 AUTO promotion khi cả hai promotion và cả hai campaign đều bật `stackable`; mặc định không cộng dồn. `allowMultipleVoucherPerOrder` chỉ còn là metadata tương thích dữ liệu cũ. |
 | BR-VOU-04 | Voucher **không được quy đổi thành tiền mặt** dưới bất kỳ hình thức nào (không hoàn tiền chênh lệch nếu giá trị voucher lớn hơn giá vé). |
-| BR-VOU-05 | Voucher customer chọn không áp dụng đồng thời với chương trình giảm giá tự động khác. Lựa chọn thủ công được ưu tiên; khi customer không chọn, engine lấy một ưu đãi tự động tốt nhất. |
+| BR-VOU-05 | Engine luôn bảo vệ mức giá tốt nhất: so sánh voucher/coupon customer chọn với AUTO tốt nhất, chỉ cộng dồn khi BR-VOU-03 cho phép và chọn tổ hợp có tổng giảm cao nhất. Nếu AUTO tốt hơn lựa chọn thủ công thì không reserve/consume voucher hoặc coupon đó; checkout phải thông báo rõ cho customer. |
 | BR-VOU-06 | Voucher chính sách thành viên **không áp dụng cho giao dịch vé nhóm/vé đoàn B2B** (Co-Sales) — Eligibility Engine phải kiểm tra `orderType != GROUP_BOOKING` trước khi cho áp dụng voucher cá nhân. |
 | BR-VOU-07 | Voucher rách/hỏng/quá hạn tại quầy: nhân viên quét mã không hợp lệ → hệ thống trả lỗi rõ ràng `VOUCHER_EXPIRED`/`VOUCHER_INVALID`, không cho override thủ công trừ khi có quyền `CSKH_AGENT` + lý do ghi nhận vào audit log. |
 
@@ -117,9 +117,9 @@
 
 | Mã | Business Rule |
 |---|---|
-| BR-STACK-01 | Engine đánh giá các promotion hợp lệ rồi chọn **đúng một** benefit: lựa chọn thủ công nếu có, nếu không thì AUTO tốt nhất; Point Redemption được xử lý sau promotion. |
+| BR-STACK-01 | Engine đánh giá lựa chọn thủ công và toàn bộ AUTO hợp lệ, sau đó chọn phương án giảm nhiều nhất: một benefit đơn hoặc tổ hợp tối đa **1 manual + 1 AUTO** theo BR-VOU-03. Point Redemption được xử lý sau promotion. |
 | BR-STACK-02 | **Không cho phép cộng dồn 2 Coupon phần trăm** trên cùng một giao dhàng, dù đến từ 2 campaign khác nhau — chỉ 1 coupon phần trăm được áp dụng theo Priority Engine. |
-| BR-STACK-03 | Không cộng dồn voucher tiền mặt với discount tự động; mỗi booking chỉ giữ một promotion benefit hiệu lực. |
+| BR-STACK-03 | Voucher tiền mặt chỉ được cộng dồn với tối đa một AUTO khi promotion-level và campaign-level `stackable` của cả hai phía đều bật. Campaign `exclusiveCampaign=true` không được ghép với campaign khác. |
 | BR-STACK-04 | Khi 2 rule có cùng `priority`, hệ thống **luôn chọn phương án giảm nhiều tiền hơn cho khách** (customer-friendly default), trừ khi rule đánh dấu `forced: true`. |
 | BR-STACK-05 | Nếu tổng mức giảm cộng dồn (Discount + Coupon + Voucher) làm giá vé về **≤ 0**, hệ thống chặn ở mức **giá tối thiểu = 0đ** (không cho âm), phần chênh lệch dư **bị mất, không hoàn lại, không chuyển sang giao dịch khác**. |
 | BR-STACK-06 | Voucher/Coupon loại "miễn phí vé" (100% giảm) không được **cộng dồn với Point Redemption** trên cùng vé đó — nếu vé đã 0đ, hệ thống tự động khoá tuỳ chọn "dùng điểm" cho vé đó ở UI (tránh khách lãng phí điểm không cần thiết). |

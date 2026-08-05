@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Clock;
 import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
@@ -40,21 +41,24 @@ public class CustomerShowtimeService {
     private final ShowtimePriceRepository priceRepository;
     private final ShowtimeBlockedSeatRepository blockedSeatRepository;
     private final SeatService seatService;
+    private final Clock clock;
 
     public CustomerShowtimeService(ShowtimeRepository showtimeRepository,
                                    ShowtimePriceRepository priceRepository,
                                    ShowtimeBlockedSeatRepository blockedSeatRepository,
-                                   SeatService seatService) {
+                                   SeatService seatService,
+                                   Clock clock) {
         this.showtimeRepository = showtimeRepository;
         this.priceRepository = priceRepository;
         this.blockedSeatRepository = blockedSeatRepository;
         this.seatService = seatService;
+        this.clock = clock;
     }
 
     public List<CustomerBookingOptionResponse> getBookingOptions(
             String movieIdentifier, LocalDate from, LocalDate to) {
         if (from == null) {
-            from = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+            from = LocalDate.now(clock);
         }
         if (to == null) {
             to = from.plusDays(4);
@@ -63,15 +67,24 @@ public class CustomerShowtimeService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                     "Booking option range must contain between 1 and 14 service dates");
         }
-        return showtimeRepository.findCustomerBookingOptions(
-                        movieIdentifier, from, to, Instant.now()).stream()
+        List<Showtime> showtimes = showtimeRepository.findCustomerBookingOptions(
+                        movieIdentifier, from, to, Instant.now(clock)).stream()
                 .collect(Collectors.toMap(
                         Showtime::getPublicId,
                         Function.identity(),
                         (first, ignored) -> first,
                         java.util.LinkedHashMap::new))
-                .values().stream()
-                .map(this::toBookingOption)
+                .values().stream().toList();
+        if (showtimes.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, List<ShowtimePrice>> pricesByShowtime = priceRepository
+                .findByShowtimeIdInWithSeatType(showtimes.stream().map(Showtime::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(price -> price.getShowtime().getId()));
+        return showtimes.stream()
+                .map(showtime -> toBookingOption(
+                        showtime, pricesByShowtime.getOrDefault(showtime.getId(), List.of())))
                 .toList();
     }
 
@@ -126,8 +139,16 @@ public class CustomerShowtimeService {
                 seats);
     }
 
-    private CustomerBookingOptionResponse toBookingOption(Showtime showtime) {
+    private CustomerBookingOptionResponse toBookingOption(
+            Showtime showtime, List<ShowtimePrice> prices) {
         ZoneId zone = ZoneId.of(showtime.getCinema().getTimezone());
+        ShowtimePrice lowest = prices.stream()
+                .filter(price -> price.getPrice() != null && price.getPrice().signum() > 0)
+                .min(Comparator.comparing(price -> SeatPriceAllocation.perPhysicalSeat(
+                        price.getSeatType().getCode(), price.getPrice())))
+                .orElse(null);
+        BigDecimal priceFrom = lowest == null ? null : SeatPriceAllocation.perPhysicalSeat(
+                lowest.getSeatType().getCode(), lowest.getPrice());
         return new CustomerBookingOptionResponse(
                 showtime.getPublicId(), showtime.getServiceDate(),
                 showtime.getStartTime(), showtime.getEndTime(),
@@ -146,7 +167,9 @@ public class CustomerShowtimeService {
                         : showtime.getMovieVersion().getFormat().getValue(),
                 showtime.getMovieVersion().getAudioLanguage(),
                 showtime.getMovieVersion().getSubtitleLanguage(),
-                showtime.getStatus().name());
+                showtime.getStatus().name(),
+                priceFrom,
+                lowest == null ? null : lowest.getCurrency());
     }
 
     private CustomerSeatLayoutResponse.CustomerSeat toCustomerSeat(
@@ -173,7 +196,7 @@ public class CustomerShowtimeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
         if (showtime.getStatus() != ShowtimeStatus.OPEN_FOR_BOOKING
                 || showtime.getStartTime() == null
-                || !showtime.getStartTime().isAfter(Instant.now())) {
+                || !showtime.getStartTime().isAfter(Instant.now(clock))) {
             throw new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND,
                     "Showtime is not open for booking or has already started");
         }

@@ -11,6 +11,7 @@ import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieProductionCompanyRepository;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +49,9 @@ class MovieServiceImplQueryTest {
     @Mock private MovieReadinessEvaluator readinessEvaluator;
     @Mock private AdminMovieProjectionService projectionService;
     @Mock private MovieLifecyclePolicy lifecyclePolicy;
+    @Mock private MovieApprovalPolicy approvalPolicy;
+    @Mock private MovieStatusHistoryService statusHistoryService;
+    @Mock private CurrentUserProvider currentUserProvider;
 
     private MovieServiceImpl service;
 
@@ -63,7 +67,10 @@ class MovieServiceImplQueryTest {
                 movieMapper,
                 readinessEvaluator,
                 projectionService,
-                lifecyclePolicy);
+                lifecyclePolicy,
+                approvalPolicy,
+                statusHistoryService,
+                currentUserProvider);
         Page<Movie> emptyPage = new PageImpl<>(List.of());
         lenient().when(movieRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(emptyPage);
         lenient().when(projectionService.enrichMovies(emptyPage)).thenReturn(new PageResponse<>());

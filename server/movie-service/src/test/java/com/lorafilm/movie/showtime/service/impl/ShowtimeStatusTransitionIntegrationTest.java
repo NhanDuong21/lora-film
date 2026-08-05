@@ -8,6 +8,8 @@ import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
+import com.lorafilm.movie.cinema.domain.entity.CinemaOperatingHour;
+import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
@@ -27,6 +29,7 @@ import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeStatusHistoryRepository;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
+import com.lorafilm.movie.showtime.validation.ShowtimeOpeningPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +73,9 @@ class ShowtimeStatusTransitionIntegrationTest {
     private CinemaRepository cinemaRepository;
 
     @Autowired
+    private CinemaOperatingHourRepository cinemaOperatingHourRepository;
+
+    @Autowired
     private AuditoriumRepository auditoriumRepository;
 
     @Autowired
@@ -81,6 +87,9 @@ class ShowtimeStatusTransitionIntegrationTest {
     @MockBean
     private ShowtimePricingService showtimePricingService;
 
+    @MockBean
+    private ShowtimeOpeningPolicy openingPolicy;
+
     private Showtime first;
     private Showtime second;
 
@@ -89,6 +98,7 @@ class ShowtimeStatusTransitionIntegrationTest {
         jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
         jdbcTemplate.execute("TRUNCATE TABLE showtime_status_history");
         jdbcTemplate.execute("TRUNCATE TABLE showtimes");
+        jdbcTemplate.execute("TRUNCATE TABLE cinema_operating_hours");
         jdbcTemplate.execute("TRUNCATE TABLE movie_versions");
         jdbcTemplate.execute("TRUNCATE TABLE auditoriums");
         jdbcTemplate.execute("TRUNCATE TABLE cinemas");
@@ -126,6 +136,14 @@ class ShowtimeStatusTransitionIntegrationTest {
         cinema.setStatus(CinemaStatus.ACTIVE);
         cinema = cinemaRepository.save(cinema);
 
+        CinemaOperatingHour operatingHour = new CinemaOperatingHour();
+        operatingHour.setCinema(cinema);
+        operatingHour.setDayOfWeek(LocalDate.of(2099, 8, 22).getDayOfWeek().getValue());
+        operatingHour.setOpenTime(java.time.LocalTime.MIDNIGHT);
+        operatingHour.setCloseTime(java.time.LocalTime.of(23, 59));
+        operatingHour.setIsClosed(false);
+        cinemaOperatingHourRepository.save(operatingHour);
+
         Auditorium auditorium = new Auditorium();
         auditorium.setPublicId(UUID.randomUUID().toString());
         auditorium.setCinema(cinema);
@@ -150,7 +168,7 @@ class ShowtimeStatusTransitionIntegrationTest {
                 throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "Injected failure");
             }
             return null;
-        }).when(showtimePricingService).validateCompleteness(any(Showtime.class));
+        }).when(openingPolicy).validateCanOpen(any(Showtime.class), any(Instant.class));
 
         UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
         request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);

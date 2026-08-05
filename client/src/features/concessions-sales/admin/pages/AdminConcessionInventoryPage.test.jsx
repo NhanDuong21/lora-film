@@ -88,8 +88,10 @@ describe('AdminConcessionInventoryPage', () => {
     const image = new File(['image-data'], 'combo.webp', { type: 'image/webp' });
     const fileInput = formDialog.querySelector('input[type="file"]');
     fireEvent.change(fileInput, { target: { files: [image] } });
+    const dropZone = within(formDialog).getByText(/Hoặc kéo ảnh/).parentElement;
+    fireEvent.drop(dropZone, { dataTransfer: { files: [image] } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu sản phẩm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Lưu sản phẩm' }));
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
     const [url, formData, config] = apiClient.post.mock.calls[0];
@@ -97,7 +99,8 @@ describe('AdminConcessionInventoryPage', () => {
     expect(formData).toBeInstanceOf(FormData);
     expect(formData.get('item')).toBeInstanceOf(Blob);
     expect(formData.get('image')).toBe(image);
-    expect(config.headers['Content-Type']).toBe('multipart/form-data');
+    // Let Axios/the browser add the multipart boundary automatically.
+    expect(config).toBeUndefined();
     expect(await screen.findByRole('alertdialog', { name: 'Đã thêm sản phẩm' })).toBeInTheDocument();
   });
 

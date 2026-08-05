@@ -12,14 +12,19 @@ import com.project.notificationservice.repository.NotificationEventInboxReposito
 import com.project.notificationservice.service.NotificationApplicationService;
 import com.project.notificationservice.service.NotificationCommands.CreateNotificationCommand;
 import com.project.notificationservice.service.NotificationCommands.RecipientCommand;
-import com.project.notificationservice.service.NotificationCommands.CouponIssuedNotification;
+import com.project.notificationservice.service.NotificationCommands.VoucherGrantedNotification;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -31,20 +36,33 @@ import java.util.Set;
 @ConditionalOnProperty(name = "notification.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class NotificationEventConsumer {
 
+    private static final Locale VIETNAMESE = Locale.forLanguageTag("vi-VN");
+    private static final DateTimeFormatter VIETNAMESE_DATE_TIME = DateTimeFormatter
+            .ofPattern("dd/MM/yyyy HH:mm")
+            .withLocale(VIETNAMESE)
+            .withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
+
     private final ObjectMapper objectMapper;
     private final NotificationEventInboxRepository inboxRepository;
     private final NotificationApplicationService notificationService;
     private final UserRecipientClient userRecipientClient;
+    private final String frontendBaseUrl;
 
     public NotificationEventConsumer(
             ObjectMapper objectMapper,
             NotificationEventInboxRepository inboxRepository,
             NotificationApplicationService notificationService,
-            UserRecipientClient userRecipientClient) {
+            UserRecipientClient userRecipientClient,
+            @Value("${notification.frontend-base-url:${FRONTEND_URL:http://localhost:5173}}")
+            String frontendBaseUrl) {
         this.objectMapper = objectMapper;
         this.inboxRepository = inboxRepository;
         this.notificationService = notificationService;
         this.userRecipientClient = userRecipientClient;
+        String resolvedFrontendBaseUrl = frontendBaseUrl == null || frontendBaseUrl.isBlank()
+                ? "http://localhost:5173"
+                : frontendBaseUrl.strip();
+        this.frontendBaseUrl = resolvedFrontendBaseUrl.replaceAll("/+$", "");
     }
 
     @KafkaListener(topics = "${notification.kafka.booking-topic:booking.domain.events.v1}")
@@ -129,22 +147,40 @@ public class NotificationEventConsumer {
         String eventId = text(event, "eventId");
         String eventType = normalize(text(event, "eventType"));
         if (!acceptPromotionInbox(eventId, eventType, json)) return;
-        if (!"COUPON_ISSUED".equals(eventType)) {
+        if (!Set.of("VOUCHER_GRANTED", "COUPON_ISSUED").contains(eventType)) {
             markPromotionProcessed(eventId);
             return;
         }
         JsonNode data = event.path("data");
         String userPublicId = text(data, "userPublicId");
-        String couponCode = text(data, "couponCode");
-        String promotionName = text(data, "promotionName");
-        if (userPublicId == null || couponCode == null || promotionName == null) {
+        String voucherCode = firstText(data, "voucherCode", "couponCode", "promotionCode");
+        String voucherName = firstText(data, "voucherName", "promotionName");
+        if (userPublicId == null || voucherCode == null || voucherName == null) {
             throw new NotificationException("EVENT_CONTRACT_INVALID",
-                    "coupon.issued event is missing recipient or coupon details",
+                    "voucher.granted event is missing recipient or voucher details",
                     HttpStatus.UNPROCESSABLE_ENTITY);
         }
-        notificationService.acceptCouponIssued(new CouponIssuedNotification(
-                eventId, userPublicId, couponCode, promotionName,
-                instant(text(data, "validTo")), defaultText(text(data, "deepLink"), "/booking")));
+        UserRecipientClient.ResolvedRecipient recipient = userRecipientClient
+                .findByUserPublicId(userPublicId)
+                .orElseThrow(() -> new NotificationException(
+                        "VOUCHER_RECIPIENT_NOT_FOUND",
+                        "Voucher recipient could not be resolved",
+                        HttpStatus.UNPROCESSABLE_ENTITY));
+        if (recipient.email() == null || recipient.email().isBlank()) {
+            throw new NotificationException(
+                    "VOUCHER_RECIPIENT_EMAIL_MISSING",
+                    "Voucher recipient does not have an email address",
+                    HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        Instant expiresAt = instant(text(data, "validTo"));
+        String deepLink = safeDeepLink(text(data, "deepLink"));
+        notificationService.acceptVoucherGranted(new VoucherGrantedNotification(
+                eventId, userPublicId, recipient.email(),
+                defaultText(recipient.fullName(), "Quý khách"),
+                voucherCode, voucherName,
+                discountLabel(data), minimumOrderLabel(data),
+                expiresAt == null ? "Không giới hạn" : VIETNAMESE_DATE_TIME.format(expiresAt),
+                expiresAt, deepLink, frontendBaseUrl + deepLink));
         markPromotionProcessed(eventId);
     }
 
@@ -241,6 +277,61 @@ public class NotificationEventConsumer {
 
     private String defaultText(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private String firstText(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String value = text(node, field);
+            if (value != null) return value;
+        }
+        return null;
+    }
+
+    private BigDecimal decimal(JsonNode node, String... fields) {
+        for (String field : fields) {
+            JsonNode value = node == null ? null : node.get(field);
+            if (value == null || value.isNull()) continue;
+            try {
+                return value.isNumber()
+                        ? value.decimalValue()
+                        : new BigDecimal(value.asText());
+            } catch (NumberFormatException exception) {
+                throw new NotificationException("EVENT_CONTRACT_INVALID",
+                        field + " must be numeric", HttpStatus.UNPROCESSABLE_ENTITY);
+            }
+        }
+        return null;
+    }
+
+    private String discountLabel(JsonNode data) {
+        String type = defaultText(text(data, "discountType"), "").toUpperCase(Locale.ROOT);
+        BigDecimal value = decimal(data, "discountValue");
+        if (Set.of("PERCENTAGE", "PERCENT").contains(type) && value != null) {
+            return value.stripTrailingZeros().toPlainString() + "%";
+        }
+        if (Set.of("FIXED_AMOUNT", "AMOUNT").contains(type) && value != null) {
+            return formatCurrency(value);
+        }
+        if (Set.of("FREE", "FULL_DISCOUNT").contains(type)) {
+            return "Miễn phí";
+        }
+        return value == null ? "Theo điều kiện chương trình" : value.toPlainString();
+    }
+
+    private String minimumOrderLabel(JsonNode data) {
+        BigDecimal minimum = decimal(data, "minimumOrderAmount", "minOrderAmount");
+        return minimum == null || minimum.signum() <= 0
+                ? "Không yêu cầu"
+                : formatCurrency(minimum);
+    }
+
+    private String formatCurrency(BigDecimal value) {
+        return NumberFormat.getCurrencyInstance(VIETNAMESE).format(value);
+    }
+
+    private String safeDeepLink(String value) {
+        String path = defaultText(value, "/booking").strip();
+        return path.startsWith("/") && !path.startsWith("//") ? path : "/booking";
     }
 
     private Instant instant(String value) {

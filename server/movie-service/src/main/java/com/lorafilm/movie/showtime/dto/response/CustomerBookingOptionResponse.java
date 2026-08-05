@@ -3,6 +3,7 @@ package com.lorafilm.movie.showtime.dto.response;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 public record CustomerBookingOptionResponse(
         String showtimePublicId,
@@ -26,5 +27,7 @@ public record CustomerBookingOptionResponse(
         String format,
         String audioLanguage,
         String subtitleLanguage,
-        String status) {
+        String status,
+        BigDecimal priceFrom,
+        String currency) {
 }

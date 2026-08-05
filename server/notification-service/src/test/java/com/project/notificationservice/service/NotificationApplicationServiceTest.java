@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,7 +63,14 @@ class NotificationApplicationServiceTest {
             ReflectionTestUtils.setField(recipient, "id", 20L);
             return recipient;
         });
-        when(deliveryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        AtomicLong deliveryIds = new AtomicLong(30L);
+        when(deliveryRepository.save(any())).thenAnswer(invocation -> {
+            NotificationDelivery delivery = invocation.getArgument(0);
+            if (delivery.getId() == null) {
+                ReflectionTestUtils.setField(delivery, "id", deliveryIds.getAndIncrement());
+            }
+            return delivery;
+        });
         service = new NotificationApplicationService(
                 requestRepository, recipientRepository, deliveryRepository, preferenceRepository,
                 inAppNotificationRepository,
@@ -120,9 +128,12 @@ class NotificationApplicationServiceTest {
     }
 
     @Test
-    void couponIssueCreatesAnImmediateInAppNotificationWithoutExposingItInWallet() {
-        service.acceptCouponIssued(new NotificationCommands.CouponIssuedNotification(
-                "coupon-event", "user", "CPN-1234", "Ưu đãi thành viên", null, "/booking"));
+    void voucherGrantCreatesImmediateInAppAndPendingTemplateEmail() {
+        service.acceptVoucherGranted(new NotificationCommands.VoucherGrantedNotification(
+                "voucher-event", "user", "customer@example.com", "Nguyen Van A",
+                "CPN-1234", "Ưu đãi thành viên", "50.000 ₫", "150.000 ₫",
+                "31/12/2099 23:59", null, "/booking",
+                "http://localhost:5173/booking"));
 
         org.mockito.ArgumentCaptor<InAppNotification> captor =
                 org.mockito.ArgumentCaptor.forClass(InAppNotification.class);
@@ -130,6 +141,27 @@ class NotificationApplicationServiceTest {
         assertThat(captor.getValue().getUserPublicId()).isEqualTo("user");
         assertThat(captor.getValue().getBody()).contains("CPN-1234");
         assertThat(captor.getValue().getDeepLink()).isEqualTo("/booking");
+
+        org.mockito.ArgumentCaptor<NotificationDelivery> deliveryCaptor =
+                org.mockito.ArgumentCaptor.forClass(NotificationDelivery.class);
+        org.mockito.Mockito.verify(deliveryRepository, org.mockito.Mockito.times(2))
+                .save(deliveryCaptor.capture());
+        assertThat(deliveryCaptor.getAllValues())
+                .anySatisfy(delivery -> {
+                    assertThat(delivery.getChannel()).isEqualTo(Channel.EMAIL);
+                    assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.PENDING);
+                })
+                .anySatisfy(delivery -> {
+                    assertThat(delivery.getChannel()).isEqualTo(Channel.IN_APP);
+                    assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.SENT);
+                });
+
+        org.mockito.ArgumentCaptor<NotificationRequest> requestCaptor =
+                org.mockito.ArgumentCaptor.forClass(NotificationRequest.class);
+        org.mockito.Mockito.verify(requestRepository).save(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getTemplateKey()).isEqualTo("VOUCHER_GRANTED");
+        assertThat(requestCaptor.getValue().getPayloadJson())
+                .contains("Nguyen Van A", "CPN-1234", "useNowLink");
     }
 
     private CreateNotificationCommand command(Category category) {

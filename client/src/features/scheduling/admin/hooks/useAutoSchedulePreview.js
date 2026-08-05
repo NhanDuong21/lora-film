@@ -78,6 +78,13 @@ const readPage = response => {
   return response.data;
 };
 
+const createPricingReadinessKey = snapshot => {
+  if (!snapshot?.preview || snapshot.preview.status !== 'PREVIEWED') return '';
+  const selectedIds = Array.from(snapshot.selectedItemIds || []).sort().join(',');
+  if (!selectedIds) return '';
+  return `${snapshot.sourcePreviewId}:${snapshot.expectedVersion}:${selectedIds}`;
+};
+
 export default function useAutoSchedulePreview(
   previewPublicId,
   { triggerToast, onSuccess } = {},
@@ -88,9 +95,12 @@ export default function useAutoSchedulePreview(
   const [isApplying, setIsApplying] = useState(false);
   const [isUpdatingSelection, setIsUpdatingSelection] = useState(false);
   const [pricingPreflight, setPricingPreflight] = useState(null);
+  const [pricingPreflightError, setPricingPreflightError] = useState('');
+  const [isCheckingPricing, setIsCheckingPricing] = useState(false);
   const snapshotRef = useRef(snapshot);
   const activeLoadRef = useRef({ generation: 0, controller: null });
   const applyIdempotencyRef = useRef({ fingerprint: '', key: '' });
+  const pricingReadinessRef = useRef({ generation: 0, completedKey: '' });
 
   const updateSnapshot = useCallback(updater => {
     setSnapshot(previous => {
@@ -239,6 +249,8 @@ export default function useAutoSchedulePreview(
         expectedVersion: previewVersion,
       });
       setPricingPreflight(null);
+      setPricingPreflightError('');
+      pricingReadinessRef.current.completedKey = '';
       setLoadState({
         active: false,
         loadedPages: reportedTotalPages,
@@ -291,6 +303,72 @@ export default function useAutoSchedulePreview(
     snapshotError?.blocksMutations,
   ]);
 
+  const pricingReadinessKey = useMemo(
+    () => createPricingReadinessKey(snapshot),
+    [snapshot],
+  );
+
+  const checkPricingReadiness = useCallback(async ({ force = false } = {}) => {
+    const currentSnapshot = snapshotRef.current;
+    const readinessKey = createPricingReadinessKey(currentSnapshot);
+    if (!readinessKey) {
+      setPricingPreflight(null);
+      setPricingPreflightError('');
+      return null;
+    }
+    if (!force && pricingReadinessRef.current.completedKey === readinessKey) {
+      return null;
+    }
+
+    const generation = pricingReadinessRef.current.generation + 1;
+    pricingReadinessRef.current.generation = generation;
+    setIsCheckingPricing(true);
+    setPricingPreflight(null);
+    setPricingPreflightError('');
+    try {
+      const response = await adminAutoScheduleService.checkPricingReadiness(
+        previewPublicId,
+        { expectedVersion: currentSnapshot.expectedVersion },
+      );
+      if (pricingReadinessRef.current.generation !== generation
+          || createPricingReadinessKey(snapshotRef.current) !== readinessKey) {
+        return null;
+      }
+      if (!response?.success || !response.data) {
+        throw new Error('Không nhận được kết quả kiểm tra giá.');
+      }
+      pricingReadinessRef.current.completedKey = readinessKey;
+      setPricingPreflight(response.data);
+      return response.data;
+    } catch (error) {
+      if (pricingReadinessRef.current.generation !== generation) return null;
+      const message = error?.errorCode === 'AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT'
+        ? 'Lịch vừa được thay đổi. Hãy làm mới rồi kiểm tra giá lại.'
+        : (error?.message || 'Không thể kiểm tra bảng giá lúc này.');
+      setPricingPreflight(null);
+      setPricingPreflightError(message);
+      return null;
+    } finally {
+      if (pricingReadinessRef.current.generation === generation) {
+        setIsCheckingPricing(false);
+      }
+    }
+  }, [previewPublicId]);
+
+  useEffect(() => {
+    if (!pricingReadinessKey
+        || isSnapshotUpdating
+        || isUpdatingSelection
+        || isApplying) return;
+    void checkPricingReadiness();
+  }, [
+    checkPricingReadiness,
+    isApplying,
+    isSnapshotUpdating,
+    isUpdatingSelection,
+    pricingReadinessKey,
+  ]);
+
   const handleToggleSelection = async (itemPublicId, currentSelectedState) => {
     if (!capabilities.canSelect) {
       triggerToast?.('Lịch này hiện không cho phép thay đổi các suất đã chọn.', 'error');
@@ -311,6 +389,8 @@ export default function useAutoSchedulePreview(
 
     const previousSelectedIds = new Set(snapshot.selectedItemIds);
     setPricingPreflight(null);
+    setPricingPreflightError('');
+    pricingReadinessRef.current.completedKey = '';
     updateSnapshot(previous => {
       const nextSelectedIds = new Set(previous.selectedItemIds);
       if (newSelectedState) nextSelectedIds.add(itemPublicId);
@@ -358,6 +438,8 @@ export default function useAutoSchedulePreview(
 
     const previousSelectedIds = new Set(snapshot.selectedItemIds);
     setPricingPreflight(null);
+    setPricingPreflightError('');
+    pricingReadinessRef.current.completedKey = '';
     updateSnapshot(previous => ({
       ...previous,
       selectedItemIds: new Set(selectedIdsArray),
@@ -395,6 +477,10 @@ export default function useAutoSchedulePreview(
   const handleApply = async () => {
     if (!capabilities.canApply) {
       triggerToast?.('Lịch này chưa sẵn sàng để tạo suất chiếu.', 'error');
+      return null;
+    }
+    if (!pricingPreflight?.complete) {
+      triggerToast?.('Hãy xử lý bảng giá và kiểm tra lại trước khi tạo suất chiếu.', 'error');
       return null;
     }
 
@@ -459,12 +545,15 @@ export default function useAutoSchedulePreview(
     },
     snapshotError,
     pricingPreflight,
+    pricingPreflightError,
+    isCheckingPricing,
     capabilities,
     isApplying,
     isUpdatingSelection,
     handleToggleSelection,
     handleBulkSelection,
     handleApply,
+    checkPricingReadiness,
     fetchPreview,
   };
 }

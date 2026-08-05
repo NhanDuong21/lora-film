@@ -20,6 +20,7 @@ import {
   getBookingTickets
 } from '../services/bookingService';
 import BookingCancellationModal from '../components/BookingCancellationModal';
+import TicketQrCode from '../components/TicketQrCode';
 import { getBookingErrorMessage } from '../utils/bookingErrorMessages';
 
 const statusPresentation = {
@@ -210,6 +211,7 @@ export default function BookingDetailPage() {
   const foodItems = Array.isArray(foodOrder?.items) ? foodOrder.items : [];
   const tickets = Array.isArray(booking.tickets) ? booking.tickets : [];
   const currentStatus = booking.bookingStatus || booking.status;
+  const ticketsUsable = ['CONFIRMED', 'COMPLETED'].includes(currentStatus);
   const status = statusPresentation[currentStatus] || {
     label: 'Đang cập nhật',
     className: 'border-zinc-700 bg-zinc-800 text-zinc-300',
@@ -422,8 +424,14 @@ export default function BookingDetailPage() {
 
             {tickets.length > 0 && (
               <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 print:border-black print:bg-white">
-                <h2 className="font-black text-white print:text-black">Vé xem phim</h2>
-                <p className="mt-1 text-xs text-zinc-500">Xuất trình mã vé khi đến rạp</p>
+                <h2 className="font-black text-white print:text-black">
+                  {ticketsUsable ? 'Vé xem phim' : 'Mã vé không còn hiệu lực'}
+                </h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {ticketsUsable
+                    ? 'Xuất trình mã vé khi đến rạp'
+                    : 'Thông tin chỉ được giữ lại để đối chiếu; không thể dùng để vào rạp.'}
+                </p>
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   {tickets.map(ticket => (
                     <div key={ticket.publicId || ticket.id} className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 print:border-black print:bg-white">
@@ -432,11 +440,16 @@ export default function BookingDetailPage() {
                         <p className="mt-1 text-lg font-black text-brand-orange">{ticket.seatLabel}</p>
                         <p className="mt-2 text-[10px] text-zinc-500">Mã vé: {ticket.ticketCode}</p>
                       </div>
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(ticket.ticketCode)}`}
-                        alt={`Mã QR vé ${ticket.ticketCode}`}
-                        className="h-20 w-20 rounded-lg bg-white p-1"
-                      />
+                      {ticketsUsable ? (
+                        <TicketQrCode
+                          ticketCode={ticket.ticketCode}
+                          className="h-20 w-20 rounded-lg bg-white p-1"
+                        />
+                      ) : (
+                        <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-[10px] font-black uppercase text-red-300">
+                          Vô hiệu
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

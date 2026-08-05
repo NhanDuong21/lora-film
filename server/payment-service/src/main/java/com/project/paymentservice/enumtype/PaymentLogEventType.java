@@ -6,6 +6,8 @@ public enum PaymentLogEventType {
     PROVIDER_SESSION_CREATED,
     PROVIDER_CALLBACK_RECEIVED,
     STATUS_CHANGED,
+    // Compatibility with payment logs created by the legacy demo/import pipeline.
+    PAYMENT_SUCCESS,
     PAYMENT_SUCCEEDED,
     PAYMENT_FAILED,
     PAYMENT_CANCELLED,

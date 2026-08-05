@@ -15,10 +15,10 @@ import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.service.CustomerMovieService;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -29,6 +29,7 @@ import org.springframework.data.domain.Pageable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.time.Clock;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,7 +57,9 @@ public class CustomerMovieServiceTest {
     @Mock
     private ShowtimeRepository showtimeRepository;
 
-    @InjectMocks
+    @Mock
+    private ShowtimePriceRepository showtimePriceRepository;
+
     private CustomerMovieService customerMovieService;
 
     private Movie activeMovie;
@@ -64,6 +67,9 @@ public class CustomerMovieServiceTest {
 
     @BeforeEach
     void setUp() {
+        customerMovieService = new CustomerMovieService(
+                movieRepository, movieGenreRepository, movieMediaRepository, movieMapper,
+                movieService, showtimeRepository, showtimePriceRepository, Clock.systemUTC());
         activeMovie = new Movie();
         activeMovie.setId(1L);
         activeMovie.setPublicId("movie-1");

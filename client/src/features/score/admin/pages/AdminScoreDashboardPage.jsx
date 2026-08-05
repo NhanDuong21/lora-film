@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
 import { Award, Users, TrendingUp, RefreshCw, ShieldAlert, Coins, Gift, Clock } from 'lucide-react';
 
+const formatCount = value => Number(value ?? 0).toLocaleString('vi-VN');
+
 export default function AdminScoreDashboardPage() {
   const {
     dashboardStats,
@@ -61,7 +63,7 @@ export default function AdminScoreDashboardPage() {
           </div>
           <div className="mt-5 flex items-baseline gap-1.5">
             <span className="text-4xl font-black text-white tracking-tighter">
-              {stats.totalMembers.toLocaleString('vi-VN')}
+              {formatCount(stats.totalMembers)}
             </span>
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">tài khoản</span>
           </div>
@@ -76,7 +78,7 @@ export default function AdminScoreDashboardPage() {
           </div>
           <div className="mt-5 flex items-baseline gap-1.5">
             <span className="text-4xl font-black text-emerald-400 tracking-tighter">
-              {stats.totalPointsEarned.toLocaleString('vi-VN')}
+              {formatCount(stats.totalPointsEarned)}
             </span>
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">pts</span>
           </div>
@@ -91,7 +93,7 @@ export default function AdminScoreDashboardPage() {
           </div>
           <div className="mt-5 flex items-baseline gap-1.5">
             <span className="text-4xl font-black text-blue-400 tracking-tighter">
-              {stats.totalPointsHeld.toLocaleString('vi-VN')}
+              {formatCount(stats.totalPointsHeld)}
             </span>
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">pts</span>
           </div>
@@ -107,7 +109,7 @@ export default function AdminScoreDashboardPage() {
           <div className="mt-5 flex items-end justify-between">
             <div className="flex items-baseline gap-1.5">
               <span className={`text-4xl font-black tracking-tighter ${stats.pendingReconciliationMismatches > 0 ? 'text-red-500' : 'text-zinc-300'}`}>
-                {stats.pendingReconciliationMismatches.toLocaleString('vi-VN')}
+                {formatCount(stats.pendingReconciliationMismatches)}
               </span>
               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">tài khoản</span>
             </div>
@@ -126,7 +128,7 @@ export default function AdminScoreDashboardPage() {
           </div>
           <div>
             <div className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1">Hạng Silver</div>
-            <div className="text-3xl font-black text-white tracking-tighter">{stats.silverMembers.toLocaleString('vi-VN')}</div>
+            <div className="text-3xl font-black text-white tracking-tighter">{formatCount(stats.silverMembers)}</div>
           </div>
         </div>
 
@@ -136,7 +138,7 @@ export default function AdminScoreDashboardPage() {
           </div>
           <div>
             <div className="text-[10px] font-black uppercase text-amber-500/80 tracking-widest mb-1">Hạng Gold</div>
-            <div className="text-3xl font-black text-amber-400 tracking-tighter">{stats.goldMembers.toLocaleString('vi-VN')}</div>
+            <div className="text-3xl font-black text-amber-400 tracking-tighter">{formatCount(stats.goldMembers)}</div>
           </div>
         </div>
 
@@ -146,7 +148,7 @@ export default function AdminScoreDashboardPage() {
           </div>
           <div>
             <div className="text-[10px] font-black uppercase text-cyan-500/80 tracking-widest mb-1">Hạng Diamond</div>
-            <div className="text-3xl font-black text-cyan-400 tracking-tighter">{stats.diamondMembers.toLocaleString('vi-VN')}</div>
+            <div className="text-3xl font-black text-cyan-400 tracking-tighter">{formatCount(stats.diamondMembers)}</div>
           </div>
         </div>
       </div>

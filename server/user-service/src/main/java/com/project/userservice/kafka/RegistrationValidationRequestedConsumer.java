@@ -36,6 +36,7 @@ public class RegistrationValidationRequestedConsumer {
             RegistrationValidationRequestedEvent event = objectMapper.readValue(message, RegistrationValidationRequestedEvent.class);
             RegistrationValidationRequestedPayload payload = event.getData();
             String requestId = payload.getRequestId();
+            String reservationOwner = normalizeReservationOwner(payload.getEmail(), requestId);
             String phoneNumber = payload.getPhoneNumber();
             String cccd = payload.getCccd();
 
@@ -62,7 +63,7 @@ public class RegistrationValidationRequestedConsumer {
         // 2. Check and Reserve in Redis
         // TTL is 15 minutes (to match OTP expiry time)
         ReservationResult reservationResult = reservationService.reserve(
-                phoneNumber, cccd, requestId, Duration.ofMinutes(15));
+                phoneNumber, cccd, reservationOwner, Duration.ofMinutes(15));
         
         if (!reservationResult.isSuccess()) {
             log.warn("Validation failed: phoneNumber or CCCD is already reserved in Redis for requestId={}", requestId);
@@ -77,5 +78,12 @@ public class RegistrationValidationRequestedConsumer {
             log.error("Failed to process REGISTRATION_VALIDATION_REQUESTED event", e);
             throw new IllegalStateException("Registration validation event processing failed", e);
         }
+    }
+
+    private String normalizeReservationOwner(String email, String requestId) {
+        if (email != null && !email.isBlank()) {
+            return email.trim().toLowerCase(java.util.Locale.ROOT);
+        }
+        return requestId;
     }
 }

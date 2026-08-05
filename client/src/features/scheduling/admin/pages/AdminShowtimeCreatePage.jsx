@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Calendar, Clock, Loader2, MapPin, Film, Info } from 'l
 import useShowtimeForm from '@/features/scheduling/admin/hooks/useShowtimeForm';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import { isSchedulableMovieStatus } from '@/features/scheduling/admin/utils/movieSchedulingEligibility';
 
 const AdminShowtimeCreatePage = () => {
   const { triggerToast } = useOutletContext() || {};
@@ -45,7 +46,7 @@ const AdminShowtimeCreatePage = () => {
   }));
 
   const movieOptions = movies
-    .filter(m => m.status !== 'DRAFT')
+    .filter(m => isSchedulableMovieStatus(m.status))
     .map(m => {
       return {
         value: m.publicId,

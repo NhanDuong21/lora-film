@@ -40,6 +40,10 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/concessions')) return 'concessions';
     if (path.endsWith('/concession-sales')) return 'concession-sales';
     if (path.endsWith('/members')) return 'customers';
+    if (path.endsWith('/scores/dashboard')) return 'scores-dashboard';
+    if (path.endsWith('/scores/tiers')) return 'scores-tiers';
+    if (path.endsWith('/scores/viewer')) return 'scores-viewer';
+    if (path.endsWith('/scores/reconciliation')) return 'scores-reconciliation';
     if (path.endsWith('/staff')) return 'staff';
     if (path.endsWith('/payroll')) return 'payroll';
     if (path.endsWith('/accounts')) return 'accounts';

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { login } from "@/features/auth/services/authService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,7 +6,7 @@ import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import { getCustomerErrorMessage } from '@/utils/customerErrorMessages';
 import { Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
 import { getUserPermissions } from '@/utils/authStorage';
-import { getAdminLandingPath, hasAdminAreaAccess } from '@/features/internal-staff/admin/permissionAccess';
+import { resolvePostLoginPath } from '../utils/loginRedirect';
 
 function Login() {
     const { login: contextLogin } = useAuth();
@@ -24,10 +24,6 @@ function Login() {
         )
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        document.title = "Đăng Nhập - LoraFilm Ticket Booking";
-    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -48,20 +44,12 @@ function Login() {
                 await contextLogin({ ...data.data, rememberMe });
                 setSuccessMessage("Đăng nhập thành công. Đang chuyển hướng...");
 
-                // Navigate based on role-specific paths
-                const role = data.data.role;
                 setTimeout(() => {
-                    if (hasAdminAreaAccess(role, getUserPermissions())) {
-                        navigate(getAdminLandingPath(role, getUserPermissions()));
-                    } else if (role === "EMPLOYEE" || role === "STAFF" || role === "ROLE_STAFF") {
-                        navigate("/employee");
-                    } else {
-                        const from = location.state?.from;
-                        const redirectTo = from?.pathname
-                            ? `${from.pathname}${from.search || ""}${from.hash || ""}`
-                            : "/";
-                        navigate(redirectTo, { replace: true });
-                    }
+                    navigate(resolvePostLoginPath({
+                        role: data.data.role,
+                        permissions: getUserPermissions(),
+                        from: location.state?.from,
+                    }), { replace: true });
                 }, 400);
             } else {
                 setErrorMsg("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
@@ -250,7 +238,7 @@ function Login() {
                     </div>
 
                     <a
-                        href={`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"}/oauth2/authorization/google`}
+                        href={`${import.meta.env.VITE_API_BASE_URL || ""}/oauth2/authorization/google`}
                         className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-3.5 text-sm font-bold text-zinc-900 transition-all hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-zinc-900"
                     >
                         <svg className="h-5 w-5" viewBox="0 0 24 24">

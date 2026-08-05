@@ -1,15 +1,18 @@
 package com.lorafilm.booking.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
+import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingSnapshotRepository;
 import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.impl.InternalBookingPaymentServiceImpl;
@@ -60,6 +63,8 @@ class InternalBookingPaymentServiceTest {
     @Mock
     private BookingPriceSnapshotRepository snapshotRepository;
     @Mock
+    private BookingSnapshotRepository bookingSnapshotRepository;
+    @Mock
     private BookingPaymentEventRepository eventRepository;
     @Mock
     private BookingStatusHistoryService historyService;
@@ -86,7 +91,9 @@ class InternalBookingPaymentServiceTest {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper().findAndRegisterModules();
+        objectMapper = new ObjectMapper()
+                .findAndRegisterModules()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         service = new InternalBookingPaymentServiceImpl(
                 bookingRepository,
                 snapshotRepository,
@@ -101,6 +108,7 @@ class InternalBookingPaymentServiceTest {
                 refundRepository,
                 lifecycleService);
         service.setScoreRedemptionClient(scoreRedemptionClient);
+        service.setBookingSnapshotRepository(bookingSnapshotRepository);
         booking = Booking.create(
                 BOOKING_PUBLIC_ID,
                 "LORAFILM-1",
@@ -143,6 +151,39 @@ class InternalBookingPaymentServiceTest {
         assertEquals("movie-public-101", context.analyticsSnapshot().moviePublicId());
         assertEquals("cinema-public-201", context.analyticsSnapshot().cinemaPublicId());
         assertEquals(2, context.analyticsSnapshot().ticketCount());
+    }
+
+    @Test
+    void normalizesLegacyAmountOnlySnapshotFromBookingPresentation() throws Exception {
+        when(bookingRepository.findById(100L)).thenReturn(Optional.of(booking));
+        when(reservationRepository.findAllByBookingId(100L))
+                .thenReturn(List.of(heldReservation()));
+
+        BookingPriceSnapshot legacyPriceSnapshot = new BookingPriceSnapshot();
+        legacyPriceSnapshot.setBooking(booking);
+        legacyPriceSnapshot.setCurrency("VND");
+        legacyPriceSnapshot.setPricingBreakdownJson(objectMapper.writeValueAsString(
+                java.util.Map.of(
+                        "ticketAmount", new BigDecimal("240000.00"),
+                        "foodAmount", BigDecimal.ZERO,
+                        "finalAmount", new BigDecimal("240000.00"))));
+        when(snapshotRepository.findByBookingId(100L))
+                .thenReturn(Optional.of(legacyPriceSnapshot));
+
+        BookingSnapshot presentationSnapshot = new BookingSnapshot();
+        presentationSnapshot.setBooking(booking);
+        presentationSnapshot.setMovieId(101L);
+        presentationSnapshot.setMovieTitle("Superman");
+        presentationSnapshot.setSeatCount(1);
+        when(bookingSnapshotRepository.findByBookingId(100L))
+                .thenReturn(Optional.of(presentationSnapshot));
+
+        var context = service.getPaymentContext(100L);
+
+        assertEquals(101L, context.analyticsSnapshot().movieId());
+        assertEquals("Superman", context.analyticsSnapshot().movieTitle());
+        assertEquals(1, context.analyticsSnapshot().ticketCount());
+        assertEquals(new BigDecimal("240000.00"), context.analyticsSnapshot().totalAmount());
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.project.promotionservice.promotion.dto.response;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
+import com.project.promotionservice.promotion.enums.PromotionStackingBlockedReason;
 import com.project.promotionservice.promotion.enums.PromotionType;
 
 import java.time.Instant;
@@ -18,6 +19,9 @@ public record PromotionResponse(
         boolean publicVisible,
         int priority,
         boolean stackable,
+        boolean campaignStackable,
+        boolean effectiveStackable,
+        PromotionStackingBlockedReason stackingBlockedReason,
         JsonNode conditionsJson,
         JsonNode actionsJson,
         JsonNode metadataJson,

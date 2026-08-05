@@ -25,7 +25,7 @@ export const seatStatePresentation = seat => {
   }
   if (seat.reservationStatus === 'HELD') {
     return {
-      className: 'border-orange-500/70 bg-orange-950 text-orange-200 opacity-80',
+      className: 'border-fuchsia-300 bg-fuchsia-950 text-fuchsia-100 shadow-[0_0_14px_rgba(232,121,249,0.35)]',
       reason: 'đang được khách khác giữ',
       sellable: false
     };

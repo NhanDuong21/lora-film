@@ -1,17 +1,21 @@
 package com.lorafilm.movie.showtime.service.impl;
 
+import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
+import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
+import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
+import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.dto.request.UpdateShowtimeStatusRequest;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeMapper;
 import com.lorafilm.movie.showtime.dto.response.AdminShowtimeResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
-import com.lorafilm.movie.pricing.service.ShowtimePricingService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeRefundOutboxService;
+import com.lorafilm.movie.showtime.validation.ShowtimeOpeningPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,9 +49,11 @@ class ShowtimeStatusTransitionServiceImplTest {
     private AdminShowtimeMapper adminShowtimeMapper;
 
     @Mock
-    private ShowtimePricingService showtimePricingService;
-    @Mock
     private ShowtimeRefundOutboxService refundOutboxService;
+    @Mock
+    private ShowtimeOpeningPolicy openingPolicy;
+    @Mock
+    private ShowtimeSchedulePreviewRepository schedulePreviewRepository;
 
     private Clock fixedClock;
 
@@ -58,8 +64,8 @@ class ShowtimeStatusTransitionServiceImplTest {
         fixedClock = Clock.fixed(Instant.parse("2026-07-10T10:00:00Z"), ZoneId.of("UTC"));
         transitionService = new ShowtimeStatusTransitionServiceImpl(
                 showtimeRepository, historyService, currentUserProvider,
-                adminShowtimeMapper, fixedClock, showtimePricingService,
-                refundOutboxService);
+                adminShowtimeMapper, fixedClock, refundOutboxService, openingPolicy,
+                schedulePreviewRepository);
     }
 
     @Test
@@ -82,7 +88,7 @@ class ShowtimeStatusTransitionServiceImplTest {
 
         assertEquals(ShowtimeStatus.OPEN_FOR_BOOKING, showtime.getStatus());
         assertEquals(Instant.parse("2026-07-10T10:00:00Z"), showtime.getBookingOpenTime());
-        verify(showtimePricingService).validateCompleteness(showtime);
+        verify(openingPolicy).validateCanOpen(showtime, fixedClock.instant());
         verify(historyService).recordTransitionHistory(eq(showtime), eq(ShowtimeStatus.DRAFT), eq(ShowtimeStatus.OPEN_FOR_BOOKING), isNull(), eq(1L), eq(fixedClock.instant()));
     }
 
@@ -95,6 +101,8 @@ class ShowtimeStatusTransitionServiceImplTest {
         showtime.setStartTime(Instant.parse("2026-07-10T09:00:00Z")); // past
 
         when(showtimeRepository.findByPublicIdForUpdate("pub-id")).thenReturn(Optional.of(showtime));
+        doThrow(new BusinessException(ErrorCode.SHOWTIME_CANNOT_OPEN_AFTER_START))
+                .when(openingPolicy).validateCanOpen(showtime, fixedClock.instant());
 
         UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
         request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
@@ -208,7 +216,7 @@ class ShowtimeStatusTransitionServiceImplTest {
                 throw new BusinessException(ErrorCode.SHOWTIME_PRICE_MISSING, "missing");
             }
             return null;
-        }).when(showtimePricingService).validateCompleteness(any(Showtime.class));
+        }).when(openingPolicy).validateCanOpen(any(Showtime.class), eq(fixedClock.instant()));
         when(currentUserProvider.getCurrentUserId()).thenReturn(7L);
 
         var summary = transitionService.previewBatchStatus(
@@ -238,7 +246,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         when(showtimeRepository.findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc("batch-1"))
                 .thenReturn(List.of(firstMissing, secondMissing, invalidStatus));
         doThrow(new BusinessException(ErrorCode.PRICING_INCOMPLETE, "diagnostic details"))
-                .when(showtimePricingService).validateCompleteness(any(Showtime.class));
+                .when(openingPolicy).validateCanOpen(any(Showtime.class), eq(fixedClock.instant()));
 
         var summary = transitionService.previewBatchStatus(
                 "batch-1", ShowtimeStatus.OPEN_FOR_BOOKING);
@@ -268,6 +276,12 @@ class ShowtimeStatusTransitionServiceImplTest {
         Showtime started = showtime("started", ShowtimeStatus.DRAFT, "2026-07-10T09:00:00Z");
         when(showtimeRepository.findAllByBatchIdForUpdate("batch-1"))
                 .thenReturn(List.of(eligible, started));
+        doAnswer(invocation -> {
+            if (invocation.getArgument(0) == started) {
+                throw new BusinessException(ErrorCode.SHOWTIME_CANNOT_OPEN_AFTER_START);
+            }
+            return null;
+        }).when(openingPolicy).validateCanOpen(any(Showtime.class), eq(fixedClock.instant()));
         when(currentUserProvider.getCurrentUserId()).thenReturn(9L);
         UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
         request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
@@ -311,19 +325,80 @@ class ShowtimeStatusTransitionServiceImplTest {
     }
 
     @Test
-    void transitionBatchStatus_CancellationFailsClosedBeforeReadingBatch() {
+    void transitionBatchStatus_CancelsAllAutomaticDraftsWithoutRefundWork() {
+        ShowtimeSchedulePreview sourcePreview = mock(ShowtimeSchedulePreview.class);
+        when(sourcePreview.getStatus()).thenReturn(SchedulePreviewStatus.APPLIED);
+        when(schedulePreviewRepository.findByPublicIdForApply("batch-1"))
+                .thenReturn(Optional.of(sourcePreview));
+        Showtime first = showtime("first", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z");
+        Showtime second = showtime("second", ShowtimeStatus.DRAFT, "2026-07-10T14:00:00Z");
+        when(showtimeRepository.findAllByBatchIdForUpdate("batch-1"))
+                .thenReturn(List.of(first, second));
+        when(showtimeRepository.saveAndFlush(any(Showtime.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(15L);
         UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
         request.setStatus(ShowtimeStatus.CANCELLED);
-        request.setReason("Requested cancellation");
+        request.setReason("Replace automatic schedule");
 
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> transitionService.transitionBatchStatus("batch-1", request));
+        var summary = transitionService.transitionBatchStatus("batch-1", request);
 
-        assertEquals(
-                ErrorCode.SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE,
-                exception.getErrorCode());
-        verify(showtimeRepository, never()).findAllByBatchIdForUpdate(anyString());
+        assertTrue(summary.isActionAllowed());
+        assertEquals(2, summary.getAffectedCount());
+        assertEquals(ShowtimeStatus.CANCELLED, first.getStatus());
+        assertEquals(ShowtimeStatus.CANCELLED, second.getStatus());
+        verify(refundOutboxService, never()).enqueueCancellation(anyString(), anyString());
+        verify(sourcePreview).markCancelled();
+        verify(schedulePreviewRepository).saveAndFlush(sourcePreview);
+    }
+
+    @Test
+    void previewBatchStatus_AllowsReplacementOnlyForAppliedAutomaticDraftBatch() {
+        ShowtimeSchedulePreview sourcePreview = mock(ShowtimeSchedulePreview.class);
+        when(sourcePreview.getStatus()).thenReturn(SchedulePreviewStatus.APPLIED);
+        when(schedulePreviewRepository.findByPublicId("batch-1"))
+                .thenReturn(Optional.of(sourcePreview));
+        when(showtimeRepository.findAllByBatchIdAndDeletedAtIsNullOrderByIdAsc("batch-1"))
+                .thenReturn(List.of(
+                        showtime("first", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z"),
+                        showtime("second", ShowtimeStatus.DRAFT, "2026-07-10T14:00:00Z")));
+
+        var summary = transitionService.previewBatchStatus("batch-1", ShowtimeStatus.CANCELLED);
+
+        assertTrue(summary.isActionAllowed());
+        assertTrue(summary.isAtomic());
+        assertEquals(2, summary.getEligibleCount());
+        assertEquals(0, summary.getSkippedCount());
+    }
+
+    @Test
+    void transitionBatchStatus_CancellationBlocksWholeBatchWhenAnyShowtimeWasOpened() {
+        ShowtimeSchedulePreview sourcePreview = mock(ShowtimeSchedulePreview.class);
+        when(sourcePreview.getStatus()).thenReturn(SchedulePreviewStatus.APPLIED);
+        when(schedulePreviewRepository.findByPublicIdForApply("batch-1"))
+                .thenReturn(Optional.of(sourcePreview));
+        Showtime draft = showtime("draft", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z");
+        Showtime opened = showtime("opened", ShowtimeStatus.OPEN_FOR_BOOKING, "2026-07-10T14:00:00Z");
+        when(showtimeRepository.findAllByBatchIdForUpdate("batch-1"))
+                .thenReturn(List.of(draft, opened));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(15L);
+        UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
+        request.setStatus(ShowtimeStatus.CANCELLED);
+        request.setReason("Replace automatic schedule");
+
+        var summary = transitionService.transitionBatchStatus("batch-1", request);
+
+        assertFalse(summary.isActionAllowed());
+        assertEquals(0, summary.getAffectedCount());
+        assertEquals(1, summary.getEligibleCount());
+        assertEquals(1, summary.getSkippedCount());
+        assertEquals("SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT",
+                summary.getReasonGroups().get(0).getReasonCode());
+        assertEquals(ShowtimeStatus.DRAFT, draft.getStatus());
+        assertEquals(ShowtimeStatus.OPEN_FOR_BOOKING, opened.getStatus());
+        verify(showtimeRepository, never()).saveAndFlush(any());
+        verify(sourcePreview, never()).markCancelled();
+        verify(schedulePreviewRepository, never()).saveAndFlush(any());
     }
 
     private Showtime showtime(String publicId, ShowtimeStatus status, String startTime) {
@@ -332,6 +407,7 @@ class ShowtimeStatusTransitionServiceImplTest {
         showtime.setStatus(status);
         showtime.setStartTime(Instant.parse(startTime));
         showtime.setEndTime(Instant.parse(startTime).plusSeconds(3600));
+        showtime.setSource(ShowtimeSource.AUTO);
         return showtime;
     }
 }

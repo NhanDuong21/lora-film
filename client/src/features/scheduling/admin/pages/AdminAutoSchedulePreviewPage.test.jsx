@@ -3,9 +3,19 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { derivePreviewCapabilities } from '../utils/autoSchedulePreviewLifecycle';
 import useAutoSchedulePreview from '../hooks/useAutoSchedulePreview';
+import useExistingShowtimeSummary from '../hooks/useExistingShowtimeSummary';
+import adminAutoScheduleService from '../services/adminAutoScheduleService';
+import adminShowtimeService from '../services/adminShowtimeService';
 import AdminAutoSchedulePreviewPage from './AdminAutoSchedulePreviewPage';
 
 vi.mock('../hooks/useAutoSchedulePreview');
+vi.mock('../hooks/useExistingShowtimeSummary');
+vi.mock('../services/adminAutoScheduleService', () => ({
+  default: { cancelPreview: vi.fn() },
+}));
+vi.mock('../services/adminShowtimeService', () => ({
+  default: { previewBatchStatus: vi.fn(), transitionBatchStatus: vi.fn() },
+}));
 
 const candidate = (index = 1, overrides = {}) => ({
   itemPublicId: `item-${index}`,
@@ -35,6 +45,7 @@ const preview = (status = 'PREVIEWED', overrides = {}) => ({
   status,
   timezoneSnapshot: 'UTC',
   cinemaName: 'Lora Cinema',
+  cinemaPublicId: 'cinema-1',
   scheduleFrom: '2026-07-24',
   scheduleTo: '2026-07-26',
   generatedAt: '2026-07-23T10:00:00Z',
@@ -55,6 +66,16 @@ const hookValue = ({
   isRefreshing = false,
   isUpdatingSelection = false,
   snapshotError = null,
+  pricingPreflight = {
+    complete: true,
+    totalCandidateCount: selectedIds.size,
+    completeCandidateCount: selectedIds.size,
+    incompleteCandidateCount: 0,
+    ambiguousCandidateCount: 0,
+    reasonGroups: [],
+  },
+  pricingPreflightError = '',
+  isCheckingPricing = false,
 } = {}) => {
   const previewValue = preview(status, {
     totalCandidateCount: items.length,
@@ -81,12 +102,16 @@ const hookValue = ({
       ? { loadedPages: 2, totalPages: 4, loadedItems: 200, totalItems: 361 }
       : { loadedPages: 1, totalPages: 1, loadedItems: items.length, totalItems: items.length },
     snapshotError,
+    pricingPreflight,
+    pricingPreflightError,
+    isCheckingPricing,
     capabilities,
     isApplying: false,
     isUpdatingSelection,
     handleToggleSelection: vi.fn(),
     handleBulkSelection: vi.fn(),
     handleApply: vi.fn(),
+    checkPricingReadiness: vi.fn(),
     fetchPreview: vi.fn(),
   };
 };
@@ -109,6 +134,123 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAutoSchedulePreview.mockReturnValue(hookValue());
+    useExistingShowtimeSummary.mockReturnValue({
+      countsByDate: {},
+      totalExisting: 0,
+      isLoading: false,
+      error: null,
+      retry: vi.fn(),
+    });
+    adminAutoScheduleService.cancelPreview.mockResolvedValue({ success: true, data: {} });
+    adminShowtimeService.previewBatchStatus.mockResolvedValue({
+      success: true,
+      data: {
+        totalCount: 1,
+        eligibleCount: 1,
+        skippedCount: 0,
+        actionAllowed: true,
+        reasonGroups: [],
+      },
+    });
+    adminShowtimeService.transitionBatchStatus.mockResolvedValue({
+      success: true,
+      data: { actionAllowed: true, affectedCount: 1 },
+    });
+  });
+
+  it('discards an unapplied preview and opens a prefilled recreate flow', async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ bản đề xuất & tạo lại' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('chưa tạo suất chiếu thật');
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ bản cũ và tạo lại' }));
+
+    await waitFor(() => expect(adminAutoScheduleService.cancelPreview).toHaveBeenCalledWith(
+      'preview-1',
+      { expectedVersion: 3 },
+    ));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(
+      '/admin/showtime-schedules/create',
+    ));
+  });
+
+  it('blocks creation and routes missing pricing to the prefilled pricing workflow', () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      pricingPreflight: {
+        complete: false,
+        totalCandidateCount: 1,
+        completeCandidateCount: 0,
+        incompleteCandidateCount: 1,
+        ambiguousCandidateCount: 0,
+        reasonGroups: [{
+          reasonCode: 'PRICING_MISSING',
+          count: 1,
+          displayMessage: 'Thiếu chính sách giá đang có hiệu lực.',
+          affectedDates: ['2026-07-24'],
+          auditoriums: [{ publicId: 'aud-1', name: 'Phòng 1' }],
+          seatTypes: [{ publicId: 'seat-vip', code: 'VIP', name: 'Ghế VIP' }],
+        }],
+      },
+    }));
+
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: 'Chưa thể tạo suất chiếu' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tạo 1 suất chiếu/i })).not.toBeInTheDocument();
+    const repairLinks = screen.getAllByRole('link', { name: /Thiết lập bảng giá cho rạp này/i });
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('cinema=cinema-1'));
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('effectiveFrom=2026-07-24'));
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('effectiveTo=2026-07-26'));
+    expect(repairLinks[0]).toHaveAttribute('href', expect.stringContaining('returnTo=%2Fadmin%2Fshowtime-schedules%2Fpreview-1'));
+
+    fireEvent.click(repairLinks[0]);
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/pricing?');
+  });
+
+  it('blocks replacement without changing any showtime when one batch item is no longer draft', async () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({ status: 'APPLIED' }));
+    adminShowtimeService.previewBatchStatus.mockResolvedValue({
+      success: true,
+      data: {
+        totalCount: 2,
+        eligibleCount: 1,
+        skippedCount: 1,
+        actionAllowed: false,
+        reasonGroups: [{
+          reasonCode: 'SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT',
+          count: 1,
+        }],
+      },
+    });
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thay lịch' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('Không thể thay lịch an toàn'));
+    expect(screen.getByRole('dialog')).toHaveTextContent('không hủy bất kỳ suất nào');
+    expect(adminShowtimeService.transitionBatchStatus).not.toHaveBeenCalled();
+  });
+
+  it('atomically cancels an all-draft batch before opening the recreate form', async () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({ status: 'APPLIED' }));
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thay lịch' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Cả 1 suất vẫn đang soạn và chưa từng mở bán',
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy toàn bộ suất cũ và tạo lại' }));
+
+    await waitFor(() => expect(adminShowtimeService.transitionBatchStatus).toHaveBeenCalledWith(
+      'preview-1',
+      {
+        status: 'CANCELLED',
+        reason: 'Thay thế bằng một lịch tự động mới',
+      },
+    ));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(
+      '/admin/showtime-schedules/create',
+    ));
   });
 
   it('defaults to the earliest service date containing a selected recommendation', () => {
@@ -170,12 +312,12 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     useAutoSchedulePreview.mockReturnValue(value);
     renderPage();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Không hợp lệ \/ xung đột \(2\)/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Cần kiểm tra \(2\)/i }));
     const overlayActions = screen.getAllByRole('button', { name: 'Xem trên sơ đồ' });
     fireEvent.click(overlayActions[0]);
     expect(screen.getByRole('button', { name: '25/07/2026' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('timeline-candidate-item-2')).toHaveAttribute('data-diagnostic', 'true');
-    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 suất đã chọn và 1 suất đang kiểm tra');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 suất hệ thống đã chọn và 1 suất đang kiểm tra');
 
     fireEvent.click(overlayActions[1]);
     expect(screen.getByRole('button', { name: '26/07/2026' })).toHaveAttribute('aria-pressed', 'true');
@@ -199,10 +341,10 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue({ items, selectedIds: new Set(['item-1']) }));
     renderPage();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Không hợp lệ \/ xung đột/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Cần kiểm tra/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Xem trên sơ đồ' }));
-    expect(screen.getByRole('status')).toHaveTextContent('bị trùng khoảng sử dụng phòng');
-    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 2 suất đề xuất');
+    expect(screen.getByText(/Suất đang kiểm tra bị trùng khoảng sử dụng phòng/)).toBeInTheDocument();
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 2 phương án');
   });
 
   it('sorts concise rows by selected state before date, room, local start, rank, and stable ID', () => {
@@ -218,7 +360,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(within(rows[0]).getByText('Phim 1')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Phim 2')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Phim 3')).toBeInTheDocument();
-    expect(within(rows[0]).getByText((_, element) => element?.tagName === 'TD' && element.textContent === '89')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('89')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Thông tin nâng cao')).toBeInTheDocument();
     expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('điểm cao hơn tốt hơn');
     expect(screen.getByText(/Điểm ưu tiên tổng hợp/)).toHaveTextContent('Thứ tự rà soát không phải thứ tự quyết định lựa chọn');
@@ -255,10 +397,65 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     }));
     renderPage();
 
-    expect(screen.getByText('2/3 phim được xếp lịch')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Phim C có giờ chiếu hợp lệ nhưng chưa có suất nào');
+    expect(screen.getByText('2/3 phim có suất đề xuất')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Phim C có phương án hợp lệ nhưng chưa có suất nào được chọn');
     expect(screen.getByRole('alert')).toHaveTextContent('Phim A đang chiếm 87.5%');
     expect(screen.getByRole('button', { name: /Phim C.*0 suất/i })).toBeInTheDocument();
+  });
+
+  it('explains zero shows by date using operational reasons and candidate units', () => {
+    const items = [
+      candidate(1, {
+        itemPublicId: 'ice-cream-release',
+        moviePublicId: 'ice-cream',
+        movieTitle: 'Gã Bán Kem',
+        serviceDate: '2026-08-04',
+        validationStatus: 'REJECTED',
+        rejectionCode: 'SHOWTIME_OUTSIDE_RELEASE_WINDOW',
+        selected: false,
+      }),
+      candidate(2, {
+        itemPublicId: 'ice-cream-overlap',
+        moviePublicId: 'ice-cream',
+        movieTitle: 'Gã Bán Kem',
+        serviceDate: '2026-08-05',
+        startTime: '2026-08-05T10:00:00Z',
+        endTime: '2026-08-05T11:00:00Z',
+        occupancyEndTime: '2026-08-05T11:15:00Z',
+        validationStatus: 'REJECTED',
+        rejectionCode: 'SHOWTIME_OVERLAP_CONFLICT',
+        selected: false,
+      }),
+    ];
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      items,
+      selectedIds: new Set(),
+      previewOverrides: { cinemaSlug: 'lora-cinema' },
+    }));
+    useExistingShowtimeSummary.mockReturnValue({
+      countsByDate: { '2026-08-04': 3, '2026-08-05': 28 },
+      totalExisting: 31,
+      isLoading: false,
+      error: null,
+      retry: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('Phân bổ suất đề xuất')).toBeInTheDocument();
+    expect(screen.getByText(/không phải do bị thuật toán bỏ quên/i)).toBeInTheDocument();
+    expect(screen.getByText('Ngoài thời gian phát hành')).toBeInTheDocument();
+    expect(screen.getByText('0 phương án hợp lệ / 2 phương án đã xét')).toBeInTheDocument();
+    expect(screen.getByText(/31 suất hiện có · 0 suất đề xuất thêm/)).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole('group', { name: 'Xem kết quả theo ngày' }))
+      .getByRole('button', { name: /05\/08\/2026/i }));
+    expect(screen.getAllByText('Lịch hiện có đang chiếm khung giờ').length).toBeGreaterThan(0);
+    expect(screen.getByText('0 phương án hợp lệ / 1 phương án đã xét')).toBeInTheDocument();
+    expect(screen.getAllByText(/28 suất hiện có.*0 suất đề xuất thêm/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /Xem lịch chiếu hiện có/i })).toHaveAttribute(
+      'href',
+      '/admin/showtimes?cinemaSlug=lora-cinema&date=2026-08-05',
+    );
   });
 
   it('explains the historical S4 minimum-coverage limitation', () => {
@@ -299,8 +496,8 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Số suất mỗi trang' }), { target: { value: '100' } });
     expect(screen.getAllByTestId('candidate-row')).toHaveLength(100);
     expect(screen.getByText('Trang 1/37 · 3615 suất')).toBeInTheDocument();
-    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 suất đã chọn');
-    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 3615 suất đề xuất');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('0 suất hệ thống đã chọn');
+    expect(screen.getByTestId('timeline-boundary-evidence')).toHaveTextContent('toàn bộ 3615 phương án');
   });
 
   it('opens an accessible drawer from a semantic timeline button and restores focus on close', async () => {
@@ -323,7 +520,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.getByText('Đang cập nhật các suất chiếu đề xuất')).toBeInTheDocument();
     expect(screen.getByText(/2\/4 trang · 200\/361 suất đề xuất/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Tạo 1 suất chiếu/i })).toBeDisabled();
-    expect(screen.getByRole('tab', { name: /^Đề xuất \(1\)$/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /^Hệ thống đã chọn \(1\)$/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('checkbox', { name: /Chọn Phim 1/i })).toBeDisabled();
   });
 
@@ -368,7 +565,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(batchLink).toHaveAttribute('href', '/admin/showtimes?source=AUTO&batchId=preview-1');
     expect(batchLink).not.toHaveAttribute('href', expect.stringContaining('status=DRAFT'));
 
-    fireEvent.click(screen.getByRole('tab', { name: /Tất cả đề xuất \(2\)/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Tất cả phương án \(2\)/i }));
     expect(screen.getByRole('link', { name: 'Mở suất chiếu showtime-1' }))
       .toHaveAttribute('href', '/admin/showtimes/showtime-1');
     expect(screen.queryByText('should-not-link')).not.toBeInTheDocument();
@@ -413,6 +610,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(dialog).toHaveTextContent('Đang soạn');
     expect(dialog).toHaveTextContent('Suất lỗi trong toàn bộ đề xuất');
     expect(dialog).toHaveTextContent('lần thử lại sẽ dùng cùng khóa an toàn');
+    expect(dialog).toHaveTextContent('Lịch chỉ có một phim');
 
     await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo 1 suất chiếu' })));
     expect(value.handleApply).toHaveBeenCalledTimes(1);

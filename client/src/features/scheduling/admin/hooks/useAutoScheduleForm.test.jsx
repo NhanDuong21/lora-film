@@ -19,6 +19,7 @@ const auditorium = {
 };
 const eligibleMovie = {
   moviePublicId: 'movie-1', title: 'Phim thử nghiệm', eligible: true, reasons: [],
+  status: 'NOW_SHOWING',
   versions: [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE' }],
 };
 
@@ -64,6 +65,51 @@ describe('useAutoScheduleForm', () => {
     expect(result.current.selectedAuditoriumIds).toEqual([]);
   });
 
+  it('only exposes active auditoriums returned by the cinema detail API', async () => {
+    adminCinemaService.getAdminCinemaDetail.mockResolvedValue({
+      success: true,
+      data: {
+        ...cinema,
+        activeAuditoriums: [
+          auditorium,
+          { publicId: 'auditorium-draft', name: 'Draft room', status: 'DRAFT' },
+          { publicId: 'auditorium-maintenance', name: 'Maintenance room', status: 'MAINTENANCE' },
+          { publicId: 'auditorium-inactive', name: 'Inactive room', status: 'INACTIVE' },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+    await waitFor(() => expect(result.current.cinemas).toHaveLength(1));
+    act(() => result.current.setSelectedCinemaId('cinema-1'));
+
+    await waitFor(() => expect(result.current.auditoriums).toEqual([auditorium]));
+    act(() => result.current.selectAllActiveAuditoriums());
+    expect(result.current.selectedAuditoriumIds).toEqual(['auditorium-1']);
+  });
+
+  it('restores an eligible schedule draft for recreation', async () => {
+    const { result } = renderHook(() => useAutoScheduleForm({
+      initialDraft: {
+        cinemaPublicId: 'cinema-1',
+        scheduleFrom: '2099-08-22',
+        scheduleTo: '2099-08-28',
+        slotGranularityMinutes: 30,
+        auditoriumPublicIds: ['auditorium-1'],
+        movieVersionPublicIds: ['version-1'],
+      },
+    }));
+
+    await waitFor(() => expect(result.current.auditoriums).toHaveLength(1));
+    await waitFor(() => expect(result.current.movies).toHaveLength(1));
+    expect(result.current.selectedCinemaId).toBe('cinema-1');
+    expect(result.current.scheduleFrom).toBe('2099-08-22');
+    expect(result.current.scheduleTo).toBe('2099-08-28');
+    expect(result.current.slotGranularityMinutes).toBe(30);
+    expect(result.current.selectedAuditoriumIds).toEqual(['auditorium-1']);
+    expect(result.current.selectedMovieVersionIds).toEqual(['version-1']);
+  });
+
   it('retains ineligible movies and removes stale selected versions after date changes', async () => {
     const { result } = renderHook(() => useAutoScheduleForm({}));
     await waitFor(() => expect(result.current.movies).toHaveLength(1));
@@ -84,6 +130,29 @@ describe('useAutoScheduleForm', () => {
     expect(result.current.movies[0].reasons[0].message).toBe('Ngoài thời gian phát hành');
     expect(result.current.selectedMovieVersionIds).toEqual([]);
     expect(result.current.selectionNotice).toContain('Đã bỏ 1 định dạng');
+  });
+
+  it('does not expose draft movies even if an older API response includes them', async () => {
+    adminAutoScheduleService.getEligibleMovies.mockResolvedValue({
+      success: true,
+      data: [
+        eligibleMovie,
+        {
+          moviePublicId: 'draft-movie',
+          title: 'Phim nháp',
+          status: 'DRAFT',
+          eligible: true,
+          reasons: [],
+          versions: [{ publicId: 'draft-version', versionName: '2D', status: 'ACTIVE' }],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+
+    await waitFor(() => expect(result.current.movies).toHaveLength(1));
+    expect(result.current.movies[0].publicId).toBe('movie-1');
+    expect(result.current.versionsByMovie).not.toHaveProperty('draft-movie');
   });
 
   it('exposes an explicit retry for a failed movie eligibility load', async () => {

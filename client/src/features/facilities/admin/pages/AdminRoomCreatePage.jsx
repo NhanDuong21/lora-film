@@ -20,6 +20,7 @@ import BrushToolbar from '@/features/facilities/admin/components/BrushToolbar';
 import StatsPanel from '@/features/facilities/admin/components/StatsPanel';
 import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDesigner';
 import AutoLayoutWizardModal from '@/features/facilities/admin/components/AutoLayoutWizardModal';
+import { buildSeatItems } from '@/features/facilities/admin/utils/seatLayout';
 
 export default function AdminRoomCreatePage() {
   const { triggerToast } = useOutletContext() || {};
@@ -250,6 +251,10 @@ export default function AdminRoomCreatePage() {
         }
       }
 
+      // Validate and format the complete layout before creating the room so a
+      // malformed manual couple-seat selection cannot leave an orphan DRAFT.
+      const seatsList = buildSeatItems({ matrix, rows, cols, skipIO, typeMapping });
+
       // 2. Create the Auditorium Room (status defaults to DRAFT)
       const roomPayload = {
         name: roomName.trim(),
@@ -266,70 +271,7 @@ export default function AdminRoomCreatePage() {
 
       const roomPublicId = auditoriumRes.data.publicId;
 
-      // 3. Format seat layout items
-      const seatsList = [];
-
-      const calculateRowLabel = (rIdx, skip) => {
-        let letterCode = 65; // 'A'
-        for (let i = 0; i < rIdx; i++) {
-          letterCode++;
-          if (skip && (letterCode === 73 || letterCode === 79)) {
-            letterCode++;
-          }
-        }
-        if (skip && (letterCode === 73 || letterCode === 79)) {
-            letterCode++;
-        }
-        return String.fromCharCode(letterCode);
-      };
-
-      for (let r = 0; r < rows; r++) {
-        const rowLabel = calculateRowLabel(r, skipIO);
-        let seatNumber = 1;
-
-        // Group couple seats in pairs: list all column indexes containing a COUPLE seat in this row
-        const coupleCols = [];
-        for (let c = 0; c < cols; c++) {
-          if (matrix[r][c].type === 'COUPLE') {
-            coupleCols.push(c);
-          }
-        }
-
-        for (let c = 0; c < cols; c++) {
-          const cell = matrix[r][c];
-          if (cell.type === 'AISLE' || cell.type === 'EXIT') continue;
-
-          const seatTypeCode = cell.type;
-          const seatTypePublicId = typeMapping[seatTypeCode];
-
-          // Compute pairGroup for couple seats
-          let pairGroup = null;
-          if (seatTypeCode === 'COUPLE') {
-            const indexInCoupleCols = coupleCols.indexOf(c);
-            if (indexInCoupleCols !== -1) {
-              const pairIndex = Math.floor(indexInCoupleCols / 2) + 1;
-              pairGroup = `${rowLabel}_P${pairIndex}`;
-            }
-          }
-
-          const seatCode = `${rowLabel}${seatNumber}`;
-
-          seatsList.push({
-            seatTypePublicId,
-            rowLabel,
-            seatNumber,
-            seatCode,
-            positionRow: r + 1,
-            positionColumn: c + 1,
-            pairGroup,
-            status: 'ACTIVE'
-          });
-
-          seatNumber++;
-        }
-      }
-
-      // 4. Save seats via bulk endpoint
+      // 3. Save seats via bulk endpoint
       const bulkRes = await adminRoomService.bulkCreateSeats(roomPublicId, { seats: seatsList });
       if (!bulkRes?.success) {
         throw new Error(bulkRes?.message || 'Không thể đồng bộ danh sách ghế');

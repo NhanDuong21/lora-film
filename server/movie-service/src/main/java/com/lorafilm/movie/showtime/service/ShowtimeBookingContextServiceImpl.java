@@ -15,6 +15,7 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
+import com.lorafilm.movie.pricing.util.AccessibleSeatPricing;
 import com.lorafilm.movie.pricing.util.SeatPriceAllocation;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
@@ -85,9 +86,6 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         }
 
         List<ShowtimePrice> prices = showtimePriceRepository.findByShowtimeId(showtime.getId());
-        Map<Long, ShowtimePrice> priceMap = prices.stream()
-                .collect(Collectors.toMap(p -> p.getSeatType().getId(), p -> p));
-
         List<ShowtimeBlockedSeat> blockedSeats = showtimeBlockedSeatRepository.findByShowtimeIdAndStatus(showtime.getId(), ActionStatus.ACTIVE);
         Set<Long> blockedSeatIds = blockedSeats.stream().map(b -> b.getSeat().getId()).collect(Collectors.toSet());
 
@@ -108,7 +106,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
 
         List<BookingContextSeatDto> seatDtos = new java.util.ArrayList<>();
         for (Seat seat : seats) {
-            ShowtimePrice showtimePrice = priceMap.get(seat.getSeatType().getId());
+            ShowtimePrice showtimePrice = AccessibleSeatPricing.findPrice(prices, seat.getSeatType());
             if (showtimePrice == null) {
                 throw new BusinessException(ErrorCode.SHOWTIME_PRICE_MISSING, "Missing price for seat type: " + seat.getSeatType().getCode());
             }

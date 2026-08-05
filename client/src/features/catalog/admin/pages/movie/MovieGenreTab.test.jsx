@@ -50,7 +50,9 @@ describe('MovieGenreTab', () => {
     expect(screen.getByText('Đã ngừng sử dụng')).toBeInTheDocument();
     expect(screen.queryByText('Không còn dùng')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Viễn tưởng cũ/ }));
+    const inactiveGenreButton = screen.getByRole('button', { name: /Viễn tưởng cũ/ });
+    await waitFor(() => expect(inactiveGenreButton).toHaveAttribute('aria-pressed', 'true'));
+    fireEvent.click(inactiveGenreButton);
     fireEvent.click(screen.getByRole('button', { name: 'Hành động' }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu lựa chọn' }));
 

@@ -20,6 +20,7 @@ import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieCredit;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
@@ -32,7 +33,6 @@ import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.AdminMovieListQuery;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResponse;
 import com.lorafilm.movie.movie.dto.MovieBulkApprovalResult;
-import com.lorafilm.movie.movie.dto.MovieBulkArchiveResponse;
 import com.lorafilm.movie.movie.dto.TmdbQueueBreakdownResponse;
 import com.lorafilm.movie.movie.dto.MovieDetailDto;
 import com.lorafilm.movie.movie.dto.MovieDto;
@@ -64,6 +64,9 @@ public class MovieServiceImpl implements MovieService {
     private final MovieReadinessEvaluator readinessEvaluator;
     private final AdminMovieProjectionService projectionService;
     private final MovieLifecyclePolicy lifecyclePolicy;
+    private final MovieApprovalPolicy approvalPolicy;
+    private final MovieStatusHistoryService statusHistoryService;
+    private final CurrentUserProvider currentUserProvider;
 
     public MovieServiceImpl(MovieRepository movieRepository,
             MovieGenreRepository movieGenreRepository,
@@ -74,7 +77,10 @@ public class MovieServiceImpl implements MovieService {
             MovieMapper movieMapper,
             MovieReadinessEvaluator readinessEvaluator,
             AdminMovieProjectionService projectionService,
-            MovieLifecyclePolicy lifecyclePolicy) {
+            MovieLifecyclePolicy lifecyclePolicy,
+            MovieApprovalPolicy approvalPolicy,
+            MovieStatusHistoryService statusHistoryService,
+            CurrentUserProvider currentUserProvider) {
         this.movieRepository = movieRepository;
         this.movieGenreRepository = movieGenreRepository;
         this.movieMediaRepository = movieMediaRepository;
@@ -85,6 +91,9 @@ public class MovieServiceImpl implements MovieService {
         this.readinessEvaluator = readinessEvaluator;
         this.projectionService = projectionService;
         this.lifecyclePolicy = lifecyclePolicy;
+        this.approvalPolicy = approvalPolicy;
+        this.statusHistoryService = statusHistoryService;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Override
@@ -103,10 +112,17 @@ public class MovieServiceImpl implements MovieService {
     public MovieBulkApprovalResponse bulkApproveTmdbMovies(AdminMovieListQuery filter, int limit) {
         validateBulkApprovalFilter(filter, limit);
 
+        java.time.LocalDate today = lifecyclePolicy.currentDate();
+        Specification<Movie> approvalWindow = MovieSpecification.releaseDateFrom(today.plusDays(1))
+                .or(MovieSpecification.releaseDateTo(today).and(
+                        MovieSpecification.hasOperationalShowtime(
+                                lifecyclePolicy.currentInstant(),
+                                MovieApprovalPolicy.OPERATIONAL_SHOWTIME_STATUSES,
+                                true)));
         Specification<Movie> specification = buildAdminMovieSpecification(filter)
                 .and(MovieSpecification.hasStatus(MovieStatus.DRAFT))
                 .and(MovieSpecification.hasTmdbSource(true))
-                .and(MovieSpecification.releaseDateFrom(lifecyclePolicy.currentDate().plusDays(1)));
+                .and(approvalWindow);
         Pageable pageable = PageRequest.of(0, limit, parseSort(filter.getSort()));
         List<Movie> candidates = movieRepository.findAll(specification, pageable).getContent();
         List<MovieBulkApprovalResult> results = new java.util.ArrayList<>();
@@ -115,7 +131,7 @@ public class MovieServiceImpl implements MovieService {
             String publicId = candidate.getPublicId();
             String title = candidate.getTitle();
             try {
-                Movie freshMovie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId).orElse(null);
+                Movie freshMovie = movieRepository.findByPublicIdForUpdate(publicId).orElse(null);
                 if (freshMovie == null) {
                     results.add(MovieBulkApprovalResult.skipped(
                             publicId,
@@ -141,7 +157,18 @@ public class MovieServiceImpl implements MovieService {
                     continue;
                 }
 
-                MovieDto approved = transitionMovieStatus(freshMovie, MovieStatus.UPCOMING);
+                MovieApprovalPolicy.ApprovalDecision decision = approvalPolicy.evaluate(freshMovie);
+                if (decision.targetStatus() == null) {
+                    results.add(MovieBulkApprovalResult.skipped(
+                            publicId,
+                            freshMovie.getTitle(),
+                            "RELEASE_DATE_REQUIRED",
+                            String.join(" ", decision.blockers())));
+                    continue;
+                }
+
+                MovieDto approved = transitionMovieStatus(
+                        freshMovie, decision.targetStatus(), "Bulk TMDB approval");
                 results.add(MovieBulkApprovalResult.approved(
                         publicId,
                         freshMovie.getTitle(),
@@ -176,92 +203,6 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    @Transactional
-    public MovieBulkArchiveResponse bulkArchiveOldTmdbMovies(AdminMovieListQuery filter, int limit) {
-        validateBulkArchiveFilter(filter, limit);
-
-        Specification<Movie> specification = buildAdminMovieSpecification(filter)
-                .and(MovieSpecification.hasStatus(MovieStatus.DRAFT))
-                .and(MovieSpecification.hasTmdbSource(true))
-                .and(MovieSpecification.releaseDateTo(lifecyclePolicy.currentDate()));
-        Pageable pageable = PageRequest.of(0, limit, parseSort(filter.getSort()));
-        List<Movie> candidates = movieRepository.findAll(specification, pageable).getContent();
-        List<MovieBulkApprovalResult> results = new java.util.ArrayList<>();
-
-        for (Movie candidate : candidates) {
-            String publicId = candidate.getPublicId();
-            String title = candidate.getTitle();
-            try {
-                Movie freshMovie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId).orElse(null);
-                if (freshMovie == null) {
-                    results.add(MovieBulkApprovalResult.skipped(
-                            publicId,
-                            title,
-                            ErrorCode.MOVIE_NOT_FOUND.name(),
-                            "Movie no longer exists or was deleted."));
-                    continue;
-                }
-                if (freshMovie.getStatus() != MovieStatus.DRAFT) {
-                    results.add(MovieBulkApprovalResult.skipped(
-                            publicId,
-                            freshMovie.getTitle(),
-                            "STATUS_CHANGED",
-                            "Movie is no longer waiting for approval."));
-                    continue;
-                }
-                if (freshMovie.getTmdbId() == null) {
-                    results.add(MovieBulkApprovalResult.skipped(
-                            publicId,
-                            freshMovie.getTitle(),
-                            "SOURCE_CHANGED",
-                            "Movie is no longer a TMDB import."));
-                    continue;
-                }
-                if (freshMovie.getReleaseDate() == null
-                        || freshMovie.getReleaseDate().isAfter(lifecyclePolicy.currentDate())) {
-                    results.add(MovieBulkApprovalResult.skipped(
-                            publicId,
-                            freshMovie.getTitle(),
-                            "RELEASE_DATE_CHANGED",
-                            "Movie is no longer an old release eligible for archiving."));
-                    continue;
-                }
-
-                MovieDto archived = transitionMovieStatus(freshMovie, MovieStatus.INACTIVE);
-                results.add(MovieBulkApprovalResult.archived(
-                        publicId,
-                        freshMovie.getTitle(),
-                        archived.getStatus()));
-            } catch (BusinessException exception) {
-                ErrorCode errorCode = exception.getErrorCode();
-                results.add(MovieBulkApprovalResult.skipped(
-                        publicId,
-                        title,
-                        errorCode == null ? "VALIDATION_FAILED" : errorCode.name(),
-                        exception.getMessage()));
-            } catch (RuntimeException exception) {
-                log.error("Bulk TMDB archive failed for movie {}", publicId, exception);
-                results.add(MovieBulkApprovalResult.error(
-                        publicId,
-                        title,
-                        ErrorCode.INTERNAL_SERVER_ERROR.name(),
-                        "Unexpected error while archiving this movie."));
-            }
-        }
-
-        int archived = (int) results.stream().filter(item -> "ARCHIVED".equals(item.outcome())).count();
-        int errors = (int) results.stream().filter(item -> "ERROR".equals(item.outcome())).count();
-        int skipped = results.size() - archived - errors;
-        return new MovieBulkArchiveResponse(
-                candidates.size(),
-                archived,
-                skipped,
-                errors,
-                limit,
-                List.copyOf(results));
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public TmdbQueueBreakdownResponse getTmdbQueueBreakdown(AdminMovieListQuery filter) {
         validateTmdbQueueFilter(filter);
@@ -271,10 +212,22 @@ public class MovieServiceImpl implements MovieService {
                 .and(MovieSpecification.hasTmdbSource(true));
         java.time.LocalDate today = lifecyclePolicy.currentDate();
         long total = movieRepository.count(base);
-        long old = movieRepository.count(base.and(MovieSpecification.releaseDateTo(today)));
         long future = movieRepository.count(base.and(MovieSpecification.releaseDateFrom(today.plusDays(1))));
+        Specification<Movie> released = MovieSpecification.releaseDateTo(today);
+        long readyToShow = movieRepository.count(base
+                .and(released)
+                .and(MovieSpecification.hasOperationalShowtime(
+                        lifecyclePolicy.currentInstant(),
+                        MovieApprovalPolicy.OPERATIONAL_SHOWTIME_STATUSES,
+                        true)));
+        long needsSchedule = movieRepository.count(base
+                .and(released)
+                .and(MovieSpecification.hasOperationalShowtime(
+                        lifecyclePolicy.currentInstant(),
+                        MovieApprovalPolicy.OPERATIONAL_SHOWTIME_STATUSES,
+                        false)));
         long undated = movieRepository.count(base.and(MovieSpecification.releaseDateIsNull()));
-        return new TmdbQueueBreakdownResponse(total, future, old, undated);
+        return new TmdbQueueBreakdownResponse(total, future, readyToShow, needsSchedule, undated);
     }
 
     private Specification<Movie> buildAdminMovieSpecification(AdminMovieListQuery query) {
@@ -402,21 +355,6 @@ public class MovieServiceImpl implements MovieService {
         }
     }
 
-    private void validateBulkArchiveFilter(AdminMovieListQuery filter, int limit) {
-        if (filter == null) {
-            throw validationError("Movie filter is required");
-        }
-        if (limit < 1 || limit > 100) {
-            throw validationError("Bulk archive limit must be between 1 and 100");
-        }
-        if (!"DRAFT".equalsIgnoreCase(normalize(filter.getStatus()))) {
-            throw validationError("Bulk archive requires status=DRAFT");
-        }
-        if (!"TMDB".equalsIgnoreCase(normalize(filter.getSource()))) {
-            throw validationError("Bulk archive requires source=TMDB");
-        }
-    }
-
     private void validateTmdbQueueFilter(AdminMovieListQuery filter) {
         if (filter == null) {
             throw validationError("Movie filter is required");
@@ -497,21 +435,43 @@ public class MovieServiceImpl implements MovieService {
     @Override
     @Transactional
     public MovieDto updateMovieStatus(String moviePublicId, MovieStatus targetStatus) {
-        Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
+        return updateMovieStatus(moviePublicId, targetStatus, null);
+    }
+
+    @Override
+    @Transactional
+    public MovieDto updateMovieStatus(String moviePublicId, MovieStatus targetStatus, String reason) {
+        Movie movie = movieRepository.findByPublicIdForUpdate(moviePublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
-        return transitionMovieStatus(movie, targetStatus);
+        return transitionMovieStatus(movie, targetStatus, reason);
     }
 
     private MovieDto transitionMovieStatus(Movie movie, MovieStatus targetStatus) {
+        return transitionMovieStatus(movie, targetStatus, null);
+    }
+
+    private MovieDto transitionMovieStatus(Movie movie, MovieStatus targetStatus, String reason) {
         MovieStatus previousStatus = movie.getStatus();
         lifecyclePolicy.validateTransition(movie, targetStatus);
+        if (previousStatus == MovieStatus.DRAFT
+                && (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING)) {
+            approvalPolicy.validateApprovalTarget(movie, targetStatus);
+        } else if (targetStatus == MovieStatus.NOW_SHOWING) {
+            approvalPolicy.validateNowShowingSchedule(movie);
+        }
         if (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING) {
             validatePublishConditions(movie);
         }
 
         movie.setStatus(targetStatus);
         Movie savedMovie = movieRepository.save(movie);
+        statusHistoryService.record(
+                savedMovie,
+                previousStatus,
+                targetStatus,
+                reason,
+                currentUserProvider.getCurrentUserId());
         log.info("Movie lifecycle transition applied: publicId={}, from={}, to={}",
                 movie.getPublicId(), previousStatus, targetStatus);
 
@@ -526,7 +486,7 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = BusinessException.class)
     public void validatePublishConditions(Long movieId) {
         Optional<Movie> movie = movieRepository.findById(movieId);
         validatePublishConditions(movie.orElse(null), movieId);

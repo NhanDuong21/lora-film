@@ -22,10 +22,6 @@ function VerifyOtp() {
     const activeEmail = email || inputEmail;
 
     useEffect(() => {
-        document.title = "Xác Thực OTP - LoraFilm";
-    }, []);
-
-    useEffect(() => {
         if (countdown <= 0) return;
         const timer = setInterval(() => {
             setCountdown(prev => prev - 1);

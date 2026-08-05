@@ -34,6 +34,7 @@ import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.dto.ValidationResult;
 import com.project.authservice.entity.PendingRegistrationData;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.authservice.entity.Account;
 import com.project.authservice.entity.Role;
@@ -68,6 +69,17 @@ import static com.project.authservice.util.SensitiveDataMasker.maskEmail;
 public class AuthServiceImpl implements AuthService {
 	private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
 	private static final String CUSTOMER_ROLE = "CUSTOMER";
+	private static final DefaultRedisScript<Long> RELEASE_REGISTRATION_RESERVATION_SCRIPT =
+			new DefaultRedisScript<>("""
+					local deleted = 0
+					if redis.call('GET', KEYS[1]) == ARGV[1] then
+					  deleted = deleted + redis.call('DEL', KEYS[1])
+					end
+					if redis.call('GET', KEYS[2]) == ARGV[1] then
+					  deleted = deleted + redis.call('DEL', KEYS[2])
+					end
+					return deleted
+					""", Long.class);
 
 	private final AccountRepository accountRepository;
 	private final RoleRepository roleRepository;
@@ -219,14 +231,19 @@ public class AuthServiceImpl implements AuthService {
 
 			CompletableFuture<ValidationResult> future = new CompletableFuture<>();
 			pendingRequests.put(requestId, future);
+			boolean validationRequested = false;
+			boolean registrationInitiated = false;
+			boolean pendingRegistrationStored = false;
+			String pendingKey = "pending_registration:" + email;
 
 			try {
 				eventPublisher.publishRegistrationValidationRequested(request, requestId);
+				validationRequested = true;
 				
 				ValidationResult result = waitForValidation(requestId, future);
 				
 				if ("SUCCESS".equalsIgnoreCase(result.getStatus())) {
-					Role role = roleRepository.findByRoleName(CUSTOMER_ROLE)
+					Role role = roleRepository.findByCode(CUSTOMER_ROLE)
 							.orElseThrow(() -> new ResourceNotFoundException("Role CUSTOMER not found"));
 
 					Account existingForUpdate = accountRepository.findByEmail(email).orElse(null);
@@ -237,10 +254,11 @@ public class AuthServiceImpl implements AuthService {
 					account.setAccountStatus(com.project.authservice.enums.AccountStatus.INACTIVE);
 					accountRepository.save(account);
 
-					String pendingKey = "pending_registration:" + email;
 					redisTemplate.opsForValue().set(pendingKey, json, Duration.ofMinutes(15));
+					pendingRegistrationStored = true;
 					verificationService.sendOtp(new SendOtpRequest(email));
-					
+					registrationInitiated = true;
+
 					return new RegistrationInitiatedResponse(requestId, "Registration successful, please check your email for OTP");
 				} else {
 					if ("PHONE_NUMBER_AND_CCCD_ALREADY_EXIST".equals(result.getErrorCode())) {
@@ -257,6 +275,8 @@ public class AuthServiceImpl implements AuthService {
 						throw new RegistrationConflictException("Phone number is currently reserved by another pending registration. Please try again later.", result.getErrorCode(), result.getRetryAfterSeconds(), null);
 					} else if ("CCCD_RESERVED".equals(result.getErrorCode())) {
 						throw new RegistrationConflictException("CCCD is currently reserved by another pending registration. Please try again later.", result.getErrorCode(), result.getRetryAfterSeconds(), null);
+					} else if ("PHONE_NUMBER_AND_CCCD_RESERVED".equals(result.getErrorCode())) {
+						throw new RegistrationConflictException("Phone number and CCCD are currently reserved by another pending registration. Please try again later.", result.getErrorCode(), result.getRetryAfterSeconds(), null);
 					} else {
 						throw new RegistrationConflictException("Registration conflict", result.getErrorCode(), result.getRetryAfterSeconds(), null);
 					}
@@ -273,6 +293,14 @@ public class AuthServiceImpl implements AuthService {
 				auditLogService.log(null, "REGISTER_FAILED", servletRequest);
 				throw new RuntimeException("System overload. Failed to validate registration. Please try again later.", e);
 			} finally {
+				if (!registrationInitiated) {
+					if (pendingRegistrationStored) {
+						redisTemplate.delete(pendingKey);
+					}
+					if (validationRequested) {
+						releaseRegistrationReservation(request, email);
+					}
+				}
 				pendingRequests.remove(requestId);
 				redisTemplate.delete("temp_request:" + requestId);
 				redisTemplate.delete("registration_validation_result:" + requestId);
@@ -285,6 +313,20 @@ public class AuthServiceImpl implements AuthService {
 		} catch (Exception e) {
 			auditLogService.log(null, "REGISTER_FAILED", servletRequest);
 			throw e;
+		}
+	}
+
+	private void releaseRegistrationReservation(RegisterRequest request, String reservationOwner) {
+		try {
+			redisTemplate.execute(
+					RELEASE_REGISTRATION_RESERVATION_SCRIPT,
+					List.of(
+							"reserved_phone:" + request.getPhoneNumber(),
+							"reserved_cccd:" + request.getCccd()),
+					reservationOwner);
+		} catch (Exception cleanupException) {
+			log.error("Failed to release registration reservation for email={}",
+					maskEmail(reservationOwner), cleanupException);
 		}
 	}
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
+import useExistingShowtimeSummary from '@/features/scheduling/admin/hooks/useExistingShowtimeSummary';
 import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20';
@@ -69,6 +70,7 @@ const Step = ({ number, title, active, complete, disabled, onClick }) => (
 export default function AdminAutoScheduleCreatePage() {
   const { triggerToast } = useOutletContext() || {};
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeStep, setActiveStep] = useState(1);
   const [movieSearch, setMovieSearch] = useState('');
   const [movieFilter, setMovieFilter] = useState('eligible');
@@ -77,7 +79,12 @@ export default function AdminAutoScheduleCreatePage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const handleSuccess = previewPublicId => navigate(`/admin/showtime-schedules/${previewPublicId}`);
-  const form = useAutoScheduleForm({ triggerToast, onSuccess: handleSuccess });
+  const recreateContext = location.state?.autoScheduleRecreate || null;
+  const form = useAutoScheduleForm({
+    triggerToast,
+    onSuccess: handleSuccess,
+    initialDraft: recreateContext?.draft,
+  });
   const {
     cinemas,
     movies,
@@ -116,6 +123,11 @@ export default function AdminAutoScheduleCreatePage() {
     dateRangeInfo,
     handleSubmit,
   } = form;
+  const existingSchedule = useExistingShowtimeSummary({
+    cinemaSlug: selectedCinema?.slug,
+    scheduleFrom,
+    scheduleTo,
+  });
 
   const visibleMovies = useMemo(() => {
     const query = movieSearch.trim().toLocaleLowerCase('vi');
@@ -183,6 +195,15 @@ export default function AdminAutoScheduleCreatePage() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Chọn vài thông tin cơ bản, hệ thống sẽ tự xếp giờ và cho bạn kiểm tra trước khi mở bán.</p>
         </div>
       </header>
+
+      {recreateContext && (
+        <section className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100" role="status">
+          <p className="font-black">Đang tạo lại từ lịch {recreateContext.sourceShortCode}</p>
+          <p className="mt-1 text-blue-200/80">
+            Rạp, khoảng ngày, phòng và phim cũ đã được điền lại. Hãy kiểm tra các lựa chọn trước khi tạo bản đề xuất mới.
+          </p>
+        </section>
+      )}
 
       <nav className="flex flex-col gap-2 lg:flex-row" aria-label="Các bước tạo lịch">
         {steps.map(step => (
@@ -265,7 +286,7 @@ export default function AdminAutoScheduleCreatePage() {
                 </div>
               </div>
               <p className="mb-4 text-sm font-bold text-zinc-300">Đã chọn {selectedAuditoriumIds.length}/{activeRoomCount || auditoriums.length} phòng đang hoạt động</p>
-              {isLoadingAuditoriums ? <p className="py-10 text-center text-sm text-zinc-500">Đang tải phòng chiếu…</p> : auditoriums.length === 0 ? <p className="py-10 text-center text-sm text-zinc-500">Chưa có phòng đang hoạt động tại rạp này.</p> : (
+              {isLoadingAuditoriums ? <p className="py-10 text-center text-sm text-zinc-500">Đang tải phòng chiếu…</p> : auditoriums.length === 0 ? <div className="flex flex-col items-center gap-3 py-10 text-center"><p className="text-sm font-bold text-amber-200">Chưa có phòng đang hoạt động tại rạp này.</p><p className="max-w-md text-xs text-zinc-500">Bạn cần tạo hoặc kích hoạt ít nhất một phòng trước khi xếp lịch.</p><button type="button" onClick={() => navigate(`/admin/rooms/create?${new URLSearchParams({ cinemaId: selectedCinemaId, returnTo: location.pathname }).toString()}`)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">Tạo phòng cho rạp này <ChevronRight className="h-4 w-4" /></button></div> : (
                 <div className="grid gap-3 md:grid-cols-2">
                   {auditoriums.map(room => {
                     const selected = selectedAuditoriumIds.includes(room.publicId);
@@ -332,21 +353,28 @@ export default function AdminAutoScheduleCreatePage() {
                   <button type="button" onClick={clearMovieVersions} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800">Bỏ chọn tất cả</button>
                 </div>
               </div>
+              {selectedMovieNames.length === 1 && (
+                <div className="mt-3 flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100" role="status">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                  <p><strong>Bạn đang chọn một phim.</strong> Lịch tạo ra có thể dồn nhiều suất vào phim này vì không có phim khác để cân bằng.</p>
+                </div>
+              )}
               {movieLoadError ? (
                 <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
                   <p>Không thể tải danh sách phim.</p>
                   <button type="button" onClick={retryMovies} className="mt-3 rounded-lg border border-rose-400/40 px-3 py-2 text-xs font-bold">Thử tải lại</button>
                 </div>
               ) : isLoadingMovies ? <p className="py-12 text-center text-sm text-zinc-500">Đang kiểm tra phim có thể chiếu…</p> : visibleMovies.length === 0 ? (
-                <p className="py-12 text-center text-sm text-zinc-500">
-                  {movieSearch.trim()
+                <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-zinc-500">
+                  <p>{movieSearch.trim()
                     ? `Không tìm thấy phim khớp từ khóa “${movieSearch.trim()}”.`
                     : selectedOnly
                       ? 'Chưa có định dạng nào được chọn để hiển thị.'
                       : movieFilter === 'eligible'
                         ? 'Chưa có phim đủ điều kiện trong khoảng ngày đã chọn.'
-                        : 'Không có phim bị loại trong khoảng ngày này.'}
-                </p>
+                        : 'Không có phim bị loại trong khoảng ngày này.'}</p>
+                  {!movieSearch.trim() && !selectedOnly && movieFilter === 'eligible' && <button type="button" onClick={() => navigate('/admin/movies')} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-zinc-700 px-4 text-sm font-black text-zinc-200 hover:bg-zinc-800">Quản lý nội dung phim <ChevronRight className="h-4 w-4" /></button>}
+                </div>
               ) : (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {visibleMovies.map(movie => {
@@ -359,6 +387,11 @@ export default function AdminAutoScheduleCreatePage() {
                           <MoviePoster src={movie.primaryPoster} title={movie.title} />
                           <span className="min-w-0 flex-1">
                             <span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-bold ${movie.eligible ? 'border-emerald-500/30 text-emerald-300' : 'border-rose-500/30 text-rose-300'}`}>{movie.eligible ? 'Có thể chiếu' : 'Chưa thể chiếu'}</span>
+                            {movie.status === 'DRAFT' && (
+                              <span className="ml-2 inline-flex rounded-md border border-amber-500/30 px-2 py-1 text-[10px] font-bold text-amber-300">
+                                Phim nháp · chỉ lập lịch chuẩn bị
+                              </span>
+                            )}
                             <span className="mt-2 block truncate text-base font-black text-white">{movie.title}</span>
                             <span className="mt-1 block text-xs text-zinc-500">{movie.durationMinutes || '—'} phút · {versions.length} định dạng</span>
                             {selectedCount > 0 && <span className="mt-2 block text-xs font-bold text-brand-orange">{selectedCount} định dạng đã chọn</span>}
@@ -369,6 +402,7 @@ export default function AdminAutoScheduleCreatePage() {
                           <div className="border-t border-rose-500/20 px-3 py-3 text-xs leading-5 text-rose-300">
                             {movie.reasons?.length > 0 && <p>{movie.reasons.map(getEligibilityReasonLabel).join(' ')}</p>}
                             <p className="mt-1 text-rose-200/75">Chỉ dùng để kiểm tra lý do, không thể chọn định dạng.</p>
+                            <button type="button" onClick={() => navigate(`/admin/movies/${encodeURIComponent(movie.publicId)}?${new URLSearchParams({ returnTo: location.pathname }).toString()}`)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-rose-300/30 px-3 font-black text-rose-100 hover:bg-rose-500/10">Mở phim để sửa <ChevronRight className="h-3.5 w-3.5" /></button>
                           </div>
                         )}
                         {expanded && (
@@ -415,6 +449,33 @@ export default function AdminAutoScheduleCreatePage() {
                   ['Phim', selectedMovieNames.join(', ') || 'Chưa chọn'],
                 ].map(([label, value]) => <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"><p className="text-xs font-bold text-zinc-500">{label}</p><p className="mt-2 text-sm font-black text-white">{value}</p></div>)}
               </div>
+              <div className="mt-5 flex flex-col gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-black">Cách lịch tự động xử lý lịch cũ</p>
+                  <p className="mt-1 leading-6 text-blue-100/80">Hệ thống chỉ bổ sung vào khung còn trống. Suất đã có không bị di chuyển hoặc hủy; vì vậy ngày đã kín có thể không tạo thêm suất nào.</p>
+                  {existingSchedule.isLoading && <p className="mt-1 text-xs text-blue-200/70" role="status">Đang kiểm tra lịch hiện có…</p>}
+                  {!existingSchedule.isLoading && !existingSchedule.error && (
+                    <p className="mt-1 text-xs font-bold text-blue-200">Đã tìm thấy {existingSchedule.totalExisting} suất hiện có trong khoảng ngày này.</p>
+                  )}
+                  {existingSchedule.error && <p className="mt-1 text-xs text-amber-200">Chưa tải được lịch hiện có; bạn vẫn có thể kiểm tra lại ở bản đề xuất.</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/showtimes?${new URLSearchParams({
+                    ...(selectedCinema?.slug ? { cinemaSlug: selectedCinema.slug } : {}),
+                    date: scheduleFrom,
+                  }).toString()}`)}
+                  className="min-h-10 shrink-0 rounded-lg border border-blue-400/30 px-3 text-xs font-black text-blue-200 hover:bg-blue-500/10"
+                >
+                  Kiểm tra lịch hiện có
+                </button>
+              </div>
+              {selectedMovieNames.length === 1 && (
+                <div className="mt-4 flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100" role="status">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                  <p><strong>Cảnh báo phân bổ:</strong> Bạn chỉ chọn {selectedMovieNames[0]}. Hệ thống không thể cân bằng suất giữa nhiều phim trong bản lịch này.</p>
+                </div>
+              )}
               {readinessIssues.length > 0 ? (
                 <div role="alert" className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
                   <p className="font-black text-amber-200">Cần hoàn tất trước khi tạo lịch</p>

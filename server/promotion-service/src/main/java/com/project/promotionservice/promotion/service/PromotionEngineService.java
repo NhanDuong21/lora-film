@@ -88,9 +88,6 @@ public class PromotionEngineService {
                 ? List.of() : request.selectedUserPromotionPublicIds();
         requireSingleManualSelection(
                 selectedPromotionIds, selectedWalletIds, request.couponCode());
-        boolean hasManualSelection = !selectedPromotionIds.isEmpty()
-                || !selectedWalletIds.isEmpty()
-                || (request.couponCode() != null && !request.couponCode().isBlank());
         for (String promotionPublicId : selectedPromotionIds) {
             Promotion promotion = requirePromotion(promotionPublicId);
             if (promotion.getPromotionType() != PromotionType.AUTO) {
@@ -99,12 +96,13 @@ public class PromotionEngineService {
             addCandidate(candidates, warnings, addedPromotions,
                     promotion, null, request, original, now, true);
         }
-        if (!hasManualSelection) {
-            for (Promotion promotion : promotionRepository.findRuntimeCandidates(
-                    PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
-                addCandidate(candidates, warnings, addedPromotions,
-                        promotion, null, request, original, now, false);
-            }
+        // AUTO promotions are system-controlled candidates. When a customer selects
+        // a voucher/coupon, that manual choice is authoritative and AUTO can only be
+        // added when the stacking policies of both benefits allow it.
+        for (Promotion promotion : promotionRepository.findRuntimeCandidates(
+                PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
+            addCandidate(candidates, warnings, addedPromotions,
+                    promotion, null, request, original, now, false);
         }
 
         for (String walletPublicId : selectedWalletIds) {
@@ -360,11 +358,54 @@ public class PromotionEngineService {
 
     private List<Candidate> selectBest(
             List<Candidate> candidates, BigDecimal originalAmount) {
-        Selection best = Selection.empty();
-        for (Candidate candidate : candidates) {
-            best = better(best, selectionOf(List.of(candidate), originalAmount));
+        List<Candidate> automaticCandidates = candidates.stream()
+                .filter(candidate -> candidate.promotion().getPromotionType()
+                        == PromotionType.AUTO)
+                .toList();
+        Candidate manualCandidate = candidates.stream()
+                .filter(candidate -> candidate.promotion().getPromotionType()
+                        != PromotionType.AUTO)
+                .findFirst()
+                .orElse(null);
+
+        if (manualCandidate == null) {
+            Selection bestAutomatic = Selection.empty();
+            for (Candidate automaticCandidate : automaticCandidates) {
+                bestAutomatic = better(bestAutomatic, selectionOf(
+                        List.of(automaticCandidate), originalAmount));
+            }
+            return bestAutomatic.candidates();
         }
-        return best.candidates();
+
+        Selection bestWithManual = selectionOf(
+                List.of(manualCandidate), originalAmount);
+        for (Candidate automaticCandidate : automaticCandidates) {
+            if (canStack(manualCandidate, automaticCandidate)) {
+                bestWithManual = better(bestWithManual, selectionOf(
+                        List.of(automaticCandidate, manualCandidate),
+                        originalAmount));
+            }
+        }
+        return bestWithManual.candidates();
+    }
+
+    private boolean canStack(Candidate manual, Candidate automatic) {
+        if (manual.promotion().getPromotionType() == PromotionType.AUTO
+                || automatic.promotion().getPromotionType() != PromotionType.AUTO) {
+            return false;
+        }
+        if (!Boolean.TRUE.equals(manual.promotion().getStackable())
+                || !Boolean.TRUE.equals(automatic.promotion().getStackable())
+                || !Boolean.TRUE.equals(manual.campaign().getStackable())
+                || !Boolean.TRUE.equals(automatic.campaign().getStackable())) {
+            return false;
+        }
+        boolean differentCampaign = !Objects.equals(
+                manual.campaign().getPublicId(), automatic.campaign().getPublicId());
+        return !differentCampaign
+                || (!Boolean.TRUE.equals(manual.campaign().getExclusiveCampaign())
+                && !Boolean.TRUE.equals(
+                automatic.campaign().getExclusiveCampaign()));
     }
 
     private Selection better(

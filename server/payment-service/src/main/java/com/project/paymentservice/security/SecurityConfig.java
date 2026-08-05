@@ -43,7 +43,7 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "ACCOUNTANT")
                 .requestMatchers("/api/admin/payments/**").hasRole("ADMIN")
                 .requestMatchers("/api/employee/**")
-                    .hasAnyRole("EMPLOYEE", "SUPERVISOR", "ADMIN")
+                    .hasAnyRole("STAFF", "EMPLOYEE", "SUPERVISOR", "ADMIN")
                 .requestMatchers("/api/payments/**").authenticated()
                 .anyRequest().authenticated()
             )

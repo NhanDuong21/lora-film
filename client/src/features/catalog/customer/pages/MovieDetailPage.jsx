@@ -32,6 +32,9 @@ const peopleNames = (people, includeCharacter = false) => sortedPeople(people)
   })
   .filter(Boolean);
 const companyNames = companies => (companies || []).map(company => company.name).filter(Boolean);
+const formatPrice = (value, currency = 'VND') => value == null
+  ? null
+  : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currency || 'VND' }).format(value);
 
 function CreditLine({ label, values }) {
   if (!values.length) return null;
@@ -161,20 +164,43 @@ export default function MovieDetailPage() {
       if (option.serviceDate !== selectedDate
         || !isFutureBookableShowtime(option, currentTimeMs)) continue;
       if (!result.has(option.cinemaPublicId)) {
-        result.set(option.cinemaPublicId, { cinema: option, versions: new Map() });
+        result.set(option.cinemaPublicId, { cinema: option, auditoriums: new Map() });
       }
       const cinema = result.get(option.cinemaPublicId);
-      if (!cinema.versions.has(option.movieVersionPublicId)) {
-        cinema.versions.set(option.movieVersionPublicId, { version: option, showtimes: [] });
+      if (!cinema.auditoriums.has(option.auditoriumPublicId)) {
+        cinema.auditoriums.set(option.auditoriumPublicId, {
+          auditorium: option,
+          versions: new Map()
+        });
       }
-      cinema.versions.get(option.movieVersionPublicId).showtimes.push(option);
+      const auditorium = cinema.auditoriums.get(option.auditoriumPublicId);
+      if (!auditorium.versions.has(option.movieVersionPublicId)) {
+        auditorium.versions.set(option.movieVersionPublicId, { version: option, showtimes: [] });
+      }
+      auditorium.versions.get(option.movieVersionPublicId).showtimes.push(option);
     }
     for (const cinema of result.values()) {
-      for (const version of cinema.versions.values()) {
-        version.showtimes.sort((a, b) => a.localStartTime.localeCompare(b.localStartTime));
+      for (const auditorium of cinema.auditoriums.values()) {
+        for (const version of auditorium.versions.values()) {
+          version.showtimes.sort((a, b) => (
+            a.localStartTime.localeCompare(b.localStartTime)
+            || a.showtimePublicId.localeCompare(b.showtimePublicId)
+          ));
+        }
       }
     }
-    return [...result.values()];
+    return [...result.values()]
+      .sort((left, right) => left.cinema.cinemaName.localeCompare(right.cinema.cinemaName, 'vi'))
+      .map(cinema => ({
+        ...cinema,
+        auditoriums: [...cinema.auditoriums.values()].sort((left, right) => (
+          (left.auditorium.auditoriumName || '').localeCompare(
+            right.auditorium.auditoriumName || '',
+            'vi',
+            { numeric: true }
+          )
+        ))
+      }));
   }, [currentTimeMs, options, selectedDate]);
 
   const poster = movie?.primaryPoster || movie?.media?.find(item => item.mediaType === 'POSTER')?.url || FALLBACK_POSTER;
@@ -362,7 +388,7 @@ export default function MovieDetailPage() {
             </div>
           ) : (
             <div className="mt-7 space-y-5">
-              {grouped.map(({ cinema, versions }) => (
+              {grouped.map(({ cinema, auditoriums }) => (
                 <article key={cinema.cinemaPublicId} className="rounded-2xl border border-white/10 bg-zinc-950/55 p-5 md:p-6">
                   <h3 className="text-xl font-black text-white">{cinema.cinemaName}</h3>
                   {(cinema.cinemaAddress || cinema.cinemaCity) && (
@@ -371,29 +397,57 @@ export default function MovieDetailPage() {
                       {[cinema.cinemaAddress, cinema.cinemaCity].filter(Boolean).join(', ')}
                     </p>
                   )}
-                  <div className="mt-5 divide-y divide-white/10">
-                    {[...versions.values()].map(({ version, showtimes }) => (
-                      <div key={version.movieVersionPublicId} className="grid gap-4 py-5 first:pt-0 last:pb-0 md:grid-cols-[220px_1fr]">
-                        <div>
-                          <strong className="text-sm text-amber-400">{version.versionName || version.format}</strong>
-                          <p className="mt-1 text-xs leading-5 text-zinc-500">
-                            {[version.audioLanguage, version.subtitleLanguage && `Phụ đề ${version.subtitleLanguage}`, version.screenType]
-                              .filter(Boolean).join(' · ')}
-                          </p>
+                  <div className="mt-5 grid gap-4">
+                    {auditoriums.map(({ auditorium, versions }) => (
+                      <section
+                        key={auditorium.auditoriumPublicId}
+                        className="overflow-hidden rounded-2xl border border-white/10 bg-black/25"
+                        aria-labelledby={`auditorium-${auditorium.auditoriumPublicId}`}
+                      >
+                        <div className="border-b border-white/10 bg-white/[0.03] px-4 py-3 md:px-5">
+                          <h4
+                            id={`auditorium-${auditorium.auditoriumPublicId}`}
+                            className="text-sm font-black text-white"
+                          >
+                            {auditorium.auditoriumName || 'Phòng chiếu'}
+                          </h4>
+                          {(auditorium.screenType || auditorium.soundType) && (
+                            <p className="mt-1 text-xs text-zinc-500">
+                              {[auditorium.screenType, auditorium.soundType].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {showtimes.map(showtime => (
-                            <button
-                              key={showtime.showtimePublicId}
-                              onClick={() => navigate(seatSelectionPath(showtime.showtimePublicId))}
-                              aria-label={`Chọn suất ${formatLocalClock(showtime.localStartTime)} tại ${cinema.cinemaName}`}
-                              className={`rounded-xl border border-white/15 bg-zinc-900 px-5 py-2.5 font-black text-white transition-colors hover:border-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange ${focus}`}
-                            >
-                              {formatLocalClock(showtime.localStartTime)}
-                            </button>
+                        <div className="divide-y divide-white/10 px-4 md:px-5">
+                          {[...versions.values()].map(({ version, showtimes }) => (
+                            <div key={version.movieVersionPublicId} className="grid gap-4 py-4 md:grid-cols-[220px_1fr]">
+                              <div>
+                                <strong className="text-sm text-amber-400">{version.versionName || version.format}</strong>
+                                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                  {[version.audioLanguage, version.subtitleLanguage && `Phụ đề ${version.subtitleLanguage}`]
+                                    .filter(Boolean).join(' · ')}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {showtimes.map(showtime => (
+                                  <button
+                                    key={showtime.showtimePublicId}
+                                    onClick={() => navigate(seatSelectionPath(showtime.showtimePublicId))}
+                                    aria-label={`Chọn suất ${formatLocalClock(showtime.localStartTime)} tại ${cinema.cinemaName}, phòng ${auditorium.auditoriumName || 'chiếu'}`}
+                                    className={`rounded-xl border border-white/15 bg-zinc-900 px-5 py-2.5 text-left font-black text-white transition-colors hover:border-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange ${focus}`}
+                                  >
+                                    <span className="block">{formatLocalClock(showtime.localStartTime)}</span>
+                                    {showtime.priceFrom != null && (
+                                      <span className="mt-0.5 block text-[10px] font-semibold text-zinc-500">
+                                        từ {formatPrice(showtime.priceFrom, showtime.currency)}
+                                      </span>
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </div>
-                      </div>
+                      </section>
                     ))}
                   </div>
                 </article>

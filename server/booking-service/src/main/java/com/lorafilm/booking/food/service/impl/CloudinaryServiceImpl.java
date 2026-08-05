@@ -93,6 +93,18 @@ public class CloudinaryServiceImpl implements CloudinaryService {
         } catch (IOException e) {
             log.error("Failed to upload image to Cloudinary", e);
             throw new BusinessException("VALIDATION_ERROR", "Invalid image format. Supported formats: JPG, PNG, WEBP", HttpStatus.BAD_REQUEST);
+        } catch (RuntimeException e) {
+            log.error("Unexpected concession image upload failure", e);
+            throw new BusinessException(
+                    "CONCESSION_IMAGE_UPLOAD_FAILED",
+                    "Không thể tải ảnh sản phẩm lên kho lưu trữ. Vui lòng thử lại hoặc dùng đường dẫn HTTPS.",
+                    HttpStatus.BAD_GATEWAY);
+        } catch (Exception e) {
+            log.error("Concession image upload failed", e);
+            throw new BusinessException(
+                    "CONCESSION_IMAGE_UPLOAD_FAILED",
+                    "Không thể tải ảnh sản phẩm lên kho lưu trữ. Vui lòng thử lại hoặc dùng đường dẫn HTTPS.",
+                    HttpStatus.BAD_GATEWAY);
         }
     }
 

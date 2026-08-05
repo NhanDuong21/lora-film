@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import useAdminScore from '../hooks/useAdminScore';
-import { History, Download, RefreshCw, Search, Shield, Filter, CheckCircle, AlertCircle } from 'lucide-react';
+import { History, Download, RefreshCw, Filter, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AdminScoreAuditLogsPage() {
   const {
@@ -44,7 +44,7 @@ export default function AdminScoreAuditLogsPage() {
       link.click();
       link.remove();
       showNotify(`Đã tải xuống file CSV: ${type}`);
-    } catch (err) {
+    } catch {
       showNotify('Lỗi khi tải xuống báo cáo CSV', 'error');
     } finally {
       setIsExporting(false);

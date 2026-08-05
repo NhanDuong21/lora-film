@@ -14,6 +14,7 @@ import MovieDetailWarnings from './movie/MovieDetailWarnings';
 import MovieLifecycleReviewPanel from '../components/MovieLifecycleReviewPanel';
 import TmdbMovieReviewPanel from '../components/TmdbMovieReviewPanel';
 import useTmdbMovieReview from '../hooks/useTmdbMovieReview';
+import MovieLaunchReadinessPanel from '../components/MovieLaunchReadinessPanel';
 
 const TABS = [
   { id: 'overview', number: '1', label: 'Thông tin phim', shortLabel: 'Thông tin', icon: Film },
@@ -82,6 +83,7 @@ export default function AdminMovieDetailPage() {
             onUpdate={() => Promise.all([reload(), tmdbReview.reload()])}
             onNavigateToTab={setActiveTab}
           />
+          <MovieLaunchReadinessPanel movie={movie} />
           <MovieDetailWarnings movie={movie} />
 
           <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/25" aria-labelledby="movie-workspace-title">

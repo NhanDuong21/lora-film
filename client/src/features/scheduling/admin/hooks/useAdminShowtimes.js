@@ -11,9 +11,9 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
   const [isOptionsLoading, setIsOptionsLoading] = useState(false);
   
   // Filters
-  const [cinemaSlug, setCinemaSlug] = useState('');
+  const [cinemaSlug, setCinemaSlug] = useState(initialFilters?.cinemaSlug || '');
   const [movieSlug, setMovieSlug] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(initialFilters?.date || '');
   const [status, setStatus] = useState(initialFilters?.status || '');
   const [format, setFormat] = useState('');
   const [audioLanguage, setAudioLanguage] = useState('');
@@ -23,7 +23,7 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(100);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const requestGenerationRef = useRef(0);

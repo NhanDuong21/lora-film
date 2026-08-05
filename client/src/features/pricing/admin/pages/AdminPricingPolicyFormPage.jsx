@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Eye, Info, Plus, Save, Trash2 } from 'lucide-react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 import adminPricingService from '../services/adminPricingService';
@@ -26,7 +26,13 @@ export default function AdminPricingPolicyFormPage() {
   const { id } = useParams();
   const editing = Boolean(id);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { triggerToast } = useOutletContext() || {};
+  const prefillCinemaId = editing ? '' : (searchParams.get('cinema') || '');
+  const prefillEffectiveFrom = editing ? '' : (searchParams.get('effectiveFrom') || '');
+  const prefillEffectiveTo = editing ? '' : (searchParams.get('effectiveTo') || '');
+  const requestedReturnTo = searchParams.get('returnTo') || '';
+  const returnTo = requestedReturnTo.startsWith('/admin/') ? requestedReturnTo : '';
   const [cinemas, setCinemas] = useState([]);
   const [seatTypes, setSeatTypes] = useState([]);
   const [auditoriums, setAuditoriums] = useState([]);
@@ -38,9 +44,9 @@ export default function AdminPricingPolicyFormPage() {
   const [previewing, setPreviewing] = useState(false);
   const [form, setForm] = useState({
     name: '',
-    cinemaId: '',
-    effectiveFrom: new Date().toISOString().slice(0, 10),
-    effectiveTo: '',
+    cinemaId: prefillCinemaId,
+    effectiveFrom: prefillEffectiveFrom || new Date().toISOString().slice(0, 10),
+    effectiveTo: prefillEffectiveTo,
     currency: 'VND',
     priority: 0,
     rules: [emptyRule()],
@@ -83,10 +89,15 @@ export default function AdminPricingPolicyFormPage() {
           })),
         });
       } else if (activeSeats.length > 0) {
-        setForm(current => ({ ...current, rules: activeSeats.map(seat => emptyRule(seat.publicId)) }));
+        const cinema = (cinemaResponse?.data?.data || []).find(item => item.publicId === prefillCinemaId);
+        setForm(current => ({
+          ...current,
+          name: current.name || (cinema ? `Bảng giá ${cinema.name}` : ''),
+          rules: activeSeats.map(seat => emptyRule(seat.publicId)),
+        }));
       }
     }).catch(error => triggerToast?.(error.response?.data?.message || 'Không thể tải biểu mẫu giá.', 'error'));
-  }, [editing, id, navigate, triggerToast]);
+  }, [editing, id, navigate, prefillCinemaId, triggerToast]);
 
   useEffect(() => {
     if (!form.cinemaId) {
@@ -157,7 +168,10 @@ export default function AdminPricingPolicyFormPage() {
       const response = editing ? await adminPricingService.updatePolicy(id, payload) : await adminPricingService.createPolicy(payload);
       setConflicts(response?.data?.conflicts || []);
       triggerToast?.('Đã lưu bảng giá đang soạn.', 'success');
-      navigate(`/admin/pricing/${response.data.publicId}`);
+      const params = new URLSearchParams();
+      if (returnTo) params.set('returnTo', returnTo);
+      const query = params.toString();
+      navigate(`/admin/pricing/${response.data.publicId}${query ? `?${query}` : ''}`);
     } catch (error) {
       if (error?.errorCode === 'PRICE_POLICY_OVERLAP' && Array.isArray(error?.data)) setConflicts(error.data);
       triggerToast?.(
@@ -192,6 +206,12 @@ export default function AdminPricingPolicyFormPage() {
 
   return (
     <form onSubmit={submit} className="min-h-full space-y-6 bg-zinc-950 text-white">
+      {returnTo && (
+        <section className="flex flex-col gap-3 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100 sm:flex-row sm:items-center sm:justify-between" role="status">
+          <div><p className="font-black">Tạo bảng giá để tiếp tục lịch đang kiểm tra</p><p className="mt-1 text-blue-200/80">Rạp và khoảng ngày đã được điền sẵn. Hãy lưu rồi kích hoạt bảng giá trước khi quay lại lịch.</p></div>
+          <button type="button" onClick={() => navigate(returnTo)} className="min-h-10 shrink-0 rounded-xl border border-blue-300/30 px-4 font-black hover:bg-blue-500/10">Quay lại lịch</button>
+        </section>
+      )}
       <header className="flex flex-col gap-4 border-b border-zinc-800 pb-6 md:flex-row md:items-end md:justify-between">
         <div className="flex items-start gap-3">
           <button type="button" onClick={() => navigate(-1)} aria-label="Quay lại" className="mt-1 rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"><ArrowLeft className="h-5 w-5" aria-hidden="true" /></button>

@@ -14,6 +14,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getCinemas } from '@/features/catalog/customer/services/movieService';
 import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+const resolveMediaUrl = value => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
 
 const dropdownPanelClass =
   'overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95 p-2 shadow-[0_20px_55px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl';
@@ -76,6 +80,7 @@ function NavDropdown({
 
 export default function Header() {
   const { user, userRole, isAuthenticated, logout } = useAuth();
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const headerRef = useRef(null);
@@ -92,6 +97,10 @@ export default function Header() {
   const normalizedRole = (userRole || '').replace(/^ROLE_/, '');
   const isCustomer = normalizedRole === 'CUSTOMER';
   const brandPath = isAuthenticated && normalizedRole === 'ADMIN' ? '/admin' : '/';
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [user?.avatarUrl]);
 
   const loadCinemaMenu = useCallback(async () => {
     setCinemaMenuLoading(true);
@@ -386,11 +395,18 @@ export default function Header() {
                     }}
                     className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-brand-orange/50 bg-brand-orange/10 text-sm font-black uppercase text-brand-orange transition hover:bg-brand-orange/20 ${focusRingClass}`}
                   >
-                    {user?.avatarUrl ? (
+                    {user?.avatarUrl && !avatarLoadFailed ? (
                       <img
-                        src={user.avatarUrl}
+                        src={getOptimizedImageUrl(resolveMediaUrl(user.avatarUrl), {
+                          width: 192,
+                          height: 192,
+                          quality: 90,
+                          gravity: 'face',
+                        })}
                         alt={user?.fullName || 'Ảnh đại diện'}
                         className="h-full w-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={() => setAvatarLoadFailed(true)}
                       />
                     ) : (
                       user?.fullName?.charAt(0) || 'U'

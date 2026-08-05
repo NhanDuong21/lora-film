@@ -30,11 +30,12 @@ import {
   revokeSession
 } from '@/features/auth/services/authService';
 import { updateUserProfile, uploadAvatar } from '@/features/auth/services/userService';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 const accountTabs = new Set(['profile', 'password', 'email', 'sessions']);
 const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 const fieldClass = 'w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-brand-orange disabled:cursor-not-allowed disabled:opacity-60';
 
 const resolveMediaUrl = (value) => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
@@ -149,7 +150,12 @@ export default function AdminMyAccountPage() {
 
   const displayName = profile?.fullName || user?.fullName || email?.split('@')[0] || 'Tài khoản LoraFilm';
   const displayRole = roleName(userRole || user?.role);
-  const avatarUrl = resolveMediaUrl(profile?.avatarUrl || user?.avatarUrl);
+  const avatarUrl = getOptimizedImageUrl(resolveMediaUrl(profile?.avatarUrl || user?.avatarUrl), {
+    width: 256,
+    height: 256,
+    quality: 90,
+    gravity: 'face',
+  });
 
   const tabs = useMemo(() => ([
     { id: 'profile', label: 'Thông tin cá nhân', icon: UserRound },
@@ -157,10 +163,6 @@ export default function AdminMyAccountPage() {
     { id: 'email', label: 'Email đăng nhập', icon: Mail },
     { id: 'sessions', label: 'Phiên đăng nhập', icon: MonitorSmartphone }
   ]), []);
-
-  useEffect(() => {
-    document.title = 'Tài khoản của tôi - LoraFilm Admin';
-  }, []);
 
   useEffect(() => {
     // Profile is loaded asynchronously by AuthContext.
@@ -394,7 +396,12 @@ export default function AdminMyAccountPage() {
           <div className="flex items-center gap-4 border-b border-zinc-800 pb-5">
             <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-brand-orange bg-zinc-950">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={`Ảnh đại diện của ${displayName}`} className="h-full w-full object-cover" />
+                <img
+                  src={avatarUrl}
+                  alt={`Ảnh đại diện của ${displayName}`}
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
                 <UserRound className="h-full w-full p-4 text-zinc-600" />
               )}

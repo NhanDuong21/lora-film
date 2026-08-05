@@ -66,4 +66,22 @@ describe('AdminPricingPolicyFormPage auditorium scope', () => {
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Phòng chiếu quy tắc 1' })).toHaveValue(''));
     expect(screen.queryByText('Loại màn hình: IMAX')).not.toBeInTheDocument();
   });
+
+  it('prefills the cinema and effective dates when opened from an auto-schedule repair action', async () => {
+    render(
+      <MemoryRouter initialEntries={[
+        '/admin/pricing/create?cinema=cinema-1&effectiveFrom=2026-07-24&effectiveTo=2026-07-26&returnTo=%2Fadmin%2Fshowtime-schedules%2Fpreview-1',
+      ]}>
+        <Routes>
+          <Route path="/admin/pricing/create" element={<AdminPricingPolicyFormPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Tạo bảng giá để tiếp tục lịch đang kiểm tra');
+    expect(screen.getByRole('combobox', { name: 'Rạp' })).toHaveValue('cinema-1');
+    expect(screen.getByLabelText('Bắt đầu áp dụng')).toHaveValue('2026-07-24');
+    expect(screen.getByLabelText(/Kết thúc áp dụng/)).toHaveValue('2026-07-26');
+    await waitFor(() => expect(screen.getByLabelText('Tên bảng giá')).toHaveValue('Bảng giá Rạp 1'));
+  });
 });

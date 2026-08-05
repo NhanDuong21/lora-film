@@ -42,7 +42,7 @@ const normalizeDateForInput = (value) => {
 
 const hasImageSource = (value) =>
   typeof value === "string" && value.trim().length > 0;
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
 const resolveMediaUrl = (value) =>
   value?.startsWith("/") ? `${apiBaseUrl}${value}` : value;
 const customerProfileTabs = new Set([
@@ -77,7 +77,6 @@ export default function CustomerProfileView({
   } = useAuth();
 
   useEffect(() => {
-    document.title = "Tài Khoản Thành Viên - LoraFilm";
     if (!isAuthenticated || !accountId) {
       navigate("/login");
     }
@@ -435,6 +434,7 @@ export default function CustomerProfileView({
                           src={avatarUrl}
                           alt={fullName}
                           className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
                           onError={(e) => {
                             e.target.onerror = null;
                             e.target.src =
@@ -1070,6 +1070,7 @@ export default function CustomerProfileView({
                         src={tempAvatarUrl}
                         alt="Preview avatar"
                         className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src =

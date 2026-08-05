@@ -30,4 +30,13 @@ describe('getOptimizedImageUrl', () => {
     );
     expect(getOptimizedImageUrl('/images/popcorn.webp')).toBe('/images/popcorn.webp');
   });
+
+  it('supports high-quality face-focused avatar transformations', () => {
+    expect(getOptimizedImageUrl(
+      'https://res.cloudinary.com/demo/image/upload/v123/avatar.jpg',
+      { width: 256, height: 256, quality: 90, gravity: 'face' }
+    )).toBe(
+      'https://res.cloudinary.com/demo/image/upload/f_auto,q_auto:best,c_fill,g_face,w_256,h_256/v123/avatar.jpg'
+    );
+  });
 });

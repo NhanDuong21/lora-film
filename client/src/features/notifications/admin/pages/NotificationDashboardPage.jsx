@@ -5,12 +5,12 @@ import { notificationAdminService } from '../services/notificationAdminService';
 import { ErrorState, LoadingState, PageHeading, StatusPill, formatNumber, formatPercent, shortSha } from '../components/NotificationAdminUi';
 
 const cards = [
-    { key: 'totalRequests', label: 'Notification requests', icon: BellRing, tone: 'text-white' },
-    { key: 'totalDeliveries', label: 'Delivery volume', icon: Send, tone: 'text-sky-300' },
-    { key: 'delivered', label: 'Sent & delivered', icon: CheckCheck, tone: 'text-emerald-300' },
-    { key: 'failed', label: 'Failed', icon: AlertOctagon, tone: 'text-red-300' },
-    { key: 'pending', label: 'Pending / retry', icon: Clock3, tone: 'text-amber-300' },
-    { key: 'deadLetters', label: 'Dead letters', icon: Activity, tone: 'text-violet-300' },
+    { key: 'totalRequests', label: 'Yêu cầu thông báo', icon: BellRing, tone: 'text-white' },
+    { key: 'totalDeliveries', label: 'Lượt gửi', icon: Send, tone: 'text-sky-300' },
+    { key: 'delivered', label: 'Đã gửi thành công', icon: CheckCheck, tone: 'text-emerald-300' },
+    { key: 'failed', label: 'Gửi thất bại', icon: AlertOctagon, tone: 'text-red-300' },
+    { key: 'pending', label: 'Đang chờ / gửi lại', icon: Clock3, tone: 'text-amber-300' },
+    { key: 'deadLetters', label: 'Cần xử lý thủ công', icon: Activity, tone: 'text-violet-300' },
 ];
 
 export default function NotificationDashboardPage() {
@@ -24,7 +24,7 @@ export default function NotificationDashboardPage() {
         try {
             setData(await notificationAdminService.dashboard());
         } catch (requestError) {
-            setError(requestError?.message || 'The notification service did not return dashboard metrics.');
+            setError(requestError?.message || 'Dịch vụ thông báo chưa trả về số liệu vận hành.');
         } finally {
             setLoading(false);
         }
@@ -39,22 +39,22 @@ export default function NotificationDashboardPage() {
         .sort(([, left], [, right]) => Number(right) - Number(left)), [data]);
     const maximum = Math.max(1, ...statusRows.map(([, value]) => Number(value)));
 
-    if (loading) return <LoadingState label="Loading delivery telemetry…" />;
+    if (loading) return <LoadingState label="Đang tải số liệu gửi thông báo…" />;
     if (error) return <ErrorState message={error} onRetry={load} />;
 
     return (
         <div className="mx-auto max-w-[1500px] space-y-6 pb-10">
             <PageHeading
-                eyebrow="Messaging operations"
-                title="Notification control room"
-                description="Live operational health for delivery pipelines. Template bodies remain in the private Git registry and never enter this database."
+                eyebrow="Vận hành thông báo"
+                title="Trung tâm điều phối thông báo"
+                description="Theo dõi yêu cầu, lượt gửi và lỗi xử lý. Nội dung mẫu được quản lý trong kho Git riêng."
                 actions={
                     <>
                         <button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:border-zinc-500">
-                            <RefreshCw className="h-4 w-4" /> Refresh
+                            <RefreshCw className="h-4 w-4" /> Làm mới
                         </button>
                         <Link to="/admin/notification-operations" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white hover:bg-orange-400">
-                            Open delivery logs <ArrowRight className="h-4 w-4" />
+                            Xem nhật ký gửi <ArrowRight className="h-4 w-4" />
                         </Link>
                     </>
                 }
@@ -77,11 +77,11 @@ export default function NotificationDashboardPage() {
                 <section className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
                     <div className="flex items-start justify-between gap-4">
                         <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Delivery state</p>
-                            <h2 className="mt-2 text-lg font-black text-white">Pipeline distribution</h2>
+                            <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Trạng thái gửi</p>
+                            <h2 className="mt-2 text-lg font-black text-white">Phân bố tiến trình</h2>
                         </div>
                         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-right">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Delivery rate</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Tỷ lệ gửi thành công</p>
                             <p className="mt-1 text-2xl font-black text-white">{formatPercent(data?.deliveryRate)}</p>
                         </div>
                     </div>
@@ -104,21 +104,21 @@ export default function NotificationDashboardPage() {
                             <GitBranch className="h-5 w-5" />
                         </div>
                         <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Template source of truth</p>
-                            <h2 className="mt-1 text-lg font-black text-white">Private Git registry</h2>
+                            <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Nguồn mẫu thông báo</p>
+                            <h2 className="mt-1 text-lg font-black text-white">Kho Git nội bộ</h2>
                         </div>
                     </div>
                     <dl className="mt-6 space-y-4 text-sm">
                         <div className="flex items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-                            <dt className="text-zinc-500">Status</dt>
+                            <dt className="text-zinc-500">Trạng thái</dt>
                             <dd><StatusPill value={data?.templateRegistry?.available ? 'AVAILABLE' : 'UNAVAILABLE'} /></dd>
                         </div>
                         <div className="flex items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-                            <dt className="text-zinc-500">Provider</dt>
+                            <dt className="text-zinc-500">Công cụ quản lý</dt>
                             <dd className="font-bold text-zinc-200">{data?.templateRegistry?.provider || 'JGit'}</dd>
                         </div>
                         <div className="flex items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-                            <dt className="text-zinc-500">Protected branch</dt>
+                            <dt className="text-zinc-500">Nhánh được bảo vệ</dt>
                             <dd className="font-mono text-xs text-orange-300">{data?.templateRegistry?.branch || 'main'}</dd>
                         </div>
                         <div className="flex items-center justify-between gap-4">
@@ -128,7 +128,7 @@ export default function NotificationDashboardPage() {
                     </dl>
                     {!data?.templateRegistry?.available && (
                         <p className="mt-5 rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-xs leading-5 text-red-200">
-                            {data?.templateRegistry?.message || 'Git template registry is unavailable.'}
+                            {data?.templateRegistry?.message || 'Kho mẫu thông báo hiện không khả dụng.'}
                         </p>
                     )}
                 </section>
