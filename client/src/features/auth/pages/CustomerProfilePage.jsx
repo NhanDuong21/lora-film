@@ -77,7 +77,6 @@ export default function CustomerProfileView({
   } = useAuth();
 
   useEffect(() => {
-    document.title = "Tài Khoản Thành Viên - LoraFilm";
     if (!isAuthenticated || !accountId) {
       navigate("/login");
     }

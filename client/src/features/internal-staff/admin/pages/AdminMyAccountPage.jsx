@@ -159,10 +159,6 @@ export default function AdminMyAccountPage() {
   ]), []);
 
   useEffect(() => {
-    document.title = 'Tài khoản của tôi - LoraFilm Admin';
-  }, []);
-
-  useEffect(() => {
     // Profile is loaded asynchronously by AuthContext.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPhone(profile?.phoneNumber || '');

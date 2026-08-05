@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "@/features/auth/services/authService";
 import CustomerNoticeModal from "@/components/common/CustomerNoticeModal";
@@ -29,12 +29,6 @@ function Register() {
         error.errorCode = errorCode;
         return error;
     };
-
-
-
-    useEffect(() => {
-        document.title = "Đăng Ký Tài Khoản - LoraFilm";
-    }, []);
 
     const handleChange = (e) => {
         const { name, value } = e.target;

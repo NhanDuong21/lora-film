@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ScrollToTop from "@/components/common/ScrollToTop";
+import DocumentTitle from "@/components/common/DocumentTitle";
 import { PermissionRoute, RoleRoute, AdminRedirectGuard } from "@/components/common/RouteGuards";
 import { ADMIN_AREA_PERMISSIONS } from "@/features/internal-staff/admin/permissionAccess";
 
@@ -47,6 +48,7 @@ function AppRoutes() {
     return (
         <BrowserRouter>
             <ScrollToTop />
+            <DocumentTitle />
             <Routes>
                 {/* Public & Customer Routes */}
                 <Route element={<AdminRedirectGuard><MainLayout /></AdminRedirectGuard>}>

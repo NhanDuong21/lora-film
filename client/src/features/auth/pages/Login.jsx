@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { login } from "@/features/auth/services/authService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,10 +24,6 @@ function Login() {
         )
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        document.title = "Đăng Nhập - LoraFilm Ticket Booking";
-    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
