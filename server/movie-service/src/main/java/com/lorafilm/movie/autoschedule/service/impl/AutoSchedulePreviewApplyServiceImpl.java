@@ -16,6 +16,8 @@ import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewReposit
 import com.lorafilm.movie.autoschedule.service.AutoScheduleApplyRevalidationService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleAuditoriumLockService;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewApplyService;
+import com.lorafilm.movie.autoschedule.service.AutoSchedulePreflightService;
+import com.lorafilm.movie.autoschedule.dto.request.AutoSchedulePreflightRequest;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePricingPreflightService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleShowtimeCreationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -32,6 +34,7 @@ import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 
@@ -68,6 +71,8 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
     private final CinemaRepository cinemaRepository;
     private final AuditoriumRepository auditoriumRepository;
     private final EntityManager entityManager;
+    private final AutoSchedulePreflightService preflightService;
+    private AutoScheduleMetrics metrics = AutoScheduleMetrics.noop();
 
     public AutoSchedulePreviewApplyServiceImpl(CurrentUserProvider currentUserProvider,
                                                ShowtimeSchedulePreviewExpiryService expiryService,
@@ -84,7 +89,8 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
                                                MovieVersionRepository movieVersionRepository,
                                                CinemaRepository cinemaRepository,
                                                AuditoriumRepository auditoriumRepository,
-                                               EntityManager entityManager) {
+                                               EntityManager entityManager,
+                                               AutoSchedulePreflightService preflightService) {
         this.currentUserProvider = currentUserProvider;
         this.expiryService = expiryService;
         this.previewRepository = previewRepository;
@@ -102,6 +108,12 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
         this.cinemaRepository = cinemaRepository;
         this.auditoriumRepository = auditoriumRepository;
         this.entityManager = entityManager;
+        this.preflightService = preflightService;
+    }
+
+    @Autowired
+    void setMetrics(AutoScheduleMetrics metrics) {
+        this.metrics = metrics;
     }
 
     @Override
@@ -116,14 +128,28 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
 
         // Normalize expiry in a separate transaction
         if (expiryService.expireIfNecessary(previewPublicId, now)) {
+            metrics.recordApply("expired");
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_EXPIRED);
         }
 
         try {
-            return transactionTemplate.execute(status -> doApply(previewPublicId, applyKey, request.getExpectedVersion(), actorId));
+            ApplyShowtimeSchedulePreviewResponse response = transactionTemplate.execute(
+                    status -> doApply(previewPublicId, applyKey, request.getExpectedVersion(), actorId));
+            metrics.recordApply("success");
+            return response;
         } catch (DataIntegrityViolationException e) {
-            return handleIdempotencyConflict(applyKey, previewPublicId);
+            // Only a row actually carrying this apply key is an idempotency conflict.
+            // Foreign-key, check and unrelated unique violations must retain their cause.
+            Optional<ShowtimeSchedulePreview> replay =
+                    previewRepository.findByApplyIdempotencyKeyDetailed(applyKey);
+            if (replay.isPresent()) {
+                metrics.recordApply("idempotent_replay");
+                return handleIdempotencyConflict(applyKey, previewPublicId, replay.get());
+            }
+            metrics.recordApply("conflict");
+            throw e;
         } catch (BusinessException e) {
+            metrics.recordApply(e.getErrorCode().name());
             if (e.getErrorCode() == ErrorCode.AUTO_SCHEDULE_PREVIEW_EXPIRED) {
                 normalizeExpiryAfterRollback(previewPublicId);
             }
@@ -165,6 +191,13 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
                 .map(ShowtimeSchedulePreviewItemRepository.ApplyItemReference::getAuditoriumId)
                 .collect(Collectors.toList());
 
+        Long cinemaId = preview.getCinema() == null ? null : preview.getCinema().getId();
+        if (cinemaId == null) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT);
+        }
+        // Global lock order is preview -> cinema -> sorted auditoriums.
+        cinemaRepository.findByIdForScheduling(cinemaId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CINEMA_NOT_FOUND));
         auditoriumLockService.lockAll(auditoriumIds);
 
         Instant freshNow = Instant.now(clock);
@@ -173,6 +206,8 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
         ReloadedApplyState currentState = reloadAuthoritativeState(previewPublicId, expectedVersion);
         preview = currentState.preview();
         List<ShowtimeSchedulePreviewItem> selectedItems = currentState.selectedItems();
+
+        validateConfigurationFingerprint(preview);
 
         revalidationService.validateAll(preview, selectedItems, freshNow);
 
@@ -186,6 +221,7 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
                     "Không thể áp dụng lịch vì một hoặc nhiều ứng viên chưa có giá đầy đủ.",
                     pricingPreflight.response());
         }
+        validatePricingSnapshots(selectedItems, pricingPreflight.resolutions());
 
         // State changes
         preview.markApplying(applyKey);
@@ -393,6 +429,14 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_APPLICABLE);
         }
 
+        if (com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1
+                .equals(preview.getStrategyVersion())
+                && !("OPTIMAL".equals(preview.getSolverStatus())
+                || "FEASIBLE".equals(preview.getSolverStatus()))) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_APPLICABLE,
+                    "Demand-aware preview has no feasible solver result");
+        }
+
         switch (preview.getStatus()) {
             case PREVIEWED:
                 break;
@@ -409,6 +453,46 @@ public class AutoSchedulePreviewApplyServiceImpl implements AutoSchedulePreviewA
             case FAILED:
             case CANCELLED:
                 throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_NOT_APPLICABLE);
+        }
+    }
+
+    private void validateConfigurationFingerprint(ShowtimeSchedulePreview preview) {
+        var scope = preview.getRequestScope();
+        if (scope == null) return; // One-release compatibility for legacy previews.
+        AutoSchedulePreflightRequest request = new AutoSchedulePreflightRequest();
+        request.setCinemaPublicId(scope.cinemaPublicId());
+        request.setPlanningDays(Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(
+                scope.scheduleFrom(), scope.scheduleTo()) + 1L));
+        request.setIncludeMovieVersionPublicIds(scope.movieVersionPublicIds());
+        request.setIncludeAuditoriumPublicIds(scope.auditoriumPublicIds());
+        var current = preflightService.prepare(request).response();
+        if (!current.canGenerate()
+                || !Objects.equals(preview.getEligibilityFingerprint(), current.eligibilityFingerprint())
+                || !Objects.equals(preview.getPricingFingerprint(), current.pricingFingerprint())
+                || !Objects.equals(preview.getConfigurationFingerprint(), current.configurationFingerprint())) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_STALE,
+                    "Eligibility or pricing configuration changed after preview generation");
+        }
+    }
+
+    private void validatePricingSnapshots(
+            List<ShowtimeSchedulePreviewItem> selectedItems,
+            List<com.lorafilm.movie.pricing.service.model.PriceResolutionResult> resolutions) {
+        for (int index = 0; index < selectedItems.size(); index++) {
+            var stored = selectedItems.get(index).getPricingSnapshot();
+            if (stored == null) continue; // Legacy preview compatibility.
+            List<String> expected = stored.prices().stream()
+                    .map(line -> line.seatTypePublicId() + "|" + line.policyPublicId() + "|"
+                            + line.rulePublicId() + "|" + line.price().stripTrailingZeros().toPlainString())
+                    .sorted().toList();
+            List<String> actual = resolutions.get(index).resolvedPrices().stream()
+                    .map(line -> line.seatType().getPublicId() + "|" + line.policy().getPublicId() + "|"
+                            + line.rule().getPublicId() + "|" + line.price().stripTrailingZeros().toPlainString())
+                    .sorted().toList();
+            if (!expected.equals(actual)) {
+                throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_STALE,
+                        "Pricing rules changed after preview generation");
+            }
         }
     }
 

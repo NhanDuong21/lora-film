@@ -45,6 +45,7 @@ public class ShowtimeMapper {
         auditoriumDto.setName(showtime.getAuditorium().getName());
         auditoriumDto.setScreenType(showtime.getAuditorium().getScreenType() != null ? showtime.getAuditorium().getScreenType().getValue() : null);
         auditoriumDto.setSoundType(showtime.getAuditorium().getSoundType() != null ? showtime.getAuditorium().getSoundType().name() : null);
+        auditoriumDto.setCapacity(showtime.getAuditorium().getCapacity());
         dto.setAuditorium(auditoriumDto);
 
         dto.setStartTime(showtime.getStartTime());

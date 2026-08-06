@@ -2,6 +2,7 @@ package com.lorafilm.movie.cinema.domain.entity;
 
 import com.lorafilm.movie.common.audit.BaseAuditableEntity;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
+import com.lorafilm.movie.cinema.domain.enums.AutoScheduleEngine;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -59,6 +60,11 @@ public class Cinema extends BaseAuditableEntity {
 
     @Column(name = "closed_date")
     private LocalDate closedDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auto_schedule_engine", nullable = false, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'CP_SAT'")
+    private AutoScheduleEngine autoScheduleEngine = AutoScheduleEngine.CP_SAT;
 
     public Cinema() {}
 
@@ -188,5 +194,13 @@ public class Cinema extends BaseAuditableEntity {
 
     public void setClosedDate(LocalDate closedDate) {
         this.closedDate = closedDate;
+    }
+
+    public AutoScheduleEngine getAutoScheduleEngine() {
+        return autoScheduleEngine;
+    }
+
+    public void setAutoScheduleEngine(AutoScheduleEngine autoScheduleEngine) {
+        this.autoScheduleEngine = autoScheduleEngine == null ? AutoScheduleEngine.CP_SAT : autoScheduleEngine;
     }
 }

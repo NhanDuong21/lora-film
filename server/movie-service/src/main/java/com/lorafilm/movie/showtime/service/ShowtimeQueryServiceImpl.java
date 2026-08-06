@@ -252,6 +252,7 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
         auditoriumDto.setName(showtime.getAuditorium().getName());
         auditoriumDto.setScreenType(showtime.getAuditorium().getScreenType() != null ? showtime.getAuditorium().getScreenType().getValue() : null);
         auditoriumDto.setSoundType(showtime.getAuditorium().getSoundType() != null ? showtime.getAuditorium().getSoundType().name() : null);
+        auditoriumDto.setCapacity(showtime.getAuditorium().getCapacity());
         layout.setAuditorium(auditoriumDto);
 
         layout.setStartTime(showtime.getStartTime());

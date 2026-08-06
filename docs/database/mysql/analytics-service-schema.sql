@@ -146,6 +146,8 @@ CREATE TABLE `fact_booking_metrics` (
   `cinema_name` varchar(255),
   `auditorium_public_id` varchar(100),
   `showtime_public_id` varchar(100),
+  `showtime_starts_at` datetime(6),
+  `movie_format` varchar(30),
   `promotion_public_id` varchar(100),
   `promotion_name` varchar(255),
   `membership_tier` varchar(50),

@@ -1132,7 +1132,10 @@ public class BookingServiceImpl implements BookingService {
                         .map(seat -> new BookingPriceSnapshotPayload.SeatPriceLine(
                                 seat.seatId(), seat.seatLabel(), seat.seatType(), seat.price(),
                                 seat.seatPublicId()))
-                        .toList());
+                        .toList(),
+                context.startsAt(),
+                context.auditoriumPublicId(),
+                context.auditoriumCapacity());
         BookingPriceSnapshot snapshot = new BookingPriceSnapshot();
         snapshot.setBooking(booking);
         snapshot.setCurrency(context.currency());

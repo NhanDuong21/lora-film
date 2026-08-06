@@ -1,38 +1,43 @@
 package com.lorafilm.movie.autoschedule.service.impl;
 
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
-import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
+import com.lorafilm.movie.autoschedule.dto.request.AutoSchedulePreflightRequest;
 import com.lorafilm.movie.autoschedule.dto.request.GenerateShowtimeSchedulePreviewRequest;
 import com.lorafilm.movie.autoschedule.dto.response.ShowtimeSchedulePreviewSummaryResponse;
 import com.lorafilm.movie.autoschedule.model.AutoScheduleGenerationContext;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleOptimizationResult;
+import com.lorafilm.movie.autoschedule.model.AutoSchedulePreflightResult;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.model.CandidateScoringContext;
 import com.lorafilm.movie.autoschedule.model.CandidateValidationResult;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerateRequestNormalizer;
+import com.lorafilm.movie.autoschedule.service.AutoScheduleCandidateEnrichmentService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationContextLoader;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationStrategy;
+import com.lorafilm.movie.autoschedule.service.AutoSchedulePreflightService;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePreviewGenerationService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleRequestFingerprintService;
 import com.lorafilm.movie.autoschedule.service.CandidateCountEstimator;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateGenerator;
 import com.lorafilm.movie.autoschedule.service.ShowtimeCandidateValidationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
-import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
-import com.lorafilm.movie.movie.repository.MovieVersionRepository;
-import com.lorafilm.movie.showtime.validation.MovieShowtimeEligibilityPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.time.ZoneId;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,14 +57,14 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
     private final CandidateCountEstimator candidateCountEstimator;
     private final ShowtimeCandidateGenerator generator;
     private final ShowtimeCandidateValidationService validationService;
+    private final AutoSchedulePreflightService preflightService;
+    private final AutoScheduleCandidateEnrichmentService enrichmentService;
     private final AutoScheduleGenerationStrategyRegistry strategyRegistry;
     private final ShowtimeSchedulePreviewLifecycleService lifecycleService;
-    private final CinemaRepository cinemaRepository;
-    private final AuditoriumRepository auditoriumRepository;
-    private final MovieVersionRepository movieVersionRepository;
     private final ShowtimeSchedulePreviewRepository previewRepository;
     private final com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper;
-    private final MovieShowtimeEligibilityPolicy movieEligibilityPolicy;
+    private AutoScheduleMetrics metrics = AutoScheduleMetrics.noop();
+    private AutoScheduleShadowComparisonService shadowComparisonService;
 
     public AutoSchedulePreviewGenerationServiceImpl(AutoScheduleGenerateRequestNormalizer normalizer,
                                                     AutoScheduleRequestFingerprintService fingerprintService,
@@ -67,36 +72,49 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
                                                     CandidateCountEstimator candidateCountEstimator,
                                                     ShowtimeCandidateGenerator generator,
                                                     ShowtimeCandidateValidationService validationService,
+                                                    AutoSchedulePreflightService preflightService,
+                                                    AutoScheduleCandidateEnrichmentService enrichmentService,
                                                     AutoScheduleGenerationStrategyRegistry strategyRegistry,
                                                     ShowtimeSchedulePreviewLifecycleService lifecycleService,
-                                                    CinemaRepository cinemaRepository,
-                                                    AuditoriumRepository auditoriumRepository,
-                                                    MovieVersionRepository movieVersionRepository,
                                                     ShowtimeSchedulePreviewRepository previewRepository,
-                                                    com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper,
-                                                    MovieShowtimeEligibilityPolicy movieEligibilityPolicy) {
+                                                    com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewMapper responseMapper) {
         this.normalizer = normalizer;
         this.fingerprintService = fingerprintService;
         this.contextLoader = contextLoader;
         this.candidateCountEstimator = candidateCountEstimator;
         this.generator = generator;
         this.validationService = validationService;
+        this.preflightService = preflightService;
+        this.enrichmentService = enrichmentService;
         this.strategyRegistry = strategyRegistry;
         this.lifecycleService = lifecycleService;
-        this.cinemaRepository = cinemaRepository;
-        this.auditoriumRepository = auditoriumRepository;
-        this.movieVersionRepository = movieVersionRepository;
         this.previewRepository = previewRepository;
         this.responseMapper = responseMapper;
-        this.movieEligibilityPolicy = movieEligibilityPolicy;
+    }
+
+    @Autowired
+    void setOperationalDependencies(AutoScheduleMetrics metrics,
+                                    AutoScheduleShadowComparisonService shadowComparisonService) {
+        this.metrics = metrics;
+        this.shadowComparisonService = shadowComparisonService;
     }
 
     @Override
     public ShowtimeSchedulePreviewSummaryResponse generatePreview(GenerateShowtimeSchedulePreviewRequest request, Long adminUserId) {
-        // 1. Normalize and Fingerprint
-        NormalizedGeneratePreviewRequest normalizedRequest = normalizer.normalize(request);
-        AutoScheduleGenerationStrategy generationStrategy = strategyRegistry.getCurrent();
+        long generationStarted = System.nanoTime();
+        String observedStrategy = AutoScheduleStrategyVersions.CURRENT;
+        AutoSchedulePreflightResult preflight = preflightService.prepare(toPreflightRequest(request));
+        validateAuthoritativeRange(request, preflight.response().planningFrom(), preflight.response().planningTo());
+        if (!preflight.response().canGenerate()) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_PREFLIGHT_BLOCKED, preflight.response());
+        }
+
+        NormalizedGeneratePreviewRequest normalizedRequest = normalizer.normalize(
+                toEffectiveRequest(request, preflight));
+        Cinema cinema = preflight.cinema();
+        AutoScheduleGenerationStrategy generationStrategy = strategyRegistry.getForCinema(cinema);
         String strategyVersion = generationStrategy.getStrategyVersion();
+        observedStrategy = strategyVersion;
         String fingerprint = fingerprintService.generateFingerprint(normalizedRequest, strategyVersion);
 
         // Date range validation
@@ -106,25 +124,6 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
         }
         if (inclusiveDays > 7) {
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_DATE_RANGE_TOO_LARGE);
-        }
-
-        // Resolve Cinema
-        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(normalizedRequest.getCinemaPublicId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.CINEMA_NOT_FOUND));
-
-        if (cinema.getStatus() != com.lorafilm.movie.cinema.domain.enums.CinemaStatus.ACTIVE) {
-            throw new BusinessException(ErrorCode.CINEMA_NOT_ACTIVE);
-        }
-
-        ZoneId cinemaZone;
-        try {
-            cinemaZone = ZoneId.of(cinema.getTimezone());
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.INVALID_CINEMA_TIMEZONE);
-        }
-
-        if (normalizedRequest.getScheduleFrom().isBefore(Instant.now().atZone(cinemaZone).toLocalDate())) {
-            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_INVALID_DATE_RANGE, "Cannot schedule in the past");
         }
 
         // Idempotency check
@@ -138,49 +137,8 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
             return responseMapper.toSummaryResponse(existing);
         }
 
-        // Resolve Auditoriums
-        List<Auditorium> auditoriums = auditoriumRepository.findByPublicIdInAndDeletedAtIsNull(normalizedRequest.getAuditoriumPublicIds());
-        if (auditoriums.size() != normalizedRequest.getAuditoriumPublicIds().size()) {
-            throw new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND);
-        }
-        for (Auditorium aud : auditoriums) {
-            if (aud.getStatus() != com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE) {
-                throw new BusinessException(ErrorCode.AUDITORIUM_NOT_ACTIVE);
-            }
-            if (aud.getCleaningBufferMinutes() == null || aud.getCleaningBufferMinutes() < 0) {
-                throw new BusinessException(ErrorCode.INVALID_CLEANING_BUFFER);
-            }
-            if (!aud.getCinema().getId().equals(cinema.getId())) {
-                throw new BusinessException(ErrorCode.AUDITORIUM_NOT_BELONG_TO_CINEMA);
-            }
-        }
-
-        // Resolve Movie Versions
-        List<MovieVersion> movieVersions = movieVersionRepository.findByPublicIdInWithMovieAndDeletedAtIsNull(normalizedRequest.getMovieVersionPublicIds());
-        if (movieVersions.size() != normalizedRequest.getMovieVersionPublicIds().size()) {
-            throw new BusinessException(ErrorCode.MOVIE_VERSION_NOT_FOUND);
-        }
-        for (MovieVersion version : movieVersions) {
-            com.lorafilm.movie.movie.domain.entity.Movie movie = version.getMovie();
-            movieEligibilityPolicy.validateMovieAndVersion(movie, version);
-        }
-
-        ShowtimeSchedulePreview preview;
-        try {
-            preview = lifecycleService.createGeneratingPreview(
-                    normalizedRequest, cinema, strategyVersion, fingerprint, adminUserId);
-        } catch (DataIntegrityViolationException e) {
-            // Concurrent same key check
-            existingOpt = previewRepository.findByGenerateIdempotencyKeyWithCinema(normalizedRequest.getIdempotencyKey());
-            if (existingOpt.isPresent()) {
-                ShowtimeSchedulePreview existing = existingOpt.get();
-                if (!matchesStoredFingerprint(normalizedRequest, existing)) {
-                    throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
-                }
-                return responseMapper.toSummaryResponse(existing);
-            }
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "Concurrency issue occurred");
-        }
+        List<Auditorium> auditoriums = preflight.auditoriums();
+        List<MovieVersion> movieVersions = preflight.movieVersions();
 
         try {
             AutoScheduleGenerationContext context = contextLoader.load(
@@ -189,6 +147,7 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
             List<ShowtimeCandidate> candidates = new ArrayList<>(estimatedCandidateCount);
             CandidateScoringContext scoringContext = new CandidateScoringContext(context);
 
+            long candidateGenerationStarted = System.nanoTime();
             long generatedCandidateCount = generator.generate(context, candidate -> {
                 CandidateValidationResult valResult = validationService.validate(candidate, context);
                 if (valResult.isValid()) {
@@ -201,28 +160,153 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
 
                 candidates.add(candidate);
             });
+            metrics.recordCandidateGeneration(
+                    Duration.ofNanos(System.nanoTime() - candidateGenerationStarted),
+                    generatedCandidateCount);
 
             if (generatedCandidateCount != estimatedCandidateCount
                     || candidates.size() != estimatedCandidateCount) {
                 throw new IllegalStateException("Candidate estimation and generation diverged");
             }
 
-            generationStrategy.scoreAndResolveDefaultSelection(candidates, scoringContext);
             attachPersistenceReferences(candidates, cinema, auditoriums, movieVersions);
+            enrichmentService.enrich(candidates, context);
+            long optimizationStarted = System.nanoTime();
+            generationStrategy.scoreAndResolveDefaultSelection(candidates, scoringContext);
+
+            if (scoringContext.getOptimizationResult() == null) {
+                if (AutoScheduleStrategyVersions.BALANCED_V1_S5.equals(strategyVersion)) {
+                    scoringContext.setOptimizationResult(legacyOptimizationResult(
+                            candidates, System.nanoTime() - optimizationStarted));
+                } else {
+                    throw new IllegalStateException("Current demand-aware strategy did not provide solver metadata");
+                }
+            }
+            if (shadowComparisonService != null) {
+                shadowComparisonService.compareIfEnabled(strategyVersion, candidates, context);
+            }
+            ShowtimeSchedulePreview preview;
+            try {
+                preview = lifecycleService.createOptimizedPreview(
+                        normalizedRequest, cinema, strategyVersion, fingerprint, adminUserId,
+                        preflight.response(), scoringContext.getOptimizationResult(),
+                        candidates.stream().filter(ShowtimeCandidate::isSelected)
+                                .map(ShowtimeCandidate::getDemandModelVersion)
+                                .filter(Objects::nonNull).findFirst()
+                                .orElseThrow(() -> new IllegalStateException("Demand model version is missing")));
+            } catch (DataIntegrityViolationException exception) {
+                Optional<ShowtimeSchedulePreview> concurrent = previewRepository
+                        .findByGenerateIdempotencyKeyWithCinema(normalizedRequest.getIdempotencyKey());
+                if (concurrent.isPresent()) {
+                    ShowtimeSchedulePreview existing = concurrent.get();
+                    if (!matchesStoredFingerprint(normalizedRequest, existing)) {
+                        throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
+                    }
+                    return responseMapper.toSummaryResponse(existing);
+                }
+                throw exception;
+            }
 
             lifecycleService.persistGeneratedItemsAndMarkPreviewed(preview, candidates);
+
+            List<ShowtimeCandidate> selected = candidates.stream()
+                    .filter(ShowtimeCandidate::isSelected).toList();
+            BigDecimal expectedContribution = selected.stream()
+                    .map(ShowtimeCandidate::getExpectedContribution)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal expectedOccupancy = selected.isEmpty() ? BigDecimal.ZERO
+                    : selected.stream().map(ShowtimeCandidate::getExpectedOccupancy)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(selected.size()), 6, RoundingMode.HALF_UP);
+            metrics.recordGeneration(strategyVersion,
+                    Duration.ofNanos(System.nanoTime() - generationStarted),
+                    scoringContext.getOptimizationResult(), expectedContribution, expectedOccupancy);
 
             return responseMapper.toSummaryResponse(preview);
 
         } catch (BusinessException e) {
-            log.warn("Generation rejected for preview {} with error {}", preview.getPublicId(), e.getErrorCode());
-            markPreviewFailedSafely(preview.getId(), sanitizeFailureReason(e));
+            metrics.recordGenerationFailure(observedStrategy,
+                    Duration.ofNanos(System.nanoTime() - generationStarted),
+                    e.getErrorCode().name());
+            log.warn("Auto schedule generation rejected with error {}", e.getErrorCode());
+            throw e;
+        } catch (DataIntegrityViolationException e) {
+            metrics.recordGenerationFailure(observedStrategy,
+                    Duration.ofNanos(System.nanoTime() - generationStarted), "conflict");
             throw e;
         } catch (Exception e) {
-            log.error("Generation failed for preview {}", preview.getPublicId(), e);
-            markPreviewFailedSafely(preview.getId(), sanitizeFailureReason(e));
+            metrics.recordGenerationFailure(observedStrategy,
+                    Duration.ofNanos(System.nanoTime() - generationStarted), "failed");
+            log.error("Auto schedule generation failed before a preview could be published", e);
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_GENERATION_FAILED);
         }
+    }
+
+    private AutoScheduleOptimizationResult legacyOptimizationResult(
+            List<ShowtimeCandidate> candidates, long durationNanos) {
+        List<ShowtimeCandidate> selected = candidates.stream()
+                .filter(ShowtimeCandidate::isSelected).toList();
+        BigDecimal score = selected.stream().map(ShowtimeCandidate::getScore)
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new AutoScheduleOptimizationResult(
+                AutoScheduleOptimizationResult.SolverStatus.FEASIBLE,
+                "LEGACY_S5_NO_SOLVER",
+                score,
+                score,
+                Duration.ofNanos(durationNanos).toMillis(),
+                selected.size(),
+                "Explicit per-cinema LEGACY feature flag selected the retained S5 strategy; no fallback occurred.");
+    }
+
+    private AutoSchedulePreflightRequest toPreflightRequest(GenerateShowtimeSchedulePreviewRequest request) {
+        AutoSchedulePreflightRequest preflight = new AutoSchedulePreflightRequest();
+        preflight.setCinemaPublicId(request.getCinemaPublicId());
+        preflight.setPlanningDays(resolvePlanningDays(request));
+        preflight.setIncludeMovieVersionPublicIds(request.getMovieVersionPublicIds());
+        preflight.setIncludeAuditoriumPublicIds(request.getAuditoriumPublicIds());
+        preflight.setExcludeMovieVersionPublicIds(request.getExcludeMovieVersionPublicIds());
+        preflight.setExcludeAuditoriumPublicIds(request.getExcludeAuditoriumPublicIds());
+        return preflight;
+    }
+
+    private int resolvePlanningDays(GenerateShowtimeSchedulePreviewRequest request) {
+        if (request.getPlanningDays() != null) return request.getPlanningDays();
+        if (request.getScheduleFrom() == null && request.getScheduleTo() == null) return 1;
+        if (request.getScheduleFrom() == null || request.getScheduleTo() == null) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_INVALID_DATE_RANGE,
+                    "scheduleFrom and scheduleTo must both be supplied or both omitted");
+        }
+        long days = ChronoUnit.DAYS.between(request.getScheduleFrom(), request.getScheduleTo()) + 1;
+        if (days != 1 && days != 3 && days != 7) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_INVALID_DATE_RANGE,
+                    "Planning range must contain exactly 1, 3, or 7 days");
+        }
+        return (int) days;
+    }
+
+    private void validateAuthoritativeRange(GenerateShowtimeSchedulePreviewRequest request,
+                                            LocalDate authoritativeFrom,
+                                            LocalDate authoritativeTo) {
+        if ((request.getScheduleFrom() != null && !request.getScheduleFrom().equals(authoritativeFrom))
+                || (request.getScheduleTo() != null && !request.getScheduleTo().equals(authoritativeTo))) {
+            throw new BusinessException(ErrorCode.AUTO_SCHEDULE_INVALID_DATE_RANGE,
+                    "Planning range must be cinema-local tomorrow through " + authoritativeTo);
+        }
+    }
+
+    private GenerateShowtimeSchedulePreviewRequest toEffectiveRequest(
+            GenerateShowtimeSchedulePreviewRequest source,
+            AutoSchedulePreflightResult preflight) {
+        GenerateShowtimeSchedulePreviewRequest effective = new GenerateShowtimeSchedulePreviewRequest();
+        effective.setCinemaPublicId(preflight.cinema().getPublicId());
+        effective.setScheduleFrom(preflight.response().planningFrom());
+        effective.setScheduleTo(preflight.response().planningTo());
+        effective.setMovieVersionPublicIds(preflight.response().eligibleMovieVersionPublicIds());
+        effective.setAuditoriumPublicIds(preflight.response().eligibleAuditoriumPublicIds());
+        effective.setSlotGranularityMinutes(source.getSlotGranularityMinutes());
+        effective.setPreviewTtlMinutes(source.getPreviewTtlMinutes());
+        effective.setIdempotencyKey(source.getIdempotencyKey());
+        return effective;
     }
 
     private boolean matchesStoredFingerprint(NormalizedGeneratePreviewRequest request,
@@ -253,18 +337,4 @@ public class AutoSchedulePreviewGenerationServiceImpl implements AutoSchedulePre
         }
     }
 
-    private void markPreviewFailedSafely(Long previewId, String failureReason) {
-        try {
-            lifecycleService.markPreviewFailed(previewId, failureReason);
-        } catch (Exception failurePersistenceException) {
-            log.error("Could not mark auto schedule preview {} as FAILED", previewId, failurePersistenceException);
-        }
-    }
-
-    private String sanitizeFailureReason(Exception e) {
-        if (e == null || e.getMessage() == null) {
-            return "Unknown error";
-        }
-        return e.getClass().getSimpleName() + ": " + e.getMessage();
-    }
 }

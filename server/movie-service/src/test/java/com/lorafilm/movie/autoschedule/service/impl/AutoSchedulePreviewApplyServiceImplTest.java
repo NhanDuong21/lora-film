@@ -13,11 +13,13 @@ import com.lorafilm.movie.autoschedule.dto.request.ApplyShowtimeSchedulePreviewR
 import com.lorafilm.movie.autoschedule.dto.response.ApplyShowtimeSchedulePreviewResponse;
 import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePricingPreflightResponse;
 import com.lorafilm.movie.autoschedule.mapper.AutoScheduleApplyResponseMapper;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleApplyRevalidationService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleAuditoriumLockService;
 import com.lorafilm.movie.autoschedule.service.AutoSchedulePricingPreflightService;
+import com.lorafilm.movie.autoschedule.service.AutoSchedulePreflightService;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleShowtimeCreationService;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
@@ -77,6 +79,7 @@ class AutoSchedulePreviewApplyServiceImplTest {
     @Mock private AutoScheduleApplyRevalidationService revalidationService;
     @Mock private AutoScheduleShowtimeCreationService showtimeCreationService;
     @Mock private AutoSchedulePricingPreflightService pricingPreflightService;
+    @Mock private AutoSchedulePreflightService preflightService;
     @Mock private AutoScheduleApplyResponseMapper responseMapper;
     @Mock private MovieRepository movieRepository;
     @Mock private MovieVersionRepository movieVersionRepository;
@@ -105,11 +108,17 @@ class AutoSchedulePreviewApplyServiceImplTest {
                 true, 1, 1, 0, 0, List.of(), List.of());
         lenient().when(pricingPreflightService.evaluate(any())).thenReturn(
                 new AutoSchedulePricingPreflightService.Evaluation(completePricing, List.of()));
+        lenient().when(cinemaRepository.findByIdForScheduling(anyLong())).thenAnswer(invocation -> {
+            Cinema locked = new Cinema();
+            locked.setId(invocation.getArgument(0));
+            return Optional.of(locked);
+        });
         applyService = new AutoSchedulePreviewApplyServiceImpl(
                 currentUserProvider, expiryService, previewRepository, itemRepository,
                 auditoriumLockService, revalidationService, showtimeCreationService,
                 pricingPreflightService, responseMapper, clock, transactionTemplate, movieRepository,
-                movieVersionRepository, cinemaRepository, auditoriumRepository, entityManager);
+                movieVersionRepository, cinemaRepository, auditoriumRepository, entityManager,
+                preflightService);
     }
 
     @Test
@@ -461,7 +470,8 @@ class AutoSchedulePreviewApplyServiceImplTest {
     private ShowtimeSchedulePreview preview(String publicId, Cinema cinema, Long version, Instant expiresAt) {
         ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
                 cinema, LocalDate.of(2026, 7, 22), LocalDate.of(2026, 7, 22),
-                15, 60, "generate-key", "fingerprint", 1L, now);
+                15, 60, AutoScheduleStrategyVersions.BALANCED_V1_S5,
+                "generate-key", "fingerprint", 1L, now);
         ReflectionTestUtils.setField(preview, "id", 1L);
         ReflectionTestUtils.setField(preview, "publicId", publicId);
         ReflectionTestUtils.setField(preview, "version", version);

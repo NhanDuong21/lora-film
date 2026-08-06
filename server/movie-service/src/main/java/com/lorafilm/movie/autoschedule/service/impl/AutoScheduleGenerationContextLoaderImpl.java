@@ -87,7 +87,8 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
                 .map(auditorium -> new AutoScheduleGenerationContext.AuditoriumSnapshot(
                         auditorium.getId(), auditorium.getPublicId(), auditorium.getCinema().getId(),
                         auditorium.getName(), auditorium.getCapacity(), auditorium.getCleaningBufferMinutes(),
-                        auditorium.getStatus(), auditorium.getDeletedAt() != null))
+                        auditorium.getStatus(), auditorium.getDeletedAt() != null,
+                        auditorium.getScreenType()))
                 .sorted(Comparator.comparing(AutoScheduleGenerationContext.AuditoriumSnapshot::publicId))
                 .toList();
 
@@ -164,7 +165,8 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
             Instant planningStart,
             Instant planningEndExclusive) {
         if (!AutoScheduleStrategyVersions.BALANCED_V1_S4.equals(strategyVersion)
-                && !AutoScheduleStrategyVersions.BALANCED_V1_S5.equals(strategyVersion)) {
+                && !AutoScheduleStrategyVersions.BALANCED_V1_S5.equals(strategyVersion)
+                && !AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1.equals(strategyVersion)) {
             return Map.of();
         }
 
@@ -199,7 +201,7 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
                         movie.getReleaseDate(), movie.getEndDate(), movie.getStatus(), movie.getDeletedAt() != null);
         return new AutoScheduleGenerationContext.MovieVersionSnapshot(
                 version.getId(), version.getPublicId(), movie.getId(), version.getStatus(),
-                version.getDeletedAt() != null, movieSnapshot);
+                version.getDeletedAt() != null, movieSnapshot, version.getFormat());
     }
 
     private Map<Long, ImmutableIntervalIndex> buildMaintenanceIndexes(

@@ -20,6 +20,9 @@
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<lombok.version>1.18.38</lombok.version>
 		<springdoc.version>2.6.0</springdoc.version>
+		<ortools.version>9.12.4544</ortools.version>
+		<!-- 1.19.8 uses Docker API 1.32, which Docker Engine 29 rejects. -->
+		<testcontainers.version>1.21.4</testcontainers.version>
 	</properties>
 
 	<dependencyManagement>
@@ -36,12 +39,26 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.google.ortools</groupId>
+			<artifactId>ortools-java</artifactId>
+			<version>${ortools.version}</version>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

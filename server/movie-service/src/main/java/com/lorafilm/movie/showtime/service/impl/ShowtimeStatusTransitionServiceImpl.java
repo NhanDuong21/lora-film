@@ -3,6 +3,7 @@ package com.lorafilm.movie.showtime.service.impl;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
+import com.lorafilm.movie.autoschedule.service.impl.AutoScheduleMetrics;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
@@ -22,6 +23,7 @@ import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
 import com.lorafilm.movie.showtime.validation.ShowtimeOpeningPolicy;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -44,6 +46,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     private final ShowtimeRefundOutboxService refundOutboxService;
     private final ShowtimeOpeningPolicy openingPolicy;
     private final ShowtimeSchedulePreviewRepository schedulePreviewRepository;
+    private AutoScheduleMetrics autoScheduleMetrics = AutoScheduleMetrics.noop();
 
     public ShowtimeStatusTransitionServiceImpl(ShowtimeRepository showtimeRepository,
                                                ShowtimeStatusHistoryService historyService,
@@ -61,6 +64,11 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         this.refundOutboxService = refundOutboxService;
         this.openingPolicy = openingPolicy;
         this.schedulePreviewRepository = schedulePreviewRepository;
+    }
+
+    @Autowired
+    void setAutoScheduleMetrics(AutoScheduleMetrics autoScheduleMetrics) {
+        this.autoScheduleMetrics = autoScheduleMetrics;
     }
 
     @Override
@@ -231,6 +239,7 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
         if (sourcePreview != null) {
             sourcePreview.markCancelled();
             schedulePreviewRepository.saveAndFlush(sourcePreview);
+            autoScheduleMetrics.recordPreviewCancellation();
         }
         summary.setAffectedCount(classification.eligible().size());
         return summary;

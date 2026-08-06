@@ -3,8 +3,6 @@ package com.lorafilm.movie.autoschedule.dto.request;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -16,26 +14,26 @@ public class GenerateShowtimeSchedulePreviewRequest {
     @Size(max = 36)
     private String cinemaPublicId;
 
-    @NotNull
     private LocalDate scheduleFrom;
 
-    @NotNull
     private LocalDate scheduleTo;
 
-    @NotEmpty
-    @Size(max = 20)
+    @Size(max = 100)
     private List<@NotBlank @Size(max = 36) String> movieVersionPublicIds;
 
-    @NotEmpty
-    @Size(max = 20)
+    @Size(max = 100)
     private List<@NotBlank @Size(max = 36) String> auditoriumPublicIds;
 
-    @NotNull
+    @Size(max = 100)
+    private List<@NotBlank @Size(max = 36) String> excludeMovieVersionPublicIds;
+
+    @Size(max = 100)
+    private List<@NotBlank @Size(max = 36) String> excludeAuditoriumPublicIds;
+
     @Min(5)
     @Max(60)
     private Integer slotGranularityMinutes;
 
-    @NotNull
     @Min(5)
     @Max(120)
     private Integer previewTtlMinutes;
@@ -43,6 +41,10 @@ public class GenerateShowtimeSchedulePreviewRequest {
     @NotBlank
     @Size(max = 100)
     private String idempotencyKey;
+
+    @Min(1)
+    @Max(7)
+    private Integer planningDays;
 
     public String getCinemaPublicId() {
         return cinemaPublicId;
@@ -107,4 +109,11 @@ public class GenerateShowtimeSchedulePreviewRequest {
     public void setIdempotencyKey(String idempotencyKey) {
         this.idempotencyKey = idempotencyKey;
     }
+
+    public Integer getPlanningDays() { return planningDays; }
+    public void setPlanningDays(Integer planningDays) { this.planningDays = planningDays; }
+    public List<String> getExcludeMovieVersionPublicIds() { return excludeMovieVersionPublicIds; }
+    public void setExcludeMovieVersionPublicIds(List<String> value) { this.excludeMovieVersionPublicIds = value; }
+    public List<String> getExcludeAuditoriumPublicIds() { return excludeAuditoriumPublicIds; }
+    public void setExcludeAuditoriumPublicIds(List<String> value) { this.excludeAuditoriumPublicIds = value; }
 }

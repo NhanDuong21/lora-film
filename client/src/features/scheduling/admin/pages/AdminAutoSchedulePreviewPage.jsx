@@ -81,6 +81,16 @@ const LIFECYCLE_TONE_CLASSES = {
   CANCELLED: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
 };
 
+const formatKpiCurrency = value => value === null || value === undefined
+  ? '—'
+  : new Intl.NumberFormat('vi-VN', {
+    notation: 'compact', style: 'currency', currency: 'VND', maximumFractionDigits: 1,
+  }).format(Number(value));
+
+const formatKpiPercent = value => value === null || value === undefined
+  ? '—'
+  : `${Math.round(Number(value) * 100)}%`;
+
 const getViewModelsForTab = (viewModels, view) => {
   switch (view) {
     case CANDIDATE_VIEWS.RECOMMENDED:
@@ -617,6 +627,27 @@ const AdminAutoSchedulePreviewPage = () => {
           ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
         </section>
 
+        {preview.strategyVersion === 'DEMAND_CP_SAT_V1' && (
+          <section className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 md:p-5" aria-label="KPI nhu cầu dự kiến">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">Demand-Aware CP-SAT</p>
+                <h2 className="mt-1 text-lg font-black text-white">KPI của lịch được chọn</h2>
+              </div>
+              <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-200">Solver {preview.solverStatus || 'UNKNOWN'} · {preview.solverDurationMillis ?? 0} ms</span>
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                ['Khách dự kiến', preview.expectedAttendance ?? '—'],
+                ['Lấp đầy dự kiến', formatKpiPercent(preview.expectedOccupancy)],
+                ['Doanh thu dự kiến', formatKpiCurrency(preview.expectedRevenue)],
+                ['Đóng góp mục tiêu', formatKpiCurrency(preview.expectedContribution)],
+              ].map(([label, value]) => <div key={label} className="rounded-xl border border-blue-500/20 bg-zinc-950/60 p-3"><dt className="text-xs text-zinc-500">{label}</dt><dd className="mt-1 text-lg font-black text-white">{value}</dd></div>)}
+            </dl>
+            <p className="mt-3 text-xs leading-5 text-blue-100/70">Mô hình {preview.demandModelVersion || 'không xác định'} · OR-Tools {preview.solverVersion || 'không xác định'} · objective {preview.objectiveValue ?? '—'}. Các giá trị này là dự báo hỗ trợ quyết định, không phải cam kết doanh thu.</p>
+          </section>
+        )}
+
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 md:p-5" aria-labelledby="proposal-timeline-title">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -831,7 +862,9 @@ const AdminAutoSchedulePreviewPage = () => {
             <summary className="cursor-pointer font-bold text-zinc-300">Thông tin nâng cao về cách hệ thống xếp lịch</summary>
             <p className="mt-2">
               Điểm ưu tiên tổng hợp khung giờ, mức phù hợp phòng và độ liền mạch; điểm cao hơn tốt hơn. Thứ tự rà soát không phải thứ tự quyết định lựa chọn.
-              {preview.strategyVersion === 'BALANCED_V1_S5'
+              {preview.strategyVersion === 'DEMAND_CP_SAT_V1'
+                ? ' Demand-Aware CP-SAT tối ưu đồng thời đóng góp dự kiến, độ phủ nhu cầu, hiệu ứng giảm dần và rủi ro dữ liệu; mọi ràng buộc phòng, thời gian chiếm dụng và tính hợp lệ vẫn là điều kiện cứng.'
+                : preview.strategyVersion === 'BALANCED_V1_S5'
                 ? ' Chiến lược S5 cân bằng số suất giữa các phim theo từng ngày vận hành bằng cách dựng lại chuỗi giờ chiếu và thực hiện các thay thế không xung đột. Phương án mới phải giữ tối thiểu 90% chất lượng trung bình và 90% thời gian sử dụng phòng, vì vậy một số chênh lệch nhỏ vẫn có thể được giữ lại.'
                 : preview.strategyVersion === 'BALANCED_V1_S4'
                   ? ' Chiến lược S4 chỉ bảo đảm độ phủ tối thiểu theo từng ngày, chưa giới hạn tỷ lệ của một phim; vì vậy lịch S4 vẫn có thể bị dồn suất.'

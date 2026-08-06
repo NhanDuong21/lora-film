@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import com.lorafilm.movie.movie.domain.enums.MovieFormat;
 
 public class ShowtimeCandidate {
     private AutoScheduleGenerationContext.CinemaSnapshot cinemaSnapshot;
@@ -36,6 +38,16 @@ public class ShowtimeCandidate {
 
     private Integer rankingPosition;
     private boolean selected;
+    private CandidatePricingSnapshot pricingSnapshot;
+    private BigDecimal expectedAttendance = BigDecimal.ZERO;
+    private BigDecimal expectedOccupancy = BigDecimal.ZERO;
+    private BigDecimal expectedRevenue = BigDecimal.ZERO;
+    private BigDecimal expectedContribution = BigDecimal.ZERO;
+    private BigDecimal demandConfidence = BigDecimal.ZERO;
+    private String demandExplanation;
+    private String demandModelVersion;
+    private boolean primeTime;
+    private List<String> riskFlags = List.of();
 
     public AutoScheduleGenerationContext.CinemaSnapshot getCinemaSnapshot() {
         return cinemaSnapshot;
@@ -199,5 +211,68 @@ public class ShowtimeCandidate {
 
     public void setSelected(boolean selected) {
         this.selected = selected;
+    }
+
+    public java.time.LocalDate getServiceDate() {
+        return operatingWindow == null ? null : operatingWindow.getServiceDate();
+    }
+
+    public MovieFormat getFormat() {
+        return movieVersionSnapshot != null ? movieVersionSnapshot.format()
+                : movieVersion != null ? movieVersion.getFormat() : null;
+    }
+
+    public CandidatePricingSnapshot getPricingSnapshot() { return pricingSnapshot; }
+    public void setPricingSnapshot(CandidatePricingSnapshot pricingSnapshot) { this.pricingSnapshot = pricingSnapshot; }
+    public BigDecimal getExpectedAttendance() { return expectedAttendance; }
+    public void setExpectedAttendance(BigDecimal value) { this.expectedAttendance = value; }
+    public BigDecimal getExpectedOccupancy() { return expectedOccupancy; }
+    public void setExpectedOccupancy(BigDecimal value) { this.expectedOccupancy = value; }
+    public BigDecimal getExpectedRevenue() { return expectedRevenue; }
+    public void setExpectedRevenue(BigDecimal value) { this.expectedRevenue = value; }
+    public BigDecimal getExpectedContribution() { return expectedContribution; }
+    public void setExpectedContribution(BigDecimal value) { this.expectedContribution = value; }
+    public BigDecimal getDemandConfidence() { return demandConfidence; }
+    public void setDemandConfidence(BigDecimal value) { this.demandConfidence = value; }
+    public String getDemandExplanation() { return demandExplanation; }
+    public void setDemandExplanation(String value) { this.demandExplanation = value; }
+    public String getDemandModelVersion() { return demandModelVersion; }
+    public void setDemandModelVersion(String value) { this.demandModelVersion = value; }
+    public boolean isPrimeTime() { return primeTime; }
+    public void setPrimeTime(boolean value) { this.primeTime = value; }
+    public List<String> getRiskFlags() { return riskFlags; }
+    public void setRiskFlags(List<String> value) { this.riskFlags = value == null ? List.of() : List.copyOf(value); }
+
+    public ShowtimeCandidate copyForReadOnlyComparison() {
+        ShowtimeCandidate copy = new ShowtimeCandidate();
+        copy.cinemaSnapshot = cinemaSnapshot;
+        copy.auditoriumSnapshot = auditoriumSnapshot;
+        copy.movieVersionSnapshot = movieVersionSnapshot;
+        copy.operatingWindow = operatingWindow;
+        copy.movie = movie;
+        copy.movieVersion = movieVersion;
+        copy.cinema = cinema;
+        copy.auditorium = auditorium;
+        copy.startTime = startTime;
+        copy.endTime = endTime;
+        copy.occupancyEndTime = occupancyEndTime;
+        copy.validationStatus = validationStatus;
+        copy.rejectionCode = rejectionCode;
+        copy.rejectionReason = rejectionReason;
+        copy.score = score;
+        copy.scoreBreakdown = Map.copyOf(scoreBreakdown);
+        copy.rankingPosition = rankingPosition;
+        copy.selected = selected;
+        copy.pricingSnapshot = pricingSnapshot;
+        copy.expectedAttendance = expectedAttendance;
+        copy.expectedOccupancy = expectedOccupancy;
+        copy.expectedRevenue = expectedRevenue;
+        copy.expectedContribution = expectedContribution;
+        copy.demandConfidence = demandConfidence;
+        copy.demandExplanation = demandExplanation;
+        copy.demandModelVersion = demandModelVersion;
+        copy.primeTime = primeTime;
+        copy.riskFlags = List.copyOf(riskFlags);
+        return copy;
     }
 }

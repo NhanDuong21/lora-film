@@ -77,7 +77,11 @@ public class PaymentOutboxService {
         payload.put("movieTitle", snapshot.getMovieTitle());
         payload.put("showtimePublicId", snapshot.getShowtimePublicId());
         payload.put("cinemaPublicId", snapshot.getCinemaPublicId());
+        payload.put("auditoriumPublicId", snapshot.getAuditoriumPublicId());
+        payload.put("showtimeStartsAt", snapshot.getShowtimeStartsAt());
+        payload.put("format", snapshot.getFormat());
         payload.put("ticketCount", snapshot.getTicketCount());
+        payload.put("availableSeats", snapshot.getAuditoriumCapacity());
         payload.put("ticketAmount", snapshot.getTicketAmount());
         payload.put("foodAmount", snapshot.getFoodAmount());
         payload.put("discountAmount", snapshot.getDiscountAmount());

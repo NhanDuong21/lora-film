@@ -73,6 +73,9 @@ class CinemaServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        lenient().when(cinemaRepository.findByPublicIdForScheduling(anyString()))
+                .thenAnswer(invocation -> cinemaRepository.findByPublicIdAndDeletedAtIsNull(
+                        invocation.getArgument(0)));
     }
 
     @Test

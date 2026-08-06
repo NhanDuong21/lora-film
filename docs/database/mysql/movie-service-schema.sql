@@ -295,6 +295,7 @@ CREATE TABLE cinemas (
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, ACTIVE, MAINTENANCE, TEMPORARILY_CLOSED, INACTIVE, PERMANENTLY_CLOSED',
     opened_date DATE NULL,
     closed_date DATE NULL,
+    auto_schedule_engine VARCHAR(20) NOT NULL DEFAULT 'CP_SAT' COMMENT 'CP_SAT or LEGACY; CP_SAT is the default for new previews',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
@@ -724,6 +725,23 @@ CREATE TABLE showtime_schedule_previews (
     request_fingerprint CHAR(64) NOT NULL
         COMMENT 'SHA-256 của normalized generate request',
 
+    request_scope_json JSON NULL,
+    policy_version VARCHAR(50) NULL,
+    demand_model_version VARCHAR(64) NULL,
+    solver_version VARCHAR(64) NULL,
+    solver_status VARCHAR(30) NULL,
+    eligibility_fingerprint CHAR(64) NULL,
+    pricing_fingerprint CHAR(64) NULL,
+    configuration_fingerprint CHAR(64) NULL,
+    objective_value DECIMAL(19, 3) NULL,
+    objective_best_bound DECIMAL(19, 3) NULL,
+    solver_duration_millis BIGINT NULL,
+    solver_explanation VARCHAR(500) NULL,
+    expected_attendance DECIMAL(19, 2) NULL,
+    expected_occupancy DECIMAL(12, 6) NULL,
+    expected_revenue DECIMAL(19, 2) NULL,
+    expected_contribution DECIMAL(19, 2) NULL,
+
     failure_reason VARCHAR(500) NULL,
 
     version BIGINT NOT NULL DEFAULT 0
@@ -833,6 +851,17 @@ CREATE TABLE showtime_schedule_preview_items (
 
     score_breakdown_json JSON NULL
         COMMENT 'Chi tiết các thành phần score để audit và explainability',
+
+    pricing_snapshot_json JSON NULL,
+    expected_attendance DECIMAL(12, 2) NULL,
+    expected_occupancy DECIMAL(12, 6) NULL,
+    expected_revenue DECIMAL(19, 2) NULL,
+    expected_contribution DECIMAL(19, 2) NULL,
+    demand_confidence DECIMAL(12, 6) NULL,
+    demand_explanation VARCHAR(500) NULL,
+    demand_model_version VARCHAR(64) NULL,
+    prime_time BOOLEAN NOT NULL DEFAULT FALSE,
+    risk_flags_json JSON NULL,
 
     ranking_position INT NOT NULL DEFAULT 0,
 

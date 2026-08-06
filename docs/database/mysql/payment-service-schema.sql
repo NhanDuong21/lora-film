@@ -297,6 +297,11 @@ CREATE TABLE `payment_analytics_snapshots` (
       CHARACTER SET ascii COLLATE ascii_bin NULL,
   `cinema_public_id` char(36)
       CHARACTER SET ascii COLLATE ascii_bin NULL,
+  `auditorium_public_id` char(36)
+      CHARACTER SET ascii COLLATE ascii_bin NULL,
+  `showtime_starts_at` datetime(6) NULL,
+  `auditorium_capacity` int NULL,
+  `movie_format` varchar(30) NULL,
   `ticket_count` int NOT NULL,
   `ticket_amount` decimal(12,2) NOT NULL DEFAULT 0,
   `food_amount` decimal(12,2) NOT NULL DEFAULT 0,
@@ -314,6 +319,8 @@ CREATE TABLE `payment_analytics_snapshots` (
       ON DELETE RESTRICT,
   CONSTRAINT `chk_payment_analytics_ticket_count`
       CHECK (`ticket_count` > 0),
+  CONSTRAINT `chk_payment_analytics_capacity`
+      CHECK (`auditorium_capacity` IS NULL OR `auditorium_capacity` > 0),
   CONSTRAINT `chk_payment_analytics_amounts`
       CHECK (
         `ticket_amount` >= 0

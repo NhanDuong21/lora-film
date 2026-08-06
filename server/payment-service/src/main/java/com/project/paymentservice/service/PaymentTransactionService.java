@@ -494,6 +494,10 @@ public class PaymentTransactionService {
         snapshot.setMovieTitle(data.getMovieTitle());
         snapshot.setShowtimePublicId(data.getShowtimePublicId());
         snapshot.setCinemaPublicId(data.getCinemaPublicId());
+        snapshot.setAuditoriumPublicId(data.getAuditoriumPublicId());
+        snapshot.setShowtimeStartsAt(data.getShowtimeStartsAt());
+        snapshot.setAuditoriumCapacity(data.getAuditoriumCapacity());
+        snapshot.setFormat(data.getFormat());
         snapshot.setTicketCount(data.getTicketCount());
         snapshot.setTicketAmount(defaultAmount(data.getTicketAmount(), context.getAmount()));
         snapshot.setFoodAmount(defaultAmount(data.getFoodAmount(), BigDecimal.ZERO));

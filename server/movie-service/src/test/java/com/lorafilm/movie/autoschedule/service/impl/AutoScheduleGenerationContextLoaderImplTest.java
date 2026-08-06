@@ -162,7 +162,7 @@ class AutoScheduleGenerationContextLoaderImplTest {
 
         assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
                 context.getStrategyVersion());
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5,
+        assertEquals(AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1,
                 AutoScheduleStrategyVersions.CURRENT);
     }
 

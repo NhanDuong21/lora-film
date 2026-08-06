@@ -35,8 +35,8 @@ public class AutoScheduleGenerateRequestNormalizerImpl implements AutoScheduleGe
                 request.getScheduleTo(),
                 movieVersionPublicIds,
                 auditoriumPublicIds,
-                request.getSlotGranularityMinutes(),
-                request.getPreviewTtlMinutes(),
+                request.getSlotGranularityMinutes() == null ? 15 : request.getSlotGranularityMinutes(),
+                request.getPreviewTtlMinutes() == null ? 60 : request.getPreviewTtlMinutes(),
                 idempotencyKey
         );
     }

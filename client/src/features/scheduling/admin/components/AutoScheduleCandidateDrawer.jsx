@@ -21,6 +21,16 @@ const DetailRow = ({ label, children }) => (
   </div>
 );
 
+const formatCurrency = value => value === null || value === undefined
+  ? '—'
+  : new Intl.NumberFormat('vi-VN', {
+    style: 'currency', currency: 'VND', maximumFractionDigits: 0,
+  }).format(Number(value));
+
+const formatPercent = value => value === null || value === undefined
+  ? '—'
+  : `${Math.round(Number(value) * 100)}%`;
+
 const AutoScheduleCandidateDrawer = ({
   candidate,
   timezone,
@@ -120,6 +130,13 @@ const AutoScheduleCandidateDrawer = ({
             <DetailRow label="Kết thúc phim">{candidate.endDateTimeDisplay}</DetailRow>
             <DetailRow label="Phòng sẵn sàng lúc">{candidate.occupancyEndDateTimeDisplay}</DetailRow>
             <DetailRow label="Điểm ưu tiên">{candidate.score ?? '—'} <span className="text-xs text-zinc-500">(cao hơn tốt hơn)</span></DetailRow>
+            <DetailRow label="Khách dự kiến">{candidate.expectedAttendance ?? '—'}</DetailRow>
+            <DetailRow label="Lấp đầy dự kiến">{formatPercent(candidate.expectedOccupancy)}</DetailRow>
+            <DetailRow label="Doanh thu dự kiến">{formatCurrency(candidate.expectedRevenue)}</DetailRow>
+            <DetailRow label="Đóng góp mục tiêu">{formatCurrency(candidate.expectedContribution)}</DetailRow>
+            <DetailRow label="Độ tin cậy nhu cầu">{formatPercent(candidate.demandConfidence)}</DetailRow>
+            <DetailRow label="Giải thích nhu cầu">{candidate.demandExplanation || 'Chưa có dữ liệu giải thích'}</DetailRow>
+            {candidate.riskFlags.length > 0 && <DetailRow label="Cảnh báo">{candidate.riskFlags.join(', ')}</DetailRow>}
             <DetailRow label="Kiểm tra">{getCandidateValidationPresentation(candidate.validationStatus).label}</DetailRow>
             <DetailRow label="Kết quả tạo suất">{candidate.applyState.label}</DetailRow>
             <DetailRow label="Lý do">{candidate.conciseReason || 'Không có'}</DetailRow>

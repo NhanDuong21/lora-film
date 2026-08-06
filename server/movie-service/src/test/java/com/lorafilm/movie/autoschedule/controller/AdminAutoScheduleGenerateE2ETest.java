@@ -32,6 +32,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -108,6 +109,10 @@ public class AdminAutoScheduleGenerateE2ETest {
         previewRepository.deleteAll();
 
         // Ensure we don't have dupes if tests share the DB
+        jdbcTemplate.execute("DELETE FROM price_policy_rules WHERE policy_id = 8888");
+        jdbcTemplate.execute("DELETE FROM price_policies WHERE id = 8888");
+        jdbcTemplate.execute("DELETE FROM seats WHERE id = 8888");
+        jdbcTemplate.execute("DELETE FROM seat_types WHERE id = 8888");
         jdbcTemplate.execute("DELETE FROM movie_versions WHERE id = 8888");
         jdbcTemplate.execute("DELETE FROM movies WHERE id = 8888");
         jdbcTemplate.execute("DELETE FROM auditoriums WHERE id = 8888");
@@ -122,6 +127,10 @@ public class AdminAutoScheduleGenerateE2ETest {
         }
 
         jdbcTemplate.update("INSERT INTO auditoriums (id, cinema_id, public_id, name, capacity, cleaning_buffer_minutes, status, screen_type, sound_type, created_at, updated_at) VALUES (8888, 8888, 'a-gen-1', 'Aud Gen 1', 100, 15, 'ACTIVE', 'STANDARD', 'STANDARD', NOW(), NOW())");
+        jdbcTemplate.update("INSERT INTO seat_types (id, public_id, code, name, status, created_at, updated_at) VALUES (8888, '00000000-0000-0000-0000-000000008888', 'STANDARD', 'Standard', 'ACTIVE', NOW(), NOW())");
+        jdbcTemplate.update("INSERT INTO seats (id, public_id, auditorium_id, seat_type_id, row_label, seat_number, seat_code, position_row, position_column, status, created_at, updated_at) VALUES (8888, '00000000-0000-0000-0000-000000008887', 8888, 8888, 'A', 1, 'A1', 1, 1, 'ACTIVE', NOW(), NOW())");
+        jdbcTemplate.update("INSERT INTO price_policies (id, public_id, name, cinema_id, effective_from, effective_to, status, currency, priority, activated_at, activated_by, version, created_at, updated_at) VALUES (8888, '00000000-0000-0000-0000-000000008886', 'Generation E2E Policy', 8888, DATE_SUB(CURDATE(), INTERVAL 1 DAY), DATE_ADD(CURDATE(), INTERVAL 60 DAY), 'ACTIVE', 'VND', 0, NOW(), 1, 0, NOW(), NOW())");
+        jdbcTemplate.update("INSERT INTO price_policy_rules (id, public_id, policy_id, seat_type_id, day_type, price, active, created_at, updated_at) VALUES (8888, '00000000-0000-0000-0000-000000008885', 8888, 8888, 'ALL_DAYS', 75000.00, true, NOW(), NOW())");
         jdbcTemplate.update("INSERT INTO movies (id, public_id, title, slug, duration_minutes, age_rating, release_date, status, created_at, updated_at) VALUES (8888, 'm-gen-1', 'Movie Gen 1', 'movie-gen-1', 120, 'T18', '2025-01-01', 'NOW_SHOWING', NOW(), NOW())");
         jdbcTemplate.update("INSERT INTO movie_versions (id, movie_id, public_id, version_name, format, audio_language, status, created_at, updated_at) VALUES (8888, 8888, 'mv-gen-1', 'Version Gen 1', 'TWO_D', 'ENG', 'ACTIVE', NOW(), NOW())");
     }
@@ -131,8 +140,8 @@ public class AdminAutoScheduleGenerateE2ETest {
     void testGeneratePreview_HappyPath() throws Exception {
         GenerateShowtimeSchedulePreviewRequest request = new GenerateShowtimeSchedulePreviewRequest();
         request.setCinemaPublicId("c-gen-1");
-        request.setScheduleFrom(LocalDate.now());
-        request.setScheduleTo(LocalDate.now());
+        request.setScheduleFrom(planningDate());
+        request.setScheduleTo(planningDate());
         request.setAuditoriumPublicIds(List.of("a-gen-1"));
         request.setMovieVersionPublicIds(List.of("mv-gen-1"));
         request.setSlotGranularityMinutes(30);
@@ -229,8 +238,8 @@ public class AdminAutoScheduleGenerateE2ETest {
     void testGeneratePreview_IdempotencyReplay() throws Exception {
         GenerateShowtimeSchedulePreviewRequest request = new GenerateShowtimeSchedulePreviewRequest();
         request.setCinemaPublicId("c-gen-1");
-        request.setScheduleFrom(LocalDate.now());
-        request.setScheduleTo(LocalDate.now());
+        request.setScheduleFrom(planningDate());
+        request.setScheduleTo(planningDate());
         request.setAuditoriumPublicIds(List.of("a-gen-1"));
         request.setMovieVersionPublicIds(List.of("mv-gen-1"));
         request.setSlotGranularityMinutes(30);
@@ -261,8 +270,8 @@ public class AdminAutoScheduleGenerateE2ETest {
     void testGeneratePreview_IdempotencyConflict() throws Exception {
         GenerateShowtimeSchedulePreviewRequest request = new GenerateShowtimeSchedulePreviewRequest();
         request.setCinemaPublicId("c-gen-1");
-        request.setScheduleFrom(LocalDate.now());
-        request.setScheduleTo(LocalDate.now());
+        request.setScheduleFrom(planningDate());
+        request.setScheduleTo(planningDate());
         request.setAuditoriumPublicIds(List.of("a-gen-1"));
         request.setMovieVersionPublicIds(List.of("mv-gen-1"));
         request.setSlotGranularityMinutes(30);
@@ -395,13 +404,17 @@ public class AdminAutoScheduleGenerateE2ETest {
     private GenerateShowtimeSchedulePreviewRequest requestWithKey(String idempotencyKey) {
         GenerateShowtimeSchedulePreviewRequest request = new GenerateShowtimeSchedulePreviewRequest();
         request.setCinemaPublicId("c-gen-1");
-        request.setScheduleFrom(LocalDate.now());
-        request.setScheduleTo(LocalDate.now());
+        request.setScheduleFrom(planningDate());
+        request.setScheduleTo(planningDate());
         request.setAuditoriumPublicIds(List.of("a-gen-1"));
         request.setMovieVersionPublicIds(List.of("mv-gen-1"));
         request.setSlotGranularityMinutes(30);
         request.setPreviewTtlMinutes(60);
         request.setIdempotencyKey(idempotencyKey);
         return request;
+    }
+
+    private LocalDate planningDate() {
+        return LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(1);
     }
 }

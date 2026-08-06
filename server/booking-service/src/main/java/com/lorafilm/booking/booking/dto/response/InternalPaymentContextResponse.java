@@ -41,7 +41,11 @@ public record InternalPaymentContextResponse(
             BigDecimal foodAmount,
             BigDecimal discountAmount,
             BigDecimal totalAmount,
-            String currency) {
+            String currency,
+            Instant showtimeStartsAt,
+            String auditoriumPublicId,
+            Integer auditoriumCapacity,
+            String format) {
         /**
          * Compatibility constructor for existing Booking controller/service tests and
          * one-release numeric Payment adapters. New runtime responses use the complete
@@ -55,6 +59,10 @@ public record InternalPaymentContextResponse(
                     null,
                     null,
                     ticketCount,
+                    null,
+                    null,
+                    null,
+                    null,
                     null,
                     null,
                     null,

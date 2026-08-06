@@ -2,6 +2,8 @@ package com.lorafilm.movie.autoschedule.service.impl;
 
 import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.service.AutoScheduleGenerationStrategy;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
+import com.lorafilm.movie.cinema.domain.enums.AutoScheduleEngine;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -35,6 +37,13 @@ public class AutoScheduleGenerationStrategyRegistry {
                             + AutoScheduleStrategyVersions.CURRENT);
         }
         return strategy;
+    }
+
+    public AutoScheduleGenerationStrategy getForCinema(Cinema cinema) {
+        if (cinema != null && cinema.getAutoScheduleEngine() == AutoScheduleEngine.LEGACY) {
+            return require(AutoScheduleStrategyVersions.BALANCED_V1_S5);
+        }
+        return getCurrent();
     }
 
     public AutoScheduleGenerationStrategy require(String strategyVersion) {

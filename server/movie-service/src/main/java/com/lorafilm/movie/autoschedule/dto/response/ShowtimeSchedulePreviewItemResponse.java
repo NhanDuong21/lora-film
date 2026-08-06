@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.List;
+import com.lorafilm.movie.autoschedule.model.CandidatePricingSnapshot;
 
 public class ShowtimeSchedulePreviewItemResponse {
 
@@ -54,6 +56,16 @@ public class ShowtimeSchedulePreviewItemResponse {
     private String createdShowtimePublicId;
     private String applyErrorCode;
     private String applyErrorMessage;
+    private CandidatePricingSnapshot pricingSnapshot;
+    private BigDecimal expectedAttendance;
+    private BigDecimal expectedOccupancy;
+    private BigDecimal expectedRevenue;
+    private BigDecimal expectedContribution;
+    private BigDecimal demandConfidence;
+    private String demandExplanation;
+    private String demandModelVersion;
+    private Boolean primeTime;
+    private List<String> riskFlags;
 
     public ShowtimeSchedulePreviewItemResponse() {
     }
@@ -156,4 +168,24 @@ public class ShowtimeSchedulePreviewItemResponse {
 
     public String getApplyErrorMessage() { return applyErrorMessage; }
     public void setApplyErrorMessage(String applyErrorMessage) { this.applyErrorMessage = applyErrorMessage; }
+    public CandidatePricingSnapshot getPricingSnapshot() { return pricingSnapshot; }
+    public void setPricingSnapshot(CandidatePricingSnapshot value) { this.pricingSnapshot = value; }
+    public BigDecimal getExpectedAttendance() { return expectedAttendance; }
+    public void setExpectedAttendance(BigDecimal value) { this.expectedAttendance = value; }
+    public BigDecimal getExpectedOccupancy() { return expectedOccupancy; }
+    public void setExpectedOccupancy(BigDecimal value) { this.expectedOccupancy = value; }
+    public BigDecimal getExpectedRevenue() { return expectedRevenue; }
+    public void setExpectedRevenue(BigDecimal value) { this.expectedRevenue = value; }
+    public BigDecimal getExpectedContribution() { return expectedContribution; }
+    public void setExpectedContribution(BigDecimal value) { this.expectedContribution = value; }
+    public BigDecimal getDemandConfidence() { return demandConfidence; }
+    public void setDemandConfidence(BigDecimal value) { this.demandConfidence = value; }
+    public String getDemandExplanation() { return demandExplanation; }
+    public void setDemandExplanation(String value) { this.demandExplanation = value; }
+    public String getDemandModelVersion() { return demandModelVersion; }
+    public void setDemandModelVersion(String value) { this.demandModelVersion = value; }
+    public Boolean getPrimeTime() { return primeTime; }
+    public void setPrimeTime(Boolean value) { this.primeTime = value; }
+    public List<String> getRiskFlags() { return riskFlags; }
+    public void setRiskFlags(List<String> value) { this.riskFlags = value; }
 }

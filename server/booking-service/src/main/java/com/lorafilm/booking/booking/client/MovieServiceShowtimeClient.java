@@ -158,7 +158,9 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
                     movie.posterUrl,
                     cinema.name,
                     auditorium.name,
-                    seatContexts);
+                    seatContexts,
+                    auditorium.publicId,
+                    auditorium.capacity);
         }
     }
 
@@ -179,6 +181,7 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public String name;
         public String format;
         public String screenType;
+        public Integer capacity;
     }
 
     private static class SeatPayload {

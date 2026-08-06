@@ -5,6 +5,8 @@ import com.lorafilm.movie.autoschedule.domain.enums.AutoScheduleStrategy;
 import com.lorafilm.movie.cinema.domain.enums.CinemaStatus;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
+import com.lorafilm.movie.movie.domain.enums.MovieFormat;
+import com.lorafilm.movie.auditorium.domain.enums.ScreenType;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -144,7 +146,15 @@ public final class AutoScheduleGenerationContext {
                                      Integer capacity,
                                      Integer cleaningBufferMinutes,
                                      AuditoriumStatus status,
-                                     boolean deleted) {
+                                     boolean deleted,
+                                     ScreenType screenType) {
+        public AuditoriumSnapshot(Long id, String publicId, Long cinemaId, String name,
+                                  Integer capacity, Integer cleaningBufferMinutes,
+                                  AuditoriumStatus status, boolean deleted) {
+            this(id, publicId, cinemaId, name, capacity, cleaningBufferMinutes,
+                    status, deleted, null);
+        }
+
         public int effectiveCleaningBufferMinutes() {
             return cleaningBufferMinutes == null ? 0 : cleaningBufferMinutes;
         }
@@ -165,7 +175,12 @@ public final class AutoScheduleGenerationContext {
                                        Long movieId,
                                        ActiveStatus status,
                                        boolean deleted,
-                                       MovieSnapshot movie) {
+                                       MovieSnapshot movie,
+                                       MovieFormat format) {
+        public MovieVersionSnapshot(Long id, String publicId, Long movieId,
+                                    ActiveStatus status, boolean deleted, MovieSnapshot movie) {
+            this(id, publicId, movieId, status, deleted, movie, null);
+        }
     }
 
     public record MovieServiceDateKey(LocalDate serviceDate, Long movieId) {

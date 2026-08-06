@@ -73,6 +73,7 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
 
     @Autowired private AutoSchedulePreviewGenerationService generationService;
     @Autowired private AutoScheduleGenerationContextLoader contextLoader;
+    @Autowired private ShowtimeCandidateGenerator candidateGenerator;
     @Autowired private MovieRepository movieRepository;
     @Autowired private EntityManagerFactory entityManagerFactory;
 
@@ -169,14 +170,25 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
     }
 
     @Test
-    void repositoryReadsStayBoundedFromNinetySixToNearLimitAndJdbcCountsAreMeasuredSeparately() {
-        runMeasuredCase(1, 15, 96, "small");
-        runMeasuredCase(4, 1, 5_712, "medium");
-        runMeasuredCase(7, 1, 9_996, "near-limit");
+    void candidateTraversalStaysRepositoryFreeAfterBoundedContextLoad() {
+        NormalizedGeneratePreviewRequest normalized = new NormalizedGeneratePreviewRequest(
+                cinema.getPublicId(), scheduleDate, scheduleDate,
+                List.of(version.getPublicId()), List.of(auditoriums.getFirst().getPublicId()),
+                15, 60, "demand-context-" + UUID.randomUUID());
+        AutoScheduleGenerationContext context = contextLoader.load(
+                normalized, cinema, List.of(auditoriums.getFirst()), List.of(version),
+                AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1);
+        clearRepositoryInvocations();
+
+        assertEquals(96, candidateGenerator.generate(context).size());
+
+        verifyNoMoreInteractions(cinemaRepository, previewRepository, auditoriumRepository,
+                movieVersionRepository, operatingHourRepository, closureRepository,
+                maintenanceRepository, showtimeRepository);
     }
 
     @Test
-    void activeS5ContextAddsExactlyOneBoundedCoverageRead() {
+    void activeDemandContextAddsExactlyOneBoundedCoverageRead() {
         clearRepositoryInvocations();
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         statistics.clear();
@@ -188,10 +200,10 @@ class AutoScheduleGenerationQueryBudgetIntegrationTest {
         long started = System.nanoTime();
         AutoScheduleGenerationContext context = contextLoader.load(
                 normalized, cinema, List.of(auditoriums.getFirst()), List.of(version),
-                AutoScheduleStrategyVersions.BALANCED_V1_S5);
+                AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1);
         long wallNanos = System.nanoTime() - started;
 
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5, context.getStrategyVersion());
+        assertEquals(AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1, context.getStrategyVersion());
         assertEquals(0, context.getExistingShowtimeCounts().size());
         verify(operatingHourRepository).findByCinemaId(cinema.getId());
         verify(closureRepository).findOverlappingClosures(eq(cinema.getId()), any(), any());

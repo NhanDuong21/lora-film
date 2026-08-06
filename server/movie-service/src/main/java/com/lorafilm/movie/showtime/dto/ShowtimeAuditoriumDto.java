@@ -5,6 +5,7 @@ public class ShowtimeAuditoriumDto {
     private String name;
     private String screenType;
     private String soundType;
+    private Integer capacity;
 
     public ShowtimeAuditoriumDto() {}
 
@@ -16,4 +17,6 @@ public class ShowtimeAuditoriumDto {
     public void setScreenType(String screenType) { this.screenType = screenType; }
     public String getSoundType() { return soundType; }
     public void setSoundType(String soundType) { this.soundType = soundType; }
+    public Integer getCapacity() { return capacity; }
+    public void setCapacity(Integer capacity) { this.capacity = capacity; }
 }

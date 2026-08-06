@@ -14,6 +14,7 @@ public class CandidateScoringContext {
     private final List<OperatingWindow> operatingWindows;
     private final List<Showtime> existingShowtimes;
     private final AutoScheduleGenerationContext generationContext;
+    private AutoScheduleOptimizationResult optimizationResult;
 
     public CandidateScoringContext(Cinema cinema, List<OperatingWindow> operatingWindows, List<Showtime> existingShowtimes) {
         this.cinema = cinema;
@@ -52,6 +53,14 @@ public class CandidateScoringContext {
         return generationContext != null
                 ? generationContext.getCinema().zoneId()
                 : ZoneId.of(cinema.getTimezone());
+    }
+
+    public AutoScheduleOptimizationResult getOptimizationResult() {
+        return optimizationResult;
+    }
+
+    public void setOptimizationResult(AutoScheduleOptimizationResult optimizationResult) {
+        this.optimizationResult = optimizationResult;
     }
 
     public Optional<Instant> findClosestPreviousOccupancyEnd(Long auditoriumId, Instant candidateStart) {

@@ -49,6 +49,10 @@ public class FactBookingMetric {
     private String auditoriumPublicId;
     @Column(name = "showtime_public_id", length = 100)
     private String showtimePublicId;
+    @Column(name = "showtime_starts_at")
+    private Instant showtimeStartsAt;
+    @Column(name = "movie_format", length = 30)
+    private String format;
     @Column(name = "promotion_public_id", length = 100)
     private String promotionPublicId;
     @Column(name = "promotion_name")
