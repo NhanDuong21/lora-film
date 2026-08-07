@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MovieTable from './MovieTable';
 
 const movie = {
@@ -9,6 +9,7 @@ const movie = {
   source: 'TMDB',
   ageRating: 'P',
   durationMinutes: 115,
+  primaryPoster: 'https://image.example/paper-tiger.jpg',
   releaseDate: '2026-11-13',
   activeVersionCount: 1,
   mediaCount: 1,
@@ -40,6 +41,30 @@ const renderMovieTable = (callbacks = {}) => render(
 );
 
 describe('MovieTable', () => {
+  beforeEach(() => {
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback) {
+        this.callback = callback;
+      }
+
+      observe() {
+        this.callback([{ isIntersecting: true }]);
+      }
+
+      disconnect() {}
+    });
+  });
+
+  it('hiển thị phim dưới dạng lưới poster thay vì bảng', () => {
+    renderMovieTable();
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByAltText('Poster Paper Tiger')).toBeInTheDocument();
+    expect(screen.getByTestId('movie-poster-card')).toBeInTheDocument();
+    expect(screen.getByText('Đã đủ thông tin')).toBeInTheDocument();
+    expect(screen.getByText('13/11/2026')).toBeInTheDocument();
+  });
+
   it('passes the movie object to detail and edit actions', () => {
     const onOpenDetail = vi.fn();
     const onOpenEdit = vi.fn();
