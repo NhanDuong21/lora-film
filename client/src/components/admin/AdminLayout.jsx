@@ -45,6 +45,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/scores/viewer')) return 'scores-viewer';
     if (path.endsWith('/scores/reconciliation')) return 'scores-reconciliation';
     if (path.endsWith('/staff')) return 'staff';
+    if (path.endsWith('/workforce')) return 'workforce';
     if (path.endsWith('/payroll')) return 'payroll';
     if (path.endsWith('/accounts')) return 'accounts';
     if (path.endsWith('/roles')) return 'roles';

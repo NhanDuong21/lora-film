@@ -16,6 +16,7 @@ import java.util.Optional;
 
 public interface PayrollRepository extends JpaRepository<Payroll, Long>, JpaSpecificationExecutor<Payroll> {
     boolean existsByEmployeeAccountIdAndSalaryMonth(Long employeeId, LocalDate salaryMonth);
+    boolean existsByPaymentReference(String paymentReference);
 
     @EntityGraph(attributePaths = {"employee", "employee.department", "employee.position", "details"})
     @Query("select p from Payroll p where p.id = :id")
@@ -25,6 +26,11 @@ public interface PayrollRepository extends JpaRepository<Payroll, Long>, JpaSpec
     Page<Payroll> findByEmployeeAccountId(Long employeeId, Pageable pageable);
 
     long countByStatus(PayrollStatus status);
+    long countBySalaryMonth(LocalDate salaryMonth);
+    long countBySalaryMonthAndStatus(LocalDate salaryMonth, PayrollStatus status);
+
+    @Query("select coalesce(sum(p.totalSalary), 0) from Payroll p where p.salaryMonth = :month and p.status <> com.project.userservice.enumtype.PayrollStatus.CANCELLED")
+    BigDecimal sumNetAmountBySalaryMonth(@Param("month") LocalDate month);
 
     @Query("select coalesce(sum(p.totalSalary), 0) from Payroll p where p.status in :statuses")
     BigDecimal sumTotalByStatuses(@Param("statuses") java.util.Collection<PayrollStatus> statuses);

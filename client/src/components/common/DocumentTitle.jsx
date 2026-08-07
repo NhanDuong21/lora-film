@@ -44,6 +44,7 @@ const pageTitle = pathname => {
     ['/admin/analytics', 'Phân tích và báo cáo'],
     ['/admin/members', 'Quản lý khách hàng'],
     ['/admin/staff', 'Quản lý nhân viên'],
+    ['/admin/workforce', 'Ca làm và chấm công'],
     ['/admin/departments', 'Quản lý phòng ban'],
     ['/admin/positions', 'Quản lý chức vụ'],
     ['/admin/payroll', 'Quản lý bảng lương'],
@@ -78,7 +79,7 @@ const pageTitle = pathname => {
   if (path === '/admin') return 'Tổng quan quản trị';
 
   if (path === '/employee' || path === '/employee/dashboard') return 'Bảng điều khiển nhân viên';
-  if (path === '/employee/checkin') return 'Soát vé tại rạp';
+  if (path === '/employee/checkin') return 'Chấm công nhân viên';
   if (path === '/employee/schedules') return 'Lịch làm việc';
   if (path === '/employee/payroll') return 'Bảng lương nhân viên';
   if (path === '/employee/payments/cash') return 'Thu tiền mặt tại quầy';

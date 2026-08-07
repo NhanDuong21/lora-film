@@ -9,6 +9,7 @@ public record EmployeeResponse(
         Long accountId,
         String employeeCode,
         String fullName,
+        String email,
         String phoneNumber,
         Long departmentId,
         String departmentCode,
@@ -18,6 +19,7 @@ public record EmployeeResponse(
         String positionName,
         LocalDate hireDate,
         BigDecimal baseSalary,
-        EmployeeStatus status
+        EmployeeStatus status,
+        Integer version
 ) {
 }

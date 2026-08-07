@@ -1,8 +1,12 @@
 package com.project.userservice.controller;
 
 import com.project.userservice.dto.request.PayrollRequest;
+import com.project.userservice.dto.request.PayrollActionRequest;
+import com.project.userservice.dto.request.PayrollGenerationRequest;
 import com.project.userservice.dto.response.ApiResponse;
 import com.project.userservice.dto.response.PayrollResponse;
+import com.project.userservice.dto.response.PayrollSummaryResponse;
+import com.project.userservice.dto.response.PayrollGenerationResponse;
 import com.project.userservice.enumtype.PayrollStatus;
 import com.project.userservice.security.CurrentActor;
 import com.project.userservice.service.PayrollService;
@@ -50,33 +54,40 @@ public class PayrollController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_CREATE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PAYROLL_CREATE')")
     public ResponseEntity<ApiResponse<PayrollResponse>> create(@Valid @RequestBody PayrollRequest request) {
         return ResponseEntity.status(201).body(ApiResponse.success("Payroll created", service.create(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_UPDATE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PAYROLL_UPDATE')")
     public ResponseEntity<ApiResponse<PayrollResponse>> update(@PathVariable Long id,
                                                                 @Valid @RequestBody PayrollRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Payroll updated", service.update(id, request)));
     }
 
-    @PutMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_APPROVE')")
-    public ResponseEntity<ApiResponse<PayrollResponse>> approve(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success("Payroll approved", service.approve(id)));
+    @GetMapping("/summary")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_VIEW')")
+    public ResponseEntity<ApiResponse<PayrollSummaryResponse>> summary(@RequestParam String month) {
+        return ResponseEntity.ok(ApiResponse.success("Payroll summary retrieved", service.summary(month)));
     }
 
-    @PutMapping("/{id}/paid")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_UPDATE')")
-    public ResponseEntity<ApiResponse<PayrollResponse>> paid(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success("Payroll marked as paid", service.markPaid(id)));
+    @PostMapping("/{id}/actions")
+    @PreAuthorize("hasRole('ADMIN') or (#request.type != null and ("
+            + "(#request.type.name() == 'APPROVE' and hasAuthority('PAYROLL_APPROVE')) or "
+            + "(#request.type.name() != 'APPROVE' and hasAuthority('PAYROLL_UPDATE'))))")
+    public ResponseEntity<ApiResponse<PayrollResponse>> action(@PathVariable Long id,
+            @Valid @RequestBody PayrollActionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Payroll action recorded",
+                service.applyAction(id, request)));
     }
 
-    @PutMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('PAYROLL_UPDATE')")
-    public ResponseEntity<ApiResponse<PayrollResponse>> cancel(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success("Payroll cancelled", service.cancel(id)));
+    @PostMapping("/generate")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PAYROLL_CREATE')")
+    public ResponseEntity<ApiResponse<PayrollGenerationResponse>> generate(
+            @Valid @RequestBody PayrollGenerationRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Payroll generated from timekeeping",
+                service.generateFromTimekeeping(request)));
     }
+
 }

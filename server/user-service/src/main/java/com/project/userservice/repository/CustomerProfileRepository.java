@@ -11,6 +11,7 @@ import com.project.userservice.enumtype.UserStatus;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import com.project.userservice.security.PiiCrypto;
 
 public interface CustomerProfileRepository extends JpaRepository<CustomerProfile, Long> {
     Optional<CustomerProfile> findByAccountId(Long accountId);
@@ -22,25 +23,49 @@ public interface CustomerProfileRepository extends JpaRepository<CustomerProfile
             select c from CustomerProfile c, User u
             where c.accountId = u.accountId
               and u.isDeleted = false
+              and u.accountType = com.project.userservice.enumtype.AccountType.CUSTOMER
+              and not exists (
+                  select 1 from Employee e
+                  where e.accountId = c.accountId and e.isDeleted = false
+              )
               and (:status is null or u.status = :status)
               and (:keyword is null or :keyword = ''
                    or lower(c.customerCode) like lower(concat('%', :keyword, '%'))
                    or lower(u.fullName) like lower(concat('%', :keyword, '%'))
-                   or u.phoneNumber like concat('%', :keyword, '%'))
+                   or lower(coalesce(u.email, '')) like lower(concat('%', :keyword, '%'))
+                   or (:keywordHash is not null and (u.phoneHash = :keywordHash or u.cccdHash = :keywordHash)))
             """)
-    Page<CustomerProfile> search(@Param("keyword") String keyword,
-                                 @Param("status") UserStatus status,
-                                 Pageable pageable);
+    Page<CustomerProfile> searchSecure(@Param("keyword") String keyword,
+                                       @Param("keywordHash") String keywordHash,
+                                       @Param("status") UserStatus status,
+                                       Pageable pageable);
+
+    default Page<CustomerProfile> search(String keyword, UserStatus status, Pageable pageable) {
+        return searchSecure(keyword, PiiCrypto.searchHash(keyword), status, pageable);
+    }
 
     @Query("""
             select count(c) from CustomerProfile c, User u
-            where c.accountId = u.accountId and u.isDeleted = false and u.status = :status
+            where c.accountId = u.accountId
+              and u.isDeleted = false
+              and u.accountType = com.project.userservice.enumtype.AccountType.CUSTOMER
+              and u.status = :status
+              and not exists (
+                  select 1 from Employee e
+                  where e.accountId = c.accountId and e.isDeleted = false
+              )
             """)
     long countByUserStatus(@Param("status") UserStatus status);
 
     @Query("""
             select count(c) from CustomerProfile c, User u
-            where c.accountId = u.accountId and u.isDeleted = false
+            where c.accountId = u.accountId
+              and u.isDeleted = false
+              and u.accountType = com.project.userservice.enumtype.AccountType.CUSTOMER
+              and not exists (
+                  select 1 from Employee e
+                  where e.accountId = c.accountId and e.isDeleted = false
+              )
             """)
     long countActiveProfiles();
 }

@@ -3,12 +3,13 @@ package com.project.userservice.service;
 import com.project.userservice.dto.request.PositionRequest;
 import com.project.userservice.dto.response.PositionResponse;
 import com.project.userservice.entity.Position;
+import com.project.userservice.entity.Department;
 import com.project.userservice.exception.BusinessException;
 import com.project.userservice.mapper.PositionMapper;
 import com.project.userservice.repository.EmployeeRepository;
 import com.project.userservice.repository.PositionRepository;
+import com.project.userservice.repository.DepartmentRepository;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,22 +21,24 @@ import java.util.List;
 public class PositionService {
     private final PositionRepository repository;
     private final EmployeeRepository employeeRepository;
+    private final DepartmentRepository departmentRepository;
     private final UserAuditService auditService;
     private final PositionMapper positionMapper;
 
     public PositionService(PositionRepository repository, EmployeeRepository employeeRepository,
+                           DepartmentRepository departmentRepository,
                            UserAuditService auditService, PositionMapper positionMapper) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
+        this.departmentRepository = departmentRepository;
         this.auditService = auditService;
         this.positionMapper = positionMapper;
     }
 
-    @Cacheable("positions")
     @Transactional(readOnly = true)
     public List<PositionResponse> list() {
         return repository.findByIsDeletedFalseOrderByTitleAsc().stream()
-                .map(positionMapper::toResponse).toList();
+                .map(this::toOperationalResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -44,7 +47,7 @@ public class PositionService {
                         com.project.userservice.util.PageableUtils.sanitize(pageable,
                                 java.util.Set.of("id", "code", "title", "createdAt", "updatedAt"),
                                 "title", org.springframework.data.domain.Sort.Direction.ASC))
-                .map(positionMapper::toResponse);
+                .map(this::toOperationalResponse);
     }
 
     @CacheEvict(value = "positions", allEntries = true)
@@ -97,6 +100,17 @@ public class PositionService {
         value.setCode(request.code().trim().toUpperCase());
         value.setTitle(request.name().trim());
         value.setDescription(request.description());
+        Department department = departmentRepository.findById(request.departmentId())
+                .orElseThrow(() -> new BusinessException("Department not found", "USER_004"));
+        if (department.isDeleted()) {
+            throw new BusinessException("Department not found", "USER_004");
+        }
+        value.setDepartment(department);
+    }
+
+    private PositionResponse toOperationalResponse(Position position) {
+        return positionMapper.toResponse(position,
+                employeeRepository.countByPositionIdAndIsDeletedFalse(position.getId()));
     }
 
 }
