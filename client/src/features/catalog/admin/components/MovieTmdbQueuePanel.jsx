@@ -26,7 +26,7 @@ export default function MovieTmdbQueuePanel({
             Xử lý phim nhập tự động
           </h2>
           <p className="mt-1 max-w-4xl text-xs leading-5 text-zinc-400">
-            Phim chưa tới ngày phát hành sẽ được duyệt sang “Sắp chiếu”. Phim đã tới ngày chỉ được duyệt sang
+            Phim chưa tới ngày bắt đầu khai thác sẽ được duyệt sang “Sắp chiếu”. Phim đã tới ngày chỉ được duyệt sang
             “Đang chiếu” khi có ít nhất một suất chiếu hợp lệ; hệ thống không còn tự động tạm ngừng phim cũ.
           </p>
         </div>
@@ -42,7 +42,7 @@ export default function MovieTmdbQueuePanel({
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <QueueBucket
           icon={<Clock3 className="h-4 w-4" />}
-          label="Phim sắp phát hành"
+          label="Sắp tới thời gian khai thác"
           description="Đủ dữ liệu sẽ được chuyển sang Sắp chiếu"
           count={future}
           tone="emerald"
@@ -63,8 +63,8 @@ export default function MovieTmdbQueuePanel({
         />
         <QueueBucket
           icon={<CircleHelp className="h-4 w-4" />}
-          label="Chưa có ngày khởi chiếu"
-          description="Cần mở hồ sơ để bổ sung ngày khởi chiếu tại hệ thống"
+          label="Chưa có ngày bắt đầu khai thác"
+          description="Cần mở hồ sơ để bổ sung thời gian khai thác tại rạp"
           count={undated}
           tone="zinc"
         />

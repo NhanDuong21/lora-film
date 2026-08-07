@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 
 public class MovieCreditAssignRequest {
-    @NotEmpty(message = "Credits cannot be empty")
+    @NotEmpty(message = "Danh sách nhân sự của phim không được để trống.")
     @Valid
     private List<MovieCreditRequest> credits;
 

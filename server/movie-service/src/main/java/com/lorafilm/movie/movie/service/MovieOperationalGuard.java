@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Objects;
 
@@ -40,10 +41,14 @@ public class MovieOperationalGuard {
         if (!schedulingChanged) {
             return;
         }
+        assertReleaseWindowEditable(movie, request.getReleaseDate(), request.getEndDate());
+    }
+
+    public void assertReleaseWindowEditable(Movie movie, LocalDate releaseDate, LocalDate endDate) {
         var impacted = showtimeRepository.findFutureOperationalPublicIdsByMovieId(
                 movie.getId(), Instant.now(clock));
         if (!impacted.isEmpty()) {
-            throw immutable("Duration or release window is already used by future showtimes.",
+            throw immutable("Không thể đổi thời gian khai thác vì phim đã có suất chiếu trong tương lai.",
                     Map.of("impactedShowtimes", impacted));
         }
     }
@@ -51,7 +56,7 @@ public class MovieOperationalGuard {
     public void assertVersionEditable(MovieVersion version) {
         if (showtimeRepository.existsFutureOperationalByMovieVersionId(
                 version.getId(), Instant.now(clock))) {
-            throw immutable("This movie version is already used by a future showtime.",
+            throw immutable("Không thể sửa bản chiếu vì đang được dùng cho một suất chiếu trong tương lai.",
                     Map.of("movieVersionPublicId", version.getPublicId()));
         }
     }
@@ -74,7 +79,7 @@ public class MovieOperationalGuard {
         }
         if (!movieMediaRepository.existsOtherActivePrimaryPoster(
                 media.getMovie().getId(), media.getId())) {
-            throw immutable("A published movie must keep an active primary poster.",
+            throw immutable("Phim đang phục vụ khách hàng phải có một poster chính đang hoạt động.",
                     Map.of("mediaPublicId", media.getPublicId()));
         }
     }

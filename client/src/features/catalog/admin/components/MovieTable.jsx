@@ -167,7 +167,7 @@ function MovieTable({
             <tr>
               <th className="w-[29%] px-5 py-4">Phim</th>
               <th className="w-[24%] px-5 py-4">Cần làm</th>
-              <th className="w-[16%] px-5 py-4">Khởi chiếu</th>
+              <th className="w-[16%] px-5 py-4">Bắt đầu khai thác</th>
               <th className="w-[15%] px-5 py-4">Hiển thị với khách</th>
               <th className="w-[16%] px-5 py-4 text-right">Hành động</th>
             </tr>
@@ -253,7 +253,7 @@ function MovieTable({
 
                   <td className="px-5 py-5">
                     <p className="font-bold text-white">
-                      {movie.releaseDate ? formatDate(movie.releaseDate) : 'Chưa đặt ngày khởi chiếu'}
+                      {movie.releaseDate ? formatDate(movie.releaseDate) : 'Chưa đặt ngày khai thác'}
                     </p>
                     <p className={`mt-2 text-xs font-semibold ${(movie.showtimeCount || 0) > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
                       {(movie.showtimeCount || 0) > 0

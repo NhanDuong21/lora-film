@@ -17,6 +17,7 @@ public class MovieDto {
     private String synopsis;
     private Integer durationMinutes;
     private AgeRating ageRating;
+    private LocalDate originalReleaseDate;
     private LocalDate releaseDate;
     private LocalDate endDate;
     private List<String> genres;
@@ -101,6 +102,14 @@ public class MovieDto {
 
     public LocalDate getReleaseDate() {
         return releaseDate;
+    }
+
+    public LocalDate getOriginalReleaseDate() {
+        return originalReleaseDate;
+    }
+
+    public void setOriginalReleaseDate(LocalDate originalReleaseDate) {
+        this.originalReleaseDate = originalReleaseDate;
     }
 
     public void setReleaseDate(LocalDate releaseDate) {

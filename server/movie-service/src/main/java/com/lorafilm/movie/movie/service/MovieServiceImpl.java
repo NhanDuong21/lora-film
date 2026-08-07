@@ -137,7 +137,7 @@ public class MovieServiceImpl implements MovieService {
                             publicId,
                             title,
                             ErrorCode.MOVIE_NOT_FOUND.name(),
-                            "Movie no longer exists or was deleted."));
+                            "Phim không còn tồn tại hoặc đã bị xóa."));
                     continue;
                 }
                 if (freshMovie.getStatus() != MovieStatus.DRAFT) {
@@ -145,7 +145,7 @@ public class MovieServiceImpl implements MovieService {
                             publicId,
                             freshMovie.getTitle(),
                             "STATUS_CHANGED",
-                            "Movie is no longer waiting for approval."));
+                            "Phim không còn ở trạng thái Chờ hoàn thiện."));
                     continue;
                 }
                 if (freshMovie.getTmdbId() == null) {
@@ -153,7 +153,7 @@ public class MovieServiceImpl implements MovieService {
                             publicId,
                             freshMovie.getTitle(),
                             "SOURCE_CHANGED",
-                            "Movie is no longer a TMDB import."));
+                            "Phim không còn là dữ liệu được nhập từ TMDB."));
                     continue;
                 }
 
@@ -168,7 +168,7 @@ public class MovieServiceImpl implements MovieService {
                 }
 
                 MovieDto approved = transitionMovieStatus(
-                        freshMovie, decision.targetStatus(), "Bulk TMDB approval");
+                        freshMovie, decision.targetStatus(), "Duyệt nhanh phim nhập từ TMDB");
                 results.add(MovieBulkApprovalResult.approved(
                         publicId,
                         freshMovie.getTitle(),
@@ -186,7 +186,7 @@ public class MovieServiceImpl implements MovieService {
                         publicId,
                         title,
                         ErrorCode.INTERNAL_SERVER_ERROR.name(),
-                        "Unexpected error while approving this movie."));
+                        "Có lỗi ngoài dự kiến khi duyệt phim này."));
             }
         }
 
@@ -232,7 +232,7 @@ public class MovieServiceImpl implements MovieService {
 
     private Specification<Movie> buildAdminMovieSpecification(AdminMovieListQuery query) {
         if (query == null) {
-            throw validationError("Movie filter is required");
+            throw validationError("Vui lòng cung cấp điều kiện lọc phim.");
         }
 
         Specification<Movie> spec = Specification.where(MovieSpecification.isNotDeleted());
@@ -243,7 +243,7 @@ public class MovieServiceImpl implements MovieService {
                 MovieStatus parsedStatus = MovieStatus.valueOf(status.toUpperCase(Locale.ROOT));
                 spec = spec.and(MovieSpecification.hasStatus(parsedStatus));
             } catch (IllegalArgumentException e) {
-                throw validationError("Invalid status: " + status);
+                throw validationError("Trạng thái phim không hợp lệ: " + status);
             }
         }
 
@@ -281,7 +281,7 @@ public class MovieServiceImpl implements MovieService {
             } else if (source.equalsIgnoreCase("MANUAL")) {
                 spec = spec.and(MovieSpecification.hasTmdbSource(false));
             } else {
-                throw validationError("Invalid source: " + source + ". Allowed values: TMDB, MANUAL");
+                throw validationError("Nguồn phim không hợp lệ. Vui lòng chọn TMDB hoặc Thủ công.");
             }
         }
 
@@ -291,7 +291,7 @@ public class MovieServiceImpl implements MovieService {
                 MovieHealthStatus parsed = MovieHealthStatus.valueOf(healthStatus.toUpperCase(Locale.ROOT));
                 spec = spec.and(MovieHealthSpecifications.healthStatusEquals(parsed));
             } catch (IllegalArgumentException e) {
-                throw validationError("Invalid healthStatus: " + healthStatus + ". Allowed values: READY, WARNING, BLOCKED");
+                throw validationError("Tình trạng dữ liệu không hợp lệ. Vui lòng chọn Sẵn sàng, Cần kiểm tra hoặc Bị chặn.");
             }
         }
 
@@ -334,7 +334,7 @@ public class MovieServiceImpl implements MovieService {
                 spec = spec.and(MovieSpecification.tmdbUpdatedBefore(
                         query.getTmdbUpdatedTo().plusDays(1).atStartOfDay()));
             } catch (java.time.DateTimeException exception) {
-                throw validationError("tmdbUpdatedTo is outside the supported date range");
+                throw validationError("Ngày kết thúc cập nhật TMDB nằm ngoài khoảng thời gian được hỗ trợ.");
             }
         }
         return spec;
@@ -342,47 +342,47 @@ public class MovieServiceImpl implements MovieService {
 
     private void validateBulkApprovalFilter(AdminMovieListQuery filter, int limit) {
         if (filter == null) {
-            throw validationError("Movie filter is required");
+            throw validationError("Vui lòng cung cấp điều kiện lọc phim.");
         }
         if (limit < 1 || limit > 100) {
-            throw validationError("Bulk approval limit must be between 1 and 100");
+            throw validationError("Mỗi lần chỉ được duyệt nhanh từ 1 đến 100 phim.");
         }
         if (!"DRAFT".equalsIgnoreCase(normalize(filter.getStatus()))) {
-            throw validationError("Bulk approval requires status=DRAFT");
+            throw validationError("Duyệt nhanh chỉ áp dụng cho phim ở trạng thái Chờ hoàn thiện.");
         }
         if (!"TMDB".equalsIgnoreCase(normalize(filter.getSource()))) {
-            throw validationError("Bulk approval requires source=TMDB");
+            throw validationError("Duyệt nhanh chỉ áp dụng cho phim được nhập từ TMDB.");
         }
     }
 
     private void validateTmdbQueueFilter(AdminMovieListQuery filter) {
         if (filter == null) {
-            throw validationError("Movie filter is required");
+            throw validationError("Vui lòng cung cấp điều kiện lọc phim.");
         }
         if (!"DRAFT".equalsIgnoreCase(normalize(filter.getStatus()))) {
-            throw validationError("TMDB queue breakdown requires status=DRAFT");
+            throw validationError("Thống kê hàng chờ TMDB chỉ áp dụng cho phim ở trạng thái Chờ hoàn thiện.");
         }
         if (!"TMDB".equalsIgnoreCase(normalize(filter.getSource()))) {
-            throw validationError("TMDB queue breakdown requires source=TMDB");
+            throw validationError("Thống kê này chỉ áp dụng cho phim được nhập từ TMDB.");
         }
     }
 
     private Sort parseSort(String rawSort) {
         String sort = rawSort == null ? "releaseDate,desc" : rawSort.trim();
         if (sort.isEmpty()) {
-            throw validationError("Invalid sort format. Expected field,direction");
+            throw validationError("Cách sắp xếp không hợp lệ.");
         }
         String[] parts = sort.split(",", -1);
         if (parts.length != 2) {
-            throw validationError("Invalid sort format. Expected field,direction");
+            throw validationError("Cách sắp xếp không hợp lệ.");
         }
         String field = parts[0].trim();
         String direction = parts[1].trim().toLowerCase(Locale.ROOT);
         if (!SORT_FIELDS.contains(field)) {
-            throw validationError("Unsupported sort field: " + field);
+            throw validationError("Không hỗ trợ sắp xếp theo trường: " + field);
         }
         if (!direction.equals("asc") && !direction.equals("desc")) {
-            throw validationError("Unsupported sort direction: " + parts[1].trim());
+            throw validationError("Chiều sắp xếp không hợp lệ: " + parts[1].trim());
         }
         Sort primary = direction.equals("desc") ? Sort.by(field).descending() : Sort.by(field).ascending();
         return primary.and(Sort.by("id").descending());
@@ -398,12 +398,15 @@ public class MovieServiceImpl implements MovieService {
         if (rawValue.equals("false")) {
             return false;
         }
-        throw validationError("Invalid " + fieldName + ": " + rawValue + ". Allowed values: true, false");
+        throw validationError("Giá trị bộ lọc " + fieldName + " không hợp lệ.");
     }
 
     private void validateRange(java.time.LocalDate from, java.time.LocalDate to, String fieldName) {
         if (from != null && to != null && from.isAfter(to)) {
-            throw validationError(fieldName + "From must be on or before " + fieldName + "To");
+            String rangeLabel = "releaseDate".equals(fieldName)
+                    ? "thời gian khai thác"
+                    : "thời gian cập nhật từ TMDB";
+            throw validationError("Ngày bắt đầu " + rangeLabel + " không được sau ngày kết thúc.");
         }
     }
 
@@ -426,7 +429,7 @@ public class MovieServiceImpl implements MovieService {
         if (movieOpt.isEmpty()) {
             movieOpt = movieRepository.findBySlugAndDeletedAtIsNull(identifier);
         }
-        Movie movie = movieOpt.orElseThrow(() -> new ResourceNotFoundException("Movie not found"));
+        Movie movie = movieOpt.orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phim."));
 
         MovieDetailDto detailDto = mapToDetailDto(movie);
         return projectionService.enrichMovieDetail(movie, detailDto);
@@ -535,6 +538,7 @@ public class MovieServiceImpl implements MovieService {
         detailDto.setSynopsis(baseDto.getSynopsis());
         detailDto.setDurationMinutes(baseDto.getDurationMinutes());
         detailDto.setAgeRating(baseDto.getAgeRating());
+        detailDto.setOriginalReleaseDate(baseDto.getOriginalReleaseDate());
         detailDto.setReleaseDate(baseDto.getReleaseDate());
         detailDto.setEndDate(baseDto.getEndDate());
         detailDto.setGenres(baseDto.getGenres());

@@ -88,7 +88,7 @@ export default function MovieDetailHeader({ movie }) {
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             <MetaItem
               icon={CalendarDays}
-              label="Khởi chiếu"
+              label="Bắt đầu khai thác"
               value={movie.releaseDate ? formatDate(movie.releaseDate) : ''}
               emptyText="Chưa có ngày"
             />

@@ -33,7 +33,7 @@ public class MovieApprovalPolicy {
     public ApprovalDecision evaluate(Movie movie) {
         List<String> blockers = new ArrayList<>();
         if (movie == null || movie.getReleaseDate() == null) {
-            blockers.add("A local release date is required before approval.");
+            blockers.add("Vui lòng chọn ngày bắt đầu khai thác tại rạp trước khi duyệt phim.");
             return new ApprovalDecision(null, List.copyOf(blockers));
         }
 
@@ -44,7 +44,7 @@ public class MovieApprovalPolicy {
 
         blockers.addAll(lifecyclePolicy.getTransitionViolations(movie, targetStatus));
         if (targetStatus == MovieStatus.NOW_SHOWING && !hasOperationalShowtime(movie.getId())) {
-            blockers.add("NOW_SHOWING requires at least one current or future non-cancelled showtime.");
+            blockers.add("Muốn chuyển sang Đang chiếu, phim phải có ít nhất một suất chiếu hiện tại hoặc tương lai chưa bị hủy.");
         }
         return new ApprovalDecision(targetStatus, List.copyOf(blockers));
     }
@@ -53,8 +53,7 @@ public class MovieApprovalPolicy {
         ApprovalDecision decision = evaluate(movie);
         List<String> violations = new ArrayList<>(decision.blockers());
         if (decision.targetStatus() != null && decision.targetStatus() != requestedTarget) {
-            violations.add("Approval target must be " + decision.targetStatus()
-                    + " for the movie's local release date.");
+            violations.add("Trạng thái cần duyệt không phù hợp với ngày bắt đầu khai thác tại rạp.");
         }
         if (!violations.isEmpty()) {
             throw new BusinessException(
@@ -67,7 +66,7 @@ public class MovieApprovalPolicy {
         if (!hasOperationalShowtime(movie == null ? null : movie.getId())) {
             throw new BusinessException(
                     ErrorCode.INVALID_MOVIE_STATUS_TRANSITION,
-                    "NOW_SHOWING requires at least one current or future non-cancelled showtime.");
+                    "Muốn chuyển sang Đang chiếu, phim phải có ít nhất một suất chiếu hiện tại hoặc tương lai chưa bị hủy.");
         }
     }
 

@@ -45,7 +45,10 @@ public class Movie extends BaseAuditableEntity {
     @Column(name = "age_rating", nullable = false)
     private AgeRating ageRating;
 
-    @Column(name = "release_date", nullable = false)
+    @Column(name = "original_release_date")
+    private LocalDate originalReleaseDate;
+
+    @Column(name = "release_date")
     private LocalDate releaseDate;
 
     @Column(name = "end_date")
@@ -158,6 +161,14 @@ public class Movie extends BaseAuditableEntity {
 
     public void setReleaseDate(LocalDate releaseDate) {
         this.releaseDate = releaseDate;
+    }
+
+    public LocalDate getOriginalReleaseDate() {
+        return originalReleaseDate;
+    }
+
+    public void setOriginalReleaseDate(LocalDate originalReleaseDate) {
+        this.originalReleaseDate = originalReleaseDate;
     }
 
     public LocalDate getEndDate() {

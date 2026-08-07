@@ -39,8 +39,9 @@ CREATE TABLE movies (
     synopsis TEXT,
     duration_minutes INT NOT NULL,
     age_rating VARCHAR(20) NOT NULL COMMENT 'P, K, T13, T16, T18',
-    release_date DATE NOT NULL,
-    end_date DATE NULL COMMENT 'Null nghĩa là chưa xác định ngày ngừng chiếu',
+    original_release_date DATE NULL COMMENT 'Ngày phát hành gốc từ TMDB hoặc nhà phát hành',
+    release_date DATE NULL COMMENT 'Ngày bắt đầu đợt khai thác hiện tại tại rạp',
+    end_date DATE NULL COMMENT 'Ngày kết thúc đợt khai thác hiện tại tại rạp',
     country VARCHAR(100),
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, UPCOMING, NOW_SHOWING, ENDED, INACTIVE',
     version BIGINT NOT NULL DEFAULT 0,
@@ -52,7 +53,8 @@ CREATE TABLE movies (
     deleted_by BIGINT NULL,
     CONSTRAINT chk_movies_duration CHECK (duration_minutes > 0),
     CONSTRAINT chk_movies_dates CHECK (
-        end_date IS NULL
+        release_date IS NULL
+        OR end_date IS NULL
         OR end_date >= release_date
     ),
     UNIQUE KEY uk_movies_active_slug (active_slug),
@@ -71,6 +73,25 @@ CREATE TABLE movie_status_history (
     changed_by BIGINT NULL,
     CONSTRAINT fk_movie_status_history_movie FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
     INDEX idx_movie_status_history_order (movie_id, changed_at, id)
+);
+
+CREATE TABLE movie_exhibition_periods (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL UNIQUE,
+    movie_id BIGINT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NULL,
+    note VARCHAR(500) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by BIGINT NULL,
+    updated_by BIGINT NULL,
+    deleted_at TIMESTAMP NULL,
+    deleted_by BIGINT NULL,
+    CONSTRAINT fk_movie_exhibition_period_movie FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
+    CONSTRAINT chk_movie_exhibition_period_dates CHECK (end_date IS NULL OR end_date >= start_date),
+    INDEX idx_movie_exhibition_period_order (movie_id, start_date, id),
+    INDEX idx_movie_exhibition_period_deleted_at (deleted_at)
 );
 
 CREATE TABLE movie_translations (
@@ -127,6 +148,14 @@ CREATE TABLE tmdb_sync_state (
     `cursor` VARCHAR(255) COMMENT 'Con trỏ đánh dấu vị trí dữ liệu đã đồng bộ',
     status VARCHAR(50) NOT NULL COMMENT 'Trạng thái đồng bộ (IDLE, IN_PROGRESS, COMPLETED, FAILED)',
     last_sync_time DATETIME COMMENT 'Mốc thời gian hoàn thành lần đồng bộ thành công gần nhất',
+    sync_scope VARCHAR(30) NULL COMMENT 'Phạm vi phim được chọn để nhập',
+    release_date_from DATE NULL,
+    release_date_to DATE NULL,
+    max_movies INT NULL,
+    processed_movies INT NOT NULL DEFAULT 0,
+    imported_movies INT NOT NULL DEFAULT 0,
+    skipped_movies INT NOT NULL DEFAULT 0,
+    status_message VARCHAR(500) NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) COMMENT 'Quản lý trạng thái đồng bộ dữ liệu từ TMDB';

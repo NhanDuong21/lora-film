@@ -9,6 +9,9 @@ import com.lorafilm.movie.integration.tmdb.dto.TmdbImportOutcome;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbImportResult;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieDetailsDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieWrapperDto;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbBulkSyncRequest;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbSyncScope;
+import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.integration.tmdb.repository.TmdbSyncStateRepository;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
@@ -21,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -67,13 +71,13 @@ class TmdbImportServiceTest {
         state.setStatus("IDLE");
         state.setCursor("0");
         
-        when(properties.isSyncEnabled()).thenReturn(true);
+        when(properties.isIntegrationEnabled()).thenReturn(true);
         when(syncStateRepository.findBySyncType("TMDB_BULK_EXPORT")).thenReturn(Optional.of(state));
         when(syncStateRepository.save(any(TmdbSyncState.class))).thenReturn(state);
         when(properties.getBatchSize()).thenReturn(100);
         
         // When the service tries to fetch from TMDB, we simulate a stop request and then throw an error
-        when(tmdbClient.fetchMoviesExport(any(), anyInt())).thenAnswer(invocation -> {
+        when(tmdbClient.fetchMoviesExport(any(), anyInt(), any(), any())).thenAnswer(invocation -> {
             importService.stopBulkSync();
             throw new RuntimeException("Simulated error");
         });
@@ -86,6 +90,45 @@ class TmdbImportServiceTest {
         verify(syncStateRepository, atLeastOnce()).save(stateCaptor.capture());
         
         assertEquals("IDLE", stateCaptor.getValue().getStatus());
+    }
+
+    @Test
+    void stopBulkSyncClearsPersistedRunningStateWhenNoLocalThreadExists() {
+        TmdbSyncState state = new TmdbSyncState();
+        state.setSyncType("TMDB_BULK_EXPORT");
+        state.setStatus("IN_PROGRESS");
+        when(syncStateRepository.findBySyncType("TMDB_BULK_EXPORT")).thenReturn(Optional.of(state));
+
+        importService.stopBulkSync();
+
+        assertEquals("IDLE", state.getStatus());
+        assertTrue(state.getStatusMessage().contains("không có tác vụ nào đang chạy"));
+        verify(syncStateRepository).save(state);
+    }
+
+    @Test
+    void pastSyncRequiresAnExplicitDateRange() {
+        when(properties.isIntegrationEnabled()).thenReturn(true);
+        TmdbBulkSyncRequest request = new TmdbBulkSyncRequest();
+        request.setScope(TmdbSyncScope.PAST);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> importService.validateBulkSyncRequest(request));
+
+        assertTrue(exception.getMessage().contains("phim quá khứ"));
+    }
+
+    @Test
+    void futureSyncAcceptsAControlledDateRange() {
+        when(properties.isIntegrationEnabled()).thenReturn(true);
+        TmdbBulkSyncRequest request = new TmdbBulkSyncRequest();
+        request.setScope(TmdbSyncScope.FUTURE);
+        request.setReleaseDateFrom(LocalDate.now().plusDays(1));
+        request.setReleaseDateTo(LocalDate.now().plusMonths(6));
+        request.setMaxMovies(250);
+
+        assertDoesNotThrow(() -> importService.validateBulkSyncRequest(request));
     }
 
     @Test

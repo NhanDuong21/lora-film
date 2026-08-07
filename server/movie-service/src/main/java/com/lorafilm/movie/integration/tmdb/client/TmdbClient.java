@@ -4,7 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.Duration;
 
 import com.lorafilm.movie.integration.tmdb.config.TmdbProperties;
 
@@ -16,20 +19,31 @@ public class TmdbClient {
 
     public TmdbClient(TmdbProperties properties) {
         this.properties = properties;
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(properties.getConnectTimeoutSeconds()));
+        requestFactory.setReadTimeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()));
         this.restClient = RestClient.builder()
                 .baseUrl(properties.getBaseUrl())
                 .defaultHeader("x-api-key", properties.getApiKey())
+                .requestFactory(requestFactory)
                 .build();
     }
 
     public String fetchMoviesExport(String cursor, int limit) {
-        log.info("[TmdbClient] Fetching movies export from TMDB API (cursor={}, limit={})", cursor, limit);
+        return fetchMoviesExport(cursor, limit, null, null);
+    }
+
+    public String fetchMoviesExport(String cursor, int limit, LocalDate releaseDateFrom, LocalDate releaseDateTo) {
+        log.info("[TmdbClient] Fetching movies export from TMDB API (cursor={}, limit={}, from={}, to={})",
+                cursor, limit, releaseDateFrom, releaseDateTo);
         try {
             byte[] response = restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/api/tmdb/export")
                             .queryParam("cursor", cursor)
                             .queryParam("limit", limit)
+                            .queryParamIfPresent("releaseDateFrom", java.util.Optional.ofNullable(releaseDateFrom))
+                            .queryParamIfPresent("releaseDateTo", java.util.Optional.ofNullable(releaseDateTo))
                             .build())
                     .retrieve()
                     .body(byte[].class);

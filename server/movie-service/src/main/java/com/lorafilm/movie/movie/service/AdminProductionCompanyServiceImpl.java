@@ -35,7 +35,7 @@ public class AdminProductionCompanyServiceImpl implements AdminProductionCompany
                     ProductionCompany saved = productionCompanyRepository.save(existing);
                     return mapToDto(saved);
                 } else {
-                    throw new BusinessException(ErrorCode.COMPANY_DUPLICATED, "Production company name already exists");
+                    throw new BusinessException(ErrorCode.COMPANY_DUPLICATED, "Tên hãng phim đã tồn tại.");
                 }
             }
         }
@@ -52,11 +52,11 @@ public class AdminProductionCompanyServiceImpl implements AdminProductionCompany
     @Transactional
     public ProductionCompanyDto updateProductionCompany(String publicId, ProductionCompanyRequest request) {
         if (request.getName() != null && productionCompanyRepository.existsByNameIgnoreCaseAndPublicIdNot(request.getName().trim(), publicId)) {
-            throw new BusinessException(ErrorCode.COMPANY_DUPLICATED, "Production company name already exists");
+            throw new BusinessException(ErrorCode.COMPANY_DUPLICATED, "Tên hãng phim đã tồn tại.");
         }
 
         ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy hãng phim."));
         
         mapRequestToEntity(request, company);
         
@@ -68,7 +68,7 @@ public class AdminProductionCompanyServiceImpl implements AdminProductionCompany
     @Transactional
     public void deleteProductionCompany(String publicId) {
         ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy hãng phim."));
         
         company.performSoftDelete(getCurrentUserId());
         productionCompanyRepository.save(company);

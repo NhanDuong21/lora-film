@@ -8,20 +8,21 @@ import jakarta.validation.constraints.Positive;
 import java.time.LocalDate;
 
 public class MovieRequest {
-    @NotBlank(message = "Title is required")
+    @NotBlank(message = "Vui lòng nhập tên phim.")
     @jakarta.validation.constraints.Size(min = 1, max = 255)
-    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]+$", message = "Title contains invalid characters")
+    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]+$", message = "Tên phim chứa ký tự không hợp lệ.")
     private String title;
     
     @jakarta.validation.constraints.Size(max = 255)
-    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]*$", message = "Original title contains invalid characters")
+    @jakarta.validation.constraints.Pattern(regexp = "^[^<>]*$", message = "Tên gốc chứa ký tự không hợp lệ.")
     private String originalTitle;
-    @NotNull(message = "Duration is required")
-    @Positive(message = "Duration must be positive")
+    @NotNull(message = "Vui lòng nhập thời lượng phim.")
+    @Positive(message = "Thời lượng phim phải lớn hơn 0 phút.")
     private Integer durationMinutes;
-    @NotNull(message = "Age rating is required")
+    @NotNull(message = "Vui lòng chọn phân loại độ tuổi.")
     private AgeRating ageRating;
-    @NotNull(message = "Release date is required")
+    private LocalDate originalReleaseDate;
+    @NotNull(message = "Vui lòng chọn ngày bắt đầu khai thác tại rạp.")
     private LocalDate releaseDate;
     private LocalDate endDate;
     private String country;
@@ -40,6 +41,8 @@ public class MovieRequest {
     public void setAgeRating(AgeRating ageRating) { this.ageRating = ageRating; }
     public LocalDate getReleaseDate() { return releaseDate; }
     public void setReleaseDate(LocalDate releaseDate) { this.releaseDate = releaseDate; }
+    public LocalDate getOriginalReleaseDate() { return originalReleaseDate; }
+    public void setOriginalReleaseDate(LocalDate originalReleaseDate) { this.originalReleaseDate = originalReleaseDate; }
     public LocalDate getEndDate() { return endDate; }
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     public String getCountry() { return country; }

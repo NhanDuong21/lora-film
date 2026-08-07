@@ -15,7 +15,7 @@ const actionLabel = {
 
 const issueMessages = {
   RELEASE_DATE_REACHED_WITHOUT_SHOWTIME:
-    'Đã đến ngày khởi chiếu nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.',
+    'Đã đến ngày bắt đầu khai thác nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.',
   NO_FUTURE_SHOWTIME:
     'Phim chưa có suất chiếu nháp hoặc suất đã mở bán trong tương lai. Hãy tạo suất chiếu hoặc mở một suất nháp.',
   NO_OPEN_SHOWTIME:

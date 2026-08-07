@@ -46,7 +46,7 @@ public class MovieLifecycleScheduler {
             movie.setStatus(MovieStatus.NOW_SHOWING);
             Movie saved = movieRepository.save(movie);
             historyService.record(saved, MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING,
-                    "Automatically started on the local release date", null);
+                    "Tự động bắt đầu khi đến ngày khai thác tại rạp", null);
             started++;
         }
 
@@ -56,7 +56,7 @@ public class MovieLifecycleScheduler {
             movie.setStatus(MovieStatus.ENDED);
             Movie saved = movieRepository.save(movie);
             historyService.record(saved, MovieStatus.NOW_SHOWING, MovieStatus.ENDED,
-                    "Automatically ended after the local release window", null);
+                    "Tự động kết thúc sau đợt khai thác tại rạp", null);
         }
 
         if (started > 0 || !ended.isEmpty()) {

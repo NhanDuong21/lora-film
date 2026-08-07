@@ -107,8 +107,8 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
               <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
                 {isDraft
                   ? inferredApprovalTarget === 'NOW_SHOWING'
-                    ? 'Phim đã tới ngày phát hành. Hãy hoàn thiện dữ liệu và lập ít nhất một suất chiếu hợp lệ trước khi duyệt sang Đang chiếu.'
-                    : 'Phim chưa tới ngày phát hành. Khi đủ dữ liệu bắt buộc, phim sẽ được duyệt sang Sắp chiếu.'
+                    ? 'Phim đã tới ngày bắt đầu khai thác. Hãy hoàn thiện dữ liệu và lập ít nhất một suất chiếu hợp lệ trước khi duyệt sang Đang chiếu.'
+                    : 'Phim chưa tới ngày bắt đầu khai thác. Khi đủ dữ liệu bắt buộc, phim sẽ được duyệt sang Sắp chiếu.'
                   : 'Các thao tác bên dưới thay đổi việc phim có được hiển thị và nhận lịch chiếu hay không.'}
               </p>
             </div>
@@ -195,7 +195,14 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
                 if (transition.requiresPublishChecklist) {
                   if (currentStatus === 'DRAFT' && !movie.releaseDate) {
                     isDisabled = true;
-                    disableReason = 'Cần bổ sung ngày khởi chiếu tại hệ thống trước khi duyệt.';
+                    disableReason = 'Cần bổ sung ngày bắt đầu khai thác tại rạp trước khi duyệt.';
+                  } else if (
+                    currentStatus === 'ENDED'
+                    && transition.target === 'UPCOMING'
+                    && (!releaseDate || releaseDate <= new Date())
+                  ) {
+                    isDisabled = true;
+                    disableReason = 'Hãy lập một đợt khai thác mới có ngày bắt đầu sau hôm nay.';
                   } else if (readiness.healthStatus === 'BLOCKED') {
                     isDisabled = true;
                     disableReason = 'Còn mục bắt buộc chưa hoàn thiện.';

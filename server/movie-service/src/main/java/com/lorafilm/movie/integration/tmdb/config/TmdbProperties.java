@@ -9,7 +9,9 @@ public class TmdbProperties {
     private String baseUrl;
     private String apiKey;
     private int batchSize = 20;
-    private boolean syncEnabled = true;
+    private boolean integrationEnabled = true;
+    private int connectTimeoutSeconds = 5;
+    private int readTimeoutSeconds = 30;
 
     private int syncStaleThresholdSeconds = 300; // default 5 minutes
 
@@ -37,12 +39,28 @@ public class TmdbProperties {
         this.batchSize = batchSize;
     }
 
-    public boolean isSyncEnabled() {
-        return syncEnabled;
+    public boolean isIntegrationEnabled() {
+        return integrationEnabled;
     }
 
-    public void setSyncEnabled(boolean syncEnabled) {
-        this.syncEnabled = syncEnabled;
+    public void setIntegrationEnabled(boolean integrationEnabled) {
+        this.integrationEnabled = integrationEnabled;
+    }
+
+    public int getConnectTimeoutSeconds() {
+        return connectTimeoutSeconds;
+    }
+
+    public void setConnectTimeoutSeconds(int connectTimeoutSeconds) {
+        this.connectTimeoutSeconds = connectTimeoutSeconds;
+    }
+
+    public int getReadTimeoutSeconds() {
+        return readTimeoutSeconds;
+    }
+
+    public void setReadTimeoutSeconds(int readTimeoutSeconds) {
+        this.readTimeoutSeconds = readTimeoutSeconds;
     }
 
     public int getSyncStaleThresholdSeconds() {

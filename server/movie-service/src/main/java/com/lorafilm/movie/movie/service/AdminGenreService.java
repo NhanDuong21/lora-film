@@ -41,7 +41,7 @@ public class AdminGenreService {
 
     public GenreResponse getGenre(String publicId) {
         Genre genre = genreRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Genre not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy thể loại.", null));
         return toResponse(genre, getMovieCounts(List.of(genre)).getOrDefault(genre.getId(), 0L));
     }
 
@@ -49,7 +49,7 @@ public class AdminGenreService {
     public GenreResponse createGenre(GenreRequest request) {
         String baseSlug = generateSlug(request.getName());
         if (genreRepository.existsBySlugAndDeletedAtIsNull(baseSlug)) {
-            throw new BusinessException(ErrorCode.GENRE_DUPLICATED, "Genre already exists.", null);
+            throw new BusinessException(ErrorCode.GENRE_DUPLICATED, "Thể loại này đã tồn tại.", null);
         }
 
         Genre genre = new Genre();
@@ -67,11 +67,11 @@ public class AdminGenreService {
     @Transactional
     public GenreResponse updateGenre(String publicId, GenreRequest request) {
         Genre genre = genreRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Genre not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy thể loại.", null));
         
         String newSlug = generateSlug(request.getName());
         if (!newSlug.equals(genre.getSlug()) && genreRepository.existsBySlugAndDeletedAtIsNull(newSlug)) {
-            throw new BusinessException(ErrorCode.GENRE_DUPLICATED, "Genre already exists.", null);
+            throw new BusinessException(ErrorCode.GENRE_DUPLICATED, "Thể loại này đã tồn tại.", null);
         }
 
         genre.setName(request.getName());
@@ -87,7 +87,7 @@ public class AdminGenreService {
     @Transactional
     public void deleteGenre(String publicId) {
         Genre genre = genreRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Genre not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy thể loại.", null));
         
         if (movieGenreRepository.existsByGenreIdAndMovieDeletedAtIsNull(genre.getId())) {
             throw new BusinessException(ErrorCode.GENRE_IN_USE, "Cannot delete genre because it is currently used by one or more active movies", null);

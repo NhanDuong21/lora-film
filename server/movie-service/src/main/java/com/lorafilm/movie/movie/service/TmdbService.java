@@ -40,7 +40,7 @@ public class TmdbService {
     @Deprecated(forRemoval = true)
     public MovieDto approveTmdbMovie(Integer tmdbId) {
         if (tmdbId == null || tmdbId <= 0) {
-            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "tmdbId must be a positive number");
+            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "Mã phim TMDB phải là số nguyên dương.");
         }
 
         log.warn("Deprecated /api/admin/tmdb/approve called for TMDB ID {}; delegating to import-as-DRAFT", tmdbId);

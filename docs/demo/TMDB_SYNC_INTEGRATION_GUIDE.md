@@ -1,204 +1,168 @@
-# TMDB Support API - Full Integration & API Reference Guide
+# Hướng dẫn nhập phim từ TMDB
 
-Tài liệu này cung cấp toàn bộ đặc tả API (API Specifications) chi tiết cho **TMDB Sync API** và hướng dẫn cụ thể cách **Movie Service** tích hợp với các API này để thiết lập luồng đồng bộ tự động.
+Tài liệu này mô tả hợp đồng giữa **Movie Service** và dịch vụ hỗ trợ TMDB. Dịch vụ TMDB chỉ cung cấp dữ liệu nguồn; Movie Service sở hữu trạng thái phim, thời gian khai thác tại rạp và quyền thao tác của quản trị viên.
 
----
+## Nguyên tắc nghiệp vụ
 
-## BẢNG CHỈ MỤC API (ENDPOINTS)
+1. Movie Service không tự nhập phim khi khởi động, trừ khi biến `TMDB_AUTO_SYNC_ENABLED=true` được cấu hình rõ ràng.
+2. Phim mới từ TMDB luôn được lưu ở trạng thái `DRAFT` — trên giao diện là **Chờ hoàn thiện**.
+3. Việc nhập dữ liệu không tự chuyển phim sang Sắp chiếu hoặc Đang chiếu.
+4. `originalReleaseDate` là ngày phát hành gốc lấy từ TMDB.
+5. `releaseDate` và `endDate` là thời gian của đợt khai thác hiện tại tại rạp.
+6. Khi chiếu lại phim cũ, quản trị viên lập đợt khai thác mới; không sửa ngày phát hành gốc.
+7. Phim cũ nhập từ TMDB chưa có thời gian khai thác tại rạp (`releaseDate = null`); quản trị viên phải lập một đợt tương lai nếu muốn chiếu lại.
+7. Dữ liệu quản trị viên đã chỉnh không bị tiến trình TMDB tự động ghi đè.
 
-*(Lưu ý: Header `x-api-key: lorafilm-secret-key` có thể được yêu cầu tùy vào cấu hình Auth Middleware hiện tại).*
+## Cấu hình Movie Service
 
-### 1. Quét Toàn Bộ Kho Phim (Bulk Export)
-Dùng để quét toàn bộ dữ liệu phim trên TMDB (hơn 1 triệu phim). API sử dụng kỹ thuật stream file nén từ TMDB, giúp tiết kiệm bộ nhớ Server.
+```properties
+tmdb.integration-enabled=${TMDB_INTEGRATION_ENABLED:true}
+tmdb.scheduler.enabled=${TMDB_AUTO_SYNC_ENABLED:false}
+tmdb.batch-size=100
+```
 
-- **Endpoint:** `GET /api/tmdb/export`
-- **Query Parameters:**
-  - `cursor` (int): Vị trí bắt đầu quét (mặc định: `0`).
-  - `limit` (int): Số lượng phim muốn quét trong đợt này (mặc định: `20`, không nên vượt quá 50 để tránh block).
-- **Response Format (200 OK):**
-  ```json
-  {
-      "cursor": 0,
-      "nextCursor": 20,
-      "limit": 20,
-      "hasMore": true,
-      "movies": [
-          {
-              "tmdbId": 550,
-              "lastUpdated": "2026-07-16T14:00:00.000Z",
-              "qualityScore": 95,
-              "qualityStatus": "ACCEPT",
-              "movie": {
-                  "tmdbId": 550,
-                  "title": "Fight Club",
-                  "originalTitle": "Fight Club",
-                  "overview": "A ticking-time-bomb insomniac...",
-                  "posterPath": "/pB8O4LaSqru31CpKvYaE3cOSjD.jpg",
-                  "backdropPath": "/rr7E0NoGKxjbkb89eZ1NwPuec.jpg",
-                  "releaseDate": "1999-10-15",
-                  "runtime": 139,
-                  "genres": [
-                      { "tmdbGenreId": 18, "name": "Drama" }
-                  ],
-                  "cast": [
-                      { "tmdbPersonId": 819, "name": "Edward Norton", "character": "The Narrator", "order": 0, "profileUrl": "..." }
-                  ],
-                  "director": {
-                      "tmdbPersonId": 7467,
-                      "name": "David Fincher",
-                      "job": "Director"
-                  },
-                  "productionCompanies": [
-                      { "tmdbCompanyId": 508, "name": "Regency Enterprises" }
-                  ],
-                  "trailer": {
-                      "site": "YouTube",
-                      "key": "O1nDozs-lOA",
-                      "url": "https://www.youtube.com/watch?v=O1nDozs-lOA"
-                  },
-                  "imdbId": "tt0137523",
-                  "voteAverage": 8.4,
-                  "voteCount": 28000,
-                  "popularity": 90.5
-              }
-          }
-      ]
-  }
-  ```
+- `TMDB_INTEGRATION_ENABLED`: cho phép Movie Service kết nối tới dịch vụ TMDB.
+- `TMDB_AUTO_SYNC_ENABLED`: cho phép chạy lịch tự động. Mặc định phải là `false`.
 
----
+## API dành cho quản trị viên
 
-### 2. Lấy Phim Mới Được Tạo (Latest)
-Lấy danh sách các bộ phim vừa được hệ thống TMDB khởi tạo.
+### Xem trạng thái tiến trình
 
-- **Endpoint:** `GET /api/tmdb/movies/latest`
-- **Query Parameters:** *Không có*
-- **Response Format (200 OK):**
-  ```json
-  {
-      "success": true,
-      "movies": [
-          {
-              "tmdbId": 1234567,
-              "lastUpdated": "2026-07-16T14:30:00.000Z",
-              "qualityScore": 85,
-              "qualityStatus": "ACCEPT",
-              "movie": {
-                  // Cấu trúc Movie giống API Export
-              }
-          }
-      ]
-  }
-  ```
+```http
+GET /api/admin/tmdb/sync/state
+```
 
----
+Kết quả gồm phạm vi ngày, giới hạn, số phim đã xét, số phim nhập mới, số phim bỏ qua và thông báo dễ hiểu.
 
-### 3. Lấy Phim Vừa Cập Nhật (Updated)
-Lấy thông tin của các phim vừa có sự thay đổi về nội dung, hình ảnh, hoặc meta data trên TMDB.
+### Nhập nhiều phim
 
-- **Endpoint:** `GET /api/tmdb/movies/updated`
-- **Query Parameters:**
-  - `page` (int): Số trang (mặc định: `1`). Max 1000 trang.
-  - `startDate` (string - Optional): Ngày bắt đầu lấy dữ liệu thay đổi. Định dạng `YYYY-MM-DD`.
-  - `endDate` (string - Optional): Ngày kết thúc lấy dữ liệu thay đổi. Định dạng `YYYY-MM-DD`.
-  *(Lưu ý: `startDate` và `endDate` không được cách nhau quá 14 ngày. Nếu không truyền, mặc định lấy trong 24 giờ qua).*
-- **Response Format (200 OK):**
-  ```json
-  {
-      "success": true,
-      "page": 1,
-      "hasMore": true,
-      "movies": [
-          {
-              "tmdbId": 299534,
-              "lastUpdated": "2026-07-16T14:45:00.000Z",
-              "qualityScore": 100,
-              "qualityStatus": "ACCEPT",
-              "movie": {
-                  // Cấu trúc Movie giống API Export
-              }
-          }
-      ]
-  }
-  ```
+```http
+POST /api/admin/tmdb/sync/bulk/start
+Content-Type: application/json
 
----
-
-### 4. Đồng Bộ Phim Cụ Thể (By ID)
-Lấy dữ liệu chuẩn hóa của 1 bộ phim bất kỳ, đã được chấm điểm chất lượng tự động.
-
-- **Endpoint:** `GET /api/tmdb/movies/{tmdbId}`
-- **Path Parameters:**
-  - `tmdbId` (int): ID của phim trên TMDB (Ví dụ: `550`).
-- **Response Format (200 OK - Nếu phim đạt chuẩn >= 70đ):**
-  ```json
-  {
-      "success": true,
-      "data": {
-          "tmdbId": 550,
-          "lastUpdated": "2026-07-16T15:00:00.000Z",
-          "qualityScore": 95,
-          "qualityStatus": "ACCEPT",
-          "movie": {
-              // Cấu trúc Movie giống API Export
-          }
-      }
-  }
-  ```
-- **Response Format (404 Not Found - Nếu phim < 70đ HOẶC không tồn tại):**
-  ```json
-  {
-      "success": false,
-      "message": "Movie not found or rejected by quality checker"
-  }
-  ```
-
----
----
-
-## HƯỚNG DẪN TÍCH HỢP CHO "MOVIE SERVICE"
-
-Vì **TMDB Support API (Project này)** hoàn toàn KHÔNG kết nối tới Database, **Movie Service** bắt buộc phải tự đảm nhận các công việc sau để luồng đồng bộ hoạt động:
-
-### 1. Cơ Chế Lưu Dữ Liệu (Upsert Flow)
-Khi Movie Service nhận được dữ liệu 1 bộ phim (từ mảng `movies`), nó cần thực thi đoạn giả mã (pseudo-code) sau:
-
-```javascript
-// 1. Tìm phim trong Database của Movie Service
-let existingMovie = DB.find("SELECT * FROM movies WHERE tmdb_id = ?", movieData.tmdbId);
-
-if (!existingMovie) {
-    // 2. Nếu CHƯA CÓ -> Lưu mới
-    DB.execute("INSERT INTO movies (...) VALUES (...)", movieData.movie);
-    DB.execute("UPDATE metadata SET last_updated = ?", movieData.lastUpdated);
-} 
-else {
-    // 3. Nếu ĐÃ CÓ -> Kiểm tra có cần Update không
-    if (movieData.lastUpdated > existingMovie.last_updated) {
-        // Data trên TMDB mới hơn -> Cập nhật
-        DB.execute("UPDATE movies SET ... WHERE tmdb_id = ?", movieData.movie, movieData.tmdbId);
-        DB.execute("UPDATE metadata SET last_updated = ? WHERE tmdb_id = ?", movieData.lastUpdated, movieData.tmdbId);
-    } else {
-        // Data không đổi -> Bỏ qua (SKIP) để tiết kiệm CPU/Database
-        console.log("SKIP: Phim chưa có gì mới.");
-    }
+{
+  "scope": "FUTURE",
+  "releaseDateFrom": "2026-08-08",
+  "releaseDateTo": "2027-08-08",
+  "maxMovies": 500
 }
 ```
 
-### 2. Kịch Bản 1: Bulk Import (Lấy toàn bộ phim)
-**Mục đích:** Cào toàn bộ 1 triệu+ phim của TMDB lúc khởi tạo hệ thống.
-**Cách làm:** Viết 1 file script (hoặc vòng lặp) trên Movie Service:
-1. Gọi `GET /api/tmdb/export?cursor=0&limit=50`.
-2. Insert 50 phim trả về vào Database.
-3. Lấy biến `nextCursor` từ response, tiếp tục gọi vòng lặp `GET /api/tmdb/export?cursor=50&limit=50`.
-4. Vòng lặp chỉ dừng khi API trả về `hasMore: false`.
+Các phạm vi được hỗ trợ:
 
-### 3. Kịch Bản 2: Daily Sync (Đồng bộ hàng ngày)
-**Mục đích:** Giữ cho kho phim luôn mới (phim mới ra rạp, phim cũ có cập nhật điểm IMDb/Trailer).
-**Cách làm:** Tạo Cronjob trên Movie Service chạy mỗi ngày 1 lần vào ban đêm.
-1. Cronjob 1: Gọi `GET /api/tmdb/movies/latest` để lấy các phim vừa được cộng đồng TMDB thêm vào hệ thống hôm nay -> Insert.
-2. Cronjob 2: Gọi `GET /api/tmdb/movies/updated?startDate=YYYY-MM-DD` (ngày hôm qua) để quét các thay đổi (sửa poster, đổi trailer...) -> Update.
+- `FUTURE`: phim có ngày phát hành gốc trong tương lai.
+- `PAST`: phim đã phát hành; bắt buộc chọn đầy đủ hai ngày.
+- `RANGE`: một khoảng ngày tự chọn.
+- `ALL`: không lọc ngày; vẫn phải đặt giới hạn tối đa 5.000 phim.
 
-### 4. Kịch Bản 3: Fix Lỗi (Thêm tay)
-**Mục đích:** Admin phát hiện 1 phim đang thiếu trên hệ thống và muốn thêm khẩn cấp.
-**Cách làm:** Movie Service làm 1 nút UI trên Admin Panel cho nhập TMDB ID. Khi bấm nút, Movie Service gọi `GET /api/tmdb/movies/{id}`. Nhận JSON xịn về và tự động Insert vào DB ngay lập tức. Nếu API trả 404, báo lỗi cho Admin "Phim chất lượng quá kém, không được phép thêm".
+Chạy lại từ đầu:
+
+```http
+POST /api/admin/tmdb/sync/bulk/reset
+```
+
+Dừng tiến trình:
+
+```http
+POST /api/admin/tmdb/sync/bulk/stop
+```
+
+### Nhập một phim
+
+```http
+POST /api/admin/tmdb/sync/{tmdbId}
+```
+
+Luồng này phù hợp nhất khi quản trị viên muốn chiếu lại một phim cũ cụ thể.
+
+## Hợp đồng với dịch vụ hỗ trợ TMDB
+
+### Đọc danh sách theo con trỏ và khoảng ngày
+
+```http
+GET /api/tmdb/export
+    ?cursor=0
+    &limit=100
+    &releaseDateFrom=2026-08-08
+    &releaseDateTo=2027-08-08
+```
+
+Hai tham số ngày là tùy chọn. Dịch vụ hỗ trợ TMDB nên lọc trước khi trả dữ liệu để Movie Service không phải đọc toàn bộ kho. Movie Service vẫn lọc lại một lần nhằm bảo vệ quy tắc nghiệp vụ khi dịch vụ nguồn chưa hỗ trợ phiên bản hợp đồng mới.
+
+Ví dụ kết quả:
+
+```json
+{
+  "cursor": 0,
+  "nextCursor": 100,
+  "limit": 100,
+  "hasMore": true,
+  "movies": [
+    {
+      "tmdbId": 550,
+      "lastUpdated": "2026-07-16T14:00:00",
+      "qualityStatus": "ACCEPT",
+      "movie": {
+        "tmdbId": 550,
+        "title": "Fight Club",
+        "originalTitle": "Fight Club",
+        "releaseDate": "1999-10-15",
+        "runtimeMinutes": 139
+      }
+    }
+  ]
+}
+```
+
+### Đọc một phim
+
+```http
+GET /api/tmdb/movies/{tmdbId}
+```
+
+### Phim mới và phim được cập nhật
+
+```http
+GET /api/tmdb/movies/latest
+GET /api/tmdb/movies/updated?lastUpdated=2026-08-06
+```
+
+Hai API này chỉ được gọi bởi lịch tự động khi `TMDB_AUTO_SYNC_ENABLED=true`.
+
+## Đợt khai thác tại rạp
+
+Xem lịch sử:
+
+```http
+GET /api/admin/movies/{moviePublicId}/exhibition-periods
+```
+
+Lập đợt mới:
+
+```http
+POST /api/admin/movies/{moviePublicId}/exhibition-periods
+Content-Type: application/json
+
+{
+  "startDate": "2026-08-20",
+  "endDate": "2026-09-05",
+  "note": "Chiếu lại trong tuần lễ phim kinh điển"
+}
+```
+
+Sau khi lập đợt tương lai cho phim Đã kết thúc, quản trị viên có thể chuyển phim sang **Sắp chiếu**. Ngày phát hành gốc không thay đổi.
+
+## Chuyển đổi cơ sở dữ liệu
+
+Chạy tệp:
+
+```text
+docs/database/mysql/migrations/20260807_separate_tmdb_release_and_exhibition_periods.sql
+```
+
+Migration sẽ:
+
+- bổ sung `original_release_date`;
+- cho phép phim TMDB chưa có thời gian khai thác được giữ ở Chờ hoàn thiện;
+- tạo bảng lịch sử đợt khai thác;
+- bổ sung thông tin tiến độ cho tiến trình TMDB.

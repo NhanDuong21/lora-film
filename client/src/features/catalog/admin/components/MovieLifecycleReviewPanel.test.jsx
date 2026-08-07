@@ -47,7 +47,7 @@ describe('MovieLifecycleReviewPanel approval target', () => {
   });
 
   it('keeps a released movie blocked while no operational showtime exists', () => {
-    const blocker = 'NOW_SHOWING requires at least one current or future non-cancelled showtime.';
+    const blocker = 'Muốn chuyển sang Đang chiếu, phim phải có ít nhất một suất chiếu hiện tại hoặc tương lai chưa bị hủy.';
     renderPanel({ ...readyMovie, releaseDate: '2020-01-01' }, {
       approvalTarget: 'NOW_SHOWING',
       canApprove: false,
@@ -56,5 +56,12 @@ describe('MovieLifecycleReviewPanel approval target', () => {
 
     expect(screen.getByRole('button', { name: 'Duyệt sang Đang chiếu' })).toBeDisabled();
     expect(screen.getByText(blocker)).toBeInTheDocument();
+  });
+
+  it('requires a future exhibition period before replaying an ended movie', () => {
+    renderPanel({ ...readyMovie, source: 'MANUAL', status: 'ENDED', releaseDate: '2020-01-01' });
+
+    expect(screen.getByRole('button', { name: 'Đưa vào đợt chiếu lại' })).toBeDisabled();
+    expect(screen.getByText('Hãy lập một đợt khai thác mới có ngày bắt đầu sau hôm nay.')).toBeInTheDocument();
   });
 });

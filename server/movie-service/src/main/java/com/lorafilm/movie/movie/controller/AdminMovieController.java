@@ -17,6 +17,9 @@ import com.lorafilm.movie.movie.dto.MovieStatusHistoryResponse;
 import com.lorafilm.movie.movie.service.MovieStatusHistoryService;
 import com.lorafilm.movie.movie.dto.MovieLaunchReadinessResponse;
 import com.lorafilm.movie.movie.service.MovieLaunchReadinessService;
+import com.lorafilm.movie.movie.service.MovieExhibitionPeriodService;
+import com.lorafilm.movie.movie.dto.CreateMovieExhibitionPeriodRequest;
+import com.lorafilm.movie.movie.dto.MovieExhibitionPeriodResponse;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieReviewResponse;
 import com.lorafilm.movie.integration.tmdb.service.TmdbMovieReviewService;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
@@ -40,6 +43,7 @@ public class AdminMovieController {
     private final TmdbMovieReviewService tmdbMovieReviewService;
     private final MovieStatusHistoryService movieStatusHistoryService;
     private final MovieLaunchReadinessService movieLaunchReadinessService;
+    private final MovieExhibitionPeriodService movieExhibitionPeriodService;
 
     public AdminMovieController(
             AdminMovieService adminMovieService,
@@ -47,13 +51,15 @@ public class AdminMovieController {
             MovieSummaryQueryService movieSummaryQueryService,
             TmdbMovieReviewService tmdbMovieReviewService,
             MovieStatusHistoryService movieStatusHistoryService,
-            MovieLaunchReadinessService movieLaunchReadinessService) {
+            MovieLaunchReadinessService movieLaunchReadinessService,
+            MovieExhibitionPeriodService movieExhibitionPeriodService) {
         this.adminMovieService = adminMovieService;
         this.movieService = movieService;
         this.movieSummaryQueryService = movieSummaryQueryService;
         this.tmdbMovieReviewService = tmdbMovieReviewService;
         this.movieStatusHistoryService = movieStatusHistoryService;
         this.movieLaunchReadinessService = movieLaunchReadinessService;
+        this.movieExhibitionPeriodService = movieExhibitionPeriodService;
     }
 
     @PostMapping
@@ -188,5 +194,20 @@ public class AdminMovieController {
     public ResponseEntity<ApiResponse<MovieLaunchReadinessResponse>> getLaunchReadiness(
             @PathVariable("publicId") String publicId) {
         return ResponseEntity.ok(ApiResponse.ok(movieLaunchReadinessService.get(publicId)));
+    }
+
+    @GetMapping("/{publicId}/exhibition-periods")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<java.util.List<MovieExhibitionPeriodResponse>>> getExhibitionPeriods(
+            @PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(ApiResponse.ok(movieExhibitionPeriodService.getPeriods(publicId)));
+    }
+
+    @PostMapping("/{publicId}/exhibition-periods")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<MovieExhibitionPeriodResponse>> createExhibitionPeriod(
+            @PathVariable("publicId") String publicId,
+            @Valid @RequestBody CreateMovieExhibitionPeriodRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(movieExhibitionPeriodService.createPeriod(publicId, request)));
     }
 }

@@ -4,6 +4,7 @@ import { useOutletContext } from 'react-router-dom';
 import { getStatusConfig } from '@/features/catalog/admin/config/movieStatusConfig';
 import { formatDate, AGE_RATING_LABELS } from '@/utils/movieHelpers';
 import MovieFormModal from '../../components/MovieFormModal';
+import MovieExhibitionPeriodPanel from '../../components/MovieExhibitionPeriodPanel';
 
 function InfoItem({ icon: Icon, label, value, emptyText = 'Chưa có thông tin' }) {
   return (
@@ -63,16 +64,21 @@ export default function MovieOverviewTab({ movie, onUpdate }) {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-5">
-          <h4 className="text-sm font-bold text-orange-300">Lịch và phân loại</h4>
+          <h4 className="text-sm font-bold text-orange-300">Phát hành và khai thác</h4>
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             <InfoItem
               icon={CalendarDays}
-              label="Ngày khởi chiếu"
+              label="Ngày phát hành gốc"
+              value={movie.originalReleaseDate ? formatDate(movie.originalReleaseDate) : ''}
+            />
+            <InfoItem
+              icon={CalendarDays}
+              label="Ngày bắt đầu khai thác tại rạp"
               value={movie.releaseDate ? formatDate(movie.releaseDate) : ''}
             />
             <InfoItem
               icon={CalendarDays}
-              label="Ngày ngừng chiếu"
+              label="Ngày kết thúc khai thác tại rạp"
               value={movie.endDate ? formatDate(movie.endDate) : ''}
             />
             <InfoItem
@@ -94,6 +100,8 @@ export default function MovieOverviewTab({ movie, onUpdate }) {
           </div>
         </section>
       </div>
+
+      <MovieExhibitionPeriodPanel movie={movie} onUpdate={onUpdate} />
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-5">
         <h4 className="text-sm font-bold text-orange-300">Tóm tắt nội dung</h4>

@@ -92,7 +92,7 @@ public class MovieLaunchReadinessService {
                 && !approvalPolicy.hasOperationalShowtime(movie.getId())) {
             warnings.add(new MovieLaunchReadinessResponse.LaunchIssue(
                     "RELEASE_DATE_REACHED_WITHOUT_SHOWTIME",
-                    "Đã đến ngày khởi chiếu nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.",
+                    "Đã đến ngày bắt đầu khai thác nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.",
                     "CREATE_SHOWTIME", null));
         }
 

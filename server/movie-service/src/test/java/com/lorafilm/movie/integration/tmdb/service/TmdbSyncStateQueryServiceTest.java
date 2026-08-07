@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -25,6 +26,9 @@ class TmdbSyncStateQueryServiceTest {
 
     @Mock
     private TmdbProperties tmdbProperties;
+
+    @Mock
+    private Environment environment;
 
     @InjectMocks
     private TmdbSyncStateQueryService queryService;
@@ -107,6 +111,18 @@ class TmdbSyncStateQueryServiceTest {
         TmdbSyncStateDto result = queryService.getSyncState("TEST_SYNC");
 
         assertEquals("FAILED", result.getDisplayStatus());
+    }
+
+    @Test
+    void testGetSyncState_Stopping() {
+        TmdbSyncState state = new TmdbSyncState();
+        state.setStatus("STOPPING");
+        when(syncStateRepository.findBySyncType("TEST_SYNC")).thenReturn(Optional.of(state));
+
+        TmdbSyncStateDto result = queryService.getSyncState("TEST_SYNC");
+
+        assertEquals("STOPPING", result.getDisplayStatus());
+        assertFalse(result.isStale());
     }
 
     @Test

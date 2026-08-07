@@ -20,6 +20,7 @@ public class MovieMapper {
         dto.setSynopsis(movie.getSynopsis());
         dto.setDurationMinutes(movie.getDurationMinutes());
         dto.setAgeRating(movie.getAgeRating());
+        dto.setOriginalReleaseDate(movie.getOriginalReleaseDate());
         dto.setReleaseDate(movie.getReleaseDate());
         dto.setEndDate(movie.getEndDate());
         dto.setStatus(movie.getStatus());

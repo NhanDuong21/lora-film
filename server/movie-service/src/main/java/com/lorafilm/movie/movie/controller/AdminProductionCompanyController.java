@@ -43,6 +43,6 @@ public class AdminProductionCompanyController {
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ApiResponse<String> deleteProductionCompany(@PathVariable("companyId") String companyId) {
         adminProductionCompanyService.deleteProductionCompany(companyId);
-        return ApiResponse.ok("Production company deleted successfully");
+        return ApiResponse.ok("Đã xóa hãng phim thành công.");
     }
 }

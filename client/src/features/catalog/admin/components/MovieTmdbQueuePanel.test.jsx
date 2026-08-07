@@ -11,10 +11,10 @@ describe('MovieTmdbQueuePanel', () => {
       />,
     );
 
-    expect(screen.getByText('Phim sắp phát hành')).toBeInTheDocument();
+    expect(screen.getByText('Sắp tới thời gian khai thác')).toBeInTheDocument();
     expect(screen.getByText('Đủ lịch để đang chiếu')).toBeInTheDocument();
     expect(screen.getByText('Cần lập lịch chiếu')).toBeInTheDocument();
-    expect(screen.getByText('Chưa có ngày khởi chiếu')).toBeInTheDocument();
+    expect(screen.getByText('Chưa có ngày bắt đầu khai thác')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();

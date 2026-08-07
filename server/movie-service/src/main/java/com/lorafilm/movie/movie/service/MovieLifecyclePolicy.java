@@ -42,13 +42,13 @@ public class MovieLifecyclePolicy {
     public List<String> getTransitionViolations(Movie movie, MovieStatus targetStatus) {
         List<String> violations = new ArrayList<>();
         if (movie == null || movie.getStatus() == null || targetStatus == null) {
-            violations.add("Current and target movie status are required.");
+            violations.add("Hệ thống chưa xác định được trạng thái hiện tại hoặc trạng thái cần chuyển đến.");
             return violations;
         }
 
         Set<MovieStatus> allowedTargets = ALLOWED_TRANSITIONS.getOrDefault(movie.getStatus(), Set.of());
         if (!allowedTargets.contains(targetStatus)) {
-            violations.add("Transition from " + movie.getStatus() + " to " + targetStatus + " is not allowed.");
+            violations.add("Không thể thực hiện thay đổi trạng thái này trong vòng đời hiện tại của phim.");
             return violations;
         }
 
@@ -60,23 +60,23 @@ public class MovieLifecyclePolicy {
                 || targetStatus == MovieStatus.NOW_SHOWING
                 || targetStatus == MovieStatus.ENDED;
         if (targetUsesReleaseWindow && releaseDate != null && endDate != null && endDate.isBefore(releaseDate)) {
-            violations.add("End date cannot be before release date.");
+            violations.add("Ngày kết thúc khai thác không được trước ngày bắt đầu khai thác.");
         }
 
         if (targetStatus == MovieStatus.UPCOMING) {
             if (releaseDate == null || !releaseDate.isAfter(today)) {
-                violations.add("UPCOMING requires a release date after today.");
+                violations.add("Muốn chuyển sang Sắp chiếu, ngày bắt đầu khai thác phải sau hôm nay.");
             }
         } else if (targetStatus == MovieStatus.NOW_SHOWING) {
             if (releaseDate == null || releaseDate.isAfter(today)) {
-                violations.add("NOW_SHOWING requires a release date on or before today.");
+                violations.add("Muốn chuyển sang Đang chiếu, ngày bắt đầu khai thác phải là hôm nay hoặc trước đó.");
             }
             if (endDate != null && endDate.isBefore(today)) {
-                violations.add("NOW_SHOWING cannot have an end date before today.");
+                violations.add("Không thể chuyển sang Đang chiếu khi đợt khai thác đã kết thúc.");
             }
         } else if (targetStatus == MovieStatus.ENDED) {
             if (endDate == null || endDate.isAfter(today)) {
-                violations.add("ENDED requires an end date on or before today.");
+                violations.add("Muốn kết thúc phim, ngày kết thúc khai thác phải là hôm nay hoặc trước đó.");
             }
         }
 
