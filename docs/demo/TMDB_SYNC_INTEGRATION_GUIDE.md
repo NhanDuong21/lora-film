@@ -11,7 +11,7 @@ Tài liệu này mô tả hợp đồng giữa **Movie Service** và dịch vụ
 5. `releaseDate` và `endDate` là thời gian của đợt khai thác hiện tại tại rạp.
 6. Khi chiếu lại phim cũ, quản trị viên lập đợt khai thác mới; không sửa ngày phát hành gốc.
 7. Phim cũ nhập từ TMDB chưa có thời gian khai thác tại rạp (`releaseDate = null`); quản trị viên phải lập một đợt tương lai nếu muốn chiếu lại.
-7. Dữ liệu quản trị viên đã chỉnh không bị tiến trình TMDB tự động ghi đè.
+8. Dữ liệu quản trị viên đã chỉnh không bị tiến trình TMDB tự động ghi đè.
 
 ## Cấu hình Movie Service
 
@@ -127,7 +127,43 @@ GET /api/tmdb/movies/latest
 GET /api/tmdb/movies/updated?lastUpdated=2026-08-06
 ```
 
-Hai API này chỉ được gọi bởi lịch tự động khi `TMDB_AUTO_SYNC_ENABLED=true`.
+### Tìm phim theo tên
+
+Để màn quản trị có thể gợi ý phim theo tên, dịch vụ TMDB riêng cần cung cấp:
+
+```http
+GET /api/tmdb/search?query=Avatar&limit=8
+x-api-key: <khóa nội bộ>
+```
+
+Phản hồi:
+
+```json
+{
+  "results": [
+    {
+      "tmdbId": 19995,
+      "title": "Avatar",
+      "originalTitle": "Avatar",
+      "releaseDate": "2009-12-18",
+      "posterPath": "/kyeqWdyUXW608qlYkRqosgbbJyK.jpg",
+      "overview": "Nội dung giới thiệu ngắn"
+    }
+  ]
+}
+```
+
+Movie Service gọi API này ở phía máy chủ; frontend không gọi trực tiếp TMDB và không được nhận khóa nội bộ.
+
+API dành cho màn quản trị:
+
+```http
+GET /api/admin/tmdb/movies/search?query=Avatar&limit=8
+```
+
+Kết quả có thêm `alreadyImported`, `localMoviePublicId` và `localMovieStatus` để ngăn admin nhập trùng phim.
+
+Hai API tìm kiếm chỉ chạy khi quản trị viên nhập tên phim trên giao diện; chúng không tự nhập phim và không phụ thuộc lịch tự động.
 
 ## Đợt khai thác tại rạp
 

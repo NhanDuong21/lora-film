@@ -17,6 +17,14 @@ const adminTmdbService = {
     const response = await apiClient.post(`${BASE_URL}/sync/bulk/start`, request);
     return response.data;
   },
+
+  searchMovies: async (query, signal) => {
+    const response = await apiClient.get(`${BASE_URL}/movies/search`, {
+      params: { query, limit: 8 },
+      signal,
+    });
+    return response.data.data || [];
+  },
   
   resetBulkSync: async (request) => {
     const response = await apiClient.post(`${BASE_URL}/sync/bulk/reset`, request);

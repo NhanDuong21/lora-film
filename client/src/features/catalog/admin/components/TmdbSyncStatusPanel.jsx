@@ -7,9 +7,9 @@ import {
   Loader2,
   Play,
   RefreshCw,
-  Search,
 } from 'lucide-react';
 import adminTmdbService from '@/features/catalog/admin/services/adminTmdbService';
+import TmdbMovieSearchImport from './TmdbMovieSearchImport';
 
 const toDateInput = date => {
   const year = date.getFullYear();
@@ -135,7 +135,6 @@ export default function TmdbSyncStatusPanel() {
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState('');
   const [notice, setNotice] = useState(null);
-  const [tmdbId, setTmdbId] = useState('');
   const [form, setForm] = useState({
     scope: 'FUTURE',
     ...defaultDates('FUTURE'),
@@ -208,26 +207,6 @@ export default function TmdbSyncStatusPanel() {
         message: 'Đã nhận yêu cầu dừng. Hệ thống đang kết thúc tác vụ hiện tại.',
       }));
       setTimeout(fetchSyncState, 300);
-    } catch (error) {
-      setNotice({ type: 'error', message: errorMessage(error) });
-    } finally {
-      setAction('');
-    }
-  };
-
-  const importOneMovie = async event => {
-    event.preventDefault();
-    const parsedId = Number(tmdbId);
-    if (!Number.isInteger(parsedId) || parsedId <= 0) {
-      setNotice({ type: 'error', message: 'Vui lòng nhập mã TMDB hợp lệ.' });
-      return;
-    }
-    setAction('single');
-    setNotice(null);
-    try {
-      const response = await adminTmdbService.syncMovieById(parsedId);
-      setNotice({ type: 'success', message: response?.data || 'Đã xử lý phim được chọn.' });
-      setTmdbId('');
     } catch (error) {
       setNotice({ type: 'error', message: errorMessage(error) });
     } finally {
@@ -413,34 +392,7 @@ export default function TmdbSyncStatusPanel() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-        <h3 className="text-sm font-bold text-white">Nhập một phim theo mã TMDB</h3>
-        <p className="mt-1 text-xs leading-5 text-zinc-500">
-          Phù hợp khi cần chiếu lại một phim cũ mà không muốn nhập cả kho phim quá khứ.
-        </p>
-        <form onSubmit={importOneMovie} className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <label className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-            <input
-              type="number"
-              min="1"
-              value={tmdbId}
-              onChange={event => setTmdbId(event.target.value)}
-              placeholder="Nhập mã TMDB, ví dụ: 550"
-              aria-label="Mã TMDB của phim"
-              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 pl-10 pr-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-orange-500"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={action === 'single'}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-500/10 px-4 text-xs font-bold text-orange-200 hover:bg-orange-500/20 disabled:opacity-50"
-          >
-            {action === 'single' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
-            Nhập phim này
-          </button>
-        </form>
-      </section>
+      <TmdbMovieSearchImport />
     </div>
   );
 }

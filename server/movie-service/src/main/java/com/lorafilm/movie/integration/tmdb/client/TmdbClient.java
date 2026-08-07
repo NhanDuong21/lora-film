@@ -120,6 +120,24 @@ public class TmdbClient {
         }
     }
 
+    public String searchMovies(String query, int limit) {
+        log.info("[TmdbClient] Searching TMDB movies (query={}, limit={})", query, limit);
+        try {
+            byte[] response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/api/tmdb/search")
+                            .queryParam("query", query)
+                            .queryParam("limit", limit)
+                            .build())
+                    .retrieve()
+                    .body(byte[].class);
+            return response != null ? new String(response, StandardCharsets.UTF_8) : null;
+        } catch (Exception exception) {
+            log.error("[TmdbClient] Error searching TMDB movies: {}", exception.getMessage());
+            throw exception;
+        }
+    }
+
     public String fetchPersonDetails(Long tmdbPersonId) {
         log.info("[TmdbClient] Fetching person details from TMDB API (tmdbPersonId={})", tmdbPersonId);
         try {
