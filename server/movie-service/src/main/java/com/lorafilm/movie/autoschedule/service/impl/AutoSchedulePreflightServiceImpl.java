@@ -184,12 +184,15 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
                     "/admin/pricing-policies?cinemaId=" + cinemaPublicId));
         }
 
-        if (!compatiblePairs.isEmpty() && !operatingWindows.isEmpty()
-                && !hasAnyAvailableSlot(auditoriums, versions, compatiblePairs,
-                operatingWindows, planningFacts)) {
-            blockers.add(blocker("PLANNING_RANGE_FULLY_BLOCKED",
-                    "Tất cả khung giờ khả dụng đều đang bị chặn bởi lịch chiếu hiện có, thời gian rạp đóng cửa hoặc lịch bảo trì",
-                    "/admin/showtimes?cinemaId=" + cinemaPublicId));
+        if (!compatiblePairs.isEmpty() && !operatingWindows.isEmpty()) {
+            AvailabilityAnalysis availability = analyzeAvailability(
+                    cinema, auditoriums, versions, compatiblePairs, operatingWindows, planningFacts);
+            if (!availability.hasAvailableSlot()) {
+                blockers.add(blocker("PLANNING_RANGE_FULLY_BLOCKED",
+                        "Không còn phương án xếp lịch khả thi trong phạm vi đã chọn. Xem chi tiết theo từng ngày và phòng bên dưới.",
+                        availability.primaryActionPath(),
+                        availability.details()));
+            }
         }
 
         String eligibilityFingerprint = eligibilityFingerprint(
@@ -339,38 +342,154 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
         return new PricingFacts(missing, ambiguous, List.copyOf(facts));
     }
 
-    private boolean hasAnyAvailableSlot(List<Auditorium> auditoriums,
-                                        List<MovieVersion> versions,
-                                        Set<AutoSchedulePreflightResult.CompatiblePair> compatiblePairs,
-                                        List<OperatingWindow> windows,
-                                        PlanningFacts facts) {
+    private AvailabilityAnalysis analyzeAvailability(
+            Cinema cinema,
+            List<Auditorium> auditoriums,
+            List<MovieVersion> versions,
+            Set<AutoSchedulePreflightResult.CompatiblePair> compatiblePairs,
+            List<OperatingWindow> windows,
+            PlanningFacts facts) {
         Map<Long, Auditorium> auditoriumsById = new HashMap<>();
         auditoriums.forEach(auditorium -> auditoriumsById.put(auditorium.getId(), auditorium));
         Map<Long, MovieVersion> versionsById = new HashMap<>();
         versions.forEach(version -> versionsById.put(version.getId(), version));
+        Map<Long, List<MovieVersion>> compatibleVersionsByAuditorium = new HashMap<>();
         for (AutoSchedulePreflightResult.CompatiblePair pair : compatiblePairs) {
-            Auditorium auditorium = auditoriumsById.get(pair.auditoriumId());
-            MovieVersion version = versionsById.get(pair.movieVersionId());
-            if (auditorium == null || version == null) continue;
-            Movie movie = version.getMovie();
-            for (OperatingWindow window : windows) {
-                if (!isWithinReleaseWindow(movie, window.getServiceDate())) continue;
-                Instant cursor = window.getOpenInstant();
-                Instant showtimeEnd = cursor.plus(movie.getDurationMinutes(), ChronoUnit.MINUTES);
-                while (!showtimeEnd.isAfter(window.getCloseInstant())) {
-                    Instant occupancyEnd = showtimeEnd.plus(
-                            auditorium.getCleaningBufferMinutes(), ChronoUnit.MINUTES);
-                    if (!overlapsAny(cursor, occupancyEnd, facts.closures())
-                            && !overlapsMaintenance(auditorium.getId(), cursor, occupancyEnd, facts.maintenance())
-                            && !overlapsShowtimes(auditorium.getId(), cursor, occupancyEnd, facts.showtimes())) {
-                        return true;
+            if (auditoriumsById.containsKey(pair.auditoriumId())
+                    && versionsById.containsKey(pair.movieVersionId())) {
+                compatibleVersionsByAuditorium
+                        .computeIfAbsent(pair.auditoriumId(), ignored -> new ArrayList<>())
+                        .add(versionsById.get(pair.movieVersionId()));
+            }
+        }
+
+        List<AutoSchedulePreflightResponse.BlockerDetail> details = new ArrayList<>();
+        List<OperatingWindow> sortedWindows = windows.stream()
+                .sorted(Comparator.comparing(OperatingWindow::getServiceDate)
+                        .thenComparing(OperatingWindow::getOpenInstant))
+                .toList();
+        List<Auditorium> sortedAuditoriums = auditoriums.stream()
+                .sorted(Comparator.comparing(Auditorium::getName)
+                        .thenComparing(Auditorium::getPublicId))
+                .toList();
+
+        for (OperatingWindow window : sortedWindows) {
+            for (Auditorium auditorium : sortedAuditoriums) {
+                List<MovieVersion> compatibleVersions = compatibleVersionsByAuditorium
+                        .getOrDefault(auditorium.getId(), List.of());
+                if (compatibleVersions.isEmpty()) {
+                    details.add(detail(
+                            "NO_COMPATIBLE_VERSION_FOR_ROOM", window, auditorium, 0,
+                            auditorium.getName() + ": không có định dạng phim nào tương thích với phòng.",
+                            cinemaTabPath(cinema, "auditoriums")));
+                    continue;
+                }
+
+                List<MovieVersion> releaseEligibleVersions = compatibleVersions.stream()
+                        .filter(version -> isWithinReleaseWindow(
+                                version.getMovie(), window.getServiceDate()))
+                        .sorted(Comparator.comparing(MovieVersion::getPublicId))
+                        .toList();
+                if (releaseEligibleVersions.isEmpty()) {
+                    details.add(detail(
+                            "NO_MOVIE_IN_RELEASE_WINDOW", window, auditorium, 0,
+                            auditorium.getName() + ": không có phim tương thích còn trong thời gian phát hành vào ngày này.",
+                            "/admin/movies"));
+                    continue;
+                }
+
+                int attemptedCandidates = 0;
+                int closureConflicts = 0;
+                int maintenanceConflicts = 0;
+                int showtimeConflicts = 0;
+                boolean anyMovieFitsOperatingWindow = false;
+
+                for (MovieVersion version : releaseEligibleVersions) {
+                    Movie movie = version.getMovie();
+                    Integer durationMinutes = movie.getDurationMinutes();
+                    if (durationMinutes == null || durationMinutes <= 0) continue;
+                    Instant lastStart = window.getCloseInstant()
+                            .minus(durationMinutes.longValue(), ChronoUnit.MINUTES);
+                    if (lastStart.isBefore(window.getOpenInstant())) continue;
+                    anyMovieFitsOperatingWindow = true;
+
+                    Instant cursor = window.getOpenInstant();
+                    while (!cursor.isAfter(lastStart)) {
+                        attemptedCandidates++;
+                        Instant showtimeEnd = cursor.plus(durationMinutes.longValue(), ChronoUnit.MINUTES);
+                        Instant occupancyEnd = showtimeEnd.plus(
+                                auditorium.getCleaningBufferMinutes(), ChronoUnit.MINUTES);
+                        boolean blockedByClosure = overlapsAny(
+                                cursor, occupancyEnd, facts.closures());
+                        boolean blockedByMaintenance = overlapsMaintenance(
+                                auditorium.getId(), cursor, occupancyEnd, facts.maintenance());
+                        boolean blockedByShowtime = overlapsShowtimes(
+                                auditorium.getId(), auditorium.getCleaningBufferMinutes(),
+                                cursor, occupancyEnd, facts.showtimes());
+
+                        if (!blockedByClosure && !blockedByMaintenance && !blockedByShowtime) {
+                            return new AvailabilityAnalysis(true, List.of(), null);
+                        }
+                        if (blockedByClosure) closureConflicts++;
+                        if (blockedByMaintenance) maintenanceConflicts++;
+                        if (blockedByShowtime) showtimeConflicts++;
+                        cursor = cursor.plus(SLOT_MINUTES, ChronoUnit.MINUTES);
                     }
-                    cursor = cursor.plus(SLOT_MINUTES, ChronoUnit.MINUTES);
-                    showtimeEnd = cursor.plus(movie.getDurationMinutes(), ChronoUnit.MINUTES);
+                }
+
+                if (!anyMovieFitsOperatingWindow) {
+                    long operatingMinutes = Duration.between(
+                            window.getOpenInstant(), window.getCloseInstant()).toMinutes();
+                    int shortestMovieMinutes = releaseEligibleVersions.stream()
+                            .map(MovieVersion::getMovie)
+                            .map(Movie::getDurationMinutes)
+                            .filter(java.util.Objects::nonNull)
+                            .min(Integer::compareTo)
+                            .orElse(0);
+                    details.add(detail(
+                            "OPERATING_WINDOW_TOO_SHORT", window, auditorium, 0,
+                            auditorium.getName() + ": cửa sổ hoạt động dài " + operatingMinutes
+                                    + " phút, không đủ cho phim tương thích ngắn nhất "
+                                    + shortestMovieMinutes + " phút.",
+                            cinemaTabPath(cinema, "operating-hours")));
+                    continue;
+                }
+
+                if (showtimeConflicts > 0) {
+                    details.add(detail(
+                            "EXISTING_SHOWTIME_CONFLICT", window, auditorium, showtimeConflicts,
+                            auditorium.getName() + ": " + showtimeConflicts + "/" + attemptedCandidates
+                                    + " phương án trùng lịch chiếu hiện có (đã tính thời gian vệ sinh).",
+                            showtimePath(cinema, window.getServiceDate())));
+                }
+                if (maintenanceConflicts > 0) {
+                    details.add(detail(
+                            "MAINTENANCE_CONFLICT", window, auditorium, maintenanceConflicts,
+                            auditorium.getName() + ": " + maintenanceConflicts + "/" + attemptedCandidates
+                                    + " phương án trùng thời gian đóng phòng hoặc bảo trì.",
+                            auditoriumMaintenancePath(auditorium)));
+                }
+                if (closureConflicts > 0) {
+                    details.add(detail(
+                            "CINEMA_CLOSURE_CONFLICT", window, auditorium, closureConflicts,
+                            auditorium.getName() + ": " + closureConflicts + "/" + attemptedCandidates
+                                    + " phương án trùng thời gian đóng cửa toàn rạp.",
+                            cinemaTabPath(cinema, "closure-periods")));
                 }
             }
         }
-        return false;
+
+        details.sort(Comparator
+                .comparing(AutoSchedulePreflightResponse.BlockerDetail::serviceDate)
+                .thenComparing(AutoSchedulePreflightResponse.BlockerDetail::auditoriumName,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(AutoSchedulePreflightResponse.BlockerDetail::code));
+        String primaryActionPath = details.stream()
+                .map(AutoSchedulePreflightResponse.BlockerDetail::actionPath)
+                .filter(path -> path != null && !path.isBlank())
+                .findFirst()
+                .orElse(showtimePath(cinema, sortedWindows.get(0).getServiceDate()));
+        return new AvailabilityAnalysis(false, List.copyOf(details), primaryActionPath);
     }
 
     private boolean isWithinReleaseWindow(Movie movie, LocalDate serviceDate) {
@@ -388,10 +507,12 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
                 && overlaps(start, end, item.getStartTime(), item.getEndTime()));
     }
 
-    private boolean overlapsShowtimes(Long auditoriumId, Instant start, Instant end,
-                                     List<Showtime> showtimes) {
+    private boolean overlapsShowtimes(Long auditoriumId, int cleaningBufferMinutes,
+                                      Instant start, Instant end,
+                                      List<Showtime> showtimes) {
         return showtimes.stream().anyMatch(item -> item.getAuditorium().getId().equals(auditoriumId)
-                && overlaps(start, end, item.getStartTime(), item.getEndTime()));
+                && overlaps(start, end, item.getStartTime(), item.getEndTime().plus(
+                Math.max(0, cleaningBufferMinutes), ChronoUnit.MINUTES)));
     }
 
     private boolean overlaps(Instant firstStart, Instant firstEnd, Instant secondStart, Instant secondEnd) {
@@ -439,6 +560,49 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
         return new AutoSchedulePreflightResponse.Blocker(code, message, actionPath);
     }
 
+    private AutoSchedulePreflightResponse.Blocker blocker(
+            String code,
+            String message,
+            String actionPath,
+            List<AutoSchedulePreflightResponse.BlockerDetail> details) {
+        return new AutoSchedulePreflightResponse.Blocker(
+                code, message, actionPath, details == null ? List.of() : List.copyOf(details));
+    }
+
+    private AutoSchedulePreflightResponse.BlockerDetail detail(
+            String code,
+            OperatingWindow window,
+            Auditorium auditorium,
+            int affectedCandidateCount,
+            String message,
+            String actionPath) {
+        return new AutoSchedulePreflightResponse.BlockerDetail(
+                code,
+                window.getServiceDate(),
+                auditorium.getPublicId(),
+                auditorium.getName(),
+                affectedCandidateCount,
+                message,
+                actionPath);
+    }
+
+    private String showtimePath(Cinema cinema, LocalDate serviceDate) {
+        StringBuilder path = new StringBuilder("/admin/showtimes?date=").append(serviceDate);
+        if (cinema.getSlug() != null && !cinema.getSlug().isBlank()) {
+            path.append("&cinemaSlug=").append(java.net.URLEncoder.encode(
+                    cinema.getSlug(), StandardCharsets.UTF_8));
+        }
+        return path.toString();
+    }
+
+    private String cinemaTabPath(Cinema cinema, String tab) {
+        return "/admin/cinemas/" + cinema.getPublicId() + "?tab=" + tab;
+    }
+
+    private String auditoriumMaintenancePath(Auditorium auditorium) {
+        return "/admin/rooms/edit/" + auditorium.getPublicId() + "?tab=maintenance";
+    }
+
     private Set<String> normalizedSet(List<String> values) {
         if (values == null) return Set.of();
         Set<String> result = new HashSet<>();
@@ -466,6 +630,12 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
         private static PlanningFacts empty() {
             return new PlanningFacts(List.of(), List.of(), List.of());
         }
+    }
+
+    private record AvailabilityAnalysis(
+            boolean hasAvailableSlot,
+            List<AutoSchedulePreflightResponse.BlockerDetail> details,
+            String primaryActionPath) {
     }
 
     private record PricingFacts(boolean hasMissing,

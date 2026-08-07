@@ -19,5 +19,23 @@ public record AutoSchedulePreflightResponse(
         List<String> eligibleMovieVersionPublicIds,
         List<String> eligibleAuditoriumPublicIds) {
 
-    public record Blocker(String code, String message, String actionPath) {}
+    public record Blocker(
+            String code,
+            String message,
+            String actionPath,
+            List<BlockerDetail> details) {
+
+        public Blocker(String code, String message, String actionPath) {
+            this(code, message, actionPath, List.of());
+        }
+    }
+
+    public record BlockerDetail(
+            String code,
+            LocalDate serviceDate,
+            String auditoriumPublicId,
+            String auditoriumName,
+            int affectedCandidateCount,
+            String message,
+            String actionPath) {}
 }

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   LayoutGrid,
@@ -14,9 +14,16 @@ import AuditoriumOverviewTab from './auditorium/AuditoriumOverviewTab';
 import AuditoriumMaintenanceTab from './auditorium/AuditoriumMaintenanceTab';
 import AuditoriumSeatLayoutTab from './auditorium/AuditoriumSeatLayoutTab';
 
+const TABS = [
+  { id: 'overview', label: 'Tổng quan & tác vụ', icon: Settings },
+  { id: 'seat-layout', label: 'Sơ đồ ghế', icon: LayoutGrid },
+  { id: 'maintenance', label: 'Đóng phòng & bảo trì', icon: Wrench },
+];
+
 export default function AdminAuditoriumDetailPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { triggerToast } = useOutletContext() || {};
   const {
     auditorium,
@@ -27,17 +34,18 @@ export default function AdminAuditoriumDetailPage() {
     changeAuditoriumStatus,
     updateSeatLayout,
   } = useAuditoriumDetail(roomId, triggerToast);
-  const [activeTab, setActiveTab] = useState('overview');
+  const requestedTab = searchParams.get('tab');
+  const activeTab = TABS.some(tab => tab.id === requestedTab) ? requestedTab : 'overview';
 
   useEffect(() => {
     fetchAuditorium();
   }, [fetchAuditorium]);
 
-  const tabs = [
-    { id: 'overview', label: 'Tổng quan & tác vụ', icon: Settings },
-    { id: 'seat-layout', label: 'Sơ đồ ghế', icon: LayoutGrid },
-    { id: 'maintenance', label: 'Đóng phòng & bảo trì', icon: Wrench },
-  ];
+  const openTab = tabId => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tabId);
+    setSearchParams(next, { replace: true });
+  };
 
   if (isLoading && !auditorium) {
     return (
@@ -96,11 +104,11 @@ export default function AdminAuditoriumDetailPage() {
         </div>
 
         <nav className="mt-6 flex gap-2 overflow-x-auto">
-          {tabs.map((tab) => (
+          {TABS.map((tab) => (
             <button
               type="button"
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => openTab(tab.id)}
               className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-xs font-black uppercase tracking-wider transition-all ${
                 activeTab === tab.id
                   ? 'border-brand-orange text-brand-orange'

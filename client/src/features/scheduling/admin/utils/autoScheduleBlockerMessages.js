@@ -10,7 +10,10 @@ const blockerMessages = Object.freeze({
 });
 
 export const getAutoScheduleBlockerMessage = blocker => (
-  blockerMessages[blocker?.code] || blocker?.message || 'Phạm vi lập lịch đang có điều kiện chưa được đáp ứng.'
+  ((blocker?.details || []).length > 0 && blocker?.message)
+  || blockerMessages[blocker?.code]
+  || blocker?.message
+  || 'Phạm vi lập lịch đang có điều kiện chưa được đáp ứng.'
 );
 
 export default blockerMessages;

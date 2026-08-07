@@ -15,7 +15,10 @@ import {
 } from 'lucide-react';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
 import { getAutoScheduleBlockerMessage } from '@/features/scheduling/admin/utils/autoScheduleBlockerMessages';
-import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
+import {
+  formatPreviewDateRange,
+  formatServiceDateKey,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20';
 
@@ -80,6 +83,83 @@ const GenerationProgress = ({ planningDays }) => {
 const formatVersionLabel = (movie, version) => (
   `${movie.title} · ${version.versionName || version.format || 'Định dạng mặc định'}`
 );
+
+const blockerDetailLabels = Object.freeze({
+  EXISTING_SHOWTIME_CONFLICT: 'Lịch chiếu hiện có',
+  MAINTENANCE_CONFLICT: 'Đóng phòng hoặc bảo trì',
+  CINEMA_CLOSURE_CONFLICT: 'Đóng cửa toàn rạp',
+  NO_COMPATIBLE_VERSION_FOR_ROOM: 'Định dạng không tương thích',
+  NO_MOVIE_IN_RELEASE_WINDOW: 'Ngoài thời gian phát hành',
+  OPERATING_WINDOW_TOO_SHORT: 'Giờ hoạt động không đủ dài',
+});
+
+const groupBlockerDetailsByDate = details => {
+  const groups = new Map();
+  (details || []).forEach(detail => {
+    const dateKey = detail.serviceDate || 'unknown';
+    if (!groups.has(dateKey)) groups.set(dateKey, []);
+    groups.get(dateKey).push(detail);
+  });
+  return Array.from(groups.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([dateKey, items]) => ({
+      dateKey,
+      items: [...items].sort((left, right) => (
+        (left.auditoriumName || '').localeCompare(right.auditoriumName || '', 'vi')
+        || (left.code || '').localeCompare(right.code || '')
+      )),
+    }));
+};
+
+const AutoScheduleBlockerDetails = ({ details }) => {
+  const groups = groupBlockerDetailsByDate(details);
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="mt-3 border-t border-amber-500/20 pt-3" aria-label="Chi tiết điều kiện đang chặn">
+      <p className="text-xs font-black uppercase tracking-wider text-amber-200">
+        Chi tiết theo ngày và phòng
+      </p>
+      <div className="mt-3 space-y-3">
+        {groups.map(group => (
+          <section key={group.dateKey} className="rounded-lg border border-amber-500/20 bg-zinc-950/40 p-3">
+            <h4 className="text-sm font-black text-amber-100">
+              {formatServiceDateKey(group.dateKey, { weekday: true })}
+            </h4>
+            <ul className="mt-2 space-y-2">
+              {group.items.map((detail, index) => (
+                <li
+                  key={`${detail.code || 'UNKNOWN'}-${detail.auditoriumPublicId || 'cinema'}-${index}`}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <span className="inline-flex rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-amber-300">
+                        {blockerDetailLabels[detail.code] || 'Điều kiện vận hành'}
+                      </span>
+                      <p className="mt-2 text-xs leading-5 text-zinc-200">{detail.message}</p>
+                    </div>
+                    {detail.actionPath && (
+                      <Link
+                        to={detail.actionPath}
+                        className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-brand-orange"
+                      >
+                        Xử lý nguyên nhân này <ChevronRight className="h-3.5 w-3.5" />
+                      </Link>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] leading-4 text-amber-100/60">
+        Số phương án có thể chồng nhiều nguyên nhân, ví dụ vừa trùng lịch chiếu vừa trùng thời gian bảo trì.
+      </p>
+    </div>
+  );
+};
 
 const ScopeChoice = ({ id, label, included, excluded, onChange }) => (
   <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -267,9 +347,12 @@ export default function AdminAutoScheduleCreatePage() {
                 {(preflight.blockers || []).length > 0 && (
                   <ul className="space-y-2">
                     {preflight.blockers.map(blocker => (
-                      <li key={blocker.code} className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <span className="flex items-start gap-2 text-sm text-amber-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {getAutoScheduleBlockerMessage(blocker)}</span>
-                        {blocker.actionPath && <Link to={blocker.actionPath} className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-brand-orange">Mở nơi xử lý <ChevronRight className="h-3.5 w-3.5" /></Link>}
+                      <li key={blocker.code} className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <span className="flex items-start gap-2 text-sm text-amber-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {getAutoScheduleBlockerMessage(blocker)}</span>
+                          {blocker.actionPath && <Link to={blocker.actionPath} className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-brand-orange">Mở nơi xử lý <ChevronRight className="h-3.5 w-3.5" /></Link>}
+                        </div>
+                        <AutoScheduleBlockerDetails details={blocker.details} />
                       </li>
                     ))}
                   </ul>

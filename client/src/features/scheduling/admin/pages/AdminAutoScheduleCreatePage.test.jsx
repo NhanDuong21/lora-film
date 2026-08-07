@@ -111,6 +111,57 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
     expect(screen.queryByText(/Closures, maintenance/)).not.toBeInTheDocument();
   });
 
+  it('shows concrete room/date diagnostics with cause-specific repair links', () => {
+    useAutoScheduleForm.mockReturnValue({
+      ...baseForm(),
+      isReady: false,
+      preflight: {
+        ...readyPreflight,
+        canGenerate: false,
+        blockers: [{
+          code: 'PLANNING_RANGE_FULLY_BLOCKED',
+          message: 'Không còn phương án xếp lịch khả thi. Xem chi tiết bên dưới.',
+          actionPath: '/admin/showtimes?date=2026-08-08&cinemaSlug=lora-cinema',
+          details: [
+            {
+              code: 'EXISTING_SHOWTIME_CONFLICT',
+              serviceDate: '2026-08-08',
+              auditoriumPublicId: 'aud-1',
+              auditoriumName: 'Phòng 1',
+              affectedCandidateCount: 12,
+              message: 'Phòng 1: 12/12 phương án trùng lịch chiếu hiện có.',
+              actionPath: '/admin/showtimes?date=2026-08-08&cinemaSlug=lora-cinema',
+            },
+            {
+              code: 'MAINTENANCE_CONFLICT',
+              serviceDate: '2026-08-08',
+              auditoriumPublicId: 'aud-2',
+              auditoriumName: 'Phòng 2',
+              affectedCandidateCount: 8,
+              message: 'Phòng 2: 8/8 phương án trùng thời gian bảo trì.',
+              actionPath: '/admin/rooms/edit/aud-2?tab=maintenance',
+            },
+          ],
+        }],
+      },
+    });
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    expect(screen.getByText('Không còn phương án xếp lịch khả thi. Xem chi tiết bên dưới.')).toBeInTheDocument();
+    expect(screen.getByText('Thứ bảy, 08/08/2026')).toBeInTheDocument();
+    expect(screen.getByText('Lịch chiếu hiện có')).toBeInTheDocument();
+    expect(screen.getByText('Đóng phòng hoặc bảo trì')).toBeInTheDocument();
+    expect(screen.getByText('Phòng 1: 12/12 phương án trùng lịch chiếu hiện có.')).toBeInTheDocument();
+    expect(screen.getByText('Phòng 2: 8/8 phương án trùng thời gian bảo trì.')).toBeInTheDocument();
+    const repairLinks = screen.getAllByRole('link', { name: 'Xử lý nguyên nhân này' });
+    expect(repairLinks[0]).toHaveAttribute(
+      'href',
+      '/admin/showtimes?date=2026-08-08&cinemaSlug=lora-cinema',
+    );
+    expect(repairLinks[1]).toHaveAttribute('href', '/admin/rooms/edit/aud-2?tab=maintenance');
+  });
+
   it('keeps include/exclude controls inside the optional advanced section', () => {
     const form = baseForm();
     useAutoScheduleForm.mockReturnValue(form);
