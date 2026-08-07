@@ -8,6 +8,7 @@ import {
   X,
 } from 'lucide-react';
 import AutoScheduleTimeline from './AutoScheduleTimeline';
+import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
 import {
   compareServiceDateKeys,
   formatCinemaDateTime,
@@ -39,9 +40,22 @@ const PRICING_STATUS_LABELS = {
   AMBIGUOUS: 'Có mức giá bị trùng',
 };
 
-const getPricingStatusLabel = status => (
-  PRICING_STATUS_LABELS[status] || 'Chưa có thông tin'
-);
+const getPricingStatusPresentation = (pricing, fallbackStatus) => {
+  const status = pricing?.status || fallbackStatus;
+  if (status && PRICING_STATUS_LABELS[status]) {
+    return { label: PRICING_STATUS_LABELS[status], tone: status === 'COMPLETE' || status === 'READY' ? 'text-emerald-300' : 'text-amber-300' };
+  }
+  if (pricing?.complete === true) {
+    return { label: 'Đã đủ giá', tone: 'text-emerald-300' };
+  }
+  if ((pricing?.ambiguousSeatTypes || []).length > 0) {
+    return { label: 'Có mức giá bị trùng', tone: 'text-amber-300' };
+  }
+  if ((pricing?.missingSeatTypes || []).length > 0) {
+    return { label: 'Chưa có giá đầy đủ', tone: 'text-amber-300' };
+  }
+  return { label: 'Chưa có thông tin', tone: 'text-zinc-300' };
+};
 
 const addMinutes = (instant, minutes) => {
   const date = new Date(instant);
@@ -91,6 +105,7 @@ const buildViewModel = showtime => {
 
 const ShowtimeQuickDrawer = ({ candidate, onClose, onViewDetail }) => {
   const closeRef = useRef(null);
+  const [pricingState, setPricingState] = useState({ data: null, isLoading: false, hasError: false });
 
   useEffect(() => {
     if (!candidate) return undefined;
@@ -105,9 +120,40 @@ const ShowtimeQuickDrawer = ({ candidate, onClose, onViewDetail }) => {
     };
   }, [candidate, onClose]);
 
+  useEffect(() => {
+    if (!candidate) return undefined;
+    let active = true;
+    const knownStatus = candidate.raw?.pricingStatus;
+    if (knownStatus) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- a previously enriched list item can skip the pricing request.
+      setPricingState({ data: { status: knownStatus }, isLoading: false, hasError: false });
+      return undefined;
+    }
+
+    setPricingState({ data: null, isLoading: true, hasError: false });
+    adminShowtimeService.getPricing(candidate.id)
+      .then(response => {
+        if (!active) return;
+        setPricingState({ data: response?.success ? response.data : null, isLoading: false, hasError: !response?.success });
+      })
+      .catch(() => {
+        if (active) setPricingState({ data: null, isLoading: false, hasError: true });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [candidate]);
+
   if (!candidate) return null;
   const showtime = candidate.raw;
   const statusLabel = getShowtimeStatusPresentation(showtime.status).label;
+  const pricingPresentation = getPricingStatusPresentation(pricingState.data, showtime.pricingStatus);
+  const pricingLabel = pricingState.isLoading
+    ? 'Đang kiểm tra…'
+    : pricingState.hasError
+      ? 'Không thể kiểm tra'
+      : pricingPresentation.label;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/65 backdrop-blur-sm" onMouseDown={event => event.target === event.currentTarget && onClose()}>
@@ -133,13 +179,18 @@ const ShowtimeQuickDrawer = ({ candidate, onClose, onViewDetail }) => {
               ['Phòng', showtime.auditorium?.name],
               ['Trạng thái', statusLabel],
               ['Dọn phòng', `${candidate.cleaningMinutes} phút · sẵn sàng lúc ${candidate.occupancyEndTimeDisplay}`],
-              ['Tình trạng giá', getPricingStatusLabel(showtime.pricingStatus)],
             ].map(([label, value]) => (
               <div key={label} className="grid grid-cols-[110px_1fr] gap-3 py-3 text-sm">
                 <dt className="font-bold text-zinc-500">{label}</dt>
                 <dd className="text-zinc-200">{value || '—'}</dd>
               </div>
             ))}
+            <div className="grid grid-cols-[110px_1fr] gap-3 py-3 text-sm">
+              <dt className="font-bold text-zinc-500">Tình trạng giá</dt>
+              <dd className={`font-bold ${pricingState.isLoading || pricingState.hasError ? 'text-zinc-300' : pricingPresentation.tone}`}>
+                {pricingLabel}
+              </dd>
+            </div>
           </dl>
         </div>
         <footer className="border-t border-zinc-800 p-5">
