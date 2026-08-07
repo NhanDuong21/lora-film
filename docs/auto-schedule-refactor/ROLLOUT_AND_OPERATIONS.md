@@ -13,7 +13,7 @@
 
 - Preflight blocker mix and p95 duration are stable.
 - CP-SAT status is `OPTIMAL`/`FEASIBLE`; timeout and model-invalid counters are zero or within the approved budget.
-- Candidate count stays below the 10,000 guard and p95 generation duration meets the service SLO.
+- Candidate count stays below the configured 50,000 memory guard and p95 generation duration meets the service SLO.
 - Preview stale/apply conflict rates do not regress.
 - Admin modification rate, selected volume, expected contribution/occupancy, prime-time allocation and auditorium use are compared with the read-only S5 shadow.
 - Applied rows are `DRAFT`, apply is idempotent, and no partial batch exists.
@@ -25,7 +25,8 @@ Production-day conclusions for forecast accuracy, cancellation impact, admin acc
 - Per cinema: `cinemas.auto_schedule_engine = 'CP_SAT' | 'LEGACY'`. Default and current engine are `CP_SAT`.
 - Shadow: `autoschedule.shadow.s5-enabled` / `AUTO_SCHEDULE_S5_SHADOW_ENABLED`, default `false`.
 - Demand history: `autoschedule.demand.analytics-enabled`, default `true`; disabling it produces explicit cold-start risk flags.
-- Solver controls: `autoschedule.solver.timeout-seconds` and fixed `autoschedule.solver.random-seed`.
+- Solver controls: `autoschedule.solver.timeout-seconds` (`0` disables the wall-clock limit), `autoschedule.solver.relative-gap-limit` (default `0.02`) and fixed `autoschedule.solver.random-seed`.
+- Candidate memory guard: `autoschedule.candidate-limit` (default `50000`; `0` disables it). Raise or disable only after heap/load validation.
 
 Changing the cinema flag changes the eligibility/configuration fingerprint, so an already-generated preview becomes stale rather than changing engine in place.
 
@@ -36,7 +37,7 @@ Prometheus is exposed through Actuator. Metric tags are limited to engine, solve
 | Area | Metrics / evidence | Suggested alert |
 |---|---|---|
 | Preflight | `autoschedule.preflight.duration`, `autoschedule.preflight.blockers`, `autoschedule.eligible.pairs` | p95 latency or blocker spike |
-| Candidates | `autoschedule.candidate.generation.duration`, `autoschedule.candidates` | p95 latency; count near 10,000 |
+| Candidates | `autoschedule.candidate.generation.duration`, `autoschedule.candidates` | p95 latency; count near the configured guard |
 | Solver | `autoschedule.solver.duration`, `autoschedule.solver.runs`, `autoschedule.solver.timeouts` | timeout/model-invalid > approved budget |
 | Forecast | expected/actual occupancy, contribution, forecast-error and history-cancellation distributions | material backtest/forward drift |
 | Preview/apply | stale, apply-conflict, admin-modification and preview-cancellation counters | rate regression against requests |
@@ -61,7 +62,7 @@ Structured logs contain engine/status and safe public correlation identifiers wh
 - `PRICING_INCOMPLETE`/`PRICING_AMBIGUOUS`: follow the blocker action path; correct seat-type coverage or precedence, rerun preflight, then generate a new preview.
 - `PLANNING_RANGE_FULLY_BLOCKED`: inspect closures, maintenance and existing Showtimes; never bypass the hard constraint.
 - Configuration-stale or price mismatch: cancel the preview and regenerate after authoritative changes.
-- Solver timeout: inspect candidate count and solver metrics; adjust the bounded timeout through configuration only after load testing. Do not fall back inside the request.
+- Solver runs longer than expected: inspect per-service-date candidate count, solver duration and heap/CPU. The default has no wall-clock limit; optionally configure a positive timeout only as a deliberate deployment policy. Do not fall back inside the request.
 - Analytics unavailable: verify service URL/token/network. Cold-start is safe but lower-confidence; do not fabricate history.
 - Windows native crash after an OR-Tools upgrade: restore 9.12.4544, run the one-variable native smoke test, and keep the additive data schema. Versions 9.14/9.15 failed on the development Windows/JDK 21 runtime.
 - Docker Engine 29 returns HTTP 400 before Testcontainers starts: verify Movie Service resolves Testcontainers 1.21.4 or newer compatible 1.x. Version 1.19.8 negotiates the removed Docker API 1.32 and can make `disabledWithoutDocker` tests appear skipped even while Docker CLI works.

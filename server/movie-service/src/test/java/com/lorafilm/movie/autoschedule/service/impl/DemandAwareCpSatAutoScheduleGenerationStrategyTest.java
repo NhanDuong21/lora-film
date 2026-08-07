@@ -49,7 +49,7 @@ class DemandAwareCpSatAutoScheduleGenerationStrategyTest {
     void selectsHigherValueCandidateAndNeverOverlapsAnAuditorium() {
         List<ShowtimeCandidate> candidates = candidates();
         var strategy = new DemandAwareCpSatAutoScheduleGenerationStrategy(
-                2.0, 20260806, new CandidateSelectionResolverImpl());
+                2.0, 0.02, 20260806, new CandidateSelectionResolverImpl());
         CandidateScoringContext context = new CandidateScoringContext(null, List.of(), List.of());
 
         strategy.scoreAndResolveDefaultSelection(candidates, context);
@@ -69,7 +69,7 @@ class DemandAwareCpSatAutoScheduleGenerationStrategyTest {
     @Test
     void fixedSeedAndSingleWorkerProduceStableSelection() {
         var strategy = new DemandAwareCpSatAutoScheduleGenerationStrategy(
-                2.0, 20260806, new CandidateSelectionResolverImpl());
+                2.0, 0.02, 20260806, new CandidateSelectionResolverImpl());
         List<ShowtimeCandidate> first = candidates();
         List<ShowtimeCandidate> second = candidates();
 
@@ -82,9 +82,23 @@ class DemandAwareCpSatAutoScheduleGenerationStrategyTest {
     }
 
     @Test
+    void solvesAndAggregatesEachServiceDateIndependently() {
+        var strategy = new DemandAwareCpSatAutoScheduleGenerationStrategy(
+                0, 0.02, 20260806, new CandidateSelectionResolverImpl());
+        List<ShowtimeCandidate> candidates = new ArrayList<>(candidates());
+        candidates.addAll(candidates(DATE.plusDays(1), OPEN.plus(1, ChronoUnit.DAYS)));
+        CandidateScoringContext context = new CandidateScoringContext(null, List.of(), List.of());
+
+        strategy.scoreAndResolveDefaultSelection(candidates, context);
+
+        assertEquals(4, context.getOptimizationResult().selectedCount());
+        assertTrue(context.getOptimizationResult().explanation().contains("2 service-date scopes"));
+    }
+
+    @Test
     void mapsUnknownAndInfeasibleStatusesToExplicitFailureSemantics() {
         var strategy = new DemandAwareCpSatAutoScheduleGenerationStrategy(
-                2.0, 20260806, new CandidateSelectionResolverImpl());
+                2.0, 0.02, 20260806, new CandidateSelectionResolverImpl());
 
         assertEquals(AutoScheduleOptimizationResult.SolverStatus.TIMEOUT,
                 strategy.mapStatus(CpSolverStatus.UNKNOWN));
@@ -94,17 +108,36 @@ class DemandAwareCpSatAutoScheduleGenerationStrategyTest {
                 strategy.mapStatus(CpSolverStatus.MODEL_INVALID));
     }
 
+    @Test
+    void zeroOrNegativeTimeoutDisablesTheCpSatTimeLimit() {
+        var unlimited = new DemandAwareCpSatAutoScheduleGenerationStrategy(
+                0, 0.02, 20260806, new CandidateSelectionResolverImpl());
+        var negative = new DemandAwareCpSatAutoScheduleGenerationStrategy(
+                -1, 0.02, 20260806, new CandidateSelectionResolverImpl());
+        var bounded = new DemandAwareCpSatAutoScheduleGenerationStrategy(
+                2.0, 0.02, 20260806, new CandidateSelectionResolverImpl());
+
+        assertFalse(unlimited.hasSolverTimeLimit());
+        assertFalse(negative.hasSolverTimeLimit());
+        assertTrue(bounded.hasSolverTimeLimit());
+    }
+
     private List<ShowtimeCandidate> candidates() {
+        return candidates(DATE, OPEN);
+    }
+
+    private List<ShowtimeCandidate> candidates(LocalDate serviceDate, Instant open) {
         List<ShowtimeCandidate> result = new ArrayList<>();
-        result.add(candidate(1L, "version-high", OPEN, OPEN.plus(120, ChronoUnit.MINUTES), "9000000"));
-        result.add(candidate(2L, "version-low", OPEN.plus(15, ChronoUnit.MINUTES),
-                OPEN.plus(120, ChronoUnit.MINUTES), "3000000"));
-        result.add(candidate(3L, "version-later", OPEN.plus(120, ChronoUnit.MINUTES),
-                OPEN.plus(240, ChronoUnit.MINUTES), "6000000"));
+        result.add(candidate(serviceDate, 1L, "version-high", open,
+                open.plus(120, ChronoUnit.MINUTES), "9000000"));
+        result.add(candidate(serviceDate, 2L, "version-low", open.plus(15, ChronoUnit.MINUTES),
+                open.plus(120, ChronoUnit.MINUTES), "3000000"));
+        result.add(candidate(serviceDate, 3L, "version-later", open.plus(120, ChronoUnit.MINUTES),
+                open.plus(240, ChronoUnit.MINUTES), "6000000"));
         return result;
     }
 
-    private ShowtimeCandidate candidate(long movieId, String versionPublicId,
+    private ShowtimeCandidate candidate(LocalDate serviceDate, long movieId, String versionPublicId,
                                          Instant start, Instant occupancyEnd,
                                          String contribution) {
         var cinema = new AutoScheduleGenerationContext.CinemaSnapshot(
@@ -113,7 +146,7 @@ class DemandAwareCpSatAutoScheduleGenerationStrategyTest {
                 10L, "aud-1", 1L, "Room 1", 100, 15, AuditoriumStatus.ACTIVE, false);
         var movie = new AutoScheduleGenerationContext.MovieSnapshot(
                 movieId, "movie-" + movieId, "Movie " + movieId, 105,
-                DATE.minusDays(7), null, MovieStatus.NOW_SHOWING, false);
+                serviceDate.minusDays(7), null, MovieStatus.NOW_SHOWING, false);
         var version = new AutoScheduleGenerationContext.MovieVersionSnapshot(
                 movieId, versionPublicId, movieId, ActiveStatus.ACTIVE, false, movie,
                 MovieFormat.TWO_D);
@@ -121,8 +154,8 @@ class DemandAwareCpSatAutoScheduleGenerationStrategyTest {
         candidate.setCinemaSnapshot(cinema);
         candidate.setAuditoriumSnapshot(auditorium);
         candidate.setMovieVersionSnapshot(version);
-        candidate.setOperatingWindow(new OperatingWindow(DATE, OPEN,
-                OPEN.plus(12, ChronoUnit.HOURS)));
+        candidate.setOperatingWindow(new OperatingWindow(serviceDate, start.truncatedTo(ChronoUnit.DAYS),
+                start.truncatedTo(ChronoUnit.DAYS).plus(12, ChronoUnit.HOURS)));
         candidate.setStartTime(start);
         candidate.setEndTime(occupancyEnd.minus(15, ChronoUnit.MINUTES));
         candidate.setOccupancyEndTime(occupancyEnd);

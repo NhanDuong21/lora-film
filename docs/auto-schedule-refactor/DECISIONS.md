@@ -39,3 +39,7 @@ Metrics use bounded tags such as engine/status/blocker code, never preview, movi
 ## ADR-010: Testcontainers compatibility
 
 Movie Service test dependencies pin Testcontainers 1.21.4. Spring Boot 3.3.5 otherwise manages 1.19.8, whose Docker client negotiates API 1.32; Docker Engine 29 requires at least API 1.40 and returns HTTP 400. Version 1.21.4 retains the 1.x module/API surface and supports recent Docker Engine changes. The final suite executes all MySQL integration tests with zero skips.
+
+## ADR-011: large interactive solve policy
+
+The default CP-SAT wall-clock limit is disabled (`autoschedule.solver.timeout-seconds=0`) so a large Admin request is not reported as failed merely because it exceeded five seconds. A positive value remains supported as an explicit deployment override. Multi-day requests are solved independently per cinema service date and then aggregated into one preview; constraints and objective terms do not cross service-date boundaries. A deterministic greedy solution hint and a configurable 2% relative optimality gap keep the unbounded wall-clock policy practical without falling back to S5. Candidate materialisation retains a separate configurable memory guard of 50,000 (`0` means unlimited); this is not a solver timeout.

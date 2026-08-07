@@ -45,14 +45,17 @@ public class DemandAwareCpSatAutoScheduleGenerationStrategy implements AutoSched
     }
 
     private final double timeoutSeconds;
+    private final double relativeGapLimit;
     private final int randomSeed;
     private final CandidateSelectionResolverImpl selectionValidator;
 
     public DemandAwareCpSatAutoScheduleGenerationStrategy(
-            @Value("${autoschedule.solver.timeout-seconds:5.0}") double timeoutSeconds,
+            @Value("${autoschedule.solver.timeout-seconds:0}") double timeoutSeconds,
+            @Value("${autoschedule.solver.relative-gap-limit:0.02}") double relativeGapLimit,
             @Value("${autoschedule.solver.random-seed:20260806}") int randomSeed,
             CandidateSelectionResolverImpl selectionValidator) {
-        this.timeoutSeconds = Math.max(0.1, timeoutSeconds);
+        this.timeoutSeconds = Math.max(0, timeoutSeconds);
+        this.relativeGapLimit = Math.max(0, Math.min(1, relativeGapLimit));
         this.randomSeed = randomSeed;
         this.selectionValidator = selectionValidator;
     }
@@ -73,6 +76,49 @@ public class DemandAwareCpSatAutoScheduleGenerationStrategy implements AutoSched
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_NO_FEASIBLE_CANDIDATES);
         }
 
+        Map<ShowtimeCandidate, Long> utilities = new IdentityHashMap<>();
+        Map<LocalDate, List<ShowtimeCandidate>> candidatesByServiceDate = new LinkedHashMap<>();
+        valid.forEach(candidate -> candidatesByServiceDate
+                .computeIfAbsent(candidate.getServiceDate(), ignored -> new ArrayList<>())
+                .add(candidate));
+
+        AutoScheduleOptimizationResult.SolverStatus aggregateStatus =
+                AutoScheduleOptimizationResult.SolverStatus.OPTIMAL;
+        BigDecimal aggregateObjective = BigDecimal.ZERO;
+        BigDecimal aggregateBound = BigDecimal.ZERO;
+        long aggregateDurationMillis = 0;
+        int selectedCount = 0;
+        for (List<ShowtimeCandidate> serviceDateCandidates : candidatesByServiceDate.values()) {
+            ScopeOptimization scope = solveServiceDate(serviceDateCandidates, utilities);
+            if (scope.status() == AutoScheduleOptimizationResult.SolverStatus.FEASIBLE) {
+                aggregateStatus = AutoScheduleOptimizationResult.SolverStatus.FEASIBLE;
+            }
+            aggregateObjective = aggregateObjective.add(scope.objectiveValue());
+            aggregateBound = aggregateBound.add(scope.bestObjectiveBound());
+            aggregateDurationMillis += scope.durationMillis();
+            selectedCount += scope.selectedCount();
+        }
+
+        rankCandidates(candidates, utilities);
+        selectionValidator.validateGlobalSelectionInvariant(candidates);
+
+        String explanation = "CP-SAT selected " + selectedCount + " showtimes across "
+                + candidatesByServiceDate.size() + " service-date scopes by maximizing expected "
+                + "contribution with capacity/risk penalties, diminishing movie value, demand coverage "
+                + "and bounded cold-start exploration.";
+        scoringContext.setOptimizationResult(new AutoScheduleOptimizationResult(
+                aggregateStatus,
+                SOLVER_VERSION,
+                aggregateObjective.setScale(3, RoundingMode.HALF_UP),
+                aggregateBound.setScale(3, RoundingMode.HALF_UP),
+                aggregateDurationMillis,
+                selectedCount,
+                explanation));
+    }
+
+    private ScopeOptimization solveServiceDate(
+            List<ShowtimeCandidate> valid,
+            Map<ShowtimeCandidate, Long> aggregateUtilities) {
         CpModel model = new CpModel();
         Map<ShowtimeCandidate, BoolVar> variables = new IdentityHashMap<>();
         Map<ShowtimeCandidate, Long> utilities = new IdentityHashMap<>();
@@ -85,6 +131,7 @@ public class DemandAwareCpSatAutoScheduleGenerationStrategy implements AutoSched
             long utility = candidateUtility(candidate);
             variables.put(candidate, variable);
             utilities.put(candidate, utility);
+            aggregateUtilities.put(candidate, utility);
             objectiveTerms.add(variable);
             objectiveCoefficients.add(utility);
             candidate.setScore(BigDecimal.valueOf(utility).setScale(3));
@@ -99,14 +146,13 @@ public class DemandAwareCpSatAutoScheduleGenerationStrategy implements AutoSched
                 objectiveTerms, objectiveCoefficients);
         model.addGreaterOrEqual(LinearExpr.sum(valid.stream()
                 .map(variables::get).toArray(LinearArgument[]::new)), 1);
+        addGreedySolutionHint(model, valid, variables, utilities);
         model.maximize(LinearExpr.weightedSum(
                 objectiveTerms.toArray(LinearArgument[]::new),
                 objectiveCoefficients.stream().mapToLong(Long::longValue).toArray()));
 
         CpSolver solver = new CpSolver();
-        solver.getParameters().setMaxTimeInSeconds(timeoutSeconds);
-        solver.getParameters().setNumSearchWorkers(1);
-        solver.getParameters().setRandomSeed(randomSeed);
+        configureSolver(solver);
         long started = System.nanoTime();
         CpSolverStatus rawStatus = solver.solve(model);
         long durationMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
@@ -130,20 +176,12 @@ public class DemandAwareCpSatAutoScheduleGenerationStrategy implements AutoSched
         if (selectedCount == 0) {
             throw new BusinessException(ErrorCode.AUTO_SCHEDULE_SOLVER_INFEASIBLE);
         }
-        rankCandidates(candidates, utilities);
-        selectionValidator.validateGlobalSelectionInvariant(candidates);
-
-        String explanation = "CP-SAT selected " + selectedCount + " showtimes by maximizing expected "
-                + "contribution with capacity/risk penalties, diminishing movie value, demand coverage "
-                + "and bounded cold-start exploration.";
-        scoringContext.setOptimizationResult(new AutoScheduleOptimizationResult(
+        return new ScopeOptimization(
                 status,
-                SOLVER_VERSION,
                 BigDecimal.valueOf(solver.objectiveValue()).setScale(3, RoundingMode.HALF_UP),
                 BigDecimal.valueOf(solver.bestObjectiveBound()).setScale(3, RoundingMode.HALF_UP),
                 durationMillis,
-                selectedCount,
-                explanation));
+                selectedCount);
     }
 
     private void addAuditoriumNoOverlapConstraints(
@@ -272,6 +310,30 @@ public class DemandAwareCpSatAutoScheduleGenerationStrategy implements AutoSched
         return Math.max(1L, utility.setScale(0, RoundingMode.HALF_UP).longValueExact());
     }
 
+    private void addGreedySolutionHint(
+            CpModel model,
+            List<ShowtimeCandidate> candidates,
+            Map<ShowtimeCandidate, BoolVar> variables,
+            Map<ShowtimeCandidate, Long> utilities) {
+        Map<Long, List<ShowtimeCandidate>> selectedByAuditorium = new HashMap<>();
+        List<ShowtimeCandidate> greedyOrder = new ArrayList<>(candidates);
+        greedyOrder.sort(Comparator
+                .comparing((ShowtimeCandidate candidate) -> utilities.get(candidate),
+                        Comparator.reverseOrder())
+                .thenComparing(candidateOrder()));
+        for (ShowtimeCandidate candidate : greedyOrder) {
+            List<ShowtimeCandidate> selected = selectedByAuditorium
+                    .computeIfAbsent(candidate.getAuditoriumId(), ignored -> new ArrayList<>());
+            boolean overlaps = selected.stream().anyMatch(existing ->
+                    candidate.getStartTime().isBefore(existing.getOccupancyEndTime())
+                            && candidate.getOccupancyEndTime().isAfter(existing.getStartTime()));
+            model.addHint(variables.get(candidate), overlaps ? 0 : 1);
+            if (!overlaps) {
+                selected.add(candidate);
+            }
+        }
+    }
+
     private Map<String, BigDecimal> scoreBreakdown(ShowtimeCandidate candidate, long utility) {
         Map<String, BigDecimal> result = new LinkedHashMap<>();
         result.put("expectedContribution", candidate.getExpectedContribution());
@@ -328,9 +390,32 @@ public class DemandAwareCpSatAutoScheduleGenerationStrategy implements AutoSched
         };
     }
 
+    void configureSolver(CpSolver solver) {
+        if (timeoutSeconds > 0) {
+            solver.getParameters().setMaxTimeInSeconds(timeoutSeconds);
+        }
+        if (relativeGapLimit > 0) {
+            solver.getParameters().setRelativeGapLimit(relativeGapLimit);
+        }
+        solver.getParameters().setNumSearchWorkers(1);
+        solver.getParameters().setRandomSeed(randomSeed);
+    }
+
+    boolean hasSolverTimeLimit() {
+        return timeoutSeconds > 0;
+    }
+
     private record MovieDateKey(Long movieId, LocalDate serviceDate) {
     }
 
     private record CloseWindowKey(Long movieId, LocalDate serviceDate, long bucket, long offset) {
+    }
+
+    private record ScopeOptimization(
+            AutoScheduleOptimizationResult.SolverStatus status,
+            BigDecimal objectiveValue,
+            BigDecimal bestObjectiveBound,
+            long durationMillis,
+            int selectedCount) {
     }
 }

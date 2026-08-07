@@ -24,6 +24,7 @@ import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.repository.AutoScheduleExistingShowtimeFact;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -41,14 +42,13 @@ import java.util.Set;
 @Service
 public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGenerationContextLoader {
 
-    public static final int MAX_CANDIDATES = 10_000;
-
     private final CinemaOperatingHourRepository operatingHourRepository;
     private final CinemaClosurePeriodRepository closureRepository;
     private final AuditoriumMaintenanceWindowRepository maintenanceRepository;
     private final ShowtimeRepository showtimeRepository;
     private final CinemaOperatingWindowResolver windowResolver;
     private final ExistingShowtimeServiceDateClassifier serviceDateClassifier;
+    private final int candidateLimit;
 
     private static final List<ShowtimeStatus> COVERAGE_STATUSES = List.of(
             ShowtimeStatus.DRAFT,
@@ -62,13 +62,15 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
                                                    AuditoriumMaintenanceWindowRepository maintenanceRepository,
                                                    ShowtimeRepository showtimeRepository,
                                                    CinemaOperatingWindowResolver windowResolver,
-                                                   ExistingShowtimeServiceDateClassifier serviceDateClassifier) {
+                                                   ExistingShowtimeServiceDateClassifier serviceDateClassifier,
+                                                   @Value("${autoschedule.candidate-limit:50000}") int candidateLimit) {
         this.operatingHourRepository = operatingHourRepository;
         this.closureRepository = closureRepository;
         this.maintenanceRepository = maintenanceRepository;
         this.showtimeRepository = showtimeRepository;
         this.windowResolver = windowResolver;
         this.serviceDateClassifier = serviceDateClassifier;
+        this.candidateLimit = candidateLimit <= 0 ? Integer.MAX_VALUE : candidateLimit;
     }
 
     @Override
@@ -110,7 +112,7 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
         if (windows.isEmpty()) {
             return new AutoScheduleGenerationContext(
                     cinemaSnapshot, request.getScheduleFrom(), request.getScheduleTo(),
-                    request.getSlotGranularityMinutes(), MAX_CANDIDATES,
+                    request.getSlotGranularityMinutes(), candidateLimit,
                     AutoScheduleStrategy.BALANCED, strategyVersion,
                     auditoriumSnapshots, versionSnapshots, windows, configuredDays,
                     ImmutableIntervalIndex.empty(), Map.of(), Map.of(), Map.of(), null, null);
@@ -150,7 +152,7 @@ public class AutoScheduleGenerationContextLoaderImpl implements AutoScheduleGene
 
         return new AutoScheduleGenerationContext(
                 cinemaSnapshot, request.getScheduleFrom(), request.getScheduleTo(),
-                request.getSlotGranularityMinutes(), MAX_CANDIDATES,
+                request.getSlotGranularityMinutes(), candidateLimit,
                 AutoScheduleStrategy.BALANCED, strategyVersion,
                 auditoriumSnapshots, versionSnapshots, windows, configuredDays,
                 closureIndex, maintenanceIndexes, showtimeIndexes.conflicts(),

@@ -135,3 +135,11 @@ Result: complete. Production SLOs, forward forecast error, cancellation outcome 
 - Run visual Admin-flow browser QA when a browser runtime is available.
 
 No source mock flow or TODO placeholder remains in the Auto Schedule scope. No commit, push, pull, rebase, reset, amend, force checkout, destructive migration, database drop or secret change was performed.
+
+## Post-completion hardening: large Admin scopes (2026-08-06)
+
+- Removed the default five-second CP-SAT wall-clock limit; `0` now means unlimited and a positive deployment override remains supported.
+- Split optimization into deterministic cinema service-date scopes, aggregate status/objective/bound/duration into the same versioned preview, and seed each scope with a non-overlapping greedy solution hint.
+- Added a configurable 2% relative optimality gap and raised the separately configurable candidate memory guard from 10,000 to 50,000 (`0` means unlimited).
+- Browser evidence on LoraFilm Thu Duc Central: three days produced an `OPTIMAL` preview with 84 selected showtimes, 8/8 movies and four auditoriums in 42,654 ms; seven days produced an `OPTIMAL` preview with 196 selected showtimes, 10/10 movies and four auditoriums in 284,994 ms. Neither request returned timeout or candidate-limit errors.
+- Focused Movie Service tests for CP-SAT scope aggregation, unlimited timeout semantics, context candidate configuration, candidate traversal and strategy registration passed: 18 tests, 0 failures/errors/skips. The production package passed. A full 616-test Movie Service rerun was attempted but the command runner reached its 10-minute ceiling before Maven completed; no assertion failure was emitted, so this rerun is recorded as infrastructure-timeout rather than pass or fail. The prior full-suite evidence above remains unchanged.
