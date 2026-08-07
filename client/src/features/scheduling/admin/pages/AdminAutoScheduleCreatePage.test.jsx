@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useAutoScheduleForm from '../hooks/useAutoScheduleForm';
 import AdminAutoScheduleCreatePage from './AdminAutoScheduleCreatePage';
 
@@ -53,6 +53,7 @@ const baseForm = () => ({
 
 describe('AdminAutoScheduleCreatePage Quick Mode', () => {
   beforeEach(() => useAutoScheduleForm.mockReturnValue(baseForm()));
+  afterEach(() => vi.useRealTimers());
 
   it('requires only cinema and a planning preset in the primary flow', () => {
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
@@ -155,5 +156,24 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
 
     expect(screen.getByRole('button', { name: 'Kiểm tra lại' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Tạo lịch tối ưu' })).toBeDisabled();
+  });
+
+  it('shows an honest animated waiting progress while the optimizer is running', () => {
+    vi.useFakeTimers();
+    useAutoScheduleForm.mockReturnValue({
+      ...baseForm(), isSubmitting: true, isReady: false, planningDays: 7,
+    });
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    expect(screen.getByRole('progressbar', { name: 'Tiến trình tạo lịch tối ưu' }))
+      .toHaveAttribute('aria-valuetext', 'Đang gửi phạm vi và chuẩn bị dữ liệu tối ưu.');
+    expect(screen.getByText('Hệ thống vẫn đang xử lý')).toBeInTheDocument();
+    expect(screen.getByLabelText('Đã chờ 00:00')).toBeInTheDocument();
+    expect(screen.getByText(/Phạm vi 7 ngày có thể mất vài phút/)).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(46_000));
+    expect(screen.getByRole('progressbar', { name: 'Tiến trình tạo lịch tối ưu' }))
+      .toHaveAttribute('aria-valuetext', 'Bộ tối ưu vẫn đang tính toán lịch phù hợp nhất.');
+    expect(screen.getByLabelText('Đã chờ 00:46')).toBeInTheDocument();
   });
 });

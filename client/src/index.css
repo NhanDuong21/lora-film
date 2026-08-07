@@ -126,3 +126,27 @@
   }
 }
 
+@keyframes auto-schedule-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  50% {
+    transform: translateX(130%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+
+.auto-schedule-progress-bar {
+  animation: auto-schedule-progress 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auto-schedule-progress-bar {
+    animation: none;
+    transform: translateX(75%);
+  }
+}
+

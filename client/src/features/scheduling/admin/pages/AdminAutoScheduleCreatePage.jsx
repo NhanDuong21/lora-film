@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertCircle,
@@ -17,6 +17,64 @@ import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoSchedu
 import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20';
+
+const generationPhases = [
+  { afterSeconds: 0, message: 'Đang gửi phạm vi và chuẩn bị dữ liệu tối ưu.' },
+  { afterSeconds: 8, message: 'Hệ thống đang tạo và đánh giá các phương án lịch.' },
+  { afterSeconds: 45, message: 'Bộ tối ưu vẫn đang tính toán lịch phù hợp nhất.' },
+  { afterSeconds: 180, message: 'Phạm vi lớn cần thêm thời gian; hệ thống vẫn đang xử lý.' },
+];
+
+const formatElapsedTime = totalSeconds => {
+  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${seconds}`;
+};
+
+const GenerationProgress = ({ planningDays }) => {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const currentPhase = generationPhases
+    .findLast(phase => elapsedSeconds >= phase.afterSeconds) || generationPhases[0];
+
+  return (
+    <section className="mt-4 rounded-xl border border-brand-orange/30 bg-brand-orange/10 p-4" aria-labelledby="generation-progress-title">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 id="generation-progress-title" className="flex items-center gap-2 text-sm font-black text-orange-100">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-brand-orange" aria-hidden="true" />
+            Hệ thống vẫn đang xử lý
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-orange-100/70" role="status" aria-live="polite">
+            {currentPhase.message}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-lg bg-zinc-950/70 px-2.5 py-1 font-mono text-xs font-bold text-orange-100" aria-label={`Đã chờ ${formatElapsedTime(elapsedSeconds)}`}>
+          {formatElapsedTime(elapsedSeconds)}
+        </span>
+      </div>
+      <div
+        className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-950/80"
+        role="progressbar"
+        aria-label="Tiến trình tạo lịch tối ưu"
+        aria-valuetext={currentPhase.message}
+      >
+        <span className="auto-schedule-progress-bar block h-full w-2/5 rounded-full bg-gradient-to-r from-orange-600 via-orange-300 to-orange-600" />
+      </div>
+      <p className="mt-2 text-[11px] leading-4 text-zinc-400">
+        Đây là tiến trình chờ, không phải phần trăm giả lập. Phạm vi {planningDays} ngày có thể mất vài phút và trang sẽ tự chuyển sang preview khi hoàn tất.
+      </p>
+    </section>
+  );
+};
 
 const formatVersionLabel = (movie, version) => (
   `${movie.title} · ${version.versionName || version.format || 'Định dạng mặc định'}`
@@ -288,6 +346,7 @@ export default function AdminAutoScheduleCreatePage() {
           <div className={`mt-5 rounded-xl border p-4 text-sm ${isReady ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-zinc-700 bg-zinc-950 text-zinc-400'}`}>
             {isCheckingPreflight ? 'Đang kiểm tra dữ liệu…' : isReady ? 'Preflight đã thông qua. Sẵn sàng chạy Demand-Aware CP-SAT.' : 'Chọn rạp và xử lý các blocker để tiếp tục.'}
           </div>
+          {isSubmitting && <GenerationProgress planningDays={planningDays} />}
           <button
             type="button"
             onClick={handleSubmit}
