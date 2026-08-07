@@ -1,17 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  ArrowUpRight,
   CalendarDays,
   CheckCircle2,
   Clock3,
   ListFilter,
-  X,
 } from 'lucide-react';
 import AutoScheduleTimeline from './AutoScheduleTimeline';
-import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
+import ShowtimeQuickDrawer from './ShowtimeQuickDrawer';
 import {
   compareServiceDateKeys,
-  formatCinemaDateTime,
   formatCinemaTime,
   formatServiceDateKey,
   getCandidateTimelineOffsets,
@@ -23,7 +20,6 @@ import {
   getMoviePalette,
   TIMELINE_ZOOM_MODES,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewViewModel';
-import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const FILTERS = [
   { value: 'ALL', label: 'Tất cả' },
@@ -31,31 +27,6 @@ const FILTERS = [
   { value: 'DRAFT', label: 'Đang soạn' },
   { value: 'CLOSED', label: 'Đã đóng bán' },
 ];
-
-const PRICING_STATUS_LABELS = {
-  COMPLETE: 'Đã đủ giá',
-  READY: 'Đã đủ giá',
-  INCOMPLETE: 'Chưa đủ giá',
-  MISSING: 'Chưa có giá',
-  AMBIGUOUS: 'Có mức giá bị trùng',
-};
-
-const getPricingStatusPresentation = (pricing, fallbackStatus) => {
-  const status = pricing?.status || fallbackStatus;
-  if (status && PRICING_STATUS_LABELS[status]) {
-    return { label: PRICING_STATUS_LABELS[status], tone: status === 'COMPLETE' || status === 'READY' ? 'text-emerald-300' : 'text-amber-300' };
-  }
-  if (pricing?.complete === true) {
-    return { label: 'Đã đủ giá', tone: 'text-emerald-300' };
-  }
-  if ((pricing?.ambiguousSeatTypes || []).length > 0) {
-    return { label: 'Có mức giá bị trùng', tone: 'text-amber-300' };
-  }
-  if ((pricing?.missingSeatTypes || []).length > 0) {
-    return { label: 'Chưa có giá đầy đủ', tone: 'text-amber-300' };
-  }
-  return { label: 'Chưa có thông tin', tone: 'text-zinc-300' };
-};
 
 const addMinutes = (instant, minutes) => {
   const date = new Date(instant);
@@ -101,106 +72,6 @@ const buildViewModel = showtime => {
     cleaningMinutes,
     occupancyEndTime,
   };
-};
-
-const ShowtimeQuickDrawer = ({ candidate, onClose, onViewDetail }) => {
-  const closeRef = useRef(null);
-  const [pricingState, setPricingState] = useState({ data: null, isLoading: false, hasError: false });
-
-  useEffect(() => {
-    if (!candidate) return undefined;
-    const frame = requestAnimationFrame(() => closeRef.current?.focus());
-    const onKeyDown = event => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [candidate, onClose]);
-
-  useEffect(() => {
-    if (!candidate) return undefined;
-    let active = true;
-    const knownStatus = candidate.raw?.pricingStatus;
-    if (knownStatus) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- a previously enriched list item can skip the pricing request.
-      setPricingState({ data: { status: knownStatus }, isLoading: false, hasError: false });
-      return undefined;
-    }
-
-    setPricingState({ data: null, isLoading: true, hasError: false });
-    adminShowtimeService.getPricing(candidate.id)
-      .then(response => {
-        if (!active) return;
-        setPricingState({ data: response?.success ? response.data : null, isLoading: false, hasError: !response?.success });
-      })
-      .catch(() => {
-        if (active) setPricingState({ data: null, isLoading: false, hasError: true });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [candidate]);
-
-  if (!candidate) return null;
-  const showtime = candidate.raw;
-  const statusLabel = getShowtimeStatusPresentation(showtime.status).label;
-  const pricingPresentation = getPricingStatusPresentation(pricingState.data, showtime.pricingStatus);
-  const pricingLabel = pricingState.isLoading
-    ? 'Đang kiểm tra…'
-    : pricingState.hasError
-      ? 'Không thể kiểm tra'
-      : pricingPresentation.label;
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/65 backdrop-blur-sm" onMouseDown={event => event.target === event.currentTarget && onClose()}>
-      <aside role="dialog" aria-modal="true" aria-labelledby="showtime-quick-title" className="flex h-full w-full max-w-md flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl">
-        <header className="flex items-start justify-between gap-4 border-b border-zinc-800 p-5">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Suất chiếu vận hành</p>
-            <h2 id="showtime-quick-title" className="mt-1 text-xl font-black text-white">{candidate.movieTitle}</h2>
-            <p className="mt-1 text-sm text-zinc-400">{candidate.versionName}</p>
-          </div>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Đóng xem nhanh suất chiếu" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white">
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </header>
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="text-3xl font-black text-white">{candidate.startTimeDisplay}<span className="mx-2 text-zinc-600">–</span>{candidate.endTimeDisplay}</p>
-            <p className="mt-2 text-sm text-zinc-400">{formatCinemaDateTime(showtime.startTime, candidate.timezone)}</p>
-          </div>
-          <dl className="divide-y divide-zinc-800 rounded-2xl border border-zinc-800 px-4">
-            {[
-              ['Rạp', showtime.cinema?.name],
-              ['Phòng', showtime.auditorium?.name],
-              ['Trạng thái', statusLabel],
-              ['Dọn phòng', `${candidate.cleaningMinutes} phút · sẵn sàng lúc ${candidate.occupancyEndTimeDisplay}`],
-            ].map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[110px_1fr] gap-3 py-3 text-sm">
-                <dt className="font-bold text-zinc-500">{label}</dt>
-                <dd className="text-zinc-200">{value || '—'}</dd>
-              </div>
-            ))}
-            <div className="grid grid-cols-[110px_1fr] gap-3 py-3 text-sm">
-              <dt className="font-bold text-zinc-500">Tình trạng giá</dt>
-              <dd className={`font-bold ${pricingState.isLoading || pricingState.hasError ? 'text-zinc-300' : pricingPresentation.tone}`}>
-                {pricingLabel}
-              </dd>
-            </div>
-          </dl>
-        </div>
-        <footer className="border-t border-zinc-800 p-5">
-          <button type="button" onClick={() => onViewDetail(candidate.id)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">
-            Mở chi tiết và giá vé <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </footer>
-      </aside>
-    </div>
-  );
 };
 
 export default function OperationalShowtimeTimeline({ showtimes = [], requestedDate, onViewDetail }) {
@@ -280,7 +151,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
         variant="operations"
       />
       <p className="flex items-center gap-2 text-xs text-zinc-500"><Clock3 className="h-3.5 w-3.5" />Đang hiển thị {filteredModels.length}/{dateModels.length} suất thuộc trang dữ liệu hiện tại.</p>
-      <ShowtimeQuickDrawer candidate={drawerCandidate} onClose={() => setDrawerCandidate(null)} onViewDetail={onViewDetail} />
+      <ShowtimeQuickDrawer showtime={drawerCandidate?.raw || null} onClose={() => setDrawerCandidate(null)} onViewDetail={onViewDetail} />
     </section>
   );
 }

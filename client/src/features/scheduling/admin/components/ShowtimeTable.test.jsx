@@ -30,7 +30,8 @@ const defaultProps = {
   setStatus: vi.fn(),
   currentPage: 0,
   setCurrentPage: vi.fn(),
-  pageSize: 10,
+  pageSize: 25,
+  setPageSize: vi.fn(),
   totalPages: 1,
   totalElements: 1,
   batchId: '',
@@ -57,12 +58,13 @@ describe('ShowtimeTable cinema timezone', () => {
     expect(screen.getByRole('region', { name: 'Phòng chiếu × thời gian' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Phim thử nghiệm.*Mở chi tiết/i }));
     expect(screen.getByRole('dialog', { name: 'Phim thử nghiệm' })).toHaveTextContent('sẵn sàng lúc');
-    fireEvent.click(screen.getByRole('button', { name: 'Mở chi tiết và giá vé' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mở trang chỉnh sửa đầy đủ' }));
     expect(onViewDetail).toHaveBeenCalledWith('showtime-1');
   });
 
   it('formats list start and end in each Showtime cinema timezone', () => {
     render(<ShowtimeTable {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách', exact: true }));
 
     expect(screen.getByText('01:30')).toBeInTheDocument();
     expect(screen.getAllByText('03:00').length).toBeGreaterThan(0);
@@ -72,6 +74,7 @@ describe('ShowtimeTable cinema timezone', () => {
 
   it('shows a safe fallback indicator for invalid cinema timezone data', () => {
     render(<ShowtimeTable {...defaultProps} showtimes={[showtime('Invalid/Timezone')]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách', exact: true }));
 
     expect(screen.getByText('18:30')).toBeInTheDocument();
     expect(screen.getByText('Giờ hiển thị tạm thời')).toBeInTheDocument();
@@ -134,6 +137,57 @@ describe('ShowtimeTable cinema timezone', () => {
     expect(screen.getByText('Toàn bộ 1 suất đã sẵn sàng')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Mở bán 1 suất' }));
     expect(onOpenBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the open-sale action available while a cached result is being verified in the background', () => {
+    render(
+      <MemoryRouter>
+        <ShowtimeTable
+          {...defaultProps}
+          batchId="preview-1"
+          isBatchReadinessLoading
+          batchReadiness={{
+            batchId: 'preview-1',
+            totalCount: 84,
+            eligibleCount: 84,
+            alreadyTargetCount: 0,
+            skippedCount: 0,
+            atomic: true,
+            actionAllowed: true,
+            reasonGroups: [],
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Đang xác minh lại ở nền; bạn vẫn có thể tiếp tục thao tác với kết quả gần nhất.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mở bán 84 suất' })).toBeEnabled();
+  });
+
+  it('defaults a batch to the day view, supports movie view, and paginates at 25 items', () => {
+    const setPageSize = vi.fn();
+    render(
+      <MemoryRouter>
+        <ShowtimeTable
+          {...defaultProps}
+          batchId="preview-1"
+          totalElements={84}
+          totalPages={4}
+          setPageSize={setPageSize}
+          movies={[{ title: 'Phim thử nghiệm', primaryPoster: '/poster.jpg' }]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('region', { name: 'Lịch chiếu theo ngày' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Phân trang lịch theo ngày' })).toHaveTextContent('1–25 trong 84 suất');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mỗi trang' }), { target: { value: '50' } });
+    expect(setPageSize).toHaveBeenCalledWith(50);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Theo phim' }));
+    expect(screen.getByRole('region', { name: 'Lịch chiếu theo phim' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Xem nhanh Phim thử nghiệm/ }));
+    expect(screen.getByRole('dialog', { name: 'Phim thử nghiệm' })).toBeInTheDocument();
   });
 
   it('separates blocked showtimes from draft status and provides a direct repair action', () => {

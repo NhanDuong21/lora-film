@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import useAdminShowtimes from '../hooks/useAdminShowtimes';
 import adminShowtimeService from '../services/adminShowtimeService';
+import { writeBatchReadinessCache } from '../utils/batchReadinessCache';
 import AdminShowtimePage from './AdminShowtimePage';
 
 vi.mock('../hooks/useAdminShowtimes');
@@ -18,6 +19,8 @@ vi.mock('../components/ShowtimeTable', () => ({
       <button type="button" onClick={props.onClearFilters}>Clear all</button>
       <button type="button" onClick={props.onClearBatch}>Clear batch</button>
       <button type="button" onClick={props.onOpenBatch}>Open batch</button>
+      <span data-testid="cached-ready-count">{props.batchReadiness?.eligibleCount ?? 'none'}</span>
+      <span data-testid="readiness-loading">{String(props.isBatchReadinessLoading)}</span>
     </div>
   ),
 }));
@@ -42,7 +45,8 @@ const hookValue = () => ({
   setSource: vi.fn(),
   currentPage: 0,
   setCurrentPage: vi.fn(),
-  pageSize: 10,
+  pageSize: 25,
+  setPageSize: vi.fn(),
   totalPages: 0,
   totalElements: 0,
   fetchShowtimes: vi.fn(),
@@ -68,7 +72,10 @@ const renderPage = initialEntry => render(
 );
 
 describe('AdminShowtimePage URL-backed batch context', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+  });
 
   it('synchronizes source/batch on initial load and later URL changes', async () => {
     const value = hookValue();
@@ -143,6 +150,31 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(adminShowtimeService.deleteBatch).toBeUndefined();
     confirmSpy.mockRestore();
+  });
+
+  it('restores the latest successful readiness immediately and refreshes it in the background', async () => {
+    const value = { ...hookValue(), batchId: 'preview-1', source: 'AUTO' };
+    useAdminShowtimes.mockReturnValue(value);
+    const cached = {
+      batchId: 'preview-1',
+      targetStatus: 'OPEN_FOR_BOOKING',
+      totalCount: 84,
+      eligibleCount: 84,
+      alreadyTargetCount: 0,
+      skippedCount: 0,
+      atomic: true,
+      actionAllowed: true,
+      reasonGroups: [],
+    };
+    writeBatchReadinessCache('preview-1', cached);
+    adminShowtimeService.previewBatchStatus.mockImplementation(() => new Promise(() => {}));
+
+    renderPage('/admin/showtimes?source=AUTO&batchId=preview-1');
+
+    expect(screen.getByTestId('cached-ready-count')).toHaveTextContent('84');
+    await waitFor(() => expect(screen.getByTestId('readiness-loading')).toHaveTextContent('true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
+    expect(screen.getByRole('dialog', { name: 'Bạn sắp mở bán 84 suất chiếu' })).toBeInTheDocument();
   });
 
   it('blocks partial batch opening when preflight reports skipped items', async () => {

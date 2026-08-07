@@ -1,9 +1,11 @@
-import { AlertTriangle, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Filter, LayoutList, Loader2, PanelsTopLeft, Play, Plus, RefreshCw, RotateCcw, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, CheckCircle2, ChevronRight, ClipboardCheck, Film, Filter, LayoutList, Loader2, PanelsTopLeft, Play, Plus, RefreshCw, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import OperationalShowtimeTimeline from '@/features/scheduling/admin/components/OperationalShowtimeTimeline';
+import ShowtimeQuickDrawer from '@/features/scheduling/admin/components/ShowtimeQuickDrawer';
+import { ShowtimeDayView, ShowtimeMovieView } from '@/features/scheduling/admin/components/ShowtimeGroupedViews';
 import {
   formatShowtimeCinemaDate,
   formatShowtimeCinemaTime,
@@ -39,6 +41,30 @@ const StatusBadge = ({ status }) => (
 );
 
 const formatCount = value => new Intl.NumberFormat('vi-VN').format(Number(value || 0));
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
+const PaginationBar = ({ currentPage, pageSize, setCurrentPage, setPageSize, totalElements, totalPages, label }) => {
+  const start = totalElements > 0 ? (currentPage * pageSize) + 1 : 0;
+  const end = Math.min((currentPage + 1) * pageSize, totalElements);
+  return (
+    <nav className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3" aria-label={label}>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+        <span>Đang hiển thị {formatCount(start)}–{formatCount(end)} trong {formatCount(totalElements)} suất</span>
+        <label className="flex items-center gap-2 font-bold text-zinc-400">
+          Mỗi trang
+          <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setCurrentPage(0); }} className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-200">
+            {PAGE_SIZE_OPTIONS.map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="mr-1 text-xs font-bold text-zinc-500">Trang {Math.min(currentPage + 1, Math.max(totalPages, 1))}/{Math.max(totalPages, 1)}</span>
+        <button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Trang trước</button>
+        <button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Trang sau</button>
+      </div>
+    </nav>
+  );
+};
 
 export default function ShowtimeTable({
   showtimes,
@@ -56,6 +82,8 @@ export default function ShowtimeTable({
   setStatus,
   currentPage,
   setCurrentPage,
+  pageSize,
+  setPageSize,
   totalPages,
   totalElements,
   batchId,
@@ -71,7 +99,8 @@ export default function ShowtimeTable({
   onOpenBatch,
   isBatchActionLoading,
 }) {
-  const [viewMode, setViewMode] = useState(batchId ? 'LIST' : 'TIMELINE');
+  const [viewMode, setViewMode] = useState(batchId ? 'DAY' : 'TIMELINE');
+  const [selectedShowtime, setSelectedShowtime] = useState(null);
   const cinemaOptions = cinemas.map(cinema => ({
     value: cinema.slug,
     label: cinema.name,
@@ -102,6 +131,8 @@ export default function ShowtimeTable({
     && openedBatchCount >= totalBatchCount
     && readyBatchCount === 0
     && blockedBatchCount === 0;
+  const isInitialReadinessLoading = isBatchReadinessLoading && !batchReadiness;
+  const isBackgroundReadinessLoading = isBatchReadinessLoading && Boolean(batchReadiness);
 
   const getBlockerAction = reasonCode => {
     const pricingCodes = new Set([
@@ -217,7 +248,7 @@ export default function ShowtimeTable({
 
           <ol className="grid gap-3 md:grid-cols-3" aria-label="Các bước chuẩn bị mở bán">
             {[
-              ['1', 'Kiểm tra điều kiện', isBatchReadinessLoading ? 'Đang thực hiện' : batchReadinessError ? 'Cần thử lại' : batchReadiness ? 'Đã hoàn tất' : 'Đang chờ'],
+              ['1', 'Kiểm tra điều kiện', isInitialReadinessLoading ? 'Đang thực hiện' : isBackgroundReadinessLoading ? 'Đang xác minh nền' : batchReadinessError ? 'Cần thử lại' : batchReadiness ? 'Đã hoàn tất' : 'Đang chờ'],
               ['2', 'Xử lý suất bị chặn', blockedBatchCount > 0 ? `Còn ${blockedBatchCount} suất` : batchReadiness ? 'Không còn vướng mắc' : 'Đang chờ kết quả'],
               ['3', 'Mở bán toàn bộ', batchFullyOpened ? 'Đã hoàn tất' : canOpenBatch ? 'Sẵn sàng xác nhận' : 'Chưa thể thực hiện'],
             ].map(([number, label, state], index) => (
@@ -235,7 +266,7 @@ export default function ShowtimeTable({
               ['Bị chặn', blockedBatchCount, blockedBatchCount ? 'text-amber-300' : 'text-zinc-300'],
               ['Đang mở bán', openedBatchCount, 'text-blue-300'],
             ].map(([label, value, tone]) => (
-              <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><dt className="text-xs font-bold text-zinc-500">{label}</dt><dd className={`mt-1 text-2xl font-black ${tone}`}>{isBatchReadinessLoading && !batchReadiness ? '—' : formatCount(value)}</dd></div>
+              <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><dt className="text-xs font-bold text-zinc-500">{label}</dt><dd className={`mt-1 text-2xl font-black ${tone}`}>{isInitialReadinessLoading ? '—' : formatCount(value)}</dd></div>
             ))}
           </dl>
 
@@ -244,13 +275,13 @@ export default function ShowtimeTable({
               <div className="flex items-start gap-3">
                 {isBatchReadinessLoading ? <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-blue-300" /> : blockedBatchCount > 0 || batchReadinessError ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />}
                 <div>
-                  <p className="font-black">{isBatchReadinessLoading ? 'Đang kiểm tra điều kiện mở bán…' : batchReadinessError || (blockedBatchCount > 0 ? `Còn ${blockedBatchCount} suất bị chặn` : batchFullyOpened ? 'Toàn bộ lịch đã mở bán' : batchReadiness ? `Toàn bộ ${readyBatchCount} suất đã sẵn sàng` : 'Đang chuẩn bị kiểm tra lịch')}</p>
-                  <p className="mt-1 text-sm text-zinc-300/80">{batchReadinessError || (blockedBatchCount > 0 ? 'Hãy xử lý các mục bên dưới rồi kiểm tra lại. Lịch không mở bán một phần.' : batchFullyOpened ? 'Khách hàng đã có thể đặt vé cho các suất trong lịch này.' : batchReadiness ? 'Bạn có thể xác nhận mở bán toàn bộ lịch.' : 'Kết quả sẽ tự động hiển thị sau ít giây.')}</p>
+                  <p className="font-black">{isInitialReadinessLoading ? 'Đang kiểm tra điều kiện mở bán…' : batchReadinessError || (blockedBatchCount > 0 ? `Còn ${blockedBatchCount} suất bị chặn` : batchFullyOpened ? 'Toàn bộ lịch đã mở bán' : batchReadiness ? `Toàn bộ ${readyBatchCount} suất đã sẵn sàng` : 'Đang chuẩn bị kiểm tra lịch')}</p>
+                  <p className="mt-1 text-sm text-zinc-300/80">{batchReadinessError || (isBackgroundReadinessLoading ? 'Đang xác minh lại ở nền; bạn vẫn có thể tiếp tục thao tác với kết quả gần nhất.' : blockedBatchCount > 0 ? 'Hãy xử lý các mục bên dưới rồi kiểm tra lại. Lịch không mở bán một phần.' : batchFullyOpened ? 'Khách hàng đã có thể đặt vé cho các suất trong lịch này.' : batchReadiness ? 'Bạn có thể xác nhận mở bán toàn bộ lịch.' : 'Kết quả sẽ tự động hiển thị sau ít giây.')}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={onCheckBatch} disabled={isBatchReadinessLoading || isBatchActionLoading} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-700 px-4 text-sm font-black text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isBatchReadinessLoading ? 'animate-spin' : ''}`} />Kiểm tra lại</button>
-                <button type="button" onClick={onOpenBatch} disabled={!canOpenBatch || isBatchReadinessLoading || isBatchActionLoading} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-500 px-5 text-sm font-black text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"><Play className="h-4 w-4" />{batchFullyOpened ? 'Đã mở bán toàn bộ' : `Mở bán ${formatCount(readyBatchCount)} suất`}</button>
+                <button type="button" onClick={onOpenBatch} disabled={!canOpenBatch || isInitialReadinessLoading || isBatchActionLoading} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-500 px-5 text-sm font-black text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"><Play className="h-4 w-4" />{batchFullyOpened ? 'Đã mở bán toàn bộ' : `Mở bán ${formatCount(readyBatchCount)} suất`}</button>
               </div>
             </div>
           </div>
@@ -277,10 +308,12 @@ export default function ShowtimeTable({
 
       {batchId && (
         <section className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 md:flex-row md:items-center md:justify-between" aria-label="Chọn cách rà soát lịch">
-          <div><h2 className="font-black">Rà soát chi tiết</h2><p className="mt-1 text-xs text-zinc-500">Dùng danh sách để kiểm tra từng suất; dùng sơ đồ để kiểm chứng phân bổ phòng và thời gian.</p></div>
-          <div className="flex rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Chế độ rà soát lịch">
+          <div><h2 className="font-black">Rà soát chi tiết</h2><p className="mt-1 text-xs text-zinc-500">Xem theo ngày để vận hành, theo phim để kiểm tra độ phủ; danh sách và sơ đồ dành cho rà soát sâu.</p></div>
+          <div className="flex flex-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Chế độ rà soát lịch">
+            <button type="button" aria-pressed={viewMode === 'DAY'} onClick={() => setViewMode('DAY')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'DAY' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><CalendarDays className="h-4 w-4" />Theo ngày</button>
+            <button type="button" aria-pressed={viewMode === 'MOVIE'} onClick={() => setViewMode('MOVIE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'MOVIE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><Film className="h-4 w-4" />Theo phim</button>
             <button type="button" aria-pressed={viewMode === 'LIST'} onClick={() => setViewMode('LIST')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'LIST' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><LayoutList className="h-4 w-4" />Danh sách</button>
-            <button type="button" aria-pressed={viewMode === 'TIMELINE'} onClick={() => setViewMode('TIMELINE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'TIMELINE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><PanelsTopLeft className="h-4 w-4" />Sơ đồ phòng và thời gian</button>
+            <button type="button" aria-pressed={viewMode === 'TIMELINE'} onClick={() => setViewMode('TIMELINE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'TIMELINE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><PanelsTopLeft className="h-4 w-4" />Sơ đồ</button>
           </div>
         </section>
       )}
@@ -322,6 +355,20 @@ export default function ShowtimeTable({
       </section>
       </details>
 
+      {!isLoading && showtimes.length > 0 && viewMode === 'DAY' && (
+        <>
+          <ShowtimeDayView showtimes={showtimes} onOpenQuickDetail={setSelectedShowtime} />
+          <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang lịch theo ngày" />
+        </>
+      )}
+
+      {!isLoading && showtimes.length > 0 && viewMode === 'MOVIE' && (
+        <>
+          <ShowtimeMovieView showtimes={showtimes} movies={movies} onOpenQuickDetail={setSelectedShowtime} />
+          <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang lịch theo phim" />
+        </>
+      )}
+
       {!isLoading && showtimes.length > 0 && viewMode === 'TIMELINE' && (
         <>
           {Number(totalElements) > showtimes.length && (
@@ -334,19 +381,11 @@ export default function ShowtimeTable({
             </div>
           )}
           <OperationalShowtimeTimeline showtimes={showtimes} requestedDate={date} onViewDetail={onViewDetail} />
-          {totalPages > 1 && (
-            <nav className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3" aria-label="Phân trang sơ đồ lịch chiếu">
-              <span className="text-xs text-zinc-500">Trang dữ liệu {currentPage + 1}/{totalPages} · lọc theo ngày và rạp để có góc nhìn chính xác hơn</span>
-              <div className="flex gap-2">
-                <button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Trang trước</button>
-                <button type="button" disabled={currentPage === totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Trang sau</button>
-              </div>
-            </nav>
-          )}
+          <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang sơ đồ lịch chiếu" />
         </>
       )}
 
-      <section className={`${viewMode === 'TIMELINE' && showtimes.length > 0 && !isLoading ? 'hidden' : ''} overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/30`} aria-label="Danh sách suất chiếu">
+      {(viewMode === 'LIST' || isLoading || showtimes.length === 0) && <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/30" aria-label="Danh sách suất chiếu">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-4 md:px-5">
           <div>
             <h2 className="text-base font-black">Danh sách suất chiếu</h2>
@@ -400,8 +439,8 @@ export default function ShowtimeTable({
                     <StatusBadge status={showtime.status} />
                     <p className="mt-1 text-[11px] text-zinc-500">{statusDescriptions[showtime.status]}</p>
                   </div>
-                  <button type="button" onClick={() => onViewDetail(showtime.showtimePublicId)} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-brand-orange/30 px-3 text-xs font-black text-brand-orange hover:bg-brand-orange/10">
-                    Chi tiết
+                  <button type="button" onClick={() => setSelectedShowtime(showtime)} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-brand-orange/30 px-3 text-xs font-black text-brand-orange hover:bg-brand-orange/10">
+                    Xem nhanh
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </article>
@@ -409,16 +448,9 @@ export default function ShowtimeTable({
             })}
           </div>
         )}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-4 md:px-5">
-            <span className="text-xs text-zinc-500">Trang {currentPage + 1} / {totalPages}</span>
-            <div className="flex gap-2">
-              <button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Trước</button>
-              <button type="button" disabled={currentPage === totalPages - 1} onClick={() => setCurrentPage(currentPage + 1)} className="min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 disabled:opacity-40">Sau</button>
-            </div>
-          </div>
-        )}
-      </section>
+        {!isLoading && showtimes.length > 0 && <div className="border-t border-zinc-800 p-3"><PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang danh sách suất chiếu" /></div>}
+      </section>}
+      <ShowtimeQuickDrawer showtime={selectedShowtime} onClose={() => setSelectedShowtime(null)} onViewDetail={onViewDetail} />
     </div>
   );
 }

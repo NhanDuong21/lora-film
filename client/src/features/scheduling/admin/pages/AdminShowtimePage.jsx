@@ -6,6 +6,10 @@ import adminShowtimeService from '@/features/scheduling/admin/services/adminShow
 import {
   getBatchStatusReasonPresentation,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import {
+  readBatchReadinessCache,
+  writeBatchReadinessCache,
+} from '@/features/scheduling/admin/utils/batchReadinessCache';
 
 const canConfirmBatchTransition = summary => Boolean(
   summary?.actionAllowed
@@ -39,6 +43,8 @@ const AdminShowtimePage = () => {
     setSource,
     currentPage,
     setCurrentPage,
+    pageSize,
+    setPageSize,
     totalPages,
     totalElements,
     fetchShowtimes
@@ -56,7 +62,9 @@ const AdminShowtimePage = () => {
   const locationStateProcessed = useRef(false);
   const [isBatchActionLoading, setIsBatchActionLoading] = useState(false);
   const [isBatchReadinessLoading, setIsBatchReadinessLoading] = useState(false);
-  const [batchReadiness, setBatchReadiness] = useState(null);
+  const [batchReadiness, setBatchReadiness] = useState(() => (
+    readBatchReadinessCache(searchParams.get('batchId') || '')?.summary || null
+  ));
   const [batchReadinessError, setBatchReadinessError] = useState('');
   const [batchActionDialog, setBatchActionDialog] = useState(null);
   const batchReadinessGenerationRef = useRef(0);
@@ -136,7 +144,7 @@ const AdminShowtimePage = () => {
     setDate('');
   };
 
-  const checkBatchReadiness = useCallback(async ({ showDialog = false, quiet = false } = {}) => {
+  const checkBatchReadiness = useCallback(async ({ showDialog = false, quiet = false, preserveCached = false } = {}) => {
     if (!batchId) return null;
 
     const requestGeneration = batchReadinessGenerationRef.current + 1;
@@ -149,6 +157,7 @@ const AdminShowtimePage = () => {
       if (res?.success && res.data) {
         const normalizedSummary = { ...res.data, batchId: res.data.batchId || batchId };
         setBatchReadiness(normalizedSummary);
+        writeBatchReadinessCache(batchId, normalizedSummary);
         if (showDialog) setBatchActionDialog({ phase: 'confirm', summary: normalizedSummary });
         return normalizedSummary;
       }
@@ -156,7 +165,7 @@ const AdminShowtimePage = () => {
     } catch {
       if (requestGeneration !== batchReadinessGenerationRef.current) return null;
       const message = 'Không thể kiểm tra điều kiện mở bán lúc này. Vui lòng thử lại.';
-      setBatchReadinessError(message);
+      if (!preserveCached) setBatchReadinessError(message);
       if (!quiet) triggerToast?.(message, 'error');
       return null;
     } finally {
@@ -168,8 +177,11 @@ const AdminShowtimePage = () => {
 
   useEffect(() => {
     if (!batchId) return;
+    const cached = readBatchReadinessCache(batchId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- navigation can change the active batch without remounting this route.
+    setBatchReadiness(previous => previous?.batchId === batchId ? previous : cached?.summary || null);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- entering a batch intentionally starts its server-side readiness check.
-    void checkBatchReadiness({ quiet: true });
+    void checkBatchReadiness({ quiet: true, preserveCached: Boolean(cached) });
   }, [batchId, checkBatchReadiness]);
 
   const handleOpenBatchDialog = () => {
@@ -221,6 +233,8 @@ const AdminShowtimePage = () => {
       setStatus={setStatus}
       currentPage={currentPage}
       setCurrentPage={setCurrentPage}
+      pageSize={pageSize}
+      setPageSize={setPageSize}
       totalPages={totalPages}
       totalElements={totalElements}
       batchId={batchId}
