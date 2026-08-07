@@ -90,12 +90,12 @@ describe('AutoScheduleTimeline Milestone C', () => {
     expect(screen.getByTestId('timeline-ruler').style.width).toBe(screen.getByTestId('timeline-track-aud-1').style.width);
     expect(screen.getByTestId('timeline-track-aud-1').style.width).toBe(screen.getByTestId('timeline-track-aud-2').style.width);
 
-    fireEvent.click(screen.getByRole('button', { name: '30 px/giờ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn' }));
     expect(root.parentElement).toHaveAttribute('data-zoom-mode', TIMELINE_ZOOM_MODES.COMPACT);
     expect(root.parentElement).toHaveAttribute('data-pixels-per-hour', '30.00');
-    fireEvent.click(screen.getByRole('button', { name: '60 px/giờ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thoáng' }));
     expect(root.parentElement).toHaveAttribute('data-pixels-per-hour', '60.00');
-    fireEvent.click(screen.getByRole('button', { name: '120 px/giờ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rộng' }));
     expect(root.parentElement).toHaveAttribute('data-pixels-per-hour', '120.00');
   });
 

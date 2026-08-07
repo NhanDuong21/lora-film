@@ -9,6 +9,14 @@ import {
 
 const PAGE_SIZE = 100;
 const MAX_PAGE_CONCURRENCY = 3;
+const BACKGROUND_HYDRATION_PAGE_THRESHOLD = 20;
+const LOCALIZED_LOAD_ERROR_CODES = new Set([
+  'INVALID_RESPONSE',
+  'MISSING_VERSION',
+  'VERSION_MISMATCH',
+  'DUPLICATE_PAGE',
+  'INCOMPLETE_SNAPSHOT',
+]);
 
 const createEmptySnapshot = () => ({
   sourcePreviewId: null,
@@ -91,6 +99,8 @@ export default function useAutoSchedulePreview(
 ) {
   const [snapshot, setSnapshot] = useState(createEmptySnapshot);
   const [loadState, setLoadState] = useState(createIdleLoadState);
+  const [candidateLoadState, setCandidateLoadState] = useState(createIdleLoadState);
+  const [candidateLoadError, setCandidateLoadError] = useState('');
   const [snapshotError, setSnapshotError] = useState(null);
   const [isApplying, setIsApplying] = useState(false);
   const [isUpdatingSelection, setIsUpdatingSelection] = useState(false);
@@ -135,6 +145,8 @@ export default function useAutoSchedulePreview(
     }
 
     setSnapshotError(null);
+    setCandidateLoadError('');
+    setCandidateLoadState(createIdleLoadState());
     setLoadState({
       active: true,
       loadedPages: 0,
@@ -148,6 +160,8 @@ export default function useAutoSchedulePreview(
       && activeLoadRef.current.controller === controller
       && !controller.signal.aborted
     );
+
+    let progressiveSnapshotPublished = false;
 
     try {
       const requestedPages = new Set([0]);
@@ -185,6 +199,107 @@ export default function useAutoSchedulePreview(
         totalItems: totalElements,
       });
 
+      const useBackgroundHydration = reportedTotalPages >= BACKGROUND_HYDRATION_PAGE_THRESHOLD;
+      if (useBackgroundHydration) {
+        const selectedFirstResponse = await adminAutoScheduleService.getPreview(
+          previewPublicId,
+          { page: 0, size: PAGE_SIZE, selected: true, sort: 'startTime,asc' },
+          { signal: controller.signal },
+        );
+        if (!isCurrentLoad()) return false;
+
+        const selectedFirstPage = readPage(selectedFirstResponse);
+        if (String(selectedFirstPage.preview.version) !== String(previewVersion)) {
+          throw createLoadError(
+            'VERSION_MISMATCH',
+            'Bản lịch đã thay đổi trong lúc tải. Hãy cập nhật lại để xem dữ liệu mới nhất.',
+            true,
+          );
+        }
+
+        const selectedTotalPages = Math.max(Number(selectedFirstPage.items.totalPages) || 0, 1);
+        const selectedTotalElements = Math.max(
+          Number(selectedFirstPage.items.totalElements)
+            || selectedFirstPage.items.content?.length
+            || 0,
+          0,
+        );
+        const selectedPages = Array.from({ length: selectedTotalPages });
+        selectedPages[0] = selectedFirstPage.items.content || [];
+        let loadedSelectedItems = selectedPages[0].length;
+        setLoadState({
+          active: true,
+          loadedPages: 1,
+          totalPages: selectedTotalPages,
+          loadedItems: loadedSelectedItems,
+          totalItems: selectedTotalElements,
+        });
+
+        for (let pageNumber = 1; pageNumber < selectedTotalPages; pageNumber += 1) {
+          const selectedResponse = await adminAutoScheduleService.getPreview(
+            previewPublicId,
+            { page: pageNumber, size: PAGE_SIZE, selected: true, sort: 'startTime,asc' },
+            { signal: controller.signal },
+          );
+          if (!isCurrentLoad()) return false;
+
+          const selectedPage = readPage(selectedResponse);
+          if (String(selectedPage.preview.version) !== String(previewVersion)) {
+            throw createLoadError(
+              'VERSION_MISMATCH',
+              'Bản lịch đã thay đổi trong lúc tải. Hãy cập nhật lại để xem dữ liệu mới nhất.',
+              true,
+            );
+          }
+          selectedPages[pageNumber] = selectedPage.items.content || [];
+          loadedSelectedItems += selectedPages[pageNumber].length;
+          setLoadState({
+            active: true,
+            loadedPages: pageNumber + 1,
+            totalPages: selectedTotalPages,
+            loadedItems: loadedSelectedItems,
+            totalItems: selectedTotalElements,
+          });
+        }
+
+        const selectedItems = selectedPages.flatMap(content => content || []);
+        if (selectedItems.length !== selectedTotalElements) {
+          throw createLoadError(
+            'INCOMPLETE_SNAPSHOT',
+            'Không thể tải đầy đủ các suất đã chọn. Hãy cập nhật lại lịch.',
+            true,
+          );
+        }
+
+        updateSnapshot({
+          sourcePreviewId: previewPublicId,
+          preview: firstPage.preview,
+          items: selectedItems,
+          selectedItemIds: new Set(
+            selectedItems.filter(item => item.selected).map(item => item.itemPublicId),
+          ),
+          expectedVersion: previewVersion,
+        });
+        setPricingPreflight(null);
+        setPricingPreflightError('');
+        pricingReadinessRef.current.completedKey = '';
+        setLoadState({
+          active: false,
+          loadedPages: selectedTotalPages,
+          totalPages: selectedTotalPages,
+          loadedItems: selectedItems.length,
+          totalItems: selectedTotalElements,
+        });
+        setCandidateLoadState({
+          active: true,
+          loadedPages: 1,
+          totalPages: reportedTotalPages,
+          loadedItems: pages[0].length,
+          totalItems: totalElements,
+        });
+        progressiveSnapshotPublished = true;
+      }
+
       let nextPage = 1;
       const worker = async () => {
         while (isCurrentLoad()) {
@@ -215,13 +330,15 @@ export default function useAutoSchedulePreview(
           pages[pageNumber] = page.items.content || [];
           completedPages.add(pageNumber);
           const loadedItems = pages.reduce((count, content) => count + (content?.length || 0), 0);
-          setLoadState({
+          const nextProgress = {
             active: true,
             loadedPages: completedPages.size,
             totalPages: reportedTotalPages,
             loadedItems,
             totalItems: totalElements,
-          });
+          };
+          if (useBackgroundHydration) setCandidateLoadState(nextProgress);
+          else setLoadState(nextProgress);
         }
       };
 
@@ -241,6 +358,28 @@ export default function useAutoSchedulePreview(
       const selectedItemIds = new Set(
         allItems.filter(item => item.selected).map(item => item.itemPublicId),
       );
+      if (useBackgroundHydration) {
+        if (
+          snapshotRef.current.sourcePreviewId === previewPublicId
+          && String(snapshotRef.current.expectedVersion) === String(previewVersion)
+        ) {
+          updateSnapshot(previous => ({
+            ...previous,
+            preview: firstPage.preview,
+            items: allItems,
+            selectedItemIds,
+          }));
+        }
+        setCandidateLoadState({
+          active: false,
+          loadedPages: reportedTotalPages,
+          totalPages: reportedTotalPages,
+          loadedItems: allItems.length,
+          totalItems: totalElements,
+        });
+        return true;
+      }
+
       updateSnapshot({
         sourcePreviewId: previewPublicId,
         preview: firstPage.preview,
@@ -265,9 +404,19 @@ export default function useAutoSchedulePreview(
       if (isObsolete || controller.signal.aborted || isIntentionalCancellation(error)) return false;
 
       controller.abort();
+      if (progressiveSnapshotPublished) {
+        setCandidateLoadState(previous => ({ ...previous, active: false }));
+        setCandidateLoadError(
+          'Không thể tải các phương án nâng cao. Bạn vẫn có thể rà soát lịch đang chọn và thử cập nhật lại sau.',
+        );
+        return true;
+      }
+
       const normalizedError = {
         code: error?.code || 'LOAD_FAILED',
-        message: error?.message || 'Không thể tải chi tiết bản lịch.',
+        message: LOCALIZED_LOAD_ERROR_CODES.has(error?.code)
+          ? error.message
+          : 'Không thể tải chi tiết bản lịch. Vui lòng thử lại.',
         blocksMutations: Boolean(error?.blocksMutations),
       };
       setSnapshotError(normalizedError);
@@ -344,7 +493,7 @@ export default function useAutoSchedulePreview(
       if (pricingReadinessRef.current.generation !== generation) return null;
       const message = error?.errorCode === 'AUTO_SCHEDULE_PREVIEW_VERSION_CONFLICT'
         ? 'Lịch vừa được thay đổi. Hãy làm mới rồi kiểm tra giá lại.'
-        : (error?.message || 'Không thể kiểm tra bảng giá lúc này.');
+        : 'Không thể kiểm tra bảng giá lúc này.';
       setPricingPreflight(null);
       setPricingPreflightError(message);
       return null;
@@ -419,6 +568,70 @@ export default function useAutoSchedulePreview(
         'Lỗi cập nhật trạng thái chọn. Đang tải lại dữ liệu.',
       ), 'error');
       fetchPreview();
+    } finally {
+      setIsUpdatingSelection(false);
+    }
+  };
+
+  const handleReplaceSelection = async (currentItemPublicId, replacementItemPublicId) => {
+    if (!capabilities.canSelect) {
+      triggerToast?.('Lịch này hiện không cho phép thay đổi các suất đã chọn.', 'error');
+      return false;
+    }
+    if (!snapshot.selectedItemIds.has(currentItemPublicId)) {
+      triggerToast?.('Suất cần thay không còn nằm trong lịch đang chọn.', 'error');
+      return false;
+    }
+    if (snapshot.selectedItemIds.has(replacementItemPublicId)) {
+      triggerToast?.('Phương án thay thế này đã có trong lịch.', 'error');
+      return false;
+    }
+
+    const nextSelectedIds = new Set(snapshot.selectedItemIds);
+    nextSelectedIds.delete(currentItemPublicId);
+    nextSelectedIds.add(replacementItemPublicId);
+    const guard = validateBulkSelection(snapshot.items, nextSelectedIds);
+    if (!guard.valid) {
+      triggerToast?.(getSelectionGuardMessage(guard.type), 'error');
+      return false;
+    }
+
+    const previousSelectedIds = new Set(snapshot.selectedItemIds);
+    setPricingPreflight(null);
+    setPricingPreflightError('');
+    pricingReadinessRef.current.completedKey = '';
+    updateSnapshot(previous => ({
+      ...previous,
+      selectedItemIds: new Set(nextSelectedIds),
+    }));
+
+    setIsUpdatingSelection(true);
+    try {
+      const response = await adminAutoScheduleService.updateSelections(previewPublicId, {
+        expectedVersion: snapshot.expectedVersion,
+        items: [
+          { itemPublicId: currentItemPublicId, selected: false },
+          { itemPublicId: replacementItemPublicId, selected: true },
+        ],
+      });
+      if (!response?.success || !response.data) {
+        throw new Error('Không nhận được kết quả thay suất từ hệ thống.');
+      }
+      updateSnapshot(previous => ({
+        ...previous,
+        preview: response.data,
+        expectedVersion: response.data.version,
+      }));
+      triggerToast?.('Đã thay suất và kiểm tra lại xung đột thành công.', 'success');
+      return true;
+    } catch (error) {
+      updateSnapshot(previous => ({ ...previous, selectedItemIds: previousSelectedIds }));
+      triggerToast?.(getSelectionBackendErrorMessage(
+        error,
+        'Không thể thay suất lúc này. Hệ thống đang tải lại lịch mới nhất.',
+      ), 'error');
+      fetchPreview();
+      return false;
     } finally {
       setIsUpdatingSelection(false);
     }
@@ -519,9 +732,11 @@ export default function useAutoSchedulePreview(
       ) {
         setPricingPreflight(error.data);
       }
-      const message = error?.message
-        || error?.response?.data?.message
-        || 'Không thể tạo suất chiếu từ lịch này.';
+      const message = error?.errorCode === 'PRICING_INCOMPLETE'
+        ? 'Chưa thể tạo suất chiếu vì bảng giá chưa đầy đủ.'
+        : error?.errorCode === 'PRICING_AMBIGUOUS'
+          ? 'Chưa thể tạo suất chiếu vì có nhiều mức giá phù hợp cùng lúc.'
+          : 'Không thể tạo suất chiếu từ lịch này. Vui lòng thử lại.';
       triggerToast?.(message, 'error');
       return null;
     } finally {
@@ -543,6 +758,14 @@ export default function useAutoSchedulePreview(
       loadedItems: loadState.loadedItems,
       totalItems: loadState.totalItems,
     },
+    isLoadingCandidates: candidateLoadState.active,
+    candidateLoadingProgress: {
+      loadedPages: candidateLoadState.loadedPages,
+      totalPages: candidateLoadState.totalPages,
+      loadedItems: candidateLoadState.loadedItems,
+      totalItems: candidateLoadState.totalItems,
+    },
+    candidateLoadError,
     snapshotError,
     pricingPreflight,
     pricingPreflightError,
@@ -551,6 +774,7 @@ export default function useAutoSchedulePreview(
     isApplying,
     isUpdatingSelection,
     handleToggleSelection,
+    handleReplaceSelection,
     handleBulkSelection,
     handleApply,
     checkPricingReadiness,

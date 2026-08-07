@@ -38,6 +38,9 @@ const renderDrawer = ({
   candidate = buildCandidate(),
   capabilities = editableCapabilities,
   onToggleSelection = vi.fn(),
+  replacementAlternatives = [],
+  onReplaceSelection = vi.fn(),
+  isLoadingAlternatives = false,
   canInspectOnTimeline = false,
   onShowDiagnostic = vi.fn(),
   onClearDiagnostic = vi.fn(),
@@ -51,6 +54,9 @@ const renderDrawer = ({
       capabilities={capabilities}
       selectionBlockedMessage=""
       onToggleSelection={onToggleSelection}
+      replacementAlternatives={replacementAlternatives}
+      onReplaceSelection={onReplaceSelection}
+      isLoadingAlternatives={isLoadingAlternatives}
       canInspectOnTimeline={canInspectOnTimeline}
       onShowDiagnostic={onShowDiagnostic}
       onClearDiagnostic={onClearDiagnostic}
@@ -70,7 +76,7 @@ describe('AutoScheduleCandidateDrawer', () => {
     await waitFor(() => expect(closeButton).toHaveFocus());
     expect(dialog).toHaveAttribute('aria-modal', 'true');
 
-    const technicalDetails = screen.getByText('Chi tiết kỹ thuật');
+    const technicalDetails = screen.getByText('Dữ liệu nhận diện');
     technicalDetails.focus();
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(closeButton).toHaveFocus();
@@ -98,7 +104,7 @@ describe('AutoScheduleCandidateDrawer', () => {
 
     fireEvent.mouseDown(screen.getByRole('dialog'));
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Chọn suất đề xuất' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm vào lịch' }));
     expect(onToggleSelection).toHaveBeenCalledWith('item-1', false);
   });
 
@@ -110,8 +116,41 @@ describe('AutoScheduleCandidateDrawer', () => {
     renderDrawer({ candidate, capabilities: { isEditable: false, canSelect: false } });
 
     expect(screen.getByRole('link', { name: /showtime-77/i })).toHaveAttribute('href', '/admin/showtimes/showtime-77');
-    expect(screen.queryByRole('button', { name: /Chọn suất đề xuất/i })).not.toBeInTheDocument();
-    expect(screen.getByText('scoreBreakdown')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Thêm vào lịch/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Dữ liệu nhận diện')).toBeInTheDocument();
+  });
+
+  it('shows contextual alternatives and replaces the selected showtime explicitly', () => {
+    const selectedCandidate = buildCandidate({}, true);
+    const alternative = buildCandidate({
+      itemPublicId: 'item-2',
+      startTime: '2026-07-24T12:00:00Z',
+      endTime: '2026-07-24T13:00:00Z',
+      occupancyEndTime: '2026-07-24T13:15:00Z',
+    });
+    alternative.id = 'item-2';
+    const onReplaceSelection = vi.fn();
+    renderDrawer({
+      candidate: selectedCandidate,
+      replacementAlternatives: [alternative],
+      onReplaceSelection,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm phương án thay thế' }));
+    expect(screen.getByText('Cùng phim')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thay bằng suất này' }));
+    expect(onReplaceSelection).toHaveBeenCalledWith('item-1', 'item-2');
+  });
+
+  it('explains that replacement alternatives are still loading', () => {
+    renderDrawer({
+      candidate: buildCandidate({}, true),
+      isLoadingAlternatives: true,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm phương án thay thế' }));
+    expect(screen.getByText('Đang chuẩn bị các phương án thay thế an toàn…')).toBeInTheDocument();
+    expect(screen.queryByText('Chưa có phương án thay thế an toàn cho suất này.')).not.toBeInTheDocument();
   });
 
   it('can add or clear the single diagnostic overlay without toggling selection', () => {

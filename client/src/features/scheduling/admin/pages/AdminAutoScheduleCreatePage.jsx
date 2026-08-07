@@ -78,7 +78,7 @@ const GenerationProgress = ({ planningDays }) => {
         <span className="auto-schedule-progress-bar block h-full w-2/5 rounded-full bg-gradient-to-r from-orange-600 via-orange-300 to-orange-600" />
       </div>
       <p className="mt-2 text-[11px] leading-4 text-zinc-400">
-        Đây là tiến trình chờ, không phải phần trăm giả lập. Phạm vi {planningDays} ngày có thể mất vài phút và trang sẽ tự chuyển sang preview khi hoàn tất.
+        Đây là tiến trình chờ thực tế. Phạm vi {planningDays} ngày có thể mất vài phút và trang sẽ tự chuyển sang bản xem trước khi hoàn tất.
       </p>
     </section>
   );
@@ -363,10 +363,10 @@ export default function AdminAutoScheduleCreatePage() {
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </button>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-orange">Auto Schedule · Demand-Aware</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-orange">Xếp lịch tự động · Tối ưu theo nhu cầu</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight">Tạo lịch tối ưu</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-            Chọn rạp và số ngày. Hệ thống tự xác định phim, định dạng, phòng, nhu cầu và khung giờ phù hợp trước khi cho bạn xem preview.
+            Chọn rạp và số ngày. Hệ thống tự xác định phim, định dạng, phòng, nhu cầu và khung giờ phù hợp trước khi cho bạn xem bản đề xuất.
           </p>
         </div>
       </header>
@@ -374,7 +374,7 @@ export default function AdminAutoScheduleCreatePage() {
       {recreateContext && (
         <section className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100" role="status">
           <p className="font-black">Đang tạo lại từ lịch {recreateContext.sourceShortCode}</p>
-          <p className="mt-1 text-blue-200/80">Quick Mode sẽ lập lại từ ngày mai; các giới hạn phòng và phim cũ đã được chuyển vào phần Nâng cao để bạn kiểm tra.</p>
+          <p className="mt-1 text-blue-200/80">Chế độ nhanh sẽ lập lại từ ngày mai; các giới hạn phòng và phim cũ đã được chuyển vào phần Nâng cao để bạn kiểm tra.</p>
         </section>
       )}
 
@@ -384,8 +384,8 @@ export default function AdminAutoScheduleCreatePage() {
             <div className="mb-6 flex items-start gap-3">
               <span className="rounded-xl bg-brand-orange/10 p-2.5 text-brand-orange"><Sparkles className="h-5 w-5" aria-hidden="true" /></span>
               <div>
-                <h2 id="quick-mode-heading" className="text-xl font-black">Quick Mode</h2>
-                <p className="mt-1 text-sm text-zinc-500">Không cần chấm độ hot hoặc chọn thủ công từng phim và phòng.</p>
+                <h2 id="quick-mode-heading" className="text-xl font-black">Chế độ nhanh</h2>
+                <p className="mt-1 text-sm text-zinc-500">Không cần tự đánh giá mức độ quan tâm hoặc chọn thủ công từng phim và phòng.</p>
               </div>
             </div>
 
@@ -433,7 +433,7 @@ export default function AdminAutoScheduleCreatePage() {
                 <span className="rounded-xl bg-blue-500/10 p-2.5 text-blue-300"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
                 <div>
                   <h2 id="preflight-heading" className="text-xl font-black">Kiểm tra trước khi tối ưu</h2>
-                  <p className="mt-1 text-sm text-zinc-500">Eligibility, tương thích định dạng, giờ hoạt động, bảo trì và bảng giá.</p>
+                  <p className="mt-1 text-sm text-zinc-500">Điều kiện tham gia, tương thích định dạng, giờ hoạt động, bảo trì và bảng giá.</p>
                 </div>
               </div>
               <button type="button" onClick={() => runPreflight()} disabled={!selectedCinemaId || isCheckingPreflight} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-zinc-700 px-4 text-sm font-bold text-zinc-200 disabled:opacity-40">
@@ -442,7 +442,7 @@ export default function AdminAutoScheduleCreatePage() {
               </button>
             </div>
 
-            {!selectedCinemaId && <p className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-500">Chọn rạp để hệ thống tự chạy preflight.</p>}
+            {!selectedCinemaId && <p className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-500">Chọn rạp để hệ thống tự kiểm tra dữ liệu.</p>}
             {selectedCinemaId && isCheckingPreflight && !preflight && <p className="mt-5 flex items-center gap-2 text-sm text-blue-200"><Loader2 className="h-4 w-4 animate-spin" /> Đang kiểm tra dữ liệu vận hành…</p>}
             {selectedCinemaId && isCheckingPreflight && preflight && <p className="mt-5 flex items-center gap-2 text-sm text-blue-200"><Loader2 className="h-4 w-4 animate-spin" /> Đang cập nhật kết quả kiểm tra…</p>}
             {preflightError && <p role="alert" className="mt-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{preflightError}</p>}
@@ -453,7 +453,7 @@ export default function AdminAutoScheduleCreatePage() {
                   <p className={`font-black ${preflight.canGenerate ? 'text-emerald-200' : 'text-amber-200'}`}>
                     {preflight.canGenerate ? 'Sẵn sàng tạo lịch' : 'Cần xử lý trước khi tạo lịch'}
                   </p>
-                  <p className="mt-1 text-sm text-zinc-300">{formatPreviewDateRange(preflight.planningFrom, preflight.planningTo)} · {preflight.timezone}</p>
+                  <p className="mt-1 text-sm text-zinc-300">{formatPreviewDateRange(preflight.planningFrom, preflight.planningTo)} · Giờ địa phương của rạp</p>
                 </div>
                 <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[
@@ -501,7 +501,7 @@ export default function AdminAutoScheduleCreatePage() {
                   <input type="number" min="5" max="60" value={slotGranularityMinutes} onChange={event => setSlotGranularityMinutes(event.target.value)} className={inputClassName} />
                   {errors.slotGranularityMinutes && <span className="block text-xs text-rose-300">{errors.slotGranularityMinutes}</span>}
                 </label>
-                <label className="space-y-1.5 text-sm font-bold text-zinc-300">Thời gian giữ preview (phút)
+                <label className="space-y-1.5 text-sm font-bold text-zinc-300">Thời gian giữ bản xem trước (phút)
                   <input type="number" min="5" max="120" value={previewTtlMinutes} onChange={event => setPreviewTtlMinutes(event.target.value)} className={inputClassName} />
                   {errors.previewTtlMinutes && <span className="block text-xs text-rose-300">{errors.previewTtlMinutes}</span>}
                 </label>
@@ -585,7 +585,7 @@ export default function AdminAutoScheduleCreatePage() {
             </div>
           </dl>
           <div className={`mt-5 rounded-xl border p-4 text-sm ${isReady ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-zinc-700 bg-zinc-950 text-zinc-400'}`}>
-            {isCheckingPreflight ? 'Đang kiểm tra dữ liệu…' : isReady ? 'Kiểm tra trước đã thông qua. Sẵn sàng chạy Demand-Aware CP-SAT.' : 'Chọn rạp và xử lý các điều kiện đang chặn để tiếp tục.'}
+            {isCheckingPreflight ? 'Đang kiểm tra dữ liệu…' : isReady ? 'Kiểm tra trước đã thông qua. Sẵn sàng tối ưu lịch.' : 'Chọn rạp và xử lý các điều kiện đang chặn để tiếp tục.'}
           </div>
           {isSubmitting && <GenerationProgress planningDays={planningDays} />}
           <button
@@ -597,7 +597,7 @@ export default function AdminAutoScheduleCreatePage() {
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {isSubmitting ? 'Đang tối ưu lịch…' : 'Tạo lịch tối ưu'}
           </button>
-          <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-zinc-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Preview không mở bán tự động. Bạn vẫn phải xem và bấm áp dụng.</p>
+          <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-zinc-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Bản xem trước không tự mở bán. Bạn vẫn phải kiểm tra và xác nhận tạo suất chiếu.</p>
         </aside>
       </div>
     </div>

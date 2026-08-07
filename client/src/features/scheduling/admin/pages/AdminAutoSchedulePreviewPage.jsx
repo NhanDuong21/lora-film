@@ -81,6 +81,16 @@ const LIFECYCLE_TONE_CLASSES = {
   CANCELLED: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
 };
 
+const PRICING_REASON_LABELS = Object.freeze({
+  PRICING_MISSING: 'Thiếu chính sách giá đang có hiệu lực.',
+  PRICING_INCOMPLETE: 'Chưa có bảng giá đầy đủ cho các suất này.',
+  PRICING_AMBIGUOUS: 'Có nhiều mức giá phù hợp cùng lúc.',
+});
+
+const getPricingReasonLabel = reasonCode => (
+  PRICING_REASON_LABELS[reasonCode] || 'Bảng giá chưa đáp ứng đầy đủ điều kiện tạo suất.'
+);
+
 const formatKpiCurrency = value => value === null || value === undefined
   ? '—'
   : new Intl.NumberFormat('vi-VN', {
@@ -152,13 +162,18 @@ const AdminAutoSchedulePreviewPage = () => {
     isRefreshing,
     isSnapshotUpdating,
     loadingProgress,
+    isLoadingCandidates,
+    candidateLoadingProgress,
+    candidateLoadError,
     snapshotError,
     pricingPreflight,
     pricingPreflightError,
     isCheckingPricing,
     capabilities,
     isApplying,
+    isUpdatingSelection,
     handleToggleSelection,
+    handleReplaceSelection,
     handleApply,
     checkPricingReadiness,
     fetchPreview,
@@ -201,12 +216,12 @@ const AdminAutoSchedulePreviewPage = () => {
         phase: response.data.actionAllowed ? 'confirm' : 'blocked',
         summary: response.data,
       });
-    } catch (error) {
+    } catch {
       setScheduleActionDialog({
         type: 'REPLACE',
         phase: 'error',
         summary: null,
-        message: error?.response?.data?.message || error?.message || 'Không thể kiểm tra điều kiện thay lịch.',
+        message: 'Không thể kiểm tra điều kiện thay lịch lúc này. Vui lòng thử lại.',
       });
     } finally {
       setIsScheduleActionLoading(false);
@@ -271,11 +286,11 @@ const AdminAutoSchedulePreviewPage = () => {
           },
         },
       });
-    } catch (error) {
+    } catch {
       setScheduleActionDialog(previous => ({
         ...previous,
         phase: 'error',
-        message: error?.response?.data?.message || error?.message || 'Không thể chuẩn bị tạo lại lịch.',
+        message: 'Không thể chuẩn bị tạo lại lịch lúc này. Vui lòng thử lại.',
       }));
     } finally {
       setIsScheduleActionLoading(false);
@@ -361,6 +376,11 @@ const AdminAutoSchedulePreviewPage = () => {
     () => getCandidateMetrics(items, selectedItemIds),
     [items, selectedItemIds],
   );
+  const totalCandidateCount = Math.max(
+    Number(preview?.totalCandidateCount) || 0,
+    Number(candidateLoadingProgress?.totalItems) || 0,
+    items.length,
+  );
   const selectedCandidates = useMemo(
     () => items.filter(item => selectedItemIds.has(item.itemPublicId)),
     [items, selectedItemIds],
@@ -384,7 +404,7 @@ const AdminAutoSchedulePreviewPage = () => {
   const pricingActionLabel = pricingHasAmbiguity
     ? 'Sửa bảng giá bị trùng'
     : 'Thiết lập bảng giá cho rạp này';
-  const pricingRepairPath = useMemo(() => {
+  const pricingRepairPath = (() => {
     if (!preview?.cinemaPublicId) return '/admin/pricing';
     const params = new URLSearchParams({
       cinema: preview.cinemaPublicId,
@@ -394,7 +414,7 @@ const AdminAutoSchedulePreviewPage = () => {
       returnTo: location.pathname,
     });
     return `/admin/pricing?${params.toString()}`;
-  }, [location.pathname, preview?.cinemaPublicId, preview?.scheduleFrom, preview?.scheduleTo]);
+  })();
   const readinessToneClass = capabilities.effectiveStatus === 'PREVIEWED'
     ? pricingNeedsAttention
       ? 'border-red-500/30 bg-red-500/10 text-red-200'
@@ -448,12 +468,49 @@ const AdminAutoSchedulePreviewPage = () => {
     : drawerSelectionBlock
       ? 'Ứng viên này thiếu dữ liệu cần thiết để lựa chọn an toàn.'
       : '';
+  const replacementAlternatives = useMemo(() => {
+    if (!capabilities.isEditable || !drawerBaseCandidate?.selected) return [];
+
+    const selectedWithoutCurrent = new Set(selectedItemIds);
+    selectedWithoutCurrent.delete(drawerBaseCandidate.id);
+    const remainingSelectionIndex = buildSelectedItemsIndex(items, selectedWithoutCurrent);
+    const currentStart = Number.isFinite(drawerBaseCandidate.startMinuteOffset)
+      ? drawerBaseCandidate.startMinuteOffset
+      : 0;
+
+    return viewModels
+      .filter(candidate => (
+        !candidate.selected
+        && candidate.validationStatus === 'VALID'
+        && candidate.applyStatus === 'PENDING'
+        && candidate.timelineEligible
+        && candidate.serviceDate === drawerBaseCandidate.serviceDate
+        && !findSelectionBlock(candidate.raw, remainingSelectionIndex)
+      ))
+      .sort((left, right) => {
+        const movieOrder = Number(right.movieKey === drawerBaseCandidate.movieKey)
+          - Number(left.movieKey === drawerBaseCandidate.movieKey);
+        if (movieOrder !== 0) return movieOrder;
+        const roomOrder = Number(right.auditoriumKey === drawerBaseCandidate.auditoriumKey)
+          - Number(left.auditoriumKey === drawerBaseCandidate.auditoriumKey);
+        if (roomOrder !== 0) return roomOrder;
+        const leftDistance = Math.abs((left.startMinuteOffset || 0) - currentStart);
+        const rightDistance = Math.abs((right.startMinuteOffset || 0) - currentStart);
+        if (leftDistance !== rightDistance) return leftDistance - rightDistance;
+        return Number(right.score || 0) - Number(left.score || 0);
+      })
+      .slice(0, 8);
+  }, [capabilities.isEditable, drawerBaseCandidate, items, selectedItemIds, viewModels]);
 
   const openDrawer = useCallback((candidate, triggerElement) => {
     setDrawerReturnFocusElement(triggerElement);
     setDrawerCandidateId(candidate.id);
   }, []);
   const closeDrawer = useCallback(() => setDrawerCandidateId(null), []);
+  const replaceDrawerCandidate = useCallback(async (currentId, replacementId) => {
+    const replaced = await handleReplaceSelection(currentId, replacementId);
+    if (replaced) setDrawerCandidateId(replacementId);
+  }, [handleReplaceSelection]);
 
   const selectActiveDate = date => {
     setActiveDateChoice({ key: previewKey, date });
@@ -559,8 +616,26 @@ const AdminAutoSchedulePreviewPage = () => {
 
       <main className="mx-auto w-full max-w-[1700px] space-y-6 p-5 md:p-8">
         <section className={`rounded-xl border p-4 ${readinessToneClass}`} aria-live="polite">
-          <div className="flex gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0"><h2 className="font-bold">{capabilities.effectiveStatus === 'PREVIEWED' ? (pricingNeedsAttention ? 'Chưa thể tạo suất chiếu' : pricingReady ? 'Sẵn sàng tạo suất chiếu' : 'Đang kiểm tra điều kiện tạo suất') : getPreviewStatusPresentation(capabilities.effectiveStatus).label}</h2><p className="mt-1 text-sm opacity-90">{capabilities.effectiveStatus === 'PREVIEWED' ? (pricingNeedsAttention ? 'Lịch không bị trùng, nhưng bảng giá chưa đủ. Hãy xử lý mục Giá vé bên dưới.' : pricingReady ? 'Lịch và bảng giá đã sẵn sàng. Bạn có thể tạo các suất chiếu ở trạng thái đang soạn.' : 'Hệ thống đang kiểm tra bảng giá cho toàn bộ suất đã chọn.') : capabilities.lifecycleMessage}</p><details className="mt-2 text-xs opacity-80"><summary className="cursor-pointer font-bold">Thông tin kỹ thuật</summary><div className="mt-2 space-y-1 break-all font-mono"><p>status: {capabilities.effectiveStatus || preview.status}</p><p>previewPublicId: {preview.previewPublicId || id}</p><p>expiresAt: {preview.expiresAt || '—'}</p><button type="button" onClick={copyPreviewId} className="inline-flex items-center gap-1 rounded border border-current/30 px-2 py-1 font-sans font-bold"><Copy className="h-3 w-3" />Sao chép UUID</button></div></details></div></div>
+          <div className="flex gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0"><h2 className="font-bold">{capabilities.effectiveStatus === 'PREVIEWED' ? (pricingNeedsAttention ? 'Chưa thể tạo suất chiếu' : pricingReady ? 'Sẵn sàng tạo suất chiếu' : 'Đang kiểm tra điều kiện tạo suất') : getPreviewStatusPresentation(capabilities.effectiveStatus).label}</h2><p className="mt-1 text-sm opacity-90">{capabilities.effectiveStatus === 'PREVIEWED' ? (pricingNeedsAttention ? 'Lịch không bị trùng, nhưng bảng giá chưa đủ. Hãy xử lý mục Giá vé bên dưới.' : pricingReady ? 'Lịch và bảng giá đã sẵn sàng. Bạn có thể tạo các suất chiếu ở trạng thái đang soạn.' : 'Hệ thống đang kiểm tra bảng giá cho toàn bộ suất đã chọn.') : capabilities.lifecycleMessage}</p><details className="mt-2 text-xs opacity-80"><summary className="cursor-pointer font-bold">Dữ liệu nhận diện bản lịch</summary><div className="mt-2 space-y-1 break-all"><p>Trạng thái: {getPreviewStatusPresentation(capabilities.effectiveStatus || preview.status).label}</p><p>Mã đầy đủ: {preview.previewPublicId || id}</p><p>Hết hiệu lực lúc: {formatCinemaDateTime(preview.expiresAt, effectiveTimezone)}</p><button type="button" onClick={copyPreviewId} className="inline-flex items-center gap-1 rounded border border-current/30 px-2 py-1 font-bold"><Copy className="h-3 w-3" />Sao chép mã lịch</button></div></details></div></div>
         </section>
+
+        {capabilities.isEditable && (
+          <nav className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4" aria-label="Các bước duyệt lịch">
+            <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                ['1', 'Rà soát lịch', 'Xem lịch theo ngày và phòng', true],
+                ['2', 'Điều chỉnh', 'Bấm vào một suất để giữ, bỏ hoặc thay', selectedItemIds.size > 0],
+                ['3', 'Kiểm tra giá', pricingReady ? 'Bảng giá đã sẵn sàng' : 'Hệ thống đang kiểm tra bảng giá', pricingReady],
+                ['4', 'Tạo suất chiếu', `Tạo ${selectedItemIds.size} suất ở trạng thái đang soạn`, false],
+              ].map(([number, label, description, completed]) => (
+                <li key={number} className={`flex gap-3 rounded-xl border p-3 ${completed ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-zinc-800 bg-zinc-950/60'}`}>
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${completed ? 'bg-emerald-400 text-emerald-950' : 'bg-zinc-800 text-zinc-300'}`}>{completed ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : number}</span>
+                  <span><strong className="block text-sm text-white">{label}</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">{description}</span></span>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
 
         {(isRefreshing || isSnapshotUpdating) && (
           <section className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-blue-300" role="status">
@@ -584,15 +659,13 @@ const AdminAutoSchedulePreviewPage = () => {
             </h2>
             {!pricingPreflight.complete && <p className="mt-1 text-sm">Chỉ {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} suất đã đủ giá. Không suất nào sẽ được tạo cho đến khi bạn sửa xong.</p>}
             {pricingPreflight.reasonGroups?.map(group => {
-              const displayMessage = group.displayMessage
-                || 'Không xác định — xem chi tiết kỹ thuật';
+              const displayMessage = getPricingReasonLabel(group.reasonCode);
               return (
                 <div key={group.reasonCode} className="mt-3 rounded-lg border border-current/20 p-3 text-sm">
                   <p className="font-bold">{group.count} suất · {displayMessage}</p>
                   {group.affectedDates?.length > 0 && <p className="mt-1">Ngày: {group.affectedDates.map(formatServiceDateKey).join(', ')}</p>}
                   {group.auditoriums?.length > 0 && <p className="mt-1">Phòng: {group.auditoriums.map(room => room.name).join(', ')}</p>}
                   {group.seatTypes?.length > 0 && <p className="mt-1">Loại ghế: {group.seatTypes.map(seat => seat.name).join(', ')}</p>}
-                  <details className="mt-2 text-xs opacity-70"><summary className="cursor-pointer">Chi tiết kỹ thuật</summary><p className="mt-1 font-mono">{group.reasonCode}</p></details>
                 </div>
               );
             })}
@@ -620,21 +693,23 @@ const AdminAutoSchedulePreviewPage = () => {
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Tóm tắt lịch đề xuất">
           {[
             [capabilities.effectiveStatus === 'APPLIED' ? 'Suất chiếu đã tạo' : 'Suất được đề xuất', capabilities.effectiveStatus === 'APPLIED' ? candidateMetrics.createdShowtimes : candidateMetrics.selectedRecommendations],
-            ['Phim có suất đề xuất', `${overallMovieDistributionSummary.representedMovieCount}/${allMovieDistribution.length}`],
-            ['Phòng được sử dụng', selectedRoomCount],
-            ['Suất cần kiểm tra', candidateMetrics.issueCandidates],
-            ['Tình trạng giá', isCheckingPricing ? 'Đang kiểm tra' : pricingReady ? 'Đã đủ' : pricingNeedsAttention ? 'Cần xử lý' : 'Chưa kiểm tra'],
+            ['Phim được xếp', `${overallMovieDistributionSummary.representedMovieCount}/${allMovieDistribution.length}`],
+            ['Phòng sử dụng', selectedRoomCount],
+            ['Cần xử lý', selectedIssueCount],
+            ['Bảng giá', isCheckingPricing ? 'Đang kiểm tra' : pricingReady ? 'Đã sẵn sàng' : pricingNeedsAttention ? 'Cần xử lý' : 'Chưa kiểm tra'],
           ].map(([label, value]) => <div key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><span className="block text-[10px] font-bold uppercase text-zinc-500">{label}</span><span className={`${typeof value === 'number' ? 'text-2xl' : 'text-sm'} mt-2 block font-black text-white`}>{value}</span></div>)}
         </section>
 
         {preview.strategyVersion === 'DEMAND_CP_SAT_V1' && (
-          <section className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 md:p-5" aria-label="KPI nhu cầu dự kiến">
+          <details className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
+            <summary className="cursor-pointer text-sm font-black text-blue-200">Xem chỉ số dự báo hỗ trợ quyết định</summary>
+          <section className="mt-4 rounded-2xl border border-blue-500/20 bg-zinc-950/30 p-4 md:p-5" aria-label="Chỉ số nhu cầu dự kiến">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">Demand-Aware CP-SAT</p>
-                <h2 className="mt-1 text-lg font-black text-white">KPI của lịch được chọn</h2>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">Tối ưu theo nhu cầu</p>
+                <h2 className="mt-1 text-lg font-black text-white">Chỉ số của lịch được chọn</h2>
               </div>
-              <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-200">Solver {preview.solverStatus || 'UNKNOWN'} · {preview.solverDurationMillis ?? 0} ms</span>
+              <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-200">Thời gian tính toán: {preview.solverDurationMillis ?? 0} mili giây</span>
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[
@@ -644,16 +719,40 @@ const AdminAutoSchedulePreviewPage = () => {
                 ['Đóng góp mục tiêu', formatKpiCurrency(preview.expectedContribution)],
               ].map(([label, value]) => <div key={label} className="rounded-xl border border-blue-500/20 bg-zinc-950/60 p-3"><dt className="text-xs text-zinc-500">{label}</dt><dd className="mt-1 text-lg font-black text-white">{value}</dd></div>)}
             </dl>
-            <p className="mt-3 text-xs leading-5 text-blue-100/70">Mô hình {preview.demandModelVersion || 'không xác định'} · OR-Tools {preview.solverVersion || 'không xác định'} · objective {preview.objectiveValue ?? '—'}. Các giá trị này là dự báo hỗ trợ quyết định, không phải cam kết doanh thu.</p>
+            <p className="mt-3 text-xs leading-5 text-blue-100/70">Các giá trị này là dự báo hỗ trợ quyết định, không phải cam kết doanh thu.</p>
+          </section>
+          </details>
+        )}
+
+        {(isLoadingCandidates || candidateLoadError) && (
+          <section
+            className={`rounded-2xl border p-4 text-sm ${candidateLoadError ? 'border-amber-500/30 bg-amber-500/10 text-amber-100' : 'border-blue-500/30 bg-blue-500/10 text-blue-100'}`}
+            role="status"
+          >
+            {isLoadingCandidates ? (
+              <div className="flex items-start gap-3">
+                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+                <div>
+                  <p className="font-black">Lịch đã sẵn sàng để rà soát</p>
+                  <p className="mt-1 opacity-80">
+                    Hệ thống đang chuẩn bị phương án thay thế ở chế độ nền: {candidateLoadingProgress.loadedPages}/{candidateLoadingProgress.totalPages} trang. Bạn có thể xem lịch ngay trong lúc chờ.
+                  </p>
+                </div>
+              </div>
+            ) : candidateLoadError}
           </section>
         )}
 
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 md:p-5" aria-labelledby="proposal-timeline-title">
+        <details open={capabilities.effectiveStatus !== 'APPLIED'} className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-3">
+          <summary className="cursor-pointer px-2 py-1 text-sm font-black text-zinc-200">
+            {capabilities.effectiveStatus === 'APPLIED' ? 'Xem lại lịch đã tạo theo phòng và thời gian' : 'Lịch theo phòng và thời gian'}
+          </summary>
+        <section className="mt-3 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 md:p-5" aria-labelledby="proposal-timeline-title">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Lịch đề xuất</p>
               <h2 id="proposal-timeline-title" className="mt-1 text-xl font-black text-zinc-100">Phòng chiếu × thời gian</h2>
-              <p className="mt-1 text-sm text-zinc-500">Rà soát lịch hệ thống đã chọn; bấm vào một suất để xem lý do và điều chỉnh.</p>
+              <p className="mt-1 text-sm text-zinc-500">Bấm vào một suất để xem lý do, bỏ khỏi lịch hoặc tìm phương án thay thế an toàn.</p>
             </div>
             {diagnosticCandidate && (
               <button type="button" onClick={clearDiagnostic} className="flex items-center gap-2 rounded-xl border border-dashed border-blue-400/60 bg-blue-500/10 px-3 py-2 text-sm font-bold text-blue-200"><X className="h-4 w-4" />Bỏ đánh dấu: {diagnosticCandidate.movieTitle}</button>
@@ -680,10 +779,13 @@ const AdminAutoSchedulePreviewPage = () => {
               onOpenDetails={openDrawer}
             />
           ) : <div className="py-12 text-center text-zinc-500">Không có ngày vận hành hợp lệ để hiển thị sơ đồ.</div>}
-          <p className="text-xs text-zinc-500" data-testid="timeline-boundary-evidence">Đang hiển thị {timelineCandidates.filter(candidate => !candidate.diagnostic).length} suất hệ thống đã chọn{diagnosticCandidate ? ' và 1 suất đang kiểm tra' : ''}. Hệ thống vẫn kiểm tra xung đột trên toàn bộ {items.length} phương án.</p>
+          <p className="text-xs text-zinc-500" data-testid="timeline-boundary-evidence">Đang hiển thị {timelineCandidates.filter(candidate => !candidate.diagnostic).length} suất hệ thống đã chọn{diagnosticCandidate ? ' và 1 suất đang kiểm tra' : ''}. Hệ thống vẫn kiểm tra xung đột trên toàn bộ {totalCandidateCount} phương án.</p>
         </section>
+        </details>
 
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 md:p-5" aria-labelledby="movie-distribution-title">
+        <details className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-3">
+          <summary className="cursor-pointer px-2 py-1 text-sm font-black text-zinc-200">Phân tích phân bổ phim theo ngày</summary>
+        <section className="mt-3 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 md:p-5" aria-labelledby="movie-distribution-title">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 id="movie-distribution-title" className="text-base font-black uppercase text-white">Phân bổ suất đề xuất</h2>
@@ -843,6 +945,7 @@ const AdminAutoSchedulePreviewPage = () => {
             ))}
           </div>
         </section>
+        </details>
 
         {capabilities.effectiveStatus === 'APPLIED' && (
           <section className="grid gap-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4 text-violet-100 sm:grid-cols-2" aria-label="Kết quả tạo suất chiếu">
@@ -857,13 +960,19 @@ const AdminAutoSchedulePreviewPage = () => {
           </section>
         )}
 
+        <details className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-3">
+          <summary className="cursor-pointer px-2 py-1 text-sm font-black text-zinc-200">
+            {capabilities.effectiveStatus === 'APPLIED' ? 'Xem dữ liệu các phương án đã xét' : 'Danh sách phương án nâng cao'}
+            <span className="ml-2 font-normal text-zinc-500">({totalCandidateCount} phương án)</span>
+          </summary>
+        <div className="mt-4 space-y-4">
         <section className="space-y-4">
           <details className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-relaxed text-zinc-400">
             <summary className="cursor-pointer font-bold text-zinc-300">Thông tin nâng cao về cách hệ thống xếp lịch</summary>
             <p className="mt-2">
               Điểm ưu tiên tổng hợp khung giờ, mức phù hợp phòng và độ liền mạch; điểm cao hơn tốt hơn. Thứ tự rà soát không phải thứ tự quyết định lựa chọn.
               {preview.strategyVersion === 'DEMAND_CP_SAT_V1'
-                ? ' Demand-Aware CP-SAT tối ưu đồng thời đóng góp dự kiến, độ phủ nhu cầu, hiệu ứng giảm dần và rủi ro dữ liệu; mọi ràng buộc phòng, thời gian chiếm dụng và tính hợp lệ vẫn là điều kiện cứng.'
+                ? ' Hệ thống tối ưu đồng thời đóng góp dự kiến, độ phủ nhu cầu, hiệu ứng giảm dần và rủi ro dữ liệu; mọi ràng buộc phòng, thời gian chiếm dụng và tính hợp lệ vẫn là điều kiện bắt buộc.'
                 : preview.strategyVersion === 'BALANCED_V1_S5'
                 ? ' Chiến lược S5 cân bằng số suất giữa các phim theo từng ngày vận hành bằng cách dựng lại chuỗi giờ chiếu và thực hiện các thay thế không xung đột. Phương án mới phải giữ tối thiểu 90% chất lượng trung bình và 90% thời gian sử dụng phòng, vì vậy một số chênh lệch nhỏ vẫn có thể được giữ lại.'
                 : preview.strategyVersion === 'BALANCED_V1_S4'
@@ -921,7 +1030,7 @@ const AdminAutoSchedulePreviewPage = () => {
                     {candidate.createdShowtimePath && <Link to={candidate.createdShowtimePath} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs font-bold text-emerald-300" aria-label={`Mở suất chiếu ${candidate.createdShowtimePublicId}`}><ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />Suất chiếu</Link>}
                     <button type="button" onClick={event => openDrawer(candidate, event.currentTarget)} className="rounded-lg border border-zinc-700 px-2 py-1.5 text-xs font-bold text-zinc-300 hover:bg-zinc-800">Kiểm tra chi tiết</button>
                   </div>
-                  <details className="mt-3 text-xs text-zinc-400"><summary className="cursor-pointer font-bold">Thông tin nâng cao</summary><dl className="mt-2 space-y-1 break-all"><div>Thứ tự rà soát: {candidate.rank ?? '—'}</div><div className="font-mono">ID: {candidate.id}</div><div className="font-mono">validationStatus: {candidate.validationStatus}</div><div className="font-mono">applyStatus: {candidate.applyStatus}</div><div className="font-mono">startTime: {candidate.technicalDetails.startTime || '—'}</div><div className="font-mono">endTime: {candidate.technicalDetails.endTime || '—'}</div><div className="font-mono">occupancyEndTime: {candidate.technicalDetails.occupancyEndTime || '—'}</div><div className="font-mono">codes: {[candidate.technicalDetails.rejectionCode, candidate.technicalDetails.applyErrorCode].filter(Boolean).join(' / ') || '—'}</div>{scoreBreakdownRows.length > 0 && <div className="mt-2 rounded border border-zinc-800 p-2"><dt className="font-bold text-zinc-300">Thành phần điểm</dt>{scoreBreakdownRows.map(row => <dd key={row.key} className="mt-1 flex justify-between gap-3"><span>{row.label}</span><span className="font-mono">{row.value}</span></dd>)}</div>}<div className="font-mono">scoreBreakdown(raw): {candidate.technicalDetails.scoreBreakdown ? JSON.stringify(candidate.technicalDetails.scoreBreakdown) : '—'}</div></dl></details>
+                  <details className="mt-3 text-xs text-zinc-400"><summary className="cursor-pointer font-bold">Thông tin nâng cao</summary><dl className="mt-2 space-y-1 break-all"><div>Thứ tự rà soát: {candidate.rank ?? '—'}</div><div>Mã phương án: {candidate.id}</div><div>Tình trạng kiểm tra: {validationPresentation.label}</div><div>Kết quả tạo suất: {candidate.applyState.label}</div><div>Bắt đầu theo giờ chuẩn: {candidate.technicalDetails.startTime || '—'}</div><div>Kết thúc theo giờ chuẩn: {candidate.technicalDetails.endTime || '—'}</div><div>Phòng sẵn sàng theo giờ chuẩn: {candidate.technicalDetails.occupancyEndTime || '—'}</div>{scoreBreakdownRows.length > 0 && <div className="mt-2 rounded border border-zinc-800 p-2"><dt className="font-bold text-zinc-300">Thành phần điểm</dt>{scoreBreakdownRows.map(row => <dd key={row.key} className="mt-1 flex justify-between gap-3"><span>{row.label}</span><span>{row.value}</span></dd>)}</div>}</dl></details>
                 </article>
               );
             })}
@@ -935,6 +1044,8 @@ const AdminAutoSchedulePreviewPage = () => {
             <div className="flex gap-2"><button type="button" onClick={() => setCandidatePage(pagination.page - 1)} disabled={pagination.page <= 1} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Trước</button><button type="button" onClick={() => setCandidatePage(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm disabled:opacity-40">Sau</button></div>
           </nav>
         )}
+        </div>
+        </details>
 
         {capabilities.isEditable && (
           <section className="sticky bottom-4 z-30 flex flex-col gap-3 rounded-2xl border border-brand-orange/30 bg-zinc-950/95 p-4 shadow-2xl shadow-black/50 backdrop-blur md:flex-row md:items-center md:justify-between" aria-label="Tiến độ duyệt lịch">
@@ -960,6 +1071,10 @@ const AdminAutoSchedulePreviewPage = () => {
         capabilities={capabilities}
         selectionBlockedMessage={drawerSelectionBlockedMessage}
         onToggleSelection={handleToggleSelection}
+        replacementAlternatives={replacementAlternatives}
+        onReplaceSelection={replaceDrawerCandidate}
+        isUpdatingSelection={isUpdatingSelection}
+        isLoadingAlternatives={isLoadingCandidates}
         canInspectOnTimeline={Boolean(
           drawerCandidate?.timelineEligible
           && (candidateView === CANDIDATE_VIEWS.ISSUES || candidateView === CANDIDATE_VIEWS.ALL)
@@ -1021,7 +1136,7 @@ const AdminAutoSchedulePreviewPage = () => {
                     <strong>{group.count} suất:</strong>{' '}
                     {group.reasonCode === 'SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT'
                       ? 'đã mở bán, đã đóng/hủy, hoặc không thuộc bản lịch tự động này.'
-                      : (group.reason || 'không đủ điều kiện thay lịch.')}
+                      : 'không đủ điều kiện thay lịch an toàn.'}
                   </p>
                 ))}
               </div>
@@ -1106,7 +1221,7 @@ const AdminAutoSchedulePreviewPage = () => {
                 <p className="font-black">Chưa thể tạo suất chiếu: {pricingPreflight.completeCandidateCount}/{pricingPreflight.totalCandidateCount} suất đã đủ giá.</p>
                 {pricingPreflight.reasonGroups?.map(group => (
                   <p key={group.reasonCode} className="mt-1">
-                    {group.count} suất · {group.displayMessage || 'Chưa xác định — xem thông tin kỹ thuật'}
+                    {group.count} suất · {getPricingReasonLabel(group.reasonCode)}
                   </p>
                 ))}
                 <Link to={pricingRepairPath} onClick={() => setShowApplyModal(false)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg bg-red-200 px-3 font-black text-red-950 hover:bg-white"><ExternalLink className="h-3.5 w-3.5" />{pricingActionLabel}</Link>

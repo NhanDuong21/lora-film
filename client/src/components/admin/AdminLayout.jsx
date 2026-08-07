@@ -321,7 +321,7 @@ export default function AdminLayout({ onBackHome }) {
               Hệ thống an ninh LoraFilm
             </div>
             <div className="h-6 w-px bg-zinc-800 hidden md:block"></div>
-            <button className="text-zinc-400 hover:text-white transition-colors p-2" title="Notifications">
+            <button className="text-zinc-400 hover:text-white transition-colors p-2" title="Thông báo" aria-label="Thông báo">
               <div className="relative">
                 <AlertCircle className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-orange rounded-full border-2 border-zinc-950"></span>

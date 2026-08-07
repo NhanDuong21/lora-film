@@ -208,7 +208,7 @@ export const getBatchStatusReasonPresentation = value => {
 export const getScoreBreakdownRows = breakdown => Object.entries(breakdown || {}).map(
   ([key, value]) => ({
     key,
-    label: SCORE_COMPONENT_PRESENTATION[key] || key,
+    label: SCORE_COMPONENT_PRESENTATION[key] || 'Thành phần bổ sung',
     value,
   }),
 );

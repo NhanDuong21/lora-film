@@ -19,9 +19,9 @@ const FALLBACK_VIEWPORT_WIDTH = 960;
 
 const ZOOM_OPTIONS = [
   { value: TIMELINE_ZOOM_MODES.FIT, label: 'Vừa khung' },
-  { value: TIMELINE_ZOOM_MODES.COMPACT, label: '30 px/giờ' },
-  { value: TIMELINE_ZOOM_MODES.COMFORTABLE, label: '60 px/giờ' },
-  { value: TIMELINE_ZOOM_MODES.DETAILED, label: '120 px/giờ' },
+  { value: TIMELINE_ZOOM_MODES.COMPACT, label: 'Thu gọn' },
+  { value: TIMELINE_ZOOM_MODES.COMFORTABLE, label: 'Thoáng' },
+  { value: TIMELINE_ZOOM_MODES.DETAILED, label: 'Rộng' },
 ];
 
 const getStatePresentation = candidate => {

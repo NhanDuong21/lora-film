@@ -116,7 +116,7 @@ describe('schedulingPresentation', () => {
         label: 'Điều chỉnh cân bằng phim',
         value: 20,
       },
-      { key: 'custom', label: 'custom', value: 3 },
+      { key: 'custom', label: 'Thành phần bổ sung', value: 3 },
     ]);
   });
 });

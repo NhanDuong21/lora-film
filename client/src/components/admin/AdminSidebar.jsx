@@ -114,8 +114,8 @@ export default function AdminSidebar({
   const hasSystemAccess = canManageRoles || canManagePermissions
     || canConfigureSystem || canViewUserAudits;
   const roleLabel = isAccountantOnly
-    ? 'Finance'
-    : (isFullAdmin ? 'Admin' : normalizedRole.replaceAll('_', ' ') || 'Staff');
+    ? 'Tài chính'
+    : (isFullAdmin ? 'Quản trị viên' : 'Nhân viên');
   const adminHomePath = getAdminLandingPath(normalizedRole, permissions);
   const avatarUrl = getAvatarUrl(user?.avatarUrl);
 
@@ -157,7 +157,7 @@ export default function AdminSidebar({
       label: 'Khuyến mãi',
       visible: isFullAdmin,
       items: [
-        { key: 'promotions', label: 'Promotion Center', path: '/admin/promotions', icon: BadgePercent },
+        { key: 'promotions', label: 'Trung tâm khuyến mãi', path: '/admin/promotions', icon: BadgePercent },
       ],
     },
     {
@@ -172,7 +172,7 @@ export default function AdminSidebar({
     },
     {
       key: 'customers',
-      label: 'Khách hàng & Loyalty',
+      label: 'Khách hàng & tích điểm',
       visible: isFullAdmin || canManageCustomers,
       items: [
         ...(canManageCustomers
@@ -180,7 +180,7 @@ export default function AdminSidebar({
           : []),
         ...(isFullAdmin
           ? [
-              { key: 'scores-dashboard', label: 'Tổng quan Loyalty', path: '/admin/scores/dashboard', icon: Award },
+              { key: 'scores-dashboard', label: 'Tổng quan tích điểm', path: '/admin/scores/dashboard', icon: Award },
               { key: 'scores-tiers', label: 'Hạng thành viên', path: '/admin/scores/tiers', icon: Award },
               { key: 'scores-viewer', label: 'Tra cứu điểm thưởng', path: '/admin/scores/viewer', icon: Gift },
               { key: 'scores-reconciliation', label: 'Đối soát điểm', path: '/admin/scores/reconciliation', icon: History },

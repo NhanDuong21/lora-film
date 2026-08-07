@@ -57,7 +57,7 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
 
   it('requires only cinema and a planning preset in the primary flow', () => {
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: 'Quick Mode' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Chế độ nhanh' })).toBeInTheDocument();
     expect(screen.getByRole('combobox')).toHaveValue('cinema-1');
     expect(screen.getByRole('button', { name: /3 ngàyNgắn hạn/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Chọn phòng chiếu')).not.toBeInTheDocument();
