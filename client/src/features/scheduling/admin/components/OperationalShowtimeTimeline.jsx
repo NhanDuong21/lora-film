@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle,
   ArrowUpRight,
   CalendarDays,
   CheckCircle2,
@@ -27,10 +26,22 @@ import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils
 
 const FILTERS = [
   { value: 'ALL', label: 'Tất cả' },
-  { value: 'NEEDS_ACTION', label: 'Cần xử lý' },
   { value: 'OPEN_FOR_BOOKING', label: 'Đang mở bán' },
   { value: 'DRAFT', label: 'Đang soạn' },
+  { value: 'CLOSED', label: 'Đã đóng bán' },
 ];
+
+const PRICING_STATUS_LABELS = {
+  COMPLETE: 'Đã đủ giá',
+  READY: 'Đã đủ giá',
+  INCOMPLETE: 'Chưa đủ giá',
+  MISSING: 'Chưa có giá',
+  AMBIGUOUS: 'Có mức giá bị trùng',
+};
+
+const getPricingStatusLabel = status => (
+  PRICING_STATUS_LABELS[status] || 'Chưa có thông tin'
+);
 
 const addMinutes = (instant, minutes) => {
   const date = new Date(instant);
@@ -122,7 +133,7 @@ const ShowtimeQuickDrawer = ({ candidate, onClose, onViewDetail }) => {
               ['Phòng', showtime.auditorium?.name],
               ['Trạng thái', statusLabel],
               ['Dọn phòng', `${candidate.cleaningMinutes} phút · sẵn sàng lúc ${candidate.occupancyEndTimeDisplay}`],
-              ['Tình trạng giá', showtime.pricingStatus || 'Chưa có thông tin'],
+              ['Tình trạng giá', getPricingStatusLabel(showtime.pricingStatus)],
             ].map(([label, value]) => (
               <div key={label} className="grid grid-cols-[110px_1fr] gap-3 py-3 text-sm">
                 <dt className="font-bold text-zinc-500">{label}</dt>
@@ -156,7 +167,6 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
     : serviceDates.includes(requestedDate) ? requestedDate : serviceDates[0];
   const dateModels = models.filter(item => item.serviceDate === activeDate);
   const filteredModels = dateModels.filter(item => {
-    if (filter === 'NEEDS_ACTION') return ['DRAFT', 'CLOSED'].includes(item.operationalStatus);
     if (filter === 'ALL') return true;
     return item.operationalStatus === filter;
   });
@@ -169,7 +179,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
     }));
     return Array.from(values.values()).sort((left, right) => left.name.localeCompare(right.name, 'vi'));
   }, [dateModels]);
-  const needsAction = dateModels.filter(item => ['DRAFT', 'CLOSED'].includes(item.operationalStatus)).length;
+  const draftCount = dateModels.filter(item => item.operationalStatus === 'DRAFT').length;
   const openCount = dateModels.filter(item => item.operationalStatus === 'OPEN_FOR_BOOKING').length;
 
   if (models.length === 0) return null;
@@ -184,7 +194,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-bold">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />{openCount} mở bán</span>
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 ${needsAction ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-zinc-700 text-zinc-400'}`}><AlertTriangle className="h-3.5 w-3.5" />{needsAction} cần xử lý</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-blue-300"><Clock3 className="h-3.5 w-3.5" />{draftCount} đang soạn</span>
         </div>
       </div>
 
@@ -206,8 +216,8 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
         </div>
       </div>
 
-      {filter === 'NEEDS_ACTION' && filteredModels.length === 0 && (
-        <p className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200"><CheckCircle2 className="h-4 w-4" />Không còn suất cần xử lý trong ngày này.</p>
+      {filter !== 'ALL' && filteredModels.length === 0 && (
+        <p className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/60 p-3 text-sm text-zinc-300"><CheckCircle2 className="h-4 w-4" />Không có suất nào ở trạng thái này trong ngày đã chọn.</p>
       )}
       <AutoScheduleTimeline
         serviceDate={activeDate}

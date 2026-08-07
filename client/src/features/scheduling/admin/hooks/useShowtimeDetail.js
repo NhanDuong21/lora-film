@@ -54,9 +54,8 @@ export default function useShowtimeDetail(showtimePublicId, { triggerToast }) {
         triggerToast?.('Đã cập nhật trạng thái suất chiếu', 'success');
         fetchDetail(); // Reload everything (detail + history)
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Lỗi cập nhật trạng thái';
-      triggerToast?.(msg, 'error');
+    } catch {
+      triggerToast?.('Không thể cập nhật trạng thái suất chiếu. Vui lòng thử lại.', 'error');
     } finally {
       setIsUpdatingStatus(false);
     }

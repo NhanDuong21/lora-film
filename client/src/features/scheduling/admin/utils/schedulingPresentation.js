@@ -199,7 +199,7 @@ export const getBatchStatusReasonPresentation = value => {
   }
   return {
     ...UNKNOWN_PRESENTATION,
-    label: 'Không xác định — xem chi tiết kỹ thuật',
+    label: 'Chưa xác định nguyên nhân — vui lòng kiểm tra danh sách suất',
     technicalValue: value || null,
     isFallback: true,
   };
@@ -226,5 +226,6 @@ export const getLocalizedHistoryReason = reason => {
   const normalized = String(reason || '').trim();
   if (!normalized) return 'Không ghi nhận lý do';
   if (normalized === 'Showtime created') return 'Đã tạo suất chiếu';
-  return normalized;
+  if (normalized === 'Showtime status changed') return 'Đã thay đổi trạng thái suất chiếu';
+  return 'Đã cập nhật thông tin suất chiếu';
 };

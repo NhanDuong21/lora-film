@@ -17,7 +17,7 @@ vi.mock('../components/ShowtimeTable', () => ({
     <div>
       <button type="button" onClick={props.onClearFilters}>Clear all</button>
       <button type="button" onClick={props.onClearBatch}>Clear batch</button>
-      <button type="button" onClick={() => props.onTransitionBatch('OPEN_FOR_BOOKING')}>Open batch</button>
+      <button type="button" onClick={props.onOpenBatch}>Open batch</button>
     </div>
   ),
 }));
@@ -126,6 +126,10 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     const confirmSpy = vi.spyOn(window, 'confirm');
     renderPage('/admin/showtimes?source=AUTO&batchId=preview-1');
 
+    await waitFor(() => expect(adminShowtimeService.previewBatchStatus).toHaveBeenCalledWith(
+      'preview-1',
+      'OPEN_FOR_BOOKING',
+    ));
     fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
     expect(await screen.findByRole('dialog', { name: 'Bạn sắp mở bán 20 suất chiếu' })).toHaveTextContent('25');
     expect(screen.getByRole('dialog')).toHaveTextContent('20');
@@ -172,7 +176,7 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     expect(adminShowtimeService.transitionBatchStatus).not.toHaveBeenCalled();
   });
 
-  it('uses the technical-details fallback only when no known blocker code is returned', async () => {
+  it('uses a Vietnamese fallback when no known blocker code is returned', async () => {
     useAdminShowtimes.mockReturnValue({ ...hookValue(), batchId: 'preview-1', source: 'AUTO' });
     adminShowtimeService.previewBatchStatus.mockResolvedValue({
       success: true,
@@ -195,7 +199,7 @@ describe('AdminShowtimePage URL-backed batch context', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open batch' }));
 
     expect(await screen.findByText(
-      '1 suất · Không xác định — xem chi tiết kỹ thuật',
+      '1 suất · Chưa xác định nguyên nhân — vui lòng kiểm tra danh sách suất',
     )).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mở bán 0 suất' })).toBeDisabled();
   });

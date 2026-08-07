@@ -89,7 +89,7 @@ describe('schedulingPresentation', () => {
       technicalValue: 'LEGACY_STATUS',
     });
     expect(getBatchStatusReasonPresentation(null)).toMatchObject({
-      label: 'Không xác định — xem chi tiết kỹ thuật',
+      label: 'Chưa xác định nguyên nhân — vui lòng kiểm tra danh sách suất',
       technicalValue: null,
       isFallback: true,
     });
