@@ -14,6 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 import useAutoScheduleForm from '@/features/scheduling/admin/hooks/useAutoScheduleForm';
+import { getAutoScheduleBlockerMessage } from '@/features/scheduling/admin/utils/autoScheduleBlockerMessages';
 import { formatPreviewDateRange } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20';
@@ -267,7 +268,7 @@ export default function AdminAutoScheduleCreatePage() {
                   <ul className="space-y-2">
                     {preflight.blockers.map(blocker => (
                       <li key={blocker.code} className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <span className="flex items-start gap-2 text-sm text-amber-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {blocker.message}</span>
+                        <span className="flex items-start gap-2 text-sm text-amber-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {getAutoScheduleBlockerMessage(blocker)}</span>
                         {blocker.actionPath && <Link to={blocker.actionPath} className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-brand-orange">Mở nơi xử lý <ChevronRight className="h-3.5 w-3.5" /></Link>}
                       </li>
                     ))}
@@ -344,7 +345,7 @@ export default function AdminAutoScheduleCreatePage() {
             </div>
           </dl>
           <div className={`mt-5 rounded-xl border p-4 text-sm ${isReady ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-zinc-700 bg-zinc-950 text-zinc-400'}`}>
-            {isCheckingPreflight ? 'Đang kiểm tra dữ liệu…' : isReady ? 'Preflight đã thông qua. Sẵn sàng chạy Demand-Aware CP-SAT.' : 'Chọn rạp và xử lý các blocker để tiếp tục.'}
+            {isCheckingPreflight ? 'Đang kiểm tra dữ liệu…' : isReady ? 'Kiểm tra trước đã thông qua. Sẵn sàng chạy Demand-Aware CP-SAT.' : 'Chọn rạp và xử lý các điều kiện đang chặn để tiếp tục.'}
           </div>
           {isSubmitting && <GenerationProgress planningDays={planningDays} />}
           <button

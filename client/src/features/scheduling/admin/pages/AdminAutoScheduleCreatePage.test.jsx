@@ -80,14 +80,35 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
       preflight: {
         ...readyPreflight,
         canGenerate: false,
-        blockers: [{ code: 'PRICING_INCOMPLETE', message: 'Thiếu bảng giá', actionPath: '/admin/pricing' }],
+        blockers: [{ code: 'PRICING_INCOMPLETE', message: 'Backend message', actionPath: '/admin/pricing' }],
       },
     });
     render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
     expect(screen.getByText('Cần xử lý trước khi tạo lịch')).toBeInTheDocument();
-    expect(screen.getByText('Thiếu bảng giá')).toBeInTheDocument();
+    expect(screen.getByText('Bảng giá hiện tại chưa bao phủ tất cả phòng chiếu và khung giờ có thể xếp lịch.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Mở nơi xử lý' })).toHaveAttribute('href', '/admin/pricing');
     expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('translates the fully blocked planning-range blocker into Vietnamese', () => {
+    useAutoScheduleForm.mockReturnValue({
+      ...baseForm(),
+      isReady: false,
+      preflight: {
+        ...readyPreflight,
+        canGenerate: false,
+        blockers: [{
+          code: 'PLANNING_RANGE_FULLY_BLOCKED',
+          message: 'Closures, maintenance, or existing showtimes block every feasible slot',
+          actionPath: '/admin/showtimes?cinemaId=cinema-1',
+        }],
+      },
+    });
+
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    expect(screen.getByText('Tất cả khung giờ khả dụng đều đang bị chặn bởi lịch chiếu hiện có, thời gian rạp đóng cửa hoặc lịch bảo trì.')).toBeInTheDocument();
+    expect(screen.queryByText(/Closures, maintenance/)).not.toBeInTheDocument();
   });
 
   it('keeps include/exclude controls inside the optional advanced section', () => {

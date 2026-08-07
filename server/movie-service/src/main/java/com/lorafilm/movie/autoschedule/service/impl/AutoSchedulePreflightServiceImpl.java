@@ -126,7 +126,7 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
         LocalDate planningTo = planningFrom.plusDays(planningDays - 1L);
         List<AutoSchedulePreflightResponse.Blocker> blockers = new ArrayList<>();
         if (cinema.getStatus() != CinemaStatus.ACTIVE) {
-            blockers.add(blocker("CINEMA_NOT_ACTIVE", "Cinema must be ACTIVE before scheduling",
+            blockers.add(blocker("CINEMA_NOT_ACTIVE", "Rạp phải ở trạng thái đang hoạt động trước khi có thể tạo lịch",
                     "/admin/cinemas/" + cinemaPublicId));
         }
 
@@ -146,19 +146,19 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
 
         if (versions.isEmpty()) {
             blockers.add(blocker("NO_ELIGIBLE_VERSIONS",
-                    "No active movie version overlaps the planning range",
+                    "Không có phiên bản phim đang hoạt động nào phù hợp với khoảng ngày đã chọn",
                     "/admin/movies"));
         }
         if (auditoriums.isEmpty()) {
             blockers.add(blocker("NO_ELIGIBLE_AUDITORIUMS",
-                    "No active auditorium with valid capacity and cleaning buffer is available",
+                    "Không có phòng chiếu đang hoạt động nào có sức chứa và thời gian vệ sinh hợp lệ",
                     "/admin/cinemas/" + cinemaPublicId + "/auditoriums"));
         }
 
         Set<AutoSchedulePreflightResult.CompatiblePair> compatiblePairs = compatiblePairs(versions, auditoriums);
         if (!versions.isEmpty() && !auditoriums.isEmpty() && compatiblePairs.isEmpty()) {
             blockers.add(blocker("NO_COMPATIBLE_PAIRS",
-                    "Eligible movie formats are incompatible with all active screens",
+                    "Định dạng của các phim đủ điều kiện không tương thích với bất kỳ phòng chiếu đang hoạt động nào",
                     "/admin/cinemas/" + cinemaPublicId + "/auditoriums"));
         }
 
@@ -167,7 +167,7 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
                 cinema, planningFrom, planningTo, operatingHours);
         if (operatingWindows.size() < planningDays) {
             blockers.add(blocker("MISSING_OPERATING_HOURS",
-                    "Every planning day must have a valid open and close window",
+                    "Mỗi ngày trong phạm vi lập lịch phải có giờ mở cửa và đóng cửa hợp lệ",
                     "/admin/cinemas/" + cinemaPublicId + "/operating-hours"));
         }
 
@@ -175,12 +175,12 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
         PricingFacts pricingFacts = evaluatePricing(cinema, auditoriums, versions, compatiblePairs, operatingWindows);
         if (pricingFacts.hasMissing()) {
             blockers.add(blocker("PRICING_INCOMPLETE",
-                    "Active pricing does not cover every schedulable room and time slot",
+                    "Bảng giá hiện tại chưa bao phủ tất cả phòng chiếu và khung giờ có thể xếp lịch",
                     "/admin/pricing-policies?cinemaId=" + cinemaPublicId));
         }
         if (pricingFacts.hasAmbiguous()) {
             blockers.add(blocker("PRICING_AMBIGUOUS",
-                    "Multiple pricing rules have the same highest precedence",
+                    "Có nhiều quy tắc giá cùng mức ưu tiên cao nhất; cần điều chỉnh để chỉ còn một quy tắc áp dụng",
                     "/admin/pricing-policies?cinemaId=" + cinemaPublicId));
         }
 
@@ -188,7 +188,7 @@ public class AutoSchedulePreflightServiceImpl implements AutoSchedulePreflightSe
                 && !hasAnyAvailableSlot(auditoriums, versions, compatiblePairs,
                 operatingWindows, planningFacts)) {
             blockers.add(blocker("PLANNING_RANGE_FULLY_BLOCKED",
-                    "Closures, maintenance, or existing showtimes block every feasible slot",
+                    "Tất cả khung giờ khả dụng đều đang bị chặn bởi lịch chiếu hiện có, thời gian rạp đóng cửa hoặc lịch bảo trì",
                     "/admin/showtimes?cinemaId=" + cinemaPublicId));
         }
 
