@@ -8,15 +8,13 @@ import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
 @Component
 public class MovieApprovalPolicy {
 
-    public static final List<ShowtimeStatus> OPERATIONAL_SHOWTIME_STATUSES = List.of(
-            ShowtimeStatus.DRAFT,
+    public static final List<ShowtimeStatus> PUBLISHED_SHOWTIME_STATUSES = List.of(
             ShowtimeStatus.OPEN_FOR_BOOKING,
             ShowtimeStatus.CLOSED);
 
@@ -37,15 +35,8 @@ public class MovieApprovalPolicy {
             return new ApprovalDecision(null, List.copyOf(blockers));
         }
 
-        LocalDate today = lifecyclePolicy.currentDate();
-        MovieStatus targetStatus = movie.getReleaseDate().isAfter(today)
-                ? MovieStatus.UPCOMING
-                : MovieStatus.NOW_SHOWING;
-
+        MovieStatus targetStatus = MovieStatus.UPCOMING;
         blockers.addAll(lifecyclePolicy.getTransitionViolations(movie, targetStatus));
-        if (targetStatus == MovieStatus.NOW_SHOWING && !hasOperationalShowtime(movie.getId())) {
-            blockers.add("Muốn chuyển sang Đang chiếu, phim phải có ít nhất một suất chiếu hiện tại hoặc tương lai chưa bị hủy.");
-        }
         return new ApprovalDecision(targetStatus, List.copyOf(blockers));
     }
 
@@ -63,18 +54,18 @@ public class MovieApprovalPolicy {
     }
 
     public void validateNowShowingSchedule(Movie movie) {
-        if (!hasOperationalShowtime(movie == null ? null : movie.getId())) {
+        if (!hasPublishedShowtime(movie == null ? null : movie.getId())) {
             throw new BusinessException(
                     ErrorCode.INVALID_MOVIE_STATUS_TRANSITION,
-                    "Muốn chuyển sang Đang chiếu, phim phải có ít nhất một suất chiếu hiện tại hoặc tương lai chưa bị hủy.");
+                    "Muốn chuyển sang Đang chiếu, phim phải có ít nhất một suất chiếu hiện tại hoặc tương lai đã được công bố.");
         }
     }
 
-    public boolean hasOperationalShowtime(Long movieId) {
+    public boolean hasPublishedShowtime(Long movieId) {
         return movieId != null && showtimeRepository
                 .existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
                         movieId,
-                        OPERATIONAL_SHOWTIME_STATUSES,
+                        PUBLISHED_SHOWTIME_STATUSES,
                         lifecyclePolicy.currentInstant());
     }
 

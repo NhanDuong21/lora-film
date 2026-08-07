@@ -1,5 +1,5 @@
 export const MEDIA_TYPES = {
-  POSTER: 'Poster',
+  POSTER: 'Áp phích',
   BACKDROP: 'Ảnh nền',
   BANNER: 'Ảnh bìa / Phông nền',
   TRAILER: 'Video giới thiệu',

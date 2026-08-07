@@ -40,7 +40,7 @@ public class MovieLifecycleScheduler {
                 MovieStatus.UPCOMING, today);
         int started = 0;
         for (Movie movie : released) {
-            if (!approvalPolicy.hasOperationalShowtime(movie.getId())) {
+            if (!approvalPolicy.hasPublishedShowtime(movie.getId())) {
                 continue;
             }
             movie.setStatus(MovieStatus.NOW_SHOWING);

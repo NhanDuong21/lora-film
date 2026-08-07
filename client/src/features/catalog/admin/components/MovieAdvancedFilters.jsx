@@ -9,7 +9,7 @@ import {
 const FILTER_LABELS = {
   source: { TMDB: 'TMDB', MANUAL: 'Thủ công' },
   healthStatus: { READY: 'Sẵn sàng', WARNING: 'Cần kiểm tra', BLOCKED: 'Bị chặn' },
-  hasPrimaryPoster: { true: 'Có poster chính', false: 'Thiếu poster chính' },
+  hasPrimaryPoster: { true: 'Có áp phích chính', false: 'Thiếu áp phích chính' },
   hasActiveVersion: { true: 'Có phiên bản hoạt động', false: 'Thiếu phiên bản hoạt động' },
   hasShowtime: { true: 'Có lịch chiếu', false: 'Chưa có lịch chiếu' },
 };
@@ -84,11 +84,11 @@ export default function MovieAdvancedFilters({ query, genres, isOpen, onApply, o
                 <option value="BLOCKED">Bị chặn</option>
               </select>
             </FilterField>
-            <FilterField label="Poster chính">
+            <FilterField label="Áp phích chính">
               <select className={inputClass} value={draft.hasPrimaryPoster} onChange={event => updateDraft('hasPrimaryPoster', event.target.value)}>
                 <option value="">Tất cả</option>
-                <option value="true">Có poster chính</option>
-                <option value="false">Thiếu poster chính</option>
+                <option value="true">Có áp phích chính</option>
+                <option value="false">Thiếu áp phích chính</option>
               </select>
             </FilterField>
             <FilterField label="Phiên bản hoạt động">
@@ -116,7 +116,7 @@ export default function MovieAdvancedFilters({ query, genres, isOpen, onApply, o
               </select>
             </FilterField>
             <FilterField label="Quốc gia">
-              <input className={inputClass} value={draft.country} onChange={event => updateDraft('country', event.target.value)} placeholder="Ví dụ: Vietnam" />
+                <input className={inputClass} value={draft.country} onChange={event => updateDraft('country', event.target.value)} placeholder="Ví dụ: Việt Nam" />
             </FilterField>
             <FilterField label="Sắp xếp">
               <select className={inputClass} value={draft.sort} onChange={event => updateDraft('sort', event.target.value)}>

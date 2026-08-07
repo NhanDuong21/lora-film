@@ -347,7 +347,7 @@ export default function MovieFormModal({
                         <Image className="h-4 w-4" />
                       </span>
                       <span>
-                        <span className="block text-xs font-bold text-zinc-200">Poster và hình ảnh</span>
+                        <span className="block text-xs font-bold text-zinc-200">Áp phích và hình ảnh</span>
                         <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500">Chọn ảnh hiển thị chính</span>
                       </span>
                     </li>

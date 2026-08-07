@@ -85,14 +85,13 @@ export default function AdminMoviePage() {
   };
 
   const handleBulkApprove = async () => {
-    const eligibleCount = (adminMovies.queueBreakdown.data?.future || 0)
-      + (adminMovies.queueBreakdown.data?.readyToShow || 0);
+    const eligibleCount = adminMovies.queueBreakdown.data?.eligibleUpcoming || 0;
     const count = Math.min(eligibleCount, 100);
     if (count <= 0) return;
 
     const confirmed = await triggerConfirm?.({
       title: `Duyệt tối đa ${count} phim?`,
-      message: 'Phim có ngày bắt đầu khai thác trong tương lai sẽ sang Sắp chiếu. Phim đã tới ngày chỉ sang Đang chiếu khi có suất chiếu hợp lệ. Mỗi phim vẫn được kiểm tra lại trước khi lưu.',
+      message: 'Chỉ phim có ngày bắt đầu khai thác sau hôm nay mới được duyệt sang Sắp chiếu. Mỗi phim vẫn được kiểm tra lại trước khi lưu.',
       confirmLabel: 'Kiểm tra và duyệt',
     });
     if (!confirmed) return;

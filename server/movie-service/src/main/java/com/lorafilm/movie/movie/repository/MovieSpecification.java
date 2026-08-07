@@ -21,8 +21,14 @@ public class MovieSpecification {
         return (root, query, cb) -> cb.isNull(root.get("deletedAt"));
     }
 
-    public static Specification<Movie> isPubliclyVisible() {
-        return (root, query, cb) -> root.get("status").in(MovieStatus.NOW_SHOWING, MovieStatus.UPCOMING);
+    public static Specification<Movie> isCustomerCatalogVisible(LocalDate today) {
+        return hasStatus(MovieStatus.NOW_SHOWING)
+                .or(isFutureUpcoming(today));
+    }
+
+    public static Specification<Movie> isFutureUpcoming(LocalDate today) {
+        return hasStatus(MovieStatus.UPCOMING)
+                .and(releaseDateFrom(today.plusDays(1)));
     }
 
     public static Specification<Movie> hasStatus(MovieStatus status) {

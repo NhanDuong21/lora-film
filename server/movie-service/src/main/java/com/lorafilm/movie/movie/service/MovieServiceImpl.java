@@ -113,16 +113,10 @@ public class MovieServiceImpl implements MovieService {
         validateBulkApprovalFilter(filter, limit);
 
         java.time.LocalDate today = lifecyclePolicy.currentDate();
-        Specification<Movie> approvalWindow = MovieSpecification.releaseDateFrom(today.plusDays(1))
-                .or(MovieSpecification.releaseDateTo(today).and(
-                        MovieSpecification.hasOperationalShowtime(
-                                lifecyclePolicy.currentInstant(),
-                                MovieApprovalPolicy.OPERATIONAL_SHOWTIME_STATUSES,
-                                true)));
         Specification<Movie> specification = buildAdminMovieSpecification(filter)
                 .and(MovieSpecification.hasStatus(MovieStatus.DRAFT))
                 .and(MovieSpecification.hasTmdbSource(true))
-                .and(approvalWindow);
+                .and(MovieSpecification.releaseDateFrom(today.plusDays(1)));
         Pageable pageable = PageRequest.of(0, limit, parseSort(filter.getSort()));
         List<Movie> candidates = movieRepository.findAll(specification, pageable).getContent();
         List<MovieBulkApprovalResult> results = new java.util.ArrayList<>();
@@ -212,22 +206,12 @@ public class MovieServiceImpl implements MovieService {
                 .and(MovieSpecification.hasTmdbSource(true));
         java.time.LocalDate today = lifecyclePolicy.currentDate();
         long total = movieRepository.count(base);
-        long future = movieRepository.count(base.and(MovieSpecification.releaseDateFrom(today.plusDays(1))));
-        Specification<Movie> released = MovieSpecification.releaseDateTo(today);
-        long readyToShow = movieRepository.count(base
-                .and(released)
-                .and(MovieSpecification.hasOperationalShowtime(
-                        lifecyclePolicy.currentInstant(),
-                        MovieApprovalPolicy.OPERATIONAL_SHOWTIME_STATUSES,
-                        true)));
-        long needsSchedule = movieRepository.count(base
-                .and(released)
-                .and(MovieSpecification.hasOperationalShowtime(
-                        lifecyclePolicy.currentInstant(),
-                        MovieApprovalPolicy.OPERATIONAL_SHOWTIME_STATUSES,
-                        false)));
+        long eligibleUpcoming = movieRepository.count(
+                base.and(MovieSpecification.releaseDateFrom(today.plusDays(1))));
+        long releaseDateExpired = movieRepository.count(
+                base.and(MovieSpecification.releaseDateTo(today)));
         long undated = movieRepository.count(base.and(MovieSpecification.releaseDateIsNull()));
-        return new TmdbQueueBreakdownResponse(total, future, readyToShow, needsSchedule, undated);
+        return new TmdbQueueBreakdownResponse(total, eligibleUpcoming, releaseDateExpired, undated);
     }
 
     private Specification<Movie> buildAdminMovieSpecification(AdminMovieListQuery query) {
@@ -447,6 +431,12 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieRepository.findByPublicIdForUpdate(moviePublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
 
+        if (targetStatus == MovieStatus.NOW_SHOWING) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_MOVIE_STATUS_TRANSITION,
+                    "Không thể chuyển phim sang Đang chiếu bằng thao tác thủ công. Hệ thống sẽ tự chuyển khi tới ngày khai thác và có suất chiếu đã công bố.");
+        }
+
         return transitionMovieStatus(movie, targetStatus, reason);
     }
 
@@ -457,8 +447,7 @@ public class MovieServiceImpl implements MovieService {
     private MovieDto transitionMovieStatus(Movie movie, MovieStatus targetStatus, String reason) {
         MovieStatus previousStatus = movie.getStatus();
         lifecyclePolicy.validateTransition(movie, targetStatus);
-        if (previousStatus == MovieStatus.DRAFT
-                && (targetStatus == MovieStatus.UPCOMING || targetStatus == MovieStatus.NOW_SHOWING)) {
+        if (previousStatus == MovieStatus.DRAFT && targetStatus == MovieStatus.UPCOMING) {
             approvalPolicy.validateApprovalTarget(movie, targetStatus);
         } else if (targetStatus == MovieStatus.NOW_SHOWING) {
             approvalPolicy.validateNowShowingSchedule(movie);

@@ -267,6 +267,23 @@ class MovieHealthSpecificationsIntegrationTest {
                 .map(Movie::getPublicId).collect(Collectors.toSet()));
     }
 
+    @Test
+    void customerCatalogHidesUpcomingMoviesWhenTheReleaseDateIsReached() {
+        LocalDate today = LocalDate.of(2026, 7, 20);
+        Movie futureUpcoming = createHealthyMovie(
+                "future-upcoming", MovieStatus.UPCOMING, 120, true, true, true);
+        futureUpcoming.setReleaseDate(today.plusDays(1));
+        movieRepository.save(futureUpcoming);
+
+        Set<String> visible = ids(MovieSpecification.isCustomerCatalogVisible(today));
+        Set<String> future = ids(MovieSpecification.isFutureUpcoming(today));
+
+        assertTrue(visible.contains(warningDuration.getPublicId()));
+        assertTrue(visible.contains(futureUpcoming.getPublicId()));
+        assertFalse(visible.contains(ready.getPublicId()));
+        assertEquals(Set.of(futureUpcoming.getPublicId()), future);
+    }
+
     private void assertParity(
             Movie movie,
             boolean hasGenre,

@@ -15,12 +15,8 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class MovieApprovalPolicyTest {
@@ -50,28 +46,25 @@ class MovieApprovalPolicyTest {
     }
 
     @Test
-    void releasedDraftTargetsNowShowingWhenAnOperationalShowtimeExists() {
+    void draftWithTodaysReleaseDateCannotBeApproved() {
         Movie movie = movie(TODAY);
-        when(showtimeRepository.existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
-                eq(1L), any(), any())).thenReturn(true);
 
         MovieApprovalPolicy.ApprovalDecision decision = approvalPolicy.evaluate(movie);
 
-        assertEquals(MovieStatus.NOW_SHOWING, decision.targetStatus());
-        assertTrue(decision.blockers().isEmpty());
+        assertEquals(MovieStatus.UPCOMING, decision.targetStatus());
+        assertTrue(decision.blockers().stream().anyMatch(message -> message.contains("sau hôm nay")));
+        verifyNoInteractions(showtimeRepository);
     }
 
     @Test
-    void releasedDraftRemainsBlockedWithoutAnOperationalShowtime() {
+    void oldDraftRequiresANewFutureExploitationDate() {
         Movie movie = movie(TODAY.minusDays(10));
-        when(showtimeRepository.existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
-                eq(1L), any(), any())).thenReturn(false);
 
         MovieApprovalPolicy.ApprovalDecision decision = approvalPolicy.evaluate(movie);
 
-        assertEquals(MovieStatus.NOW_SHOWING, decision.targetStatus());
-        assertFalse(decision.blockers().isEmpty());
-        assertTrue(decision.blockers().getFirst().contains("showtime"));
+        assertEquals(MovieStatus.UPCOMING, decision.targetStatus());
+        assertTrue(decision.blockers().stream().anyMatch(message -> message.contains("sau hôm nay")));
+        verifyNoInteractions(showtimeRepository);
     }
 
     private Movie movie(LocalDate releaseDate) {

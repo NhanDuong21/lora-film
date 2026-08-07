@@ -15,7 +15,7 @@ const actionLabel = {
 
 const issueMessages = {
   RELEASE_DATE_REACHED_WITHOUT_SHOWTIME:
-    'Đã đến ngày bắt đầu khai thác nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.',
+    'Đã tới ngày khai thác nhưng phim chưa có suất chiếu đã công bố. Phim đang được ẩn khỏi trang khách; hãy dời ngày khai thác hoặc chuẩn bị lịch cho đợt mới.',
   NO_FUTURE_SHOWTIME:
     'Phim chưa có suất chiếu nháp hoặc suất đã mở bán trong tương lai. Hãy tạo suất chiếu hoặc mở một suất nháp.',
   NO_OPEN_SHOWTIME:
@@ -87,7 +87,7 @@ export default function MovieLaunchReadinessPanel({ movie }) {
       <div className="flex items-start justify-between gap-4 border-b border-zinc-800 p-5 md:p-6">
         <div>
           <h2 id="launch-readiness-title" className="text-lg font-bold text-white">Sẵn sàng phát hành & mở bán</h2>
-          <p className="mt-1 text-sm text-zinc-500">Kiểm tra xuyên suốt hồ sơ phim, suất chiếu và giá trước khi customer nhìn thấy nút đặt vé.</p>
+          <p className="mt-1 text-sm text-zinc-500">Kiểm tra xuyên suốt hồ sơ phim, suất chiếu và giá trước khi khách hàng nhìn thấy nút đặt vé.</p>
         </div>
         <button type="button" onClick={reload} disabled={loading} aria-label="Kiểm tra lại" className="rounded-lg border border-zinc-700 p-2 text-zinc-400 hover:text-white disabled:opacity-50">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -105,7 +105,7 @@ export default function MovieLaunchReadinessPanel({ movie }) {
               ['Hồ sơ', readiness.contentReady ? 'Đã đủ' : 'Còn thiếu'],
               ['Có thể duyệt', readiness.publishable ? 'Có' : 'Chưa'],
               ['Suất nháp có thể mở', `${readiness.openableDraftShowtimeCount}/${readiness.draftShowtimeCount}`],
-              ['Customer đặt được', readiness.bookable ? 'Đang mở bán' : 'Chưa mở bán'],
+              ['Khách hàng đặt được', readiness.bookable ? 'Đang mở bán' : 'Chưa mở bán'],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-600">{label}</p>
@@ -116,7 +116,7 @@ export default function MovieLaunchReadinessPanel({ movie }) {
 
           {issues.length === 0 ? (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">
-              <CheckCircle2 className="h-4 w-4" /> Không còn blocker trong phạm vi hiện tại.
+              <CheckCircle2 className="h-4 w-4" /> Không còn điều kiện chặn trong phạm vi hiện tại.
             </div>
           ) : (
             <div className="space-y-2">

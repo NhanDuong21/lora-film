@@ -101,7 +101,6 @@ public class MovieLifecyclePolicy {
         Map<MovieStatus, Set<MovieStatus>> transitions = new EnumMap<>(MovieStatus.class);
         transitions.put(MovieStatus.DRAFT, Set.of(
                 MovieStatus.UPCOMING,
-                MovieStatus.NOW_SHOWING,
                 MovieStatus.INACTIVE));
         transitions.put(MovieStatus.UPCOMING, Set.of(MovieStatus.NOW_SHOWING, MovieStatus.INACTIVE));
         transitions.put(MovieStatus.NOW_SHOWING, Set.of(MovieStatus.ENDED, MovieStatus.INACTIVE));

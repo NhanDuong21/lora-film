@@ -108,13 +108,13 @@ function MoviePosterCard({ movie, onOpenDetail, onOpenEdit, onDelete }) {
         {movie.primaryPoster ? (
           <LazyImage
             src={movie.primaryPoster}
-            alt={`Poster ${title}`}
+            alt={`Áp phích ${title}`}
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
           />
         ) : (
           <span className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-zinc-600">
             <ImageIcon size={34} />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Chưa có poster</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">Chưa có áp phích</span>
           </span>
         )}
 

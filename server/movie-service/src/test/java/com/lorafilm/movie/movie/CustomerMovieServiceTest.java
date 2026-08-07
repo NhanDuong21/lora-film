@@ -30,6 +30,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,6 +41,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class CustomerMovieServiceTest {
+
+    private static final LocalDate TODAY = LocalDate.of(2026, 8, 7);
 
     @Mock
     private MovieRepository movieRepository;
@@ -69,7 +74,8 @@ public class CustomerMovieServiceTest {
     void setUp() {
         customerMovieService = new CustomerMovieService(
                 movieRepository, movieGenreRepository, movieMediaRepository, movieMapper,
-                movieService, showtimeRepository, showtimePriceRepository, Clock.systemUTC());
+                movieService, showtimeRepository, showtimePriceRepository,
+                Clock.fixed(Instant.parse("2026-08-07T02:00:00Z"), ZoneOffset.UTC));
         activeMovie = new Movie();
         activeMovie.setId(1L);
         activeMovie.setPublicId("movie-1");
@@ -163,6 +169,37 @@ public class CustomerMovieServiceTest {
             () -> customerMovieService.getMovieDetail("movie-draft"));
             
         assertEquals(ErrorCode.MOVIE_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void getMovieDetail_UpcomingMovieAtReleaseDateWithoutOpenShowtime_IsHidden() {
+        draftMovie.setStatus(MovieStatus.UPCOMING);
+        draftMovie.setReleaseDate(TODAY);
+        when(movieRepository.findByIdentifierAndDeletedAtIsNull("movie-draft"))
+                .thenReturn(Optional.of(draftMovie));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> customerMovieService.getMovieDetail("movie-draft"));
+
+        assertEquals(ErrorCode.MOVIE_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void getMovieDetail_FutureUpcomingMovie_RemainsVisibleBeforeTicketSalesOpen() {
+        draftMovie.setStatus(MovieStatus.UPCOMING);
+        draftMovie.setReleaseDate(TODAY.plusDays(1));
+        when(movieRepository.findByIdentifierAndDeletedAtIsNull("movie-draft"))
+                .thenReturn(Optional.of(draftMovie));
+        com.lorafilm.movie.movie.dto.MovieDetailDto detailDto =
+                new com.lorafilm.movie.movie.dto.MovieDetailDto();
+        detailDto.setPublicId("movie-draft");
+        when(movieService.getMovieByIdentifier("movie-draft")).thenReturn(detailDto);
+
+        var response = customerMovieService.getMovieDetail("movie-draft");
+
+        assertEquals("movie-draft", response.getPublicId());
+        assertTrue(response.getCatalogVisible());
+        assertFalse(response.getBookable());
     }
 
     @Test

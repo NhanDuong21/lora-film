@@ -57,7 +57,7 @@ export default function MovieStatusTransitionDialog({
                 <div className="space-y-2">
                   {renderChecklistItem('Có thể loại', checklist.hasGenre)}
                   {renderChecklistItem('Có phiên bản đang hoạt động', checklist.hasActiveVersion)}
-                  {renderChecklistItem('Có poster chính', checklist.hasPrimaryPoster)}
+                  {renderChecklistItem('Có áp phích chính', checklist.hasPrimaryPoster)}
                 </div>
               </div>
 

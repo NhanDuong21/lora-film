@@ -82,6 +82,9 @@ public class AdminMovieControllerTest {
     @MockBean
     private com.lorafilm.movie.movie.service.MovieLaunchReadinessService movieLaunchReadinessService;
 
+    @MockBean
+    private com.lorafilm.movie.movie.service.MovieExhibitionPeriodService movieExhibitionPeriodService;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -295,7 +298,7 @@ public class AdminMovieControllerTest {
     @Test
     void tmdbQueueBreakdown_ReturnsSeparatedCounts() throws Exception {
         when(movieService.getTmdbQueueBreakdown(any(AdminMovieListQuery.class)))
-                .thenReturn(new TmdbQueueBreakdownResponse(17, 8, 4, 2, 3));
+                .thenReturn(new TmdbQueueBreakdownResponse(17, 8, 6, 3));
 
         mockMvc.perform(get("/api/admin/movies/tmdb-queue-breakdown")
                         .param("status", "DRAFT")
@@ -304,9 +307,8 @@ public class AdminMovieControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.total").value(17))
-                .andExpect(jsonPath("$.data.future").value(8))
-                .andExpect(jsonPath("$.data.readyToShow").value(4))
-                .andExpect(jsonPath("$.data.needsSchedule").value(2))
+                .andExpect(jsonPath("$.data.eligibleUpcoming").value(8))
+                .andExpect(jsonPath("$.data.releaseDateExpired").value(6))
                 .andExpect(jsonPath("$.data.undated").value(3));
     }
 

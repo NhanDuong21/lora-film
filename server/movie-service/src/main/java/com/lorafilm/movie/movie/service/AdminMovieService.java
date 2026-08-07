@@ -374,7 +374,10 @@ public class AdminMovieService {
         }
 
         if (movie.getStatus() != MovieStatus.ENDED && movie.getStatus() != MovieStatus.DRAFT) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cannot delete movie because it is not in Stopped Showing (ENDED) or Draft (DRAFT) status.", null);
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Chỉ có thể xóa phim đang ở trạng thái Chờ hoàn thiện hoặc Đã kết thúc.",
+                    null);
         }
         
         Long userId = 1L;
