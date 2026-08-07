@@ -180,7 +180,6 @@ const AdminShowtimePage = () => {
     const cached = readBatchReadinessCache(batchId);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- navigation can change the active batch without remounting this route.
     setBatchReadiness(previous => previous?.batchId === batchId ? previous : cached?.summary || null);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- entering a batch intentionally starts its server-side readiness check.
     void checkBatchReadiness({ quiet: true, preserveCached: Boolean(cached) });
   }, [batchId, checkBatchReadiness]);
 

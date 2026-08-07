@@ -9,13 +9,19 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.List;
+import com.project.userservice.security.PiiCrypto;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSpecificationExecutor<Employee> {
+    boolean existsByAccountIdAndIsDeletedFalse(Long accountId);
     boolean existsByDepartmentIdAndIsDeletedFalse(Long departmentId);
     boolean existsByPositionIdAndIsDeletedFalse(Long positionId);
     Page<Employee> findByIsDeletedFalse(Pageable pageable);
     long countByIsDeletedFalse();
     long countByStatusAndIsDeletedFalse(EmployeeStatus status);
+    long countByDepartmentIdAndIsDeletedFalse(Long departmentId);
+    long countByPositionIdAndIsDeletedFalse(Long positionId);
+    List<Employee> findByStatusAndIsDeletedFalse(EmployeeStatus status);
 
     @EntityGraph(attributePaths = {"department", "position"})
     @Query("""
@@ -28,11 +34,18 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
               and (:keyword is null or :keyword = ''
                    or lower(e.employeeCode) like lower(concat('%', :keyword, '%'))
                    or lower(u.fullName) like lower(concat('%', :keyword, '%'))
-                   or u.phoneNumber like concat('%', :keyword, '%'))
+                   or lower(coalesce(u.email, '')) like lower(concat('%', :keyword, '%'))
+                   or (:keywordHash is not null and u.phoneHash = :keywordHash))
             """)
-    Page<Employee> search(@Param("keyword") String keyword,
-                          @Param("status") EmployeeStatus status,
-                          @Param("departmentId") Long departmentId,
-                          @Param("positionId") Long positionId,
-                          Pageable pageable);
+    Page<Employee> searchSecure(@Param("keyword") String keyword,
+                                @Param("keywordHash") String keywordHash,
+                                @Param("status") EmployeeStatus status,
+                                @Param("departmentId") Long departmentId,
+                                @Param("positionId") Long positionId,
+                                Pageable pageable);
+
+    default Page<Employee> search(String keyword, EmployeeStatus status, Long departmentId,
+                                  Long positionId, Pageable pageable) {
+        return searchSecure(keyword, PiiCrypto.searchHash(keyword), status, departmentId, positionId, pageable);
+    }
 }

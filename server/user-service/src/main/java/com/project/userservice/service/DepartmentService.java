@@ -7,8 +7,8 @@ import com.project.userservice.exception.BusinessException;
 import com.project.userservice.mapper.DepartmentMapper;
 import com.project.userservice.repository.DepartmentRepository;
 import com.project.userservice.repository.EmployeeRepository;
+import com.project.userservice.repository.PositionRepository;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,22 +20,24 @@ import java.util.List;
 public class DepartmentService {
     private final DepartmentRepository repository;
     private final EmployeeRepository employeeRepository;
+    private final PositionRepository positionRepository;
     private final UserAuditService auditService;
     private final DepartmentMapper departmentMapper;
 
     public DepartmentService(DepartmentRepository repository, EmployeeRepository employeeRepository,
+                             PositionRepository positionRepository,
                              UserAuditService auditService, DepartmentMapper departmentMapper) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
+        this.positionRepository = positionRepository;
         this.auditService = auditService;
         this.departmentMapper = departmentMapper;
     }
 
-    @Cacheable("departments")
     @Transactional(readOnly = true)
     public List<DepartmentResponse> list() {
         return repository.findByIsDeletedFalseOrderByNameAsc().stream()
-                .map(departmentMapper::toResponse).toList();
+                .map(this::toOperationalResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -44,7 +46,7 @@ public class DepartmentService {
                         com.project.userservice.util.PageableUtils.sanitize(pageable,
                                 java.util.Set.of("id", "code", "name", "createdAt", "updatedAt"),
                                 "name", org.springframework.data.domain.Sort.Direction.ASC))
-                .map(departmentMapper::toResponse);
+                .map(this::toOperationalResponse);
     }
 
     @CacheEvict(value = "departments", allEntries = true)
@@ -85,6 +87,9 @@ public class DepartmentService {
         if (employeeRepository.existsByDepartmentIdAndIsDeletedFalse(id)) {
             throw new BusinessException("Department is assigned to active employees", "USER_DEPARTMENT_IN_USE");
         }
+        if (positionRepository.existsByDepartmentIdAndIsDeletedFalse(id)) {
+            throw new BusinessException("Department still contains active positions", "USER_DEPARTMENT_IN_USE");
+        }
         value.setDeleted(true);
         repository.save(value);
         auditService.log("DEPARTMENT_DELETED", "DEPARTMENT", id, null);
@@ -103,6 +108,12 @@ public class DepartmentService {
         value.setCode(request.code().trim().toUpperCase());
         value.setName(request.name().trim());
         value.setDescription(request.description());
+    }
+
+    private DepartmentResponse toOperationalResponse(Department department) {
+        return departmentMapper.toResponse(department,
+                positionRepository.countByDepartmentIdAndIsDeletedFalse(department.getId()),
+                employeeRepository.countByDepartmentIdAndIsDeletedFalse(department.getId()));
     }
 
 }

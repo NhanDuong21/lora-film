@@ -38,6 +38,7 @@ export const routePaths = {
     showtimes: '/admin/showtimes',
     pricing: '/admin/pricing',
     staff: '/admin/staff',
+    workforce: '/admin/workforce',
     departments: '/admin/departments',
     positions: '/admin/positions',
     concessionSales: '/admin/concession-sales',

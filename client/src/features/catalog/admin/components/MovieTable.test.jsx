@@ -59,7 +59,7 @@ describe('MovieTable', () => {
     renderMovieTable();
 
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    expect(screen.getByAltText('Poster Paper Tiger')).toBeInTheDocument();
+    expect(screen.getByAltText('Áp phích Paper Tiger')).toBeInTheDocument();
     expect(screen.getByTestId('movie-poster-card')).toBeInTheDocument();
     expect(screen.getByText('Đã đủ thông tin')).toBeInTheDocument();
     expect(screen.getByText('13/11/2026')).toBeInTheDocument();

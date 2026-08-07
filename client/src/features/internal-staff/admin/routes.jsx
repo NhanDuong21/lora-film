@@ -11,6 +11,7 @@ const AdminStaffView = lazy(() => import('./pages/AdminStaffPage'));
 const AdminPayrollPage = lazy(() => import('./pages/AdminPayrollPage'));
 const AdminDepartmentPage = lazy(() => import('./pages/AdminDepartmentPage'));
 const AdminPositionPage = lazy(() => import('./pages/AdminPositionPage'));
+const AdminWorkforcePage = lazy(() => import('./pages/AdminWorkforcePage'));
 const AdminRolePage = lazy(() => import('./pages/AdminRolePage'));
 const AdminPermissionPage = lazy(() => import('./pages/AdminPermissionPage'));
 const AdminAuthAuditPage = lazy(() => import('./pages/AdminAuthAuditPage'));
@@ -53,6 +54,7 @@ export const adminStaffRoutes = [
     { path: 'staff', element: requirePermission(<AdminStaffView />, 'EMPLOYEE_VIEW') },
     { path: 'departments', element: requirePermission(<AdminDepartmentPage />, 'DEPARTMENT_VIEW') },
     { path: 'positions', element: requirePermission(<AdminPositionPage />, 'POSITION_VIEW') },
+    { path: 'workforce', element: requirePermission(<AdminWorkforcePage />, 'EMPLOYEE_VIEW') },
     { path: 'payroll', element: requirePermission(<AdminPayrollPage />, 'PAYROLL_VIEW') },
     { path: 'roles', element: requirePermission(<AdminRolePage />, 'ROLE_VIEW') },
     { path: 'accounts', element: requirePermission(<AdminAccountPage />, 'SYSTEM_CONFIGURATION') },

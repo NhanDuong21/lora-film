@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.userservice.dto.AccountVerifiedEvent;
 import com.project.userservice.dto.AccountVerifiedPayload;
 import com.project.userservice.entity.User;
+import com.project.userservice.entity.CustomerProfile;
 import com.project.userservice.repository.CustomerProfileRepository;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.service.UserAuditService;
@@ -17,6 +18,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -92,6 +94,25 @@ class AccountVerifiedConsumerOAuthTest {
 
         verify(dependencies.reservationService).release(
                 "0901234567", "092205006789", "customer@example.com");
+        verify(acknowledgment).acknowledge();
+    }
+
+    @Test
+    void workforceAccountDoesNotCreateCustomerPersona() throws Exception {
+        Dependencies dependencies = new Dependencies();
+        AccountVerifiedConsumer consumer = dependencies.consumer();
+        AccountVerifiedEvent event = oauthEvent();
+        event.getData().setRole("EMPLOYEE");
+        Acknowledgment acknowledgment = mock(Acknowledgment.class);
+
+        when(dependencies.objectMapper.readValue("event", AccountVerifiedEvent.class))
+                .thenReturn(event);
+        when(dependencies.userRepository.findById(31L)).thenReturn(Optional.empty());
+
+        consumer.consume("event", acknowledgment);
+
+        verify(dependencies.customerProfileRepository, never()).save(any(CustomerProfile.class));
+        verify(dependencies.customerProfileRepository, never()).existsByAccountId(31L);
         verify(acknowledgment).acknowledge();
     }
 

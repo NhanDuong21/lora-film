@@ -16,8 +16,15 @@ public class PayrollMapper {
                 payroll.getEmployee().getEmployeeCode(), user == null ? null : user.getFullName(),
                 payroll.getSalaryMonth(), payroll.getBasicSalary(), payroll.getAllowance(),
                 payroll.getBonus(), payroll.getDeduction(), payroll.getTotalSalary(),
-                payroll.getStatus(), payroll.getApprovedBy(), payroll.getApprovedAt(),
-                payroll.getPaidAt(),
+                payroll.getStatus(), payroll.getCreatedBy(), payroll.getApprovedBy(),
+                payroll.getApprovedAt(), payroll.getPaidBy(), payroll.getPaidAt(),
+                payroll.getPaymentReference(), payroll.getBankBatchReference(),
+                payroll.getAccountingReference(), payroll.getReconciliationStatus(),
+                payroll.getReconciledBy(), payroll.getReconciledAt(), payroll.getReconciliationNote(),
+                payroll.getSourceType(), payroll.getSourceChecksum(), payroll.getScheduledMinutes(),
+                payroll.getWorkedMinutes(), payroll.getPaidLeaveMinutes(), payroll.getOvertimeMinutes(),
+                payroll.getCancelledBy(),
+                payroll.getCancellationReason(), payroll.getVersion(),
                 includeDetails ? payroll.getDetails().stream()
                         .map(detail -> new PayrollDetailResponse(detail.getId(), detail.getType(),
                                 detail.getDescription(), detail.getAmount()))

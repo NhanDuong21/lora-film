@@ -6,6 +6,7 @@ import com.project.userservice.entity.User;
 import com.project.userservice.entity.CustomerProfile;
 import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.enumtype.Gender;
+import com.project.userservice.enumtype.AccountType;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.repository.CustomerProfileRepository;
 import com.project.userservice.service.UserDomainEventService;
@@ -96,11 +97,15 @@ public class AccountVerifiedConsumer {
                     existingUser.setAvatarUrl(payload.getAvatarUrl().trim());
                     profileChanged = true;
                 }
+                if (existingUser.getAccountType() == null) {
+                    existingUser.setAccountType(accountType(payload.getRole()));
+                    profileChanged = true;
+                }
                 if (profileChanged) {
                     userRepository.save(existingUser);
                     log.info("Backfilled OAuth profile fields for existing accountId: {}", accountId);
                 }
-                ensureCustomerProfile(accountId);
+                ensureCustomerProfile(accountId, payload.getRole());
                 recordProfileCreated(accountId, payload.getEmail(), requestId, "SUCCESS");
                 releaseReservationAfterCommit(phoneNumber, cccd, reservationOwner);
                 log.info("Idempotently handled existing user profile for accountId={}", accountId);
@@ -158,11 +163,15 @@ public class AccountVerifiedConsumer {
                 user.setBirthYear(event.getData().getBirthYear());
             }
             user.setStatus(UserStatus.ACTIVE);
+            user.setAccountType(accountType(payload.getRole()));
 
             userRepository.save(user);
-            ensureCustomerProfile(accountId);
-            auditService.log("CUSTOMER_PROFILE_CREATED", "CUSTOMER", accountId,
-                    "Created from verified account");
+            boolean customerProfileCreated = ensureCustomerProfile(accountId, payload.getRole());
+            auditService.log(customerProfileCreated ? "CUSTOMER_PROFILE_CREATED" : "USER_PROFILE_CREATED",
+                    customerProfileCreated ? "CUSTOMER" : "USER", accountId,
+                    customerProfileCreated
+                            ? "Created from verified customer account"
+                            : "Created from verified workforce account");
 
             recordProfileCreated(accountId, event.getData().getEmail(), requestId, "SUCCESS");
             releaseReservationAfterCommit(phoneNumber, cccd, reservationOwner);
@@ -176,15 +185,33 @@ public class AccountVerifiedConsumer {
         }
     }
 
-    private void ensureCustomerProfile(Long accountId) {
+    private boolean ensureCustomerProfile(Long accountId, String role) {
+        if (!isCustomerRole(role)) {
+            log.info("Skipping customer profile for workforce accountId={} role={}", accountId, role);
+            return false;
+        }
         if (customerProfileRepository.existsByAccountId(accountId)) {
-            return;
+            return true;
         }
         CustomerProfile customer = new CustomerProfile();
         customer.setAccountId(accountId);
         customer.setCustomerCode("CUS" + String.format("%010d", accountId));
         customer.setJoinedAt(LocalDate.now());
         customerProfileRepository.save(customer);
+        return true;
+    }
+
+    private boolean isCustomerRole(String role) {
+        if (role == null || role.isBlank()) {
+            // Backwards compatibility for older ACCOUNT_VERIFIED producers.
+            return true;
+        }
+        String normalized = role.trim().toUpperCase(java.util.Locale.ROOT);
+        return normalized.equals("CUSTOMER") || normalized.equals("MEMBER") || normalized.equals("USER");
+    }
+
+    private AccountType accountType(String role) {
+        return isCustomerRole(role) ? AccountType.CUSTOMER : AccountType.WORKFORCE;
     }
 
     private String resolveFullName(AccountVerifiedPayload payload) {

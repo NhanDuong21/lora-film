@@ -94,6 +94,33 @@ class AccountServiceImplTest {
         verify(credentialRevocationService, never()).revokeAll(any());
     }
 
+    @Test
+    void employeeAccountUsesLeastPrivilegeStaffRoleFromProductionSeed() {
+        var staff = Role.builder().id(3L).code("STAFF").roleName("Cinema staff").build();
+        var createRequest = new com.project.authservice.dto.request.EmployeeAccountRequest();
+        createRequest.setEmail("  new.staff@lorafilm.local ");
+        createRequest.setPassword("Temporary@123");
+        createRequest.setFullName("New Staff");
+
+        when(accountRepository.existsByEmail("new.staff@lorafilm.local")).thenReturn(false);
+        when(roleRepository.findByCode("STAFF")).thenReturn(Optional.of(staff));
+        when(passwordEncoder.encode("Temporary@123")).thenReturn("encoded");
+        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
+            Account saved = invocation.getArgument(0);
+            saved.setId(20L);
+            return saved;
+        });
+
+        service.createEmployeeAccount(createRequest);
+
+        verify(accountRepository).save(argThat(account ->
+                "new.staff@lorafilm.local".equals(account.getEmail())
+                        && "STAFF".equals(account.getRole().getCode())
+                        && account.getAccountStatus() == AccountStatus.ACTIVE));
+        verify(roleRepository, never()).findByCode("EMPLOYEE");
+        verify(eventPublisher).publishEmployeeAccountCreated(any(Account.class), eq("New Staff"));
+    }
+
     private Account account(Long id, Role role, AccountStatus status) {
         return Account.builder()
                 .id(id)

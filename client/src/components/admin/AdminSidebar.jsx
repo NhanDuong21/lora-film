@@ -8,6 +8,7 @@ import {
   Building,
   Calendar,
   CalendarRange,
+  CalendarClock,
   ChevronDown,
   Coffee,
   Coins,
@@ -194,6 +195,7 @@ export default function AdminSidebar({
       visible: hasHumanResourcesAccess,
       items: [
         ...(canManageEmployees ? [{ key: 'staff', label: 'Nhân viên', path: '/admin/staff', icon: Shield }] : []),
+        ...(canManageEmployees ? [{ key: 'workforce', label: 'Ca làm & chấm công', path: '/admin/workforce', icon: CalendarClock }] : []),
         ...(canManageDepartments ? [{ key: 'departments', label: 'Phòng ban', path: '/admin/departments', icon: Building }] : []),
         ...(canManagePositions ? [{ key: 'positions', label: 'Vị trí', path: '/admin/positions', icon: BadgeDollarSign }] : []),
         ...(canManagePayroll ? [{ key: 'payroll', label: 'Bảng lương', path: '/admin/payroll', icon: TrendingUp }] : []),

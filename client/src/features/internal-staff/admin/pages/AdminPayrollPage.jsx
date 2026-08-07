@@ -1,385 +1,211 @@
-import { useCallback, useEffect, useState } from 'react';
-import { changePayrollStatus, getPayrolls, createPayroll, updatePayroll, getEmployees } from '../services/userAdminService';
-import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
-import { Banknote, FileSpreadsheet, Plus, Edit2, CheckCircle2, XCircle, Search, Filter, Clock, CheckCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import AdminStatCard from '../components/AdminStatCard';
+import { CheckCircle2, CircleDollarSign, Clock3, FilePlus2, RefreshCcw, Search, ShieldCheck } from 'lucide-react';
+import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
+import {
+  applyPayrollAction,
+  createPayroll,
+  generatePayrollFromTimekeeping,
+  getEmployees,
+  getPayroll,
+  getPayrolls,
+  getPayrollSummary,
+  updatePayroll
+} from '../services/userAdminService';
 import useAdminAccess from '../hooks/useAdminAccess';
+import {
+  ActionModal,
+  ConsolePagination,
+  ConsolePanel,
+  DetailDrawer,
+  DetailGrid,
+  MetricStrip,
+  OperationsHeader
+} from '../components/OperationsConsole';
 
-const money = value => new Intl.NumberFormat('vi-VN', {
-  style: 'currency', currency: 'VND', maximumFractionDigits: 0
-}).format(value || 0);
+const currentMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+const emptyPage = { content: [], totalPages: 0, totalElements: 0 };
+const emptyPayroll = month => ({ employeeId: '', salaryMonth: month, basicSalary: '', allowance: 0, bonus: 0, deduction: 0 });
+const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value || 0);
+const STATUS_LABELS = { PENDING_APPROVAL: 'Chờ duyệt', APPROVED: 'Đã duyệt', PAYMENT_PENDING: 'Chờ đối soát', PAID: 'Đã trả', CANCELLED: 'Đã hủy', DRAFT: 'Nháp' };
+const ACTION_LABELS = { APPROVE: 'Duyệt phiếu lương', SUBMIT_PAYMENT: 'Gửi lệnh thanh toán', RECONCILE: 'Đối soát ngân hàng/kế toán', CANCEL: 'Hủy phiếu lương' };
 
 export default function AdminPayrollPage() {
   const can = useAdminAccess();
-  const canCreatePayroll = can('PAYROLL_CREATE');
-  const canUpdatePayroll = can('PAYROLL_UPDATE');
-  const canApprovePayroll = can('PAYROLL_APPROVE');
-  const [query, setQuery] = useState({ month: '', status: '', page: 0, size: 10 });
-  const [result, setResult] = useState({ content: [], totalPages: 0, totalElements: 0 });
+  const outlet = useOutletContext();
+  const notify = outlet?.triggerToast || (() => undefined);
+  const [query, setQuery] = useState({ month: currentMonth(), status: '', page: 0, size: 15 });
+  const [result, setResult] = useState(emptyPage);
+  const [summary, setSummary] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [state, setState] = useState({ loading: true, error: '' });
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingPayroll, setEditingPayroll] = useState(null);
-  const [formData, setFormData] = useState({
-    employeeId: '', salaryMonth: '', basicSalary: '', allowance: 0, bonus: 0, deduction: 0
-  });
-  const [stats, setStats] = useState({ totalBudget: 0, pending: 0, paid: 0 });
-  const outlet = useOutletContext();
-  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
-  const notify = outlet?.triggerToast || (() => undefined);
-
-  const loadEmployees = useCallback(async () => {
-    if (!canCreatePayroll && !canUpdatePayroll) return;
-    try {
-      const data = await getEmployees({ size: 100 });
-      setEmployees(data?.content || []);
-    } catch (error) {
-      setState(value => ({
-        ...value,
-        error: error?.message || 'Không thể tải danh sách nhân viên.'
-      }));
-    }
-  }, [canCreatePayroll, canUpdatePayroll]);
-
-  useEffect(() => { loadEmployees(); }, [loadEmployees]);
-
-  const openModal = (payroll = null) => {
-    setEditingPayroll(payroll);
-    if (payroll) {
-      setFormData({
-        employeeId: payroll.employeeId || '',
-        salaryMonth: String(payroll.salaryMonth || '').slice(0, 7),
-        basicSalary: payroll.basicSalary || '',
-        allowance: payroll.allowance || 0,
-        bonus: payroll.bonus || 0,
-        deduction: payroll.deduction || 0
-      });
-    } else {
-      const now = new Date();
-      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      setFormData({
-        employeeId: '', salaryMonth: monthStr, basicSalary: '',
-        allowance: 0, bonus: 0, deduction: 0
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const payload = {
-      employeeId: Number(formData.employeeId),
-      salaryMonth: formData.salaryMonth,
-      basicSalary: Number(formData.basicSalary),
-      allowance: Number(formData.allowance || 0),
-      bonus: Number(formData.bonus || 0),
-      deduction: Number(formData.deduction || 0),
-      details: []
-    };
-    try {
-      if (editingPayroll) {
-        await updatePayroll(editingPayroll.id, payload);
-      } else {
-        await createPayroll(payload);
-      }
-      setIsModalOpen(false);
-      await load();
-      notify(editingPayroll ? 'Bảng lương đã được cập nhật.' : 'Bảng lương đã được tạo.');
-    } catch (error) {
-      notify(error?.message || 'Lỗi khi lưu bảng lương', 'error');
-    }
-  };
+  const [selected, setSelected] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [payrollOpen, setPayrollOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [payrollForm, setPayrollForm] = useState(() => emptyPayroll(currentMonth()));
+  const [actionOpen, setActionOpen] = useState(false);
+  const [actionForm, setActionForm] = useState({ type: 'APPROVE', reason: '', paymentReference: '', bankBatchReference: '', accountingReference: '', reconciliationMatched: true });
+  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
     try {
-      const data = await getPayrolls({
-        ...query, month: query.month || undefined, status: query.status || undefined
-      });
-      setResult(data || { content: [], totalPages: 0, totalElements: 0 });
-      
-      if (query.page === 0 && !query.status) {
-        setStats({
-           totalBudget: data?.content?.reduce((acc, curr) => acc + (curr.totalSalary || 0), 0) || 0,
-           pending: data?.content?.filter(p => p.status === 'PENDING_APPROVAL')?.length || 0,
-           paid: data?.content?.filter(p => p.status === 'PAID')?.length || 0
-        });
-      }
-      
+      const [page, totals, employeePage] = await Promise.all([
+        getPayrolls({ ...query, status: query.status || undefined }),
+        getPayrollSummary(query.month),
+        can('PAYROLL_CREATE') ? getEmployees({ page: 0, size: 100, status: 'ACTIVE' }) : Promise.resolve(emptyPage)
+      ]);
+      setResult(page || emptyPage);
+      setSummary(totals);
+      setEmployees(employeePage?.content || []);
       setState({ loading: false, error: '' });
     } catch (error) {
-      setState({ loading: false, error: error?.message || 'Không thể tải bảng lương.' });
+      setState({ loading: false, error: error?.message || 'Không thể tải kỳ lương.' });
     }
-  }, [query]);
-  
-  useEffect(() => { load(); }, [load]);
+  }, [can, query]);
 
-  const transition = async (id, action) => {
-    if (!await confirmAction(`Xác nhận thao tác ${action} với bảng lương này?`)) return;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  const metrics = useMemo(() => [
+    { label: 'Giá trị kỳ lương', value: money(summary?.totalNetAmount), hint: `${summary?.totalRecords || 0} phiếu, không gồm phiếu hủy`, icon: CircleDollarSign, tone: 'orange' },
+    { label: 'Chờ kiểm soát', value: summary?.pendingApproval || 0, hint: 'Cần người khác với người tạo duyệt', icon: Clock3, tone: 'amber' },
+    { label: 'Duyệt / chờ đối soát', value: `${summary?.approved || 0} / ${summary?.paymentPending || 0}`, hint: 'Lệnh ngân hàng chưa được coi là đã trả', icon: ShieldCheck, tone: 'blue' },
+    { label: 'Đã thanh toán', value: summary?.paid || 0, hint: `${summary?.cancelled || 0} phiếu đã hủy`, icon: CheckCircle2, tone: 'green' }
+  ], [summary]);
+
+  const openDetail = async payroll => {
+    setSelected(payroll);
+    setDetailLoading(true);
     try {
-      await changePayrollStatus(id, action);
-      await load();
-      notify('Trạng thái bảng lương đã được cập nhật.');
+      setSelected(await getPayroll(payroll.id));
     } catch (error) {
-      setState(value => ({ ...value, error: error?.message || 'Không thể cập nhật bảng lương.' }));
+      notify(error?.message || 'Không thể tải chi tiết phiếu lương.', 'error');
+    } finally {
+      setDetailLoading(false);
     }
   };
 
+  const openPayrollForm = (payroll = null) => {
+    setEditing(payroll);
+    setPayrollForm(payroll ? {
+      employeeId: String(payroll.employeeId),
+      salaryMonth: String(payroll.salaryMonth).slice(0, 7),
+      basicSalary: payroll.basicSalary,
+      allowance: payroll.allowance,
+      bonus: payroll.bonus,
+      deduction: payroll.deduction
+    } : emptyPayroll(query.month));
+    setPayrollOpen(true);
+  };
+
+  const submitPayroll = async event => {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      const payload = {
+        employeeId: Number(payrollForm.employeeId),
+        salaryMonth: payrollForm.salaryMonth,
+        basicSalary: Number(payrollForm.basicSalary),
+        allowance: Number(payrollForm.allowance || 0),
+        bonus: Number(payrollForm.bonus || 0),
+        deduction: Number(payrollForm.deduction || 0),
+        details: []
+      };
+      if (editing) await updatePayroll(editing.id, payload);
+      else await createPayroll(payload);
+      setPayrollOpen(false);
+      await load();
+      notify(editing ? 'Đã cập nhật phiếu lương.' : 'Đã tạo phiếu lương ngoại lệ.');
+    } catch (error) {
+      notify(error?.message || 'Không thể lưu phiếu lương.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openAction = type => {
+    setActionForm({ type, reason: '', paymentReference: '', bankBatchReference: '', accountingReference: '', reconciliationMatched: true });
+    setActionOpen(true);
+  };
+
+  const generatePeriod = async () => {
+    setSubmitting(true);
+    try {
+      const outcome = await generatePayrollFromTimekeeping(query.month);
+      notify(`Đã sinh ${outcome.generatedCount} phiếu từ chấm công; bỏ qua ${outcome.skippedExisting} phiếu đã có và ${outcome.skippedNoSchedule} nhân viên chưa có ca.`);
+      await load();
+    } catch (error) {
+      notify(error?.message || 'Không thể sinh kỳ lương từ chấm công.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitAction = async event => {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      const updated = await applyPayrollAction(selected.id, {
+        ...actionForm,
+        paymentReference: actionForm.type === 'RECONCILE' ? actionForm.paymentReference.trim() : null,
+        bankBatchReference: actionForm.type === 'SUBMIT_PAYMENT' ? actionForm.bankBatchReference.trim() : null,
+        accountingReference: actionForm.type === 'RECONCILE' ? actionForm.accountingReference.trim() : null,
+        reconciliationMatched: actionForm.type === 'RECONCILE' ? actionForm.reconciliationMatched : null,
+        expectedVersion: selected.version
+      });
+      setSelected(updated);
+      setActionOpen(false);
+      await load();
+      notify('Đã ghi nhận hành động kỳ lương.');
+    } catch (error) {
+      notify(error?.message || 'Không thể thực hiện hành động.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const drawerActions = selected ? <div className="grid gap-2 sm:grid-cols-2">
+    {can('PAYROLL_UPDATE') && selected.status === 'PENDING_APPROVAL' ? <button type="button" onClick={() => openPayrollForm(selected)} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-zinc-200 hover:bg-white/5">Sửa số liệu</button> : null}
+    {can('PAYROLL_APPROVE') && selected.status === 'PENDING_APPROVAL' ? <button type="button" onClick={() => openAction('APPROVE')} className="rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black">Duyệt phiếu</button> : null}
+    {can('PAYROLL_UPDATE') && selected.status === 'APPROVED' ? <button type="button" onClick={() => openAction('SUBMIT_PAYMENT')} className="rounded-xl bg-blue-500 px-4 py-3 text-sm font-black text-white">Gửi lệnh thanh toán</button> : null}
+    {can('PAYROLL_UPDATE') && selected.status === 'PAYMENT_PENDING' ? <button type="button" onClick={() => openAction('RECONCILE')} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black">Đối soát thanh toán</button> : null}
+    {can('PAYROLL_UPDATE') && selected.status === 'PENDING_APPROVAL' ? <button type="button" onClick={() => openAction('CANCEL')} className="rounded-xl border border-red-500/30 px-4 py-3 text-sm font-black text-red-400">Hủy phiếu</button> : null}
+  </div> : null;
+
   return (
-    <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <h1 className="text-2xl font-black uppercase tracking-wider text-white">Quản lý <span className="text-brand-orange">Lương</span></h1>
-          <p className="mt-1 text-sm text-zinc-500">Duyệt, ghi nhận thanh toán và theo dõi lương theo tháng.</p>
-        </div>
-        {canCreatePayroll && <button onClick={() => openModal()} className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2">
-          <Plus size={18} />
-          <span>Tạo Bảng Lương</span>
-        </button>}
-      </header>
+    <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-5 text-white md:p-8">
+      <OperationsHeader eyebrow="Payroll control" title="Kiểm soát kỳ lương" description="Phiếu lương được sinh từ snapshot ca làm, chấm công và nghỉ phép; thanh toán chỉ hoàn tất sau khi khớp chứng từ ngân hàng với bút toán kế toán." actions={can('PAYROLL_CREATE') ? <><button disabled={submitting} type="button" onClick={generatePeriod} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white"><RefreshCcw size={18} /> Sinh từ chấm công</button><button type="button" onClick={() => openPayrollForm()} className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black"><FilePlus2 size={18} /> Phiếu ngoại lệ</button></> : null} />
+      <MetricStrip items={metrics} />
+      <ConsolePanel>
+        <div className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-[1fr_260px]"><label className="relative"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={18} /><input type="month" aria-label="Kỳ lương" value={query.month} onChange={event => setQuery(value => ({ ...value, month: event.target.value, page: 0 }))} className="h-11 w-full rounded-xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm outline-none focus:border-brand-orange" /></label><select aria-label="Lọc trạng thái phiếu lương" value={query.status} onChange={event => setQuery(value => ({ ...value, status: event.target.value, page: 0 }))} className="h-11 rounded-xl border border-white/10 bg-black/30 px-4 text-sm outline-none focus:border-brand-orange"><option value="">Tất cả trạng thái</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+        <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!result.content?.length} emptyMessage="Kỳ này chưa có phiếu lương">
+          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-white/[0.025] text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600"><tr><th className="px-5 py-4">Nhân viên</th><th className="px-5 py-4">Kỳ</th><th className="px-5 py-4">Thực nhận</th><th className="px-5 py-4">Trạng thái</th><th className="px-5 py-4 text-right">Kiểm soát</th></tr></thead><tbody className="divide-y divide-white/5">{result.content?.map(payroll => <tr key={payroll.id} className="hover:bg-white/[0.025]"><td className="px-5 py-4"><p className="font-black text-zinc-100">{payroll.employeeName}</p><p className="mt-1 font-mono text-xs text-zinc-600">{payroll.employeeCode}</p></td><td className="px-5 py-4 font-mono text-zinc-400">{String(payroll.salaryMonth).slice(0, 7)}</td><td className="px-5 py-4 font-black text-zinc-200">{money(payroll.totalSalary)}</td><td className="px-5 py-4"><StatusBadge status={payroll.status} label={STATUS_LABELS[payroll.status]} /></td><td className="px-5 py-4 text-right"><button type="button" onClick={() => openDetail(payroll)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 hover:border-brand-orange/50 hover:text-brand-orange">Mở phiếu</button></td></tr>)}</tbody></table></div>
+          <ConsolePagination page={query.page} totalPages={result.totalPages} totalElements={result.totalElements} onPage={page => setQuery(value => ({ ...value, page }))} />
+        </AsyncState>
+      </ConsolePanel>
 
-      {/* Dashboard Statistics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <AdminStatCard title="Tổng ngân sách hiển thị" value={money(stats.totalBudget)} valueClassName="text-brand-orange" subtitle={`Kỳ ${query.month || 'hiện tại'}`} icon={Banknote} colorClass="bg-brand-orange/10 text-brand-orange border-brand-orange/20" />
-        <AdminStatCard title="Chờ duyệt" value={stats.pending} icon={Clock} colorClass="bg-amber-500/10 text-amber-500 border-amber-500/20" />
-        <AdminStatCard title="Đã thanh toán" value={stats.paid} icon={CheckCircle} colorClass="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" />
-      </div>
+      <DetailDrawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.employeeName || 'Phiếu lương'} subtitle={selected ? `${selected.employeeCode} · ${String(selected.salaryMonth).slice(0, 7)}` : ''} footer={drawerActions}>
+        {detailLoading ? <p className="text-sm text-zinc-500">Đang tải phiếu…</p> : selected ? <div className="space-y-6"><DetailGrid items={[{ label: 'Lương cơ bản', value: money(selected.basicSalary) }, { label: 'Phụ cấp', value: money(selected.allowance) }, { label: 'Khấu trừ', value: money(selected.deduction) }, { label: 'Thực nhận', value: money(selected.totalSalary) }, { label: 'Nguồn', value: selected.sourceType === 'TIMEKEEPING' ? 'Ca làm & chấm công' : 'Ngoại lệ thủ công' }, { label: 'Trạng thái', value: STATUS_LABELS[selected.status] }]} />{selected.sourceType === 'TIMEKEEPING' ? <DetailGrid items={[{ label: 'Phút ca', value: selected.scheduledMinutes }, { label: 'Phút công', value: selected.workedMinutes }, { label: 'Nghỉ hưởng lương', value: selected.paidLeaveMinutes }, { label: 'Tăng ca', value: selected.overtimeMinutes }]} /> : null}<div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-sm leading-6 text-zinc-500"><p><span className="font-black text-zinc-300">Người lập:</span> {selected.createdBy ? `Account #${selected.createdBy}` : 'Tác vụ hệ thống'}</p><p><span className="font-black text-zinc-300">Người duyệt:</span> {selected.approvedBy ? `Account #${selected.approvedBy}` : '—'}</p><p><span className="font-black text-zinc-300">Lô ngân hàng:</span> {selected.bankBatchReference || '—'}</p><p><span className="font-black text-zinc-300">Giao dịch:</span> {selected.paymentReference || '—'}</p><p><span className="font-black text-zinc-300">Bút toán:</span> {selected.accountingReference || '—'}</p><p><span className="font-black text-zinc-300">Đối soát:</span> {selected.reconciliationStatus}</p>{selected.cancellationReason ? <p><span className="font-black text-zinc-300">Lý do hủy:</span> {selected.cancellationReason}</p> : null}</div></div> : null}
+      </DetailDrawer>
 
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
-          <input 
-            type="month"
-            value={query.month}
-            onChange={event => setQuery(value => ({ ...value, month: event.target.value, page: 0 }))}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-10 pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-brand-orange outline-none transition-colors"
-          />
-        </div>
-        <div className="w-full sm:w-64 relative">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4 z-10 pointer-events-none" />
-          <select 
-            value={query.status}
-            onChange={event => setQuery(value => ({ ...value, status: event.target.value, page: 0 }))}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-10 pl-10 pr-4 text-sm text-zinc-100 outline-none focus:border-brand-orange appearance-none"
-          >
-            <option value="">Tất cả trạng thái</option>
-            <option value="PENDING_APPROVAL">Chờ duyệt</option>
-            <option value="APPROVED">Đã duyệt</option>
-            <option value="PAID">Đã trả</option>
-            <option value="CANCELLED">Đã hủy</option>
-          </select>
-        </div>
-      </div>
+      <ActionModal open={payrollOpen} onClose={() => setPayrollOpen(false)} title={editing ? 'Điều chỉnh phiếu lương' : 'Tạo phiếu lương ngoại lệ'} description="Tác vụ tháng tự sinh phiếu từ lương cơ bản. Form này dành cho trường hợp ngoại lệ và mọi phiếu đều phải qua bước duyệt độc lập." onSubmit={submitPayroll} submitLabel={editing ? 'Lưu số liệu' : 'Tạo phiếu'} submitting={submitting}>
+        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Nhân viên *</label><select required disabled={Boolean(editing)} value={payrollForm.employeeId} onChange={event => { const employee = employees.find(item => String(item.accountId) === event.target.value); setPayrollForm(value => ({ ...value, employeeId: event.target.value, basicSalary: employee?.baseSalary || '' })); }} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange disabled:opacity-50"><option value="">Chọn nhân viên</option>{employees.map(item => <option key={item.accountId} value={item.accountId}>{item.fullName} · {item.employeeCode}</option>)}</select></div>
+        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Kỳ lương *</label><input required disabled={Boolean(editing)} type="month" value={payrollForm.salaryMonth} onChange={event => setPayrollForm(value => ({ ...value, salaryMonth: event.target.value }))} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange disabled:opacity-50" /></div>
+        <div className="grid gap-3 sm:grid-cols-2">{[['basicSalary', 'Lương cơ bản *'], ['allowance', 'Phụ cấp'], ['bonus', 'Thưởng'], ['deduction', 'Khấu trừ']].map(([key, label]) => <div key={key}><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">{label}</label><input required={key === 'basicSalary'} type="number" min={key === 'basicSalary' ? 1 : 0} value={payrollForm[key]} onChange={event => setPayrollForm(value => ({ ...value, [key]: event.target.value }))} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /></div>)}</div>
+      </ActionModal>
 
-      <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!result.content?.length} emptyMessage="Không có bảng lương nào">
-        <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/30">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-zinc-950/50 text-xs uppercase font-black text-zinc-500 tracking-wider">
-              <tr>
-                <th className="p-4 rounded-tl-2xl">Nhân viên</th>
-                <th className="p-4">Kỳ lương</th>
-                <th className="p-4">Thực nhận</th>
-                <th className="p-4">Trạng thái</th>
-                <th className="p-4 text-right rounded-tr-2xl">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {result.content?.map(payroll => (
-                <tr key={payroll.id} className="hover:bg-zinc-800/20 transition-colors group">
-                  <td className="p-4">
-                    <p className="font-bold text-zinc-100">{payroll.employeeName}</p>
-                    <span className="font-mono text-xs text-zinc-500 mt-0.5 inline-block bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                      {payroll.employeeCode}
-                    </span>
-                  </td>
-                  <td className="p-4 font-mono text-zinc-300">
-                    {String(payroll.salaryMonth || '').slice(0, 7)}
-                  </td>
-                  <td className="p-4 font-bold text-brand-orange tracking-wide">
-                    {money(payroll.totalSalary)}
-                  </td>
-                  <td className="p-4">
-                    <StatusBadge status={payroll.status} />
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {canApprovePayroll && payroll.status === 'PENDING_APPROVAL' && (
-                        <button 
-                          onClick={() => transition(payroll.id, 'approve')}
-                          className="p-1.5 rounded-lg text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors tooltip"
-                          title="Duyệt bảng lương"
-                        >
-                          <CheckCircle2 size={16} />
-                        </button>
-                      )}
-                      
-                      {canUpdatePayroll && payroll.status === 'APPROVED' && (
-                        <button 
-                          onClick={() => transition(payroll.id, 'paid')}
-                          className="p-1.5 rounded-lg text-zinc-400 hover:text-sky-400 hover:bg-sky-500/10 transition-colors tooltip"
-                          title="Xác nhận đã trả"
-                        >
-                          <Banknote size={16} />
-                        </button>
-                      )}
-
-                      {canUpdatePayroll && <button
-                        onClick={() => openModal(payroll)} 
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors tooltip"
-                        title="Chỉnh sửa chi tiết"
-                      >
-                        <Edit2 size={16} />
-                      </button>}
-
-                      {canUpdatePayroll && !['APPROVED', 'PAID', 'CANCELLED'].includes(payroll.status) && (
-                        <button 
-                          onClick={() => transition(payroll.id, 'cancel')}
-                          className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors tooltip"
-                          title="Hủy bảng lương"
-                        >
-                          <XCircle size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {result.totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
-            <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              Trang {query.page + 1} / {result.totalPages} <span className="mx-2">•</span> Tổng: {result.totalElements}
-            </span>
-            <div className="flex justify-end gap-2">
-              <button 
-                disabled={query.page === 0} 
-                onClick={() => setQuery(value => ({ ...value, page: value.page - 1 }))}
-                className="rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-zinc-900 transition-colors"
-              >
-                Trước
-              </button>
-              <button 
-                disabled={query.page + 1 >= result.totalPages}
-                onClick={() => setQuery(value => ({ ...value, page: value.page + 1 }))}
-                className="rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-zinc-900 transition-colors"
-              >
-                Tiếp
-              </button>
-            </div>
-          </div>
-        )}
-      </AsyncState>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-          <form onSubmit={handleSubmit} className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950 p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-              <h2 className="text-xl font-black uppercase tracking-wider text-white flex items-center gap-2">
-                <FileSpreadsheet className="text-brand-orange" size={24} />
-                {editingPayroll ? 'Sửa Bảng Lương' : 'Tạo Bảng Lương Mới'}
-              </h2>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
-                X
-              </button>
-            </div>
-            
-            <div className="space-y-4 pt-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5 relative col-span-2">
-                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Nhân viên <span className="text-brand-orange">*</span></label>
-                  <select 
-                    value={formData.employeeId}
-                    onChange={e => {
-                      const employee = employees.find(item => String(item.accountId) === e.target.value);
-                      setFormData({
-                        ...formData,
-                        employeeId: e.target.value,
-                        basicSalary: employee?.baseSalary || ''
-                      });
-                    }}
-                    required 
-                    disabled={!!editingPayroll}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors appearance-none disabled:opacity-50"
-                  >
-                    <option value="">Chọn nhân viên</option>
-                    {employees.map(e => <option key={e.accountId} value={e.accountId}>{e.fullName} ({e.employeeCode})</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Kỳ lương <span className="text-brand-orange">*</span></label>
-                <input 
-                  type="month"
-                  value={formData.salaryMonth} 
-                  onChange={e => setFormData({ ...formData, salaryMonth: e.target.value })} 
-                  required 
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none transition-colors font-mono" 
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Lương cơ bản</label>
-                  <input 
-                    type="number" 
-                    value={formData.basicSalary}
-                    onChange={e => setFormData({ ...formData, basicSalary: e.target.value })}
-                    className="w-full bg-zinc-900 border border-emerald-900/50 rounded-xl px-4 py-2.5 text-sm focus:border-emerald-500 outline-none transition-colors font-mono text-emerald-400" 
-                    placeholder="0" 
-                    min="0.01"
-                    step="0.01"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Phụ cấp</label>
-                  <input 
-                    type="number" 
-                    value={formData.allowance}
-                    onChange={e => setFormData({ ...formData, allowance: e.target.value })}
-                    className="w-full bg-zinc-900 border border-sky-900/50 rounded-xl px-4 py-2.5 text-sm focus:border-sky-500 outline-none transition-colors font-mono text-sky-400"
-                    placeholder="0" 
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Thưởng / Khấu trừ</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="number" min="0" step="0.01" value={formData.bonus}
-                    onChange={e => setFormData({ ...formData, bonus: e.target.value })}
-                    aria-label="Tiền thưởng"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none"
-                    placeholder="Tiền thưởng" />
-                  <input type="number" min="0" step="0.01" value={formData.deduction}
-                    onChange={e => setFormData({ ...formData, deduction: e.target.value })}
-                    aria-label="Khấu trừ"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:border-brand-orange outline-none"
-                    placeholder="Khấu trừ" />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-6 border-t border-zinc-800">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-sm font-bold text-zinc-300 hover:bg-zinc-800 transition-colors">
-                Hủy
-              </button>
-              <button type="submit" className="rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-bold text-zinc-950 hover:bg-orange-600 transition-colors shadow-lg shadow-brand-orange/20">
-                {editingPayroll ? 'Lưu thay đổi' : 'Tạo bảng lương'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <ActionModal open={actionOpen} onClose={() => setActionOpen(false)} title={ACTION_LABELS[actionForm.type]} description={actionForm.type === 'APPROVE' ? 'Người lập phiếu không thể tự duyệt. Hệ thống sẽ kiểm tra ở API.' : 'Hành động này được lưu cùng người thực hiện, thời điểm và version dữ liệu.'} onSubmit={submitAction} submitLabel={ACTION_LABELS[actionForm.type]} submitting={submitting} tone={actionForm.type === 'CANCEL' ? 'danger' : 'orange'}>
+        {actionForm.type === 'SUBMIT_PAYMENT' ? <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Mã lô ngân hàng *</label><input required maxLength={100} value={actionForm.bankBatchReference} onChange={event => setActionForm(value => ({ ...value, bankBatchReference: event.target.value }))} placeholder="BANK-BATCH-2026-08-001" className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /></div> : null}
+        {actionForm.type === 'RECONCILE' ? <><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-black uppercase text-zinc-500">Mã giao dịch ngân hàng *<input required maxLength={100} value={actionForm.paymentReference} onChange={event => setActionForm(value => ({ ...value, paymentReference: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm" /></label><label className="text-xs font-black uppercase text-zinc-500">Mã bút toán kế toán *<input required maxLength={100} value={actionForm.accountingReference} onChange={event => setActionForm(value => ({ ...value, accountingReference: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm" /></label></div><label className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-sm font-bold"><input type="checkbox" checked={actionForm.reconciliationMatched} onChange={event => setActionForm(value => ({ ...value, reconciliationMatched: event.target.checked }))} /> Chứng từ ngân hàng khớp bút toán kế toán</label></> : null}
+        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lý do / căn cứ *</label><textarea required minLength={5} maxLength={500} rows={4} value={actionForm.reason} onChange={event => setActionForm(value => ({ ...value, reason: event.target.value }))} placeholder="Căn cứ duyệt, đối soát hoặc lý do hủy…" className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm leading-6 outline-none focus:border-brand-orange" /></div>
+      </ActionModal>
     </section>
   );
 }

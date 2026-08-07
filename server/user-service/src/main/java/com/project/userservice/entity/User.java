@@ -2,12 +2,15 @@ package com.project.userservice.entity;
 
 import com.project.userservice.enumtype.Gender;
 import com.project.userservice.enumtype.UserStatus;
+import com.project.userservice.enumtype.AccountType;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.project.userservice.security.EncryptedStringConverter;
+import com.project.userservice.security.PiiCrypto;
 
 @Entity
 @Table(name = "users")
@@ -24,11 +27,19 @@ public class User {
     @Column(name = "email", length = 255)
     private String email;
 
-    @Column(name = "phone_number", unique = true, length = 15)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "phone_number", length = 512)
     private String phoneNumber;
 
-    @Column(name = "cccd", unique = true, length = 12)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "cccd", length = 512)
     private String cccd;
+
+    @Column(name = "phone_hash", unique = true, length = 64, columnDefinition = "CHAR(64)")
+    private String phoneHash;
+
+    @Column(name = "cccd_hash", unique = true, length = 64, columnDefinition = "CHAR(64)")
+    private String cccdHash;
 
     @Column(name = "cccd_masked", length = 20)
     private String cccdMasked;
@@ -55,6 +66,19 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private UserStatus status = UserStatus.ACTIVE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 20)
+    private AccountType accountType = AccountType.CUSTOMER;
+
+    @Column(name = "pii_key_version", nullable = false)
+    private Integer piiKeyVersion = 1;
+
+    @Column(name = "pii_retention_until")
+    private LocalDate piiRetentionUntil;
+
+    @Column(name = "pii_erased_at")
+    private LocalDateTime piiErasedAt;
 
     @Version
     @Column(name = "version")
@@ -129,6 +153,7 @@ public class User {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+        this.phoneHash = PiiCrypto.searchHash(phoneNumber);
     }
 
     public String getCccd() {
@@ -137,6 +162,7 @@ public class User {
 
     public void setCccd(String cccd) {
         this.cccd = cccd;
+        this.cccdHash = PiiCrypto.searchHash(cccd);
     }
 
     public String getCccdMasked() {
@@ -201,6 +227,28 @@ public class User {
 
     public void setStatus(UserStatus status) {
         this.status = status;
+    }
+
+    public AccountType getAccountType() {
+        return accountType;
+    }
+
+    public void setAccountType(AccountType accountType) {
+        this.accountType = accountType;
+    }
+
+    public String getPhoneHash() { return phoneHash; }
+    public String getCccdHash() { return cccdHash; }
+    public Integer getPiiKeyVersion() { return piiKeyVersion; }
+    public void setPiiKeyVersion(Integer piiKeyVersion) { this.piiKeyVersion = piiKeyVersion; }
+    public LocalDate getPiiRetentionUntil() { return piiRetentionUntil; }
+    public void setPiiRetentionUntil(LocalDate piiRetentionUntil) { this.piiRetentionUntil = piiRetentionUntil; }
+    public LocalDateTime getPiiErasedAt() { return piiErasedAt; }
+    public void setPiiErasedAt(LocalDateTime piiErasedAt) { this.piiErasedAt = piiErasedAt; }
+    public void refreshPiiProtection() {
+        this.phoneHash = PiiCrypto.searchHash(phoneNumber);
+        this.cccdHash = PiiCrypto.searchHash(cccd);
+        this.piiKeyVersion = 1;
     }
 
     public LocalDateTime getCreatedAt() {

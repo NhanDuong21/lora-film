@@ -3,6 +3,7 @@ package com.project.userservice.controller;
 import com.project.userservice.dto.response.ApiResponse;
 import com.project.userservice.dto.response.CustomerResponse;
 import com.project.userservice.enumtype.UserStatus;
+import com.project.userservice.dto.request.CustomerAccessActionRequest;
 import com.project.userservice.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,15 +39,13 @@ public class CustomerController {
         return ResponseEntity.ok(ApiResponse.success("Customer retrieved", service.get(id)));
     }
 
-    @PutMapping("/{id}/block")
+    @PostMapping("/{id}/access-actions")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('CUSTOMER_UPDATE')")
-    public ResponseEntity<ApiResponse<CustomerResponse>> block(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success("Customer blocked", service.changeStatus(id, UserStatus.BLOCKED)));
+    public ResponseEntity<ApiResponse<CustomerResponse>> applyAccessAction(
+            @PathVariable Long id,
+            @jakarta.validation.Valid @RequestBody CustomerAccessActionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Customer access action applied", service.applyAccessAction(id, request)));
     }
 
-    @PutMapping("/{id}/unblock")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('CUSTOMER_UPDATE')")
-    public ResponseEntity<ApiResponse<CustomerResponse>> unblock(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success("Customer unblocked", service.changeStatus(id, UserStatus.ACTIVE)));
-    }
 }
