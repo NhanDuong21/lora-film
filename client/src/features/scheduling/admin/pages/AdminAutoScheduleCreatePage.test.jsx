@@ -31,7 +31,7 @@ const baseForm = () => ({
   setPreviewTtlMinutes: vi.fn(),
   auditoriums: [{ publicId: 'aud-1', name: 'Phòng 1', status: 'ACTIVE', screenType: '2D' }],
   movies: [{
-    publicId: 'movie-1', title: 'Phim A',
+    publicId: 'movie-1', title: 'Phim A', primaryPoster: 'https://cdn.lorafilm.test/phim-a.jpg', durationMinutes: 120,
     versions: [{ publicId: 'version-1', versionName: '2D', status: 'ACTIVE' }],
   }],
   includeAuditoriumIds: [],
@@ -191,6 +191,23 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
     expect(advanced).toHaveAttribute('open');
     expect(screen.getByText('Đang cập nhật kết quả kiểm tra…')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('renders eligible movie versions as selectable poster cards', () => {
+    const form = baseForm();
+    useAutoScheduleForm.mockReturnValue(form);
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    fireEvent.click(screen.getByText('Nâng cao'));
+
+    expect(screen.getByRole('img', { name: 'Poster Phim A' })).toHaveAttribute(
+      'src',
+      'https://cdn.lorafilm.test/phim-a.jpg',
+    );
+    expect(screen.getByRole('heading', { name: 'Phim A' })).toBeInTheDocument();
+    expect(screen.getByText('120 phút')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Chỉ dùng Phim A - 2D' }));
+    expect(form.setScopeChoice).toHaveBeenCalledWith('include', 'version:version-1', true);
   });
 
   it('submits only after preflight is ready', () => {

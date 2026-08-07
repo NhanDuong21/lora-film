@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-d
 import {
   AlertCircle,
   ArrowLeft,
+  Ban,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -80,8 +81,8 @@ const GenerationProgress = ({ planningDays }) => {
   );
 };
 
-const formatVersionLabel = (movie, version) => (
-  `${movie.title} · ${version.versionName || version.format || 'Định dạng mặc định'}`
+const formatVersionName = version => (
+  version.versionName || version.format || 'Định dạng mặc định'
 );
 
 const blockerDetailLabels = Object.freeze({
@@ -184,6 +185,72 @@ const ScopeChoice = ({ id, label, included, excluded, onChange }) => (
     </div>
   </div>
 );
+
+const MovieVersionChoice = ({ movie, version, included, excluded, onChange }) => {
+  const [posterFailed, setPosterFailed] = useState(false);
+  const posterUrl = movie.primaryPoster || movie.posterUrl || movie.image || '';
+  const versionName = formatVersionName(version);
+  const selectionClassName = included
+    ? 'border-blue-500/70 bg-blue-500/5 ring-1 ring-blue-500/30'
+    : excluded
+      ? 'border-rose-500/70 bg-rose-500/5 ring-1 ring-rose-500/30'
+      : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700';
+
+  return (
+    <article className={`group overflow-hidden rounded-2xl border transition-colors ${selectionClassName}`}>
+      <div className="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-zinc-800 via-zinc-900 to-black">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-zinc-600">
+          <Film className="h-8 w-8" aria-hidden="true" />
+          <span className="text-[11px] font-bold uppercase tracking-wider">Chưa có poster</span>
+        </div>
+        {posterUrl && !posterFailed && (
+          <img
+            src={posterUrl}
+            alt={`Poster ${movie.title}`}
+            loading="lazy"
+            decoding="async"
+            onError={() => setPosterFailed(true)}
+            className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+          />
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/90 to-transparent" aria-hidden="true" />
+        <span className="absolute left-2.5 top-2.5 rounded-full border border-white/10 bg-black/75 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white backdrop-blur-sm">
+          {versionName}
+        </span>
+        {included && <span className="absolute bottom-2.5 left-2.5 rounded-full bg-blue-500 px-2.5 py-1 text-[10px] font-black text-white shadow-lg">Chỉ dùng</span>}
+        {excluded && <span className="absolute bottom-2.5 left-2.5 rounded-full bg-rose-500 px-2.5 py-1 text-[10px] font-black text-white shadow-lg">Đã loại</span>}
+      </div>
+
+      <div className="flex min-h-36 flex-col p-3">
+        <h4 className="line-clamp-2 min-h-10 text-sm font-black leading-5 text-zinc-100" title={movie.title}>{movie.title}</h4>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+          <span>{versionName}</span>
+          {movie.durationMinutes && <><span aria-hidden="true">·</span><span>{movie.durationMinutes} phút</span></>}
+        </div>
+        <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
+          <button
+            type="button"
+            aria-label={`Chỉ dùng ${movie.title} - ${versionName}`}
+            aria-pressed={included}
+            onClick={() => onChange('include', `version:${version.publicId}`, !included)}
+            className={`inline-flex min-h-9 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1 text-[10px] font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${included ? 'border-blue-500 bg-blue-500 text-white' : 'border-zinc-700 text-zinc-300 hover:border-blue-500/70 hover:text-blue-200'}`}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Chỉ dùng
+          </button>
+          <button
+            type="button"
+            aria-label={`Loại khỏi lịch ${movie.title} - ${versionName}`}
+            aria-pressed={excluded}
+            onClick={() => onChange('exclude', `version:${version.publicId}`, !excluded)}
+            className={`inline-flex min-h-9 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1 text-[10px] font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 ${excluded ? 'border-rose-500 bg-rose-500 text-white' : 'border-zinc-700 text-zinc-300 hover:border-rose-500/70 hover:text-rose-200'}`}
+          >
+            <Ban className="h-3.5 w-3.5" aria-hidden="true" /> Loại
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+};
 
 export default function AdminAutoScheduleCreatePage() {
   const { triggerToast } = useOutletContext() || {};
@@ -412,18 +479,23 @@ export default function AdminAutoScheduleCreatePage() {
               </div>
 
               <div>
-                <h3 className="flex items-center gap-2 font-black"><Film className="h-4 w-4 text-brand-orange" /> Phiên bản phim đủ điều kiện</h3>
-                <div className="mt-3 max-h-96 space-y-2 overflow-y-auto pr-1">
-                  {versions.map(({ movie, version }) => (
-                    <ScopeChoice
-                      key={version.publicId}
-                      id={`version:${version.publicId}`}
-                      label={formatVersionLabel(movie, version)}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 font-black"><Film className="h-4 w-4 text-brand-orange" /> Phim và phiên bản đủ điều kiện</h3>
+                  {versions.length > 0 && <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] font-bold text-zinc-400">{versions.length} phiên bản</span>}
+                </div>
+                <div className="mt-3 max-h-[46rem] overflow-y-auto pr-2">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+                    {versions.map(({ movie, version }) => (
+                      <MovieVersionChoice
+                        key={`${version.publicId}:${movie.primaryPoster || ''}`}
+                        movie={movie}
+                        version={version}
                       included={includeMovieVersionIds.includes(version.publicId)}
                       excluded={excludeMovieVersionIds.includes(version.publicId)}
                       onChange={setScopeChoice}
-                    />
-                  ))}
+                      />
+                    ))}
+                  </div>
                   {!isLoadingScope && preflight && versions.length === 0 && <p className="text-sm text-zinc-500">Không có phiên bản phim khả dụng trong phạm vi hiện tại.</p>}
                 </div>
               </div>
