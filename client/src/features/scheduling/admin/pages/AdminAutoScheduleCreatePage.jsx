@@ -6,10 +6,12 @@ import {
   Ban,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Film,
   Loader2,
   MapPin,
+  Search,
   Settings2,
   Sparkles,
   Users,
@@ -22,6 +24,7 @@ import {
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition-colors focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20';
+const MOVIE_VERSION_PAGE_SIZE = 10;
 
 const generationPhases = [
   { afterSeconds: 0, message: 'Đang gửi phạm vi và chuẩn bị dữ liệu tối ưu.' },
@@ -84,6 +87,11 @@ const GenerationProgress = ({ planningDays }) => {
 const formatVersionName = version => (
   version.versionName || version.format || 'Định dạng mặc định'
 );
+
+const normalizeSearchText = value => String(value || '')
+  .normalize('NFD')
+  .replace(/\p{Diacritic}/gu, '')
+  .toLocaleLowerCase('vi');
 
 const blockerDetailLabels = Object.freeze({
   EXISTING_SHOWTIME_CONFLICT: 'Lịch chiếu hiện có',
@@ -295,6 +303,28 @@ export default function AdminAutoScheduleCreatePage() {
   const versions = useMemo(() => movies.flatMap(movie => (movie.versions || [])
     .filter(version => version.status === 'ACTIVE')
     .map(version => ({ movie, version }))), [movies]);
+  const [movieVersionQuery, setMovieVersionQuery] = useState('');
+  const [visibleVersionCount, setVisibleVersionCount] = useState(MOVIE_VERSION_PAGE_SIZE);
+  const filteredVersions = useMemo(() => {
+    const query = normalizeSearchText(movieVersionQuery.trim());
+    if (!query) return versions;
+    return versions.filter(({ movie, version }) => normalizeSearchText([
+      movie.title,
+      movie.originalTitle,
+      version.versionName,
+      version.format,
+      version.audioLanguage,
+      version.subtitleLanguage,
+      version.dubLanguage,
+    ].filter(Boolean).join(' ')).includes(query));
+  }, [movieVersionQuery, versions]);
+  const visibleVersions = filteredVersions.slice(0, visibleVersionCount);
+  const remainingVersionCount = Math.max(0, filteredVersions.length - visibleVersions.length);
+  const visibleVersionLabel = movieVersionQuery.trim()
+    ? `${filteredVersions.length} kết quả`
+    : visibleVersions.length < versions.length
+      ? `${visibleVersions.length}/${versions.length} phiên bản`
+      : `${versions.length} phiên bản`;
   const advancedChoiceCount = includeAuditoriumIds.length + excludeAuditoriumIds.length
     + includeMovieVersionIds.length + excludeMovieVersionIds.length;
   const hasAdvancedErrors = Boolean(errors.slotGranularityMinutes || errors.previewTtlMinutes);
@@ -308,6 +338,22 @@ export default function AdminAutoScheduleCreatePage() {
       return;
     }
     setIsAdvancedOpen(event.currentTarget.open);
+  };
+  const resetMovieVersionBrowser = () => {
+    setMovieVersionQuery('');
+    setVisibleVersionCount(MOVIE_VERSION_PAGE_SIZE);
+  };
+  const handleCinemaChange = event => {
+    resetMovieVersionBrowser();
+    setSelectedCinemaId(event.target.value);
+  };
+  const handlePlanningPresetChange = days => {
+    resetMovieVersionBrowser();
+    setPlanningPreset(days);
+  };
+  const handleMovieVersionQueryChange = event => {
+    setMovieVersionQuery(event.target.value);
+    setVisibleVersionCount(MOVIE_VERSION_PAGE_SIZE);
   };
 
   return (
@@ -347,7 +393,7 @@ export default function AdminAutoScheduleCreatePage() {
               Rạp <span className="text-brand-orange">*</span>
               <select
                 value={selectedCinemaId}
-                onChange={event => setSelectedCinemaId(event.target.value)}
+                onChange={handleCinemaChange}
                 disabled={isLoadingCinemas}
                 className={inputClassName}
               >
@@ -370,7 +416,7 @@ export default function AdminAutoScheduleCreatePage() {
                     key={preset.days}
                     type="button"
                     aria-pressed={planningDays === preset.days}
-                    onClick={() => setPlanningPreset(preset.days)}
+                    onClick={() => handlePlanningPresetChange(preset.days)}
                     className={`rounded-xl border p-4 text-left transition-colors ${planningDays === preset.days ? 'border-brand-orange bg-brand-orange/10' : 'border-zinc-700 bg-zinc-950 hover:border-zinc-500'}`}
                   >
                     <span className={`block font-black ${planningDays === preset.days ? 'text-brand-orange' : 'text-zinc-200'}`}>{preset.label}</span>
@@ -481,21 +527,45 @@ export default function AdminAutoScheduleCreatePage() {
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="flex items-center gap-2 font-black"><Film className="h-4 w-4 text-brand-orange" /> Phim và phiên bản đủ điều kiện</h3>
-                  {versions.length > 0 && <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] font-bold text-zinc-400">{versions.length} phiên bản</span>}
+                  {versions.length > 0 && <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] font-bold text-zinc-400">{visibleVersionLabel}</span>}
                 </div>
+                {versions.length > 0 && (
+                  <label className="relative mt-3 block">
+                    <span className="sr-only">Tìm phim hoặc phiên bản</span>
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" aria-hidden="true" />
+                    <input
+                      type="search"
+                      value={movieVersionQuery}
+                      onChange={handleMovieVersionQueryChange}
+                      placeholder="Tìm theo tên phim hoặc phiên bản…"
+                      className="min-h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-10 pr-3 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-brand-orange/70 focus:ring-2 focus:ring-brand-orange/10"
+                    />
+                  </label>
+                )}
                 <div className="mt-3 max-h-[46rem] overflow-y-auto pr-2">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-                    {versions.map(({ movie, version }) => (
+                    {visibleVersions.map(({ movie, version }) => (
                       <MovieVersionChoice
                         key={`${version.publicId}:${movie.primaryPoster || ''}`}
                         movie={movie}
                         version={version}
-                      included={includeMovieVersionIds.includes(version.publicId)}
-                      excluded={excludeMovieVersionIds.includes(version.publicId)}
-                      onChange={setScopeChoice}
+                        included={includeMovieVersionIds.includes(version.publicId)}
+                        excluded={excludeMovieVersionIds.includes(version.publicId)}
+                        onChange={setScopeChoice}
                       />
                     ))}
                   </div>
+                  {remainingVersionCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleVersionCount(current => current + MOVIE_VERSION_PAGE_SIZE)}
+                      className="mx-auto mt-4 flex min-h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-200 transition-colors hover:border-brand-orange/70 hover:text-brand-orange"
+                    >
+                      Xem thêm {Math.min(MOVIE_VERSION_PAGE_SIZE, remainingVersionCount)} phiên bản
+                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                  {!isLoadingScope && versions.length > 0 && filteredVersions.length === 0 && <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-center text-sm text-zinc-500">Không tìm thấy phim hoặc phiên bản phù hợp.</p>}
                   {!isLoadingScope && preflight && versions.length === 0 && <p className="text-sm text-zinc-500">Không có phiên bản phim khả dụng trong phạm vi hiện tại.</p>}
                 </div>
               </div>

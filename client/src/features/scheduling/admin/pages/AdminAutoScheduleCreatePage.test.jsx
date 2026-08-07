@@ -210,6 +210,40 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
     expect(form.setScopeChoice).toHaveBeenCalledWith('include', 'version:version-1', true);
   });
 
+  it('renders movie posters in batches and preserves choices while loading more or searching', () => {
+    const movies = Array.from({ length: 13 }, (_, index) => ({
+      publicId: `movie-${index + 1}`,
+      title: `Phim ${String(index + 1).padStart(2, '0')}`,
+      primaryPoster: `https://cdn.lorafilm.test/phim-${index + 1}.jpg`,
+      versions: [{ publicId: `version-${index + 1}`, versionName: '2D', status: 'ACTIVE' }],
+    }));
+    const form = {
+      ...baseForm(),
+      movies,
+      includeMovieVersionIds: ['version-1'],
+    };
+    useAutoScheduleForm.mockReturnValue(form);
+    render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    fireEvent.click(screen.getByText('Nâng cao'));
+
+    expect(screen.getAllByRole('img', { name: /Poster Phim/ })).toHaveLength(10);
+    expect(screen.getByText('10/13 phiên bản')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chỉ dùng Phim 01 - 2D' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem thêm 3 phiên bản' }));
+    expect(screen.getAllByRole('img', { name: /Poster Phim/ })).toHaveLength(13);
+    expect(screen.getByText('13 phiên bản')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chỉ dùng Phim 01 - 2D' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm phim hoặc phiên bản' }), {
+      target: { value: 'phim 13' },
+    });
+    expect(screen.getAllByRole('img', { name: /Poster Phim/ })).toHaveLength(1);
+    expect(screen.getByText('1 kết quả')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Xem thêm/ })).not.toBeInTheDocument();
+  });
+
   it('submits only after preflight is ready', () => {
     const form = baseForm();
     useAutoScheduleForm.mockReturnValue(form);
