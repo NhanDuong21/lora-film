@@ -163,7 +163,7 @@ export default function AdminLayout({ onBackHome }) {
   );
 
   return (
-    <div className="w-full h-screen overflow-hidden bg-zinc-950 flex font-sans relative">
+    <div className="w-full h-screen overflow-clip bg-zinc-950 flex font-sans relative">
       
       {/* Toast Notification */}
       {toast.visible && (
@@ -301,7 +301,7 @@ export default function AdminLayout({ onBackHome }) {
       )}
 
       {/* Right Column Workspace (Fluid layout) */}
-      <div className="flex-1 h-full flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 h-full flex flex-col overflow-clip">
         
         {/* Sticky top Navigation Bar */}
         <header className="w-full h-[72px] bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800 flex items-center justify-between px-4 sm:px-8 shrink-0 z-20">
@@ -336,7 +336,7 @@ export default function AdminLayout({ onBackHome }) {
         </header>
 
         {/* Dynamic View Body Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           <Outlet context={outletContext} />
         </main>
       </div>

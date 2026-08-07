@@ -169,7 +169,10 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
     const advanced = screen.getByText('Nâng cao').closest('details');
     expect(advanced).not.toHaveAttribute('open');
     fireEvent.click(screen.getByText('Nâng cao'));
-    fireEvent.click(screen.getAllByText('Chỉ dùng')[0]);
+    const onlyUse = screen.getAllByRole('button', { name: 'Chỉ dùng' })[0];
+    expect(onlyUse).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('checkbox', { name: 'Chỉ dùng' })).not.toBeInTheDocument();
+    fireEvent.click(onlyUse);
     expect(form.setScopeChoice).toHaveBeenCalledWith('include', 'auditorium:aud-1', true);
   });
 
