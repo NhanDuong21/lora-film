@@ -115,7 +115,6 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess, initialDr
     } catch (error) {
       if (sequence !== preflightSequence.current) return null;
       const normalized = getAutoScheduleError(error);
-      setPreflight(null);
       setPreflightError(normalized.message || 'Không thể kiểm tra điều kiện tạo lịch.');
       if (!silent) triggerToast?.(normalized.message, 'error');
       return null;
@@ -126,6 +125,10 @@ export default function useAutoScheduleForm({ triggerToast, onSuccess, initialDr
 
   useEffect(() => {
     setPreflight(null);
+    setPreflightError('');
+  }, [selectedCinemaId]);
+
+  useEffect(() => {
     if (!selectedCinemaId) return undefined;
     const timer = setTimeout(() => { void runPreflight({ silent: true }); }, 250);
     return () => clearTimeout(timer);

@@ -169,8 +169,25 @@ describe('AdminAutoScheduleCreatePage Quick Mode', () => {
     const advanced = screen.getByText('Nâng cao').closest('details');
     expect(advanced).not.toHaveAttribute('open');
     fireEvent.click(screen.getByText('Nâng cao'));
-    fireEvent.click(screen.getAllByText('Ghim dùng')[0]);
+    fireEvent.click(screen.getAllByText('Chỉ dùng')[0]);
     expect(form.setScopeChoice).toHaveBeenCalledWith('include', 'auditorium:aud-1', true);
+  });
+
+  it('keeps Advanced open and the previous preflight visible while filters refresh', () => {
+    const form = baseForm();
+    useAutoScheduleForm.mockReturnValue(form);
+    const { rerender } = render(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+    const advanced = screen.getByText('Nâng cao').closest('details');
+
+    fireEvent.click(screen.getByText('Nâng cao'));
+    expect(advanced).toHaveAttribute('open');
+
+    useAutoScheduleForm.mockReturnValue({ ...form, isCheckingPreflight: true, isReady: false });
+    rerender(<MemoryRouter><AdminAutoScheduleCreatePage /></MemoryRouter>);
+
+    expect(advanced).toHaveAttribute('open');
+    expect(screen.getByText('Đang cập nhật kết quả kiểm tra…')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
   });
 
   it('submits only after preflight is ready', () => {

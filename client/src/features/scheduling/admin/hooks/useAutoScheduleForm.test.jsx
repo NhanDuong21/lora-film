@@ -79,6 +79,25 @@ describe('useAutoScheduleForm Quick Mode', () => {
     expect(result.current.excludeAuditoriumIds).toEqual(['aud-1']);
   });
 
+  it('keeps the last preflight visible while an advanced filter refresh is pending', async () => {
+    const { result } = renderHook(() => useAutoScheduleForm({}));
+    await selectCinema(result);
+    let resolveRefresh;
+    adminAutoScheduleService.preflight.mockImplementationOnce(() => new Promise(resolve => {
+      resolveRefresh = resolve;
+    }));
+
+    act(() => result.current.setScopeChoice('include', 'auditorium:aud-1', true));
+    await waitFor(() => expect(result.current.isCheckingPreflight).toBe(true));
+
+    expect(result.current.preflight).toEqual(readyPreflight);
+    await act(async () => resolveRefresh({
+      success: true,
+      data: { ...readyPreflight, eligibleAuditoriumCount: 1 },
+    }));
+    await waitFor(() => expect(result.current.isCheckingPreflight).toBe(false));
+  });
+
   it('surfaces blockers and prevents generation', async () => {
     adminAutoScheduleService.preflight.mockResolvedValue({
       success: true,

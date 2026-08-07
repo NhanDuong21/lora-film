@@ -172,7 +172,7 @@ const ScopeChoice = ({ id, label, included, excluded, onChange }) => (
           checked={included}
           onChange={event => onChange('include', id, event.target.checked)}
         />
-        Ghim dùng
+        Chỉ dùng
       </label>
       <label className={`cursor-pointer rounded-lg border px-3 py-2 text-xs font-bold ${excluded ? 'border-rose-500 bg-rose-500/10 text-rose-200' : 'border-zinc-700 text-zinc-400'}`}>
         <input
@@ -232,6 +232,18 @@ export default function AdminAutoScheduleCreatePage() {
     .map(version => ({ movie, version }))), [movies]);
   const advancedChoiceCount = includeAuditoriumIds.length + excludeAuditoriumIds.length
     + includeMovieVersionIds.length + excludeMovieVersionIds.length;
+  const hasAdvancedErrors = Boolean(errors.slotGranularityMinutes || errors.previewTtlMinutes);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(() => Boolean(
+    recreateContext?.draft?.auditoriumPublicIds?.length
+    || recreateContext?.draft?.movieVersionPublicIds?.length,
+  ));
+  const handleAdvancedToggle = event => {
+    if (!event.currentTarget.open && hasAdvancedErrors) {
+      event.currentTarget.open = true;
+      return;
+    }
+    setIsAdvancedOpen(event.currentTarget.open);
+  };
 
   return (
     <div className="min-h-full space-y-6 bg-zinc-950 text-white animate-fade-in">
@@ -304,7 +316,7 @@ export default function AdminAutoScheduleCreatePage() {
             </fieldset>
           </section>
 
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 md:p-6" aria-labelledby="preflight-heading">
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 md:p-6" aria-labelledby="preflight-heading" aria-busy={isCheckingPreflight}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 <span className="rounded-xl bg-blue-500/10 p-2.5 text-blue-300"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
@@ -321,6 +333,7 @@ export default function AdminAutoScheduleCreatePage() {
 
             {!selectedCinemaId && <p className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-500">Chọn rạp để hệ thống tự chạy preflight.</p>}
             {selectedCinemaId && isCheckingPreflight && !preflight && <p className="mt-5 flex items-center gap-2 text-sm text-blue-200"><Loader2 className="h-4 w-4 animate-spin" /> Đang kiểm tra dữ liệu vận hành…</p>}
+            {selectedCinemaId && isCheckingPreflight && preflight && <p className="mt-5 flex items-center gap-2 text-sm text-blue-200"><Loader2 className="h-4 w-4 animate-spin" /> Đang cập nhật kết quả kiểm tra…</p>}
             {preflightError && <p role="alert" className="mt-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{preflightError}</p>}
 
             {preflight && (
@@ -361,13 +374,17 @@ export default function AdminAutoScheduleCreatePage() {
             )}
           </section>
 
-          <details className="group rounded-2xl border border-zinc-800 bg-zinc-900/60" open={Boolean(errors.slotGranularityMinutes || errors.previewTtlMinutes)}>
+          <details
+            className="group rounded-2xl border border-zinc-800 bg-zinc-900/60"
+            open={isAdvancedOpen || hasAdvancedErrors}
+            onToggle={handleAdvancedToggle}
+          >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 font-black text-zinc-200 md:p-6">
               <span className="flex items-center gap-3"><Settings2 className="h-5 w-5 text-brand-orange" /> Nâng cao <span className="text-xs font-normal text-zinc-500">(tùy chọn)</span></span>
               {advancedChoiceCount > 0 && <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs text-blue-200">{advancedChoiceCount} giới hạn</span>}
             </summary>
             <div className="space-y-6 border-t border-zinc-800 p-5 md:p-6">
-              <p className="text-sm leading-6 text-zinc-400">Mặc định optimizer tự dùng toàn bộ dữ liệu đủ điều kiện. “Ghim dùng” giới hạn phạm vi vào các mục được ghim; “Loại khỏi lịch” bỏ mục đó khỏi lần chạy này.</p>
+              <p className="text-sm leading-6 text-zinc-400">Mặc định optimizer tự dùng toàn bộ dữ liệu đủ điều kiện. “Chỉ dùng” giới hạn phạm vi vào các mục được chọn trong cùng nhóm; “Loại khỏi lịch” bỏ mục đó khỏi lần chạy này. Mục được chọn vẫn chỉ được xếp khi có phương án khả thi.</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1.5 text-sm font-bold text-zinc-300">Bước thời gian (phút)
                   <input type="number" min="5" max="60" value={slotGranularityMinutes} onChange={event => setSlotGranularityMinutes(event.target.value)} className={inputClassName} />
