@@ -24,4 +24,10 @@ describe('admin permission access', () => {
     expect(getAdminLandingPath('ROLE_ADMIN', [])).toBe('/admin');
     expect(getAdminLandingPath('CUSTOM_ROLE', [])).toBe('/403');
   });
+
+  it('lands system operators on the consolidated operational screens', () => {
+    expect(getAdminLandingPath('ACCESS_OPERATOR', ['ROLE_VIEW'])).toBe('/admin/accounts?tab=access');
+    expect(getAdminLandingPath('ACCESS_OPERATOR', ['PERMISSION_VIEW'])).toBe('/admin/accounts?tab=access');
+    expect(getAdminLandingPath('AUDITOR', ['USER_AUDIT_VIEW'])).toBe('/admin/audits?tab=operations');
+  });
 });

@@ -170,19 +170,45 @@ public class SystemBootstrap {
             ).contains(p.getCode()))
             .collect(Collectors.toSet());
 
-        createRoleIfNotExists("ADMIN", "Administrator", new HashSet<>(allPermissions));
-        createRoleIfNotExists("EMPLOYEE", "Employee", employeePermissions);
-        createRoleIfNotExists("CUSTOMER", "Customer", customerPermissions);
+        Set<Permission> managerPermissions = allPermissions.stream()
+            .filter(p -> Arrays.asList(
+                "DASHBOARD_VIEW", "CUSTOMER_VIEW", "EMPLOYEE_VIEW",
+                "DEPARTMENT_VIEW", "POSITION_VIEW", "BOOKING_VIEW", "BOOKING_MANAGE",
+                "MOVIE_VIEW", "CINEMA_MANAGE", "SHOWTIME_MANAGE", "PRICING_MANAGE",
+                "PAYMENT_VIEW", "PROMOTION_MANAGE", "ANALYTICS_MANAGE",
+                "SCORE_MANAGE", "MEMBERSHIP_TIER_MANAGE"
+            ).contains(p.getCode()))
+            .collect(Collectors.toSet());
+
+        createRoleIfNotExists("ADMIN", "System administrator",
+                "Full access to the LoraFilm back office", new HashSet<>(allPermissions));
+        createRoleIfNotExists("MANAGER", "Cinema manager",
+                "Manages cinema operations and reports", managerPermissions);
+        createRoleIfNotExists("EMPLOYEE", "Employee",
+                "Performs assigned cinema tasks based on granted permissions", employeePermissions);
+        createRoleIfNotExists("CUSTOMER", "Customer",
+                "Can browse movies and manage bookings", customerPermissions);
     }
 
-    private void createRoleIfNotExists(String code, String name, Set<Permission> permissions) {
+    private void createRoleIfNotExists(String code, String name, String description, Set<Permission> permissions) {
         roleRepository.findByCode(code).ifPresentOrElse(
-            r -> log.debug("Role {} already exists.", code),
+            role -> {
+                boolean metadataChanged = !name.equals(role.getRoleName())
+                        || !description.equals(role.getDescription());
+                if (metadataChanged) {
+                    role.setRoleName(name);
+                    role.setDescription(description);
+                    roleRepository.save(role);
+                    log.info("Normalized built-in role metadata: {}", code);
+                } else {
+                    log.debug("Role {} already exists.", code);
+                }
+            },
             () -> {
                 Role r = Role.builder()
                     .code(code)
-                    .roleName(code) // Repository searches by roleName
-                    .description(name)
+                    .roleName(name)
+                    .description(description)
                     .permissions(permissions)
                     .build();
                 roleRepository.save(r);

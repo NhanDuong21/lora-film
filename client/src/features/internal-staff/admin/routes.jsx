@@ -15,12 +15,9 @@ const AdminWorkforcePage = lazy(() => import('./pages/AdminWorkforcePage'));
 const AdminHrCommandCenterPage = lazy(() => import('./pages/AdminHrCommandCenterPage'));
 const AdminApprovalInboxPage = lazy(() => import('./pages/AdminApprovalInboxPage'));
 const AdminOrganizationPage = lazy(() => import('./pages/AdminOrganizationPage'));
-const AdminRolePage = lazy(() => import('./pages/AdminRolePage'));
-const AdminPermissionPage = lazy(() => import('./pages/AdminPermissionPage'));
 const AdminAuthAuditPage = lazy(() => import('./pages/AdminAuthAuditPage'));
 const AdminEmployeeDocumentPage = lazy(() => import('./pages/AdminEmployeeDocumentPage'));
 const AdminAccountPage = lazy(() => import('./pages/AdminAccountPage'));
-const AdminUserAuditPage = lazy(() => import('./pages/AdminUserAuditPage'));
 const AdminAnalyticsPage = lazy(() => import('@/features/analytics/admin/pages/AdminAnalyticsPage'));
 const AdminMyAccountPage = lazy(() => import('./pages/AdminMyAccountPage'));
 
@@ -62,11 +59,11 @@ export const adminStaffRoutes = [
     { path: 'workforce', element: requirePermission(<AdminWorkforcePage />, 'EMPLOYEE_VIEW') },
     { path: 'organization', element: requirePermission(<AdminOrganizationPage />, 'DEPARTMENT_VIEW', 'POSITION_VIEW') },
     { path: 'payroll', element: requirePermission(<AdminPayrollPage />, 'PAYROLL_VIEW') },
-    { path: 'roles', element: requirePermission(<AdminRolePage />, 'ROLE_VIEW') },
-    { path: 'accounts', element: requirePermission(<AdminAccountPage />, 'SYSTEM_CONFIGURATION') },
-    { path: 'permissions', element: requirePermission(<AdminPermissionPage />, 'PERMISSION_VIEW') },
-    { path: 'audits', element: requirePermission(<AdminAuthAuditPage />, 'SYSTEM_CONFIGURATION') },
-    { path: 'user-audits', element: requirePermission(<AdminUserAuditPage />, 'USER_AUDIT_VIEW', 'SYSTEM_CONFIGURATION') },
+    { path: 'roles', element: requirePermission(<Navigate to="/admin/accounts?tab=access" replace />, 'ROLE_VIEW') },
+    { path: 'accounts', element: requirePermission(<AdminAccountPage />, 'SYSTEM_CONFIGURATION', 'ROLE_VIEW', 'PERMISSION_VIEW') },
+    { path: 'permissions', element: requirePermission(<Navigate to="/admin/accounts?tab=access" replace />, 'PERMISSION_VIEW') },
+    { path: 'audits', element: requirePermission(<AdminAuthAuditPage />, 'SYSTEM_CONFIGURATION', 'USER_AUDIT_VIEW') },
+    { path: 'user-audits', element: requirePermission(<Navigate to="/admin/audits?tab=operations" replace />, 'USER_AUDIT_VIEW', 'SYSTEM_CONFIGURATION') },
     {
         path: 'staff/:accountId/documents',
         element: requirePermission(<AdminEmployeeDocumentPage />, 'EMPLOYEE_VIEW')

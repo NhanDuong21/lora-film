@@ -6,6 +6,7 @@ const siteName = 'LoraFilm';
 
 const roleLabels = {
   ADMIN: 'Quản trị viên',
+  MANAGER: 'Quản lý rạp',
   EMPLOYEE: 'Nhân viên',
   CUSTOMER: 'Khách hàng',
 };
@@ -50,11 +51,11 @@ const pageTitle = pathname => {
     ['/admin/departments', 'Quản lý phòng ban'],
     ['/admin/positions', 'Quản lý chức vụ'],
     ['/admin/payroll', 'Quản lý bảng lương'],
-    ['/admin/roles', 'Quản lý vai trò'],
-    ['/admin/accounts', 'Quản lý tài khoản'],
-    ['/admin/permissions', 'Quản lý quyền hạn'],
-    ['/admin/audits', 'Nhật ký bảo mật'],
-    ['/admin/user-audits', 'Nhật ký người dùng'],
+    ['/admin/roles', 'Tài khoản và phân quyền'],
+    ['/admin/accounts', 'Tài khoản và phân quyền'],
+    ['/admin/permissions', 'Tài khoản và phân quyền'],
+    ['/admin/audits', 'Nhật ký hoạt động'],
+    ['/admin/user-audits', 'Nhật ký hoạt động'],
     ['/admin/movie-operations', 'Vận hành phim'],
     ['/admin/movies', 'Quản lý phim'],
     ['/admin/genres', 'Quản lý thể loại'],

@@ -109,7 +109,12 @@ describe('AdminSidebar', () => {
     expect(screen.queryByRole('button', { name: 'Hệ thống & thông báo' })).not.toBeInTheDocument();
 
     openSection('Hệ thống');
-    expect(screen.getByRole('button', { name: 'Quản lý vai trò' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tài khoản & phân quyền' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nhật ký hoạt động' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quản lý vai trò' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quản lý quyền hạn' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nhật ký truy cập' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nhật ký nghiệp vụ' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tổng quan thông báo' })).not.toBeInTheDocument();
   });
 
