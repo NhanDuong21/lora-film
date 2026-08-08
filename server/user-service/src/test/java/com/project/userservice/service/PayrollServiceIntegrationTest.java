@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
@@ -96,6 +97,17 @@ class PayrollServiceIntegrationTest {
     }
 
     @Test
+    void payrollListSupportsSystemCreatedRecordsWithoutActor() {
+        payrollService.create(request("2026-08"));
+
+        var page = payrollService.search(9001L, null, "2026-08", PageRequest.of(0, 10));
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent().getFirst().createdBy()).isNull();
+        assertThat(page.getContent().getFirst().createdByName()).isNull();
+    }
+
+    @Test
     void approvedPayrollCannotBeEdited() {
         PayrollResponse created = payrollService.create(request("2026-06"));
         SecurityContextHolder.getContext().setAuthentication(
@@ -134,6 +146,24 @@ class PayrollServiceIntegrationTest {
                         "Approve monthly payroll", null, null, null, null, created.version())))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("creator cannot approve");
+    }
+
+    @Test
+    void payrollDetailReturnsOperationalActorNames() {
+        saveActor(77L, "Nguyễn Minh Anh");
+        saveActor(88L, "Lê Thu Hà");
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(77L, null, List.of()));
+        PayrollResponse created = payrollService.create(request("2026-01"));
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(88L, null, List.of()));
+        PayrollResponse approved = payrollService.applyAction(created.id(),
+                new PayrollActionRequest(PayrollActionType.APPROVE, "Independent approval",
+                        null, null, null, null, created.version()));
+
+        assertThat(approved.createdByName()).isEqualTo("Nguyễn Minh Anh");
+        assertThat(approved.approvedByName()).isEqualTo("Lê Thu Hà");
     }
 
     @Test
@@ -191,5 +221,12 @@ class PayrollServiceIntegrationTest {
         return new PayrollRequest(9001L, month, new BigDecimal("10000000"),
                 new BigDecimal("500000"), new BigDecimal("1000000"),
                 new BigDecimal("250000"), List.of());
+    }
+
+    private void saveActor(Long accountId, String fullName) {
+        User actor = new User();
+        actor.setAccountId(accountId);
+        actor.setFullName(fullName);
+        userRepository.save(actor);
     }
 }

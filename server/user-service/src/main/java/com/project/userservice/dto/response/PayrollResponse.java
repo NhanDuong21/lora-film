@@ -41,6 +41,11 @@ public record PayrollResponse(
         Integer overtimeMinutes,
         Long cancelledBy,
         String cancellationReason,
+        String createdByName,
+        String approvedByName,
+        String paidByName,
+        String reconciledByName,
+        String cancelledByName,
         Integer version,
         List<PayrollDetailResponse> details
 ) {
