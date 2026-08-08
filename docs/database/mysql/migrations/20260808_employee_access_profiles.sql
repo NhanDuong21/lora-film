@@ -64,18 +64,27 @@ VALUES
     ('ACCOUNTING', 'Nhân viên kế toán',
      'Theo dõi thanh toán, đối soát doanh thu và xử lý bảng lương.'),
     ('CUSTOMER_SERVICE', 'Nhân viên chăm sóc khách hàng',
-     'Tra cứu khách hàng, đặt vé và hỗ trợ điểm thưởng.'),
-    ('CINEMA_OPERATIONS', 'Nhân viên vận hành rạp',
-     'Theo dõi phòng chiếu, suất chiếu và tình hình vận hành trong ngày.')
+     'Tra cứu khách hàng, đặt vé và hỗ trợ điểm thưởng.')
 ON DUPLICATE KEY UPDATE
     name = VALUES(name),
     description = VALUES(description),
     is_active = TRUE;
 
+-- Vận hành rạp thuộc trách nhiệm của MANAGER. Không tự nâng quyền tài khoản cũ:
+-- nếu từng có nhân viên thuộc nhóm này, đưa về nhóm chờ để admin rà soát thủ công.
+UPDATE auth_db.accounts a
+JOIN auth_db.access_profiles old_profile ON old_profile.id = a.access_profile_id
+JOIN auth_db.access_profiles general_profile ON general_profile.code = 'GENERAL_STAFF'
+SET a.access_profile_id = general_profile.id
+WHERE old_profile.code = 'CINEMA_OPERATIONS';
+
+DELETE FROM auth_db.access_profiles
+WHERE code = 'CINEMA_OPERATIONS';
+
 DELETE app
 FROM auth_db.access_profile_permissions app
 JOIN auth_db.access_profiles ap ON ap.id = app.access_profile_id
-WHERE ap.code IN ('GENERAL_STAFF', 'BOX_OFFICE', 'TICKET_CHECKER', 'ACCOUNTING', 'CUSTOMER_SERVICE', 'CINEMA_OPERATIONS');
+WHERE ap.code IN ('GENERAL_STAFF', 'BOX_OFFICE', 'TICKET_CHECKER', 'ACCOUNTING', 'CUSTOMER_SERVICE');
 
 INSERT INTO auth_db.access_profile_permissions (access_profile_id, permission_id)
 SELECT ap.id, p.id
@@ -90,8 +99,6 @@ JOIN auth_db.permissions p ON (
            'PAYROLL_VIEW', 'PAYROLL_CREATE', 'PAYROLL_UPDATE', 'PAYROLL_APPROVE'))
     OR (ap.code = 'CUSTOMER_SERVICE' AND p.code IN (
            'USER_VIEW', 'CUSTOMER_VIEW', 'BOOKING_VIEW', 'SCORE_MANAGE'))
-    OR (ap.code = 'CINEMA_OPERATIONS' AND p.code IN (
-           'MOVIE_VIEW', 'CINEMA_MANAGE', 'SHOWTIME_MANAGE', 'BOOKING_VIEW', 'ANALYTICS_VIEW'))
 );
 
 -- EMPLOYEE chỉ giữ quyền cá nhân dùng chung. Quyền công việc đến từ nhóm nghiệp vụ.

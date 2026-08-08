@@ -493,7 +493,10 @@ export default function AdminAccountPage() {
             <div>
               <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                 <div><div className="flex items-center gap-2"><Users size={19} className="text-brand-orange" /><h2 className="text-lg font-black text-white">Chọn nhóm nghiệp vụ cần cấu hình</h2></div><p className="mt-1 text-sm text-zinc-500">Mỗi nhân viên chỉ thuộc một nhóm. Chọn thẻ để xem và chỉnh quyền công việc của cả nhóm.</p></div>
-                <span className="text-xs text-zinc-600">{accessProfiles.length} nhóm đang hoạt động</span>
+                <span className="text-xs text-zinc-600">
+                  {accessProfiles.filter(profile => profile.code !== 'GENERAL_STAFF').length} nhóm công việc
+                  {accessProfiles.some(profile => profile.code === 'GENERAL_STAFF') ? ' · 1 nhóm chờ phân loại' : ''}
+                </span>
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {accessProfiles.map(profile => {
