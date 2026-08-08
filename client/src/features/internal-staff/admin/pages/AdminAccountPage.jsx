@@ -12,6 +12,19 @@ import { ActionModal, OperationsHeader } from '../components/OperationsConsole';
 import { AsyncState, Input, Select, StatusBadge } from '@/components/common/ui/uiKit';
 
 const EMPTY_FORM = { fullName: '', email: '', password: '' };
+const ROLE_LABELS = {
+  'system administrator': 'Quản trị hệ thống',
+  'cinema manager': 'Quản lý rạp',
+  'cinema staff': 'Nhân viên rạp',
+  customer: 'Khách hàng'
+};
+const STATUS_LABELS = {
+  ACTIVE: 'Hoạt động',
+  INACTIVE: 'Chưa kích hoạt',
+  LOCKED: 'Bị khóa',
+  DELETED: 'Đã xóa'
+};
+const roleLabel = role => ROLE_LABELS[String(role?.name || '').toLowerCase()] || role?.name || 'Chưa phân vai trò';
 
 export default function AdminAccountPage() {
   const [query, setQuery] = useState({ keyword: '', roleId: '', status: '', page: 0, size: 10 });
@@ -119,7 +132,7 @@ export default function AdminAccountPage() {
         <Input aria-label="Tìm tài khoản" placeholder="Email hoặc mã tài khoản…" value={query.keyword} onChange={event => setQuery(value => ({ ...value, keyword: event.target.value, page: 0 }))} />
         <Select aria-label="Lọc vai trò" value={query.roleId} onChange={event => setQuery(value => ({ ...value, roleId: event.target.value, page: 0 }))}>
           <option value="">Tất cả vai trò</option>
-          {roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
+          {roles.map(role => <option key={role.id} value={role.id}>{roleLabel(role)}</option>)}
         </Select>
         <Select aria-label="Lọc trạng thái" value={query.status} onChange={event => setQuery(value => ({ ...value, status: event.target.value, page: 0 }))}>
           <option value="">Tất cả trạng thái</option>
@@ -144,10 +157,10 @@ export default function AdminAccountPage() {
                   <td className="p-4">
                     <select aria-label={`Vai trò của ${account.email}`} className="rounded bg-zinc-800 px-2 py-1 text-xs text-brand-orange focus:outline-none focus:ring-1 focus:ring-brand-orange disabled:opacity-50" value={account.role?.id || ''} disabled={updatingId === account.id || account.status === 'DELETED'} onChange={event => handleRoleChange(account.id, event.target.value)}>
                       <option value="" disabled>Chọn vai trò</option>
-                      {roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
+                      {roles.map(role => <option key={role.id} value={role.id}>{roleLabel(role)}</option>)}
                     </select>
                   </td>
-                  <td className="p-4"><StatusBadge status={account.status} /></td>
+                  <td className="p-4"><StatusBadge status={account.status} label={STATUS_LABELS[account.status]} /></td>
                   <td className="p-4 text-right">
                     {account.status === 'LOCKED' ? (
                       <button type="button" disabled={updatingId === account.id} onClick={() => handleStatusChange(account.id, 'ACTIVE')} className="text-xs font-bold text-emerald-400 hover:underline disabled:opacity-40">Mở khóa</button>

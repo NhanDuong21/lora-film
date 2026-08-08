@@ -12,6 +12,7 @@ const routeNameMap = {
   'departments': 'Phòng ban',
   'positions': 'Vị trí',
   'payroll': 'Quy trình bảng lương',
+  'accounts': 'Tài khoản đăng nhập',
   'roles': 'Vai trò',
   'permissions': 'Quyền hạn',
   'settings': 'Cấu hình',

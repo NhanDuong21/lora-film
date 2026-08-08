@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
-import { Check, Clock3, CreditCard, Umbrella, X } from 'lucide-react';
+import { Check, CreditCard, Umbrella, X } from 'lucide-react';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
 import { applyLeaveRequestAction, applyPayrollAction, getLeaveRequests, getPayrolls } from '../services/userAdminService';
 import useAdminAccess from '../hooks/useAdminAccess';
@@ -8,6 +8,14 @@ import { ActionModal } from '../components/OperationsConsole';
 import { HrHero, PersonAvatar, UatGuide } from '../components/HrWorkspace';
 
 const page = { content: [], totalElements: 0 };
+const LEAVE_TYPE_LABELS = {
+  ANNUAL: 'Nghỉ phép năm',
+  SICK: 'Nghỉ ốm',
+  UNPAID: 'Nghỉ không lương',
+  MATERNITY: 'Nghỉ thai sản',
+  PATERNITY: 'Nghỉ chăm con',
+  OTHER: 'Nghỉ khác'
+};
 const month = () => new Date().toISOString().slice(0, 7);
 const monthDates = value => {
   const first = value + '-01';
@@ -91,7 +99,7 @@ export default function AdminApprovalInboxPage() {
           {tab === 'leave' ? items.map(item => (
             <article key={item.id} className="grid gap-5 rounded-2xl border border-white/10 bg-[#0b0b0e] p-5 lg:grid-cols-[minmax(220px,.7fr)_minmax(300px,1.3fr)_auto] lg:items-center">
               <div className="flex items-center gap-3"><PersonAvatar name={item.employeeName} size="lg" /><div><p className="font-black">{item.employeeName}</p><p className="mt-1 text-xs text-zinc-500">{item.employeeCode}</p></div></div>
-              <div><p className="text-sm font-bold text-zinc-200">{item.startDate} → {item.endDate}</p><p className="mt-1 text-xs text-zinc-500">{item.leaveType} · {item.paid ? 'Có hưởng lương' : 'Không hưởng lương'}</p><p className="mt-2 text-sm leading-6 text-zinc-400">{item.reason}</p></div>
+              <div><p className="text-sm font-bold text-zinc-200">{item.startDate} → {item.endDate}</p><p className="mt-1 text-xs text-zinc-500">{LEAVE_TYPE_LABELS[item.leaveType] || item.leaveType} · {item.paid ? 'Có hưởng lương' : 'Không hưởng lương'}</p><p className="mt-2 text-sm leading-6 text-zinc-400">{item.reason}</p></div>
               <div className="flex gap-2 lg:justify-end"><button type="button" onClick={() => open('leave', item, 'REJECT')} className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 px-4 py-2.5 text-sm font-black text-red-300"><X size={16} /> Từ chối</button><button type="button" onClick={() => open('leave', item, 'APPROVE')} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-black"><Check size={16} /> Duyệt</button></div>
             </article>
           )) : items.map(item => (

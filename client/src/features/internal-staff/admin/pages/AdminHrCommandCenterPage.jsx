@@ -57,7 +57,7 @@ export default function AdminHrCommandCenterPage() {
     payrollSummary: null, departments: [], positions: [], pii: null
   });
   const [state, setState] = useState({ loading: true, error: '' });
-  const range = useMemo(weekRange, []);
+  const range = useMemo(() => weekRange(), []);
   const month = currentMonth();
 
   const load = useCallback(async () => {
