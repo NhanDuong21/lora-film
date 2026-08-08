@@ -77,7 +77,7 @@ const buildViewModel = showtime => {
   };
 };
 
-export default function OperationalShowtimeTimeline({ showtimes = [], requestedDate, onViewDetail, readOnly = false }) {
+export default function OperationalShowtimeTimeline({ showtimes = [], requestedDate, onViewDetail, readOnly = false, quickDrawerProps = {} }) {
   const [dateChoice, setDateChoice] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [zoomMode, setZoomMode] = useState(TIMELINE_ZOOM_MODES.FIT);
@@ -156,7 +156,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
         variant="operations"
       />
       <p className="flex items-center gap-2 text-xs text-zinc-500"><Clock3 className="h-3.5 w-3.5" />Đang hiển thị {filteredModels.length}/{dateModels.length} suất thuộc trang dữ liệu hiện tại.</p>
-      {!readOnly && <ShowtimeQuickDrawer showtime={drawerCandidate?.raw || null} onClose={() => setDrawerCandidate(null)} onViewDetail={onViewDetail} />}
+      {!readOnly && <ShowtimeQuickDrawer showtime={drawerCandidate?.raw || null} onClose={() => setDrawerCandidate(null)} onViewDetail={onViewDetail} {...quickDrawerProps} />}
     </section>
   );
 }

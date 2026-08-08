@@ -39,7 +39,13 @@ const addMinutes = (instant, minutes) => {
   return new Date(value.getTime() + (Number(minutes || 0) * 60_000)).toISOString();
 };
 
-export default function ShowtimeQuickDrawer({ showtime, onClose, onViewDetail }) {
+export default function ShowtimeQuickDrawer({
+  showtime,
+  onClose,
+  onViewDetail,
+  showPricing = true,
+  renderActions,
+}) {
   const closeRef = useRef(null);
   const [pricingState, setPricingState] = useState({ data: null, isLoading: false, hasError: false });
 
@@ -57,7 +63,7 @@ export default function ShowtimeQuickDrawer({ showtime, onClose, onViewDetail })
   }, [onClose, showtime]);
 
   useEffect(() => {
-    if (!showtime) return undefined;
+    if (!showtime || !showPricing) return undefined;
     let active = true;
     if (showtime.pricingStatus) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- an enriched list item does not need another request.
@@ -82,7 +88,7 @@ export default function ShowtimeQuickDrawer({ showtime, onClose, onViewDetail })
     return () => {
       active = false;
     };
-  }, [showtime]);
+  }, [showPricing, showtime]);
 
   if (!showtime) return null;
   const timezone = showtime.cinema?.timezone;
@@ -130,19 +136,20 @@ export default function ShowtimeQuickDrawer({ showtime, onClose, onViewDetail })
                 <dd className="text-zinc-200">{value || '—'}</dd>
               </div>
             ))}
-            <div className="grid grid-cols-[110px_1fr] gap-3 py-3 text-sm">
+            {showPricing && <div className="grid grid-cols-[110px_1fr] gap-3 py-3 text-sm">
               <dt className="font-bold text-zinc-500">Tình trạng giá</dt>
               <dd className={`font-bold ${pricingState.isLoading || pricingState.hasError ? 'text-zinc-300' : pricingPresentation.tone}`}>
                 {pricingLabel}
               </dd>
-            </div>
+            </div>}
           </dl>
         </div>
-        <footer className="border-t border-zinc-800 p-5">
-          <button type="button" onClick={() => onViewDetail(showtime.showtimePublicId)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">
+        {(typeof renderActions === 'function' || typeof onViewDetail === 'function') && <footer className="space-y-3 border-t border-zinc-800 p-5">
+          {typeof renderActions === 'function' && renderActions(showtime, { close: onClose })}
+          {typeof onViewDetail === 'function' && <button type="button" onClick={() => onViewDetail(showtime.showtimePublicId)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">
             Mở trang chỉnh sửa đầy đủ <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </footer>
+          </button>}
+        </footer>}
       </aside>
     </div>
   );

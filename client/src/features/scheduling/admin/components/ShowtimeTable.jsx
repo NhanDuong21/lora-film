@@ -75,7 +75,7 @@ const PaginationBar = ({ currentPage, pageSize, setCurrentPage, setPageSize, tot
 };
 
 export default function ShowtimeTable({
-  showtimes,
+  showtimes = [],
   cinemas = [],
   movies = [],
   isLoading,
@@ -106,11 +106,16 @@ export default function ShowtimeTable({
   onCheckBatch,
   onOpenBatch,
   isBatchActionLoading,
+  headerEyebrow = 'Lịch chiếu & giá vé',
+  headerDescription = 'Xem lịch, biết ngay việc nào cần xử lý và mở bán suất chiếu khi mọi thông tin đã sẵn sàng.',
+  showCreateActions = true,
+  cinemaFilterLocked = false,
+  quickDrawerProps = {},
 }) {
   const [viewMode, setViewMode] = useState(batchId ? 'DAY' : 'TIMELINE');
   const [selectedShowtime, setSelectedShowtime] = useState(null);
   const cinemaOptions = cinemas.map(cinema => ({
-    value: cinema.slug,
+    value: cinema.slug || cinema.publicId,
     label: cinema.name,
     subtitle: cinema.address,
   }));
@@ -183,7 +188,7 @@ export default function ShowtimeTable({
   };
 
   const clearFilters = () => {
-    setCinemaSlug('');
+    if (!cinemaFilterLocked) setCinemaSlug('');
     setMovieSlug('');
     setDate('');
     setStatus('');
@@ -195,15 +200,15 @@ export default function ShowtimeTable({
     <div className="min-h-full space-y-6 bg-zinc-950 text-white animate-fade-in">
       <header className="flex flex-col gap-5 border-b border-zinc-800 pb-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orange">{batchId ? 'Vận hành lịch chiếu' : 'Lịch chiếu & giá vé'}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orange">{batchId ? 'Vận hành lịch chiếu' : headerEyebrow}</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight">{batchId ? 'Chuẩn bị mở bán' : 'Lịch chiếu'}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
             {batchId
               ? 'Kiểm tra điều kiện, xử lý các suất bị chặn và mở bán toàn bộ lịch khi đã sẵn sàng.'
-              : 'Xem lịch, biết ngay việc nào cần xử lý và mở bán suất chiếu khi mọi thông tin đã sẵn sàng.'}
+              : headerDescription}
           </p>
         </div>
-        {!batchId && <div className="flex flex-wrap gap-3">
+        {!batchId && showCreateActions && <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={onOpenCreate}
@@ -356,7 +361,13 @@ export default function ShowtimeTable({
         <div className="grid gap-3 lg:grid-cols-4">
           <label className="space-y-1.5 text-xs font-bold text-zinc-400">
             Rạp
-            <SearchableSelect options={cinemaOptions} value={cinemaSlug} onChange={value => { setCinemaSlug(value); setCurrentPage(0); }} placeholder="Tất cả rạp" disabled={isOptionsLoading} />
+            {cinemaFilterLocked ? (
+              <div className="flex min-h-11 items-center rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-sm font-bold text-emerald-100">
+                {cinemaOptions.find(option => option.value === cinemaSlug)?.label || 'Rạp được phân công'}
+              </div>
+            ) : (
+              <SearchableSelect options={cinemaOptions} value={cinemaSlug} onChange={value => { setCinemaSlug(value); setCurrentPage(0); }} placeholder="Tất cả rạp" disabled={isOptionsLoading} />
+            )}
           </label>
           <label className="space-y-1.5 text-xs font-bold text-zinc-400">
             Phim
@@ -399,7 +410,7 @@ export default function ShowtimeTable({
               </p>
             </div>
           )}
-          <OperationalShowtimeTimeline showtimes={operationalShowtimes} requestedDate={date} onViewDetail={onViewDetail} />
+          <OperationalShowtimeTimeline showtimes={operationalShowtimes} requestedDate={date} onViewDetail={onViewDetail} quickDrawerProps={quickDrawerProps} />
           <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang sơ đồ lịch chiếu" />
         </>
       )}
@@ -427,11 +438,11 @@ export default function ShowtimeTable({
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
             <Calendar className="h-10 w-10 text-zinc-700" aria-hidden="true" />
             <h3 className="text-base font-black text-zinc-200">Chưa có suất chiếu phù hợp</h3>
-            <p className="max-w-sm text-sm text-zinc-500">Thử đổi bộ lọc hoặc tạo lịch chiếu mới cho rạp.</p>
-            <button type="button" onClick={onOpenAutoSchedule} className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">
+            <p className="max-w-sm text-sm text-zinc-500">{showCreateActions ? 'Thử đổi bộ lọc hoặc tạo lịch chiếu mới cho rạp.' : 'Thử đổi ngày, phim hoặc tình trạng trong bộ lọc.'}</p>
+            {showCreateActions && <button type="button" onClick={onOpenAutoSchedule} className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">
               <Sparkles className="h-4 w-4" aria-hidden="true" />
               Tạo lịch tuần
-            </button>
+            </button>}
           </div>
         ) : (
           <div className="divide-y divide-zinc-800">
@@ -478,7 +489,7 @@ export default function ShowtimeTable({
         )}
         {!isLoading && showtimes.length > 0 && <div className="border-t border-zinc-800 p-3"><PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang danh sách suất chiếu" /></div>}
       </section>}
-      <ShowtimeQuickDrawer showtime={selectedShowtime} onClose={() => setSelectedShowtime(null)} onViewDetail={onViewDetail} />
+      <ShowtimeQuickDrawer showtime={selectedShowtime} onClose={() => setSelectedShowtime(null)} onViewDetail={onViewDetail} {...quickDrawerProps} />
     </div>
   );
 }
