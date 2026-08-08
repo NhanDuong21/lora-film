@@ -11,7 +11,9 @@ import {
   getEmploymentActions,
   getPositions
 } from '../services/userAdminService';
+import { createEmployeeAccount } from '../services/authAdminService';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
+import SearchableSelect from '@/components/common/SearchableSelect';
 import useAdminAccess from '../hooks/useAdminAccess';
 import {
   ActionModal,
@@ -20,7 +22,7 @@ import {
   DetailDrawer,
   DetailGrid,
 } from '../components/OperationsConsole';
-import { CalendarDays, FileText, Mail, Phone, Search, UserPlus } from 'lucide-react';
+import { CalendarDays, FileText, KeyRound, Mail, Phone, Search, UserPlus, UserRoundCheck } from 'lucide-react';
 import { HrHero, PersonAvatar, UatGuide } from '../components/HrWorkspace';
 
 const EMPTY_PAGE = { content: [], totalPages: 0, totalElements: 0 };
@@ -33,6 +35,7 @@ const ACTION_LABELS = {
 };
 
 const initialHireForm = () => ({ accountId: '', departmentId: '', positionId: '', hireDate: TODAY, baseSalary: '' });
+const initialAccountForm = () => ({ fullName: '', email: '', password: '' });
 const initialActionForm = () => ({ type: 'TRANSFER', departmentId: '', positionId: '', baseSalary: '', effectiveDate: TODAY, reason: '' });
 
 export default function AdminStaffPage() {
@@ -52,6 +55,9 @@ export default function AdminStaffPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [hireOpen, setHireOpen] = useState(false);
   const [hireForm, setHireForm] = useState(initialHireForm);
+  const [hireStep, setHireStep] = useState(1);
+  const [accountMode, setAccountMode] = useState('existing');
+  const [accountForm, setAccountForm] = useState(initialAccountForm);
   const [actionOpen, setActionOpen] = useState(false);
   const [actionForm, setActionForm] = useState(initialActionForm);
   const [submitting, setSubmitting] = useState(false);
@@ -107,10 +113,74 @@ export default function AdminStaffPage() {
     }
   };
 
+  const openHire = () => {
+    setHireForm(initialHireForm());
+    setAccountForm(initialAccountForm());
+    setAccountMode('existing');
+    setHireStep(1);
+    setHireOpen(true);
+  };
+
+  const closeHire = () => {
+    setHireOpen(false);
+    setHireStep(1);
+    setAccountMode('existing');
+    setAccountForm(initialAccountForm());
+  };
+
+  const createAndResolveAccount = async () => {
+    const created = await createEmployeeAccount({
+      fullName: accountForm.fullName.trim(),
+      email: accountForm.email.trim(),
+      password: accountForm.password
+    });
+    let eligibleAccount = null;
+    for (let attempt = 0; attempt < 8 && !eligibleAccount; attempt += 1) {
+      if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 350));
+      const accountPage = await getEligibleEmployeeAccounts({
+        keyword: created.email,
+        page: 0,
+        size: 20
+      });
+      eligibleAccount = accountPage?.content?.find(item => item.accountId === created.id) || null;
+    }
+    return eligibleAccount || {
+      accountId: created.id,
+      fullName: accountForm.fullName.trim(),
+      email: created.email,
+      syncing: true
+    };
+  };
+
   const submitHire = async event => {
     event.preventDefault();
     setSubmitting(true);
     try {
+      if (hireStep === 1) {
+        if (accountMode === 'existing') {
+          if (!hireForm.accountId) {
+            notify('Hãy chọn một tài khoản đăng nhập để tiếp tục.', 'error');
+            return;
+          }
+        } else {
+          const account = await createAndResolveAccount();
+          setOptions(value => ({
+            ...value,
+            accounts: [account, ...value.accounts.filter(item => item.accountId !== account.accountId)]
+          }));
+          setHireForm(value => ({ ...value, accountId: String(account.accountId) }));
+          setAccountMode('existing');
+          notify(account.syncing
+            ? 'Đã tạo tài khoản. Hệ thống đang đồng bộ hồ sơ, bạn có thể tiếp tục nhập thông tin công việc.'
+            : 'Đã tạo tài khoản đăng nhập. Tiếp tục khai báo thông tin công việc.');
+        }
+        setHireStep(2);
+        return;
+      }
+      if (!hireForm.departmentId || !hireForm.positionId || !hireForm.baseSalary) {
+        notify('Vui lòng nhập đủ phòng ban, vị trí và lương cơ bản.', 'error');
+        return;
+      }
       await createEmployee({
         accountId: Number(hireForm.accountId),
         departmentId: Number(hireForm.departmentId),
@@ -118,12 +188,12 @@ export default function AdminStaffPage() {
         hireDate: hireForm.hireDate,
         baseSalary: Number(hireForm.baseSalary)
       });
-      setHireOpen(false);
+      closeHire();
       setHireForm(initialHireForm());
       await load();
-      notify('Đã hoàn tất hồ sơ nhân viên từ tài khoản đủ điều kiện.');
+      notify('Đã tạo nhân viên. Người này đã có thể được phân ca và tính lương.');
     } catch (error) {
-      notify(error?.message || 'Không thể tạo hồ sơ nhân viên.', 'error');
+      notify(error?.message || (hireStep === 1 ? 'Không thể tạo tài khoản đăng nhập.' : 'Không thể tạo hồ sơ nhân viên.'), 'error');
     } finally {
       setSubmitting(false);
     }
@@ -161,13 +231,32 @@ export default function AdminStaffPage() {
   };
 
   const statusCounts = dashboard?.employeesByStatus || {};
+  const selectedHireAccount = options.accounts.find(item => String(item.accountId) === String(hireForm.accountId));
+  const accountOptions = options.accounts.map(account => ({
+    value: String(account.accountId),
+    label: account.fullName,
+    subtitle: 'Email đăng nhập: ' + account.email,
+    badge: 'Chưa có hồ sơ'
+  }));
+  const departmentOptions = options.departments.map(item => ({
+    value: String(item.id),
+    label: item.name,
+    subtitle: item.description || 'Phòng ban đang hoạt động'
+  }));
+  const positionOptions = options.positions
+    .filter(item => String(item.departmentId) === String(hireForm.departmentId))
+    .map(item => ({
+      value: String(item.id),
+      label: item.name,
+      subtitle: item.description || 'Vị trí công việc'
+    }));
   return (
     <section className="min-h-full space-y-5 text-white">
       <HrHero
         context="Hồ sơ thay cho danh sách tài khoản"
         title="Hồ sơ nhân viên"
         description="Mỗi nhân viên có một hồ sơ công việc, thông tin liên hệ và dòng thời gian thay đổi. Mở một thẻ để xem toàn bộ hành trình thay vì sửa trực tiếp trên bảng."
-        actions={<><UatGuide compact />{canCreate ? <button type="button" onClick={() => { setHireForm(initialHireForm()); setHireOpen(true); }} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black hover:bg-orange-400"><UserPlus size={18} /> Thêm nhân viên</button> : null}</>}
+        actions={<><UatGuide compact />{canCreate ? <button type="button" onClick={openHire} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black hover:bg-orange-400"><UserPlus size={18} /> Thêm nhân viên</button> : null}</>}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -271,16 +360,77 @@ export default function AdminStaffPage() {
         ) : null}
       </DetailDrawer>
 
-      <ActionModal open={hireOpen} onClose={() => setHireOpen(false)} title="Tạo hồ sơ nhân viên" description="Chỉ các tài khoản đang hoạt động và chưa gắn với nhân viên mới xuất hiện. Việc tạo tài khoản/mật khẩu đã được tách khỏi form nhân sự." onSubmit={submitHire} submitLabel="Tạo hồ sơ" submitting={submitting}>
-        <label className="block text-xs font-black uppercase tracking-wider text-zinc-500">Tài khoản đủ điều kiện *</label>
-        <select value={hireForm.accountId} onChange={event => setHireForm(value => ({ ...value, accountId: event.target.value }))} required className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange"><option value="">Chọn tài khoản</option>{options.accounts.map(account => <option key={account.accountId} value={account.accountId}>{account.fullName} · {account.email}</option>)}</select>
-        {!options.accounts.length ? <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-amber-300">Chưa có tài khoản đủ điều kiện. Hãy tạo hoặc kích hoạt tài khoản tại “Tài khoản đăng nhập” trước.</p> : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Phòng ban *</label><select value={hireForm.departmentId} onChange={event => setHireForm(value => ({ ...value, departmentId: event.target.value, positionId: '' }))} required className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange"><option value="">Chọn phòng ban</option>{options.departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-          <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Vị trí *</label><select value={hireForm.positionId} onChange={event => setHireForm(value => ({ ...value, positionId: event.target.value }))} required disabled={!hireForm.departmentId} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange disabled:opacity-40"><option value="">Chọn vị trí</option>{options.positions.filter(item => String(item.departmentId) === String(hireForm.departmentId)).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-          <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Ngày vào làm *</label><input type="date" max={TODAY} value={hireForm.hireDate} onChange={event => setHireForm(value => ({ ...value, hireDate: event.target.value }))} required className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /></div>
-          <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lương cơ bản *</label><input type="number" min="1" value={hireForm.baseSalary} onChange={event => setHireForm(value => ({ ...value, baseSalary: event.target.value }))} required className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /></div>
+      <ActionModal
+        open={hireOpen}
+        onClose={closeHire}
+        title={hireStep === 1 ? 'Bước 1 · Chọn tài khoản đăng nhập' : 'Bước 2 · Khai báo hồ sơ công việc'}
+        description={hireStep === 1
+          ? 'Chọn một tài khoản có sẵn hoặc tạo mới ngay tại đây.'
+          : 'Bổ sung thông tin để người này xuất hiện trong ca làm, chấm công và bảng lương.'}
+        onSubmit={submitHire}
+        submitLabel={hireStep === 1 ? (accountMode === 'new' ? 'Tạo tài khoản & tiếp tục' : 'Tiếp tục') : 'Tạo nhân viên'}
+        submitting={submitting}
+      >
+        <div className="grid grid-cols-2 gap-2" aria-label={'Tiến độ: bước ' + hireStep + ' trên 2'}>
+          {[1, 2].map(step => (
+            <div key={step} className={'h-1.5 rounded-full ' + (step <= hireStep ? 'bg-orange-500' : 'bg-white/10')} />
+          ))}
         </div>
+
+        {hireStep === 1 ? (
+          <>
+            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4 text-sm leading-6 text-zinc-300">
+              <p className="font-black text-blue-200">Tài khoản và nhân viên khác nhau thế nào?</p>
+              <p className="mt-1 text-zinc-400"><strong className="text-zinc-200">Tài khoản</strong> dùng để đăng nhập. <strong className="text-zinc-200">Hồ sơ nhân viên</strong> lưu phòng ban, vị trí, ngày vào làm và lương. Hệ thống sẽ liên kết hai phần này với nhau.</p>
+            </div>
+
+            <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-black/30 p-1">
+              <button type="button" onClick={() => setAccountMode('existing')} className={'rounded-lg px-3 py-2.5 text-xs font-black transition ' + (accountMode === 'existing' ? 'bg-orange-500 text-black' : 'text-zinc-500 hover:text-white')}>Dùng tài khoản có sẵn</button>
+              <button type="button" onClick={() => setAccountMode('new')} className={'rounded-lg px-3 py-2.5 text-xs font-black transition ' + (accountMode === 'new' ? 'bg-orange-500 text-black' : 'text-zinc-500 hover:text-white')}>Tạo tài khoản mới</button>
+            </div>
+
+            {accountMode === 'existing' ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Tài khoản chưa có hồ sơ nhân viên *</label>
+                  <SearchableSelect
+                    value={hireForm.accountId}
+                    onChange={accountId => setHireForm(value => ({ ...value, accountId }))}
+                    options={accountOptions}
+                    placeholder="Chọn hoặc tìm theo tên, email"
+                    ariaLabel="Chọn tài khoản đăng nhập"
+                  />
+                </div>
+                <p className="text-xs leading-5 text-zinc-500">Có {options.accounts.length} tài khoản đang hoạt động nhưng chưa có hồ sơ nhân viên.</p>
+                {!options.accounts.length ? (
+                  <button type="button" onClick={() => setAccountMode('new')} className="w-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-left text-xs font-bold leading-5 text-amber-300 hover:bg-amber-500/10">Chưa có tài khoản phù hợp. Bấm vào đây để tạo tài khoản mới ngay trong quy trình.</button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Họ và tên *</label><input value={accountForm.fullName} onChange={event => setAccountForm(value => ({ ...value, fullName: event.target.value }))} required placeholder="Ví dụ: Nguyễn Thị Lan" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Email đăng nhập *</label><input type="email" value={accountForm.email} onChange={event => setAccountForm(value => ({ ...value, email: event.target.value }))} required placeholder="lan.nguyen@lorafilm.local" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
+                <div><label className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500"><KeyRound size={14} /> Mật khẩu ban đầu *</label><input type="password" minLength={6} value={accountForm.password} onChange={event => setAccountForm(value => ({ ...value, password: event.target.value }))} required placeholder="Tối thiểu 6 ký tự" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
+                <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs leading-5 text-zinc-500">Tài khoản mới được cấp quyền nhân viên cơ bản. Bạn có thể đổi vai trò sau tại mục “Tài khoản đăng nhập”.</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-300"><UserRoundCheck size={20} /></span>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-zinc-100">{selectedHireAccount?.fullName || 'Tài khoản đã chọn'}</p><p className="mt-1 truncate text-xs text-zinc-500">{selectedHireAccount?.email}</p></div>
+              <button type="button" onClick={() => setHireStep(1)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-400 hover:bg-white/5 hover:text-white">Đổi</button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Phòng ban *</label><SearchableSelect value={hireForm.departmentId} onChange={departmentId => setHireForm(value => ({ ...value, departmentId, positionId: '' }))} options={departmentOptions} placeholder="Chọn phòng ban" ariaLabel="Chọn phòng ban" /></div>
+              <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Vị trí *</label><SearchableSelect value={hireForm.positionId} onChange={positionId => setHireForm(value => ({ ...value, positionId }))} options={positionOptions} placeholder={hireForm.departmentId ? 'Chọn vị trí' : 'Chọn phòng ban trước'} ariaLabel="Chọn vị trí" disabled={!hireForm.departmentId} /></div>
+              <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Ngày vào làm *</label><input type="date" max={TODAY} value={hireForm.hireDate} onChange={event => setHireForm(value => ({ ...value, hireDate: event.target.value }))} required className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
+              <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lương cơ bản *</label><input type="number" min="1" value={hireForm.baseSalary} onChange={event => setHireForm(value => ({ ...value, baseSalary: event.target.value }))} required placeholder="Ví dụ: 12000000" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
+            </div>
+            <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs leading-5 text-zinc-500">Sau khi hoàn tất, nhân viên sẽ xuất hiện trong danh sách hồ sơ và có thể được phân ca, chấm công, xin nghỉ và tính lương.</p>
+          </>
+        )}
       </ActionModal>
 
       <ActionModal open={actionOpen} onClose={() => setActionOpen(false)} title="Ghi nhận hành động nhân sự" description="Mọi hành động yêu cầu ngày hiệu lực và lý do. Hệ thống lưu snapshot trước/sau để audit." onSubmit={submitAction} submitLabel="Ghi nhận hành động" submitting={submitting} tone={['SUSPEND', 'RESIGN'].includes(actionForm.type) ? 'danger' : 'orange'}>
