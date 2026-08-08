@@ -103,7 +103,7 @@ public class PayrollService {
                         .map(p -> p.getEmployee().getAccountId()).distinct().toList())
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
         return page.map(payroll -> payrollMapper.toResponse(payroll,
-                users.get(payroll.getEmployee().getAccountId()), false));
+                users.get(payroll.getEmployee().getAccountId()), Map.of(), false));
     }
 
     @Transactional(readOnly = true)
@@ -112,7 +112,18 @@ public class PayrollService {
                 .orElseThrow(() -> new BusinessException("Payroll not found", "USER_006"));
         User user = userRepository.findById(payroll.getEmployee().getAccountId())
                 .orElseThrow(() -> new BusinessException("User not found", "USER_001"));
-        return payrollMapper.toResponse(payroll, user, true);
+        Map<Long, String> actorNames = userRepository.findAllById(actorIds(payroll)).stream()
+                .filter(actor -> actor.getFullName() != null && !actor.getFullName().isBlank())
+                .collect(Collectors.toMap(User::getAccountId, User::getFullName));
+        return payrollMapper.toResponse(payroll, user, actorNames, true);
+    }
+
+    private List<Long> actorIds(Payroll payroll) {
+        return java.util.stream.Stream.of(payroll.getCreatedBy(), payroll.getApprovedBy(), payroll.getPaidBy(),
+                        payroll.getReconciledBy(), payroll.getCancelledBy())
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     @Transactional

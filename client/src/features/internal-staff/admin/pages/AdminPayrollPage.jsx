@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { CheckCircle2, CircleDollarSign, Clock3, FilePlus2, RefreshCcw, Search, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Banknote, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, FilePlus2, RefreshCcw, Search, ShieldCheck, UserRound } from 'lucide-react';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
 import {
   applyPayrollAction,
@@ -18,7 +18,6 @@ import {
   ConsolePagination,
   ConsolePanel,
   DetailDrawer,
-  DetailGrid,
 } from '../components/OperationsConsole';
 import { HrHero, UatGuide, WorkflowSteps } from '../components/HrWorkspace';
 
@@ -31,6 +30,32 @@ const emptyPayroll = month => ({ employeeId: '', salaryMonth: month, basicSalary
 const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value || 0);
 const STATUS_LABELS = { PENDING_APPROVAL: 'Chờ duyệt', APPROVED: 'Đã duyệt', PAYMENT_PENDING: 'Chờ đối soát', PAID: 'Đã trả', CANCELLED: 'Đã hủy', DRAFT: 'Nháp' };
 const ACTION_LABELS = { APPROVE: 'Duyệt phiếu lương', SUBMIT_PAYMENT: 'Gửi lệnh thanh toán', RECONCILE: 'Đối soát ngân hàng/kế toán', CANCEL: 'Hủy phiếu lương' };
+const RECONCILIATION_LABELS = { NOT_SUBMITTED: 'Chưa gửi đối soát', PENDING: 'Đang chờ đối soát', MATCHED: 'Đã khớp chứng từ', MISMATCH: 'Chứng từ chưa khớp' };
+const DETAIL_TYPE_LABELS = { ALLOWANCE: 'Phụ cấp', BONUS: 'Thưởng', DEDUCTION: 'Khấu trừ' };
+const minutesLabel = value => {
+  const minutes = Math.max(0, Number(value) || 0);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return [hours ? hours + ' giờ' : '', rest ? rest + ' phút' : ''].filter(Boolean).join(' ') || '0 giờ';
+};
+const monthLabel = value => {
+  const [year, month] = String(value || '').slice(0, 7).split('-');
+  return month && year ? `Tháng ${month}/${year}` : 'Chưa xác định kỳ lương';
+};
+const dateTimeLabel = value => {
+  if (!value) return '';
+  const date = new Date(value);
+  return `${date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} lúc ${date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+};
+const actorLabel = (name, id, emptyLabel) => name || (id ? 'Tài khoản đã ngừng hoạt động' : emptyLabel);
+const PAYROLL_GUIDANCE = {
+  PENDING_APPROVAL: { title: 'Cần kiểm tra và duyệt phiếu', description: 'Đối chiếu giờ công, khoản khấu trừ và số tiền thực nhận trước khi duyệt.', tone: 'amber' },
+  APPROVED: { title: 'Phiếu đã được duyệt', description: 'Bước tiếp theo là đưa phiếu vào lô thanh toán ngân hàng.', tone: 'blue' },
+  PAYMENT_PENDING: { title: 'Cần đối soát thanh toán', description: 'Nhập mã giao dịch ngân hàng và mã bút toán kế toán để hoàn tất.', tone: 'amber' },
+  PAID: { title: 'Đã hoàn tất trả lương', description: 'Giao dịch ngân hàng và bút toán kế toán đã được đối soát.', tone: 'green' },
+  CANCELLED: { title: 'Phiếu đã bị hủy', description: 'Phiếu này không được đưa vào thanh toán.', tone: 'red' },
+  DRAFT: { title: 'Phiếu đang ở dạng nháp', description: 'Hoàn thiện số liệu trước khi chuyển sang bước duyệt.', tone: 'zinc' }
+};
 
 export default function AdminPayrollPage() {
   const can = useAdminAccess();
@@ -186,6 +211,19 @@ export default function AdminPayrollPage() {
     {can('PAYROLL_UPDATE') && selected.status === 'PENDING_APPROVAL' ? <button type="button" onClick={() => openAction('CANCEL')} className="rounded-xl border border-red-500/30 px-4 py-3 text-sm font-black text-red-400">Hủy phiếu</button> : null}
   </div> : null;
 
+  const scheduledMinutes = Number(selected?.scheduledMinutes) || 0;
+  const workedMinutes = Number(selected?.workedMinutes) || 0;
+  const missingMinutes = Math.max(0, scheduledMinutes - workedMinutes - (Number(selected?.paidLeaveMinutes) || 0));
+  const attendancePercent = scheduledMinutes ? Math.min(100, Math.round((workedMinutes / scheduledMinutes) * 100)) : 0;
+  const guidance = PAYROLL_GUIDANCE[selected?.status] || PAYROLL_GUIDANCE.DRAFT;
+  const guidanceClass = {
+    amber: 'border-amber-500/25 bg-amber-500/[0.07] text-amber-100',
+    blue: 'border-blue-500/25 bg-blue-500/[0.07] text-blue-100',
+    green: 'border-emerald-500/25 bg-emerald-500/[0.07] text-emerald-100',
+    red: 'border-red-500/25 bg-red-500/[0.07] text-red-100',
+    zinc: 'border-white/10 bg-white/[0.035] text-zinc-200'
+  }[guidance.tone];
+
   return (
     <section className="flex-1 space-y-5 overflow-auto text-white">
       <HrHero context={'Kỳ lương ' + query.month} title="Quy trình bảng lương" description="Làm lần lượt từ dữ liệu chấm công đến đối soát. Mỗi phiếu luôn cho biết đang ở bước nào và nút tiếp theo cần bấm là gì." actions={<><UatGuide compact />{can('PAYROLL_CREATE') ? <><button disabled={submitting} type="button" onClick={generatePeriod} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white hover:bg-white/5"><RefreshCcw size={18} /> Lấy dữ liệu chấm công</button><button type="button" onClick={() => openPayrollForm()} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black hover:bg-orange-400"><FilePlus2 size={18} /> Tạo phiếu ngoại lệ</button></> : null}</>} />
@@ -211,8 +249,73 @@ export default function AdminPayrollPage() {
         </AsyncState>
       </ConsolePanel>
 
-      <DetailDrawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.employeeName || 'Phiếu lương'} subtitle={selected ? `${selected.employeeCode} · ${String(selected.salaryMonth).slice(0, 7)}` : ''} footer={drawerActions}>
-        {detailLoading ? <p className="text-sm text-zinc-500">Đang tải phiếu…</p> : selected ? <div className="space-y-6"><DetailGrid items={[{ label: 'Lương cơ bản', value: money(selected.basicSalary) }, { label: 'Phụ cấp', value: money(selected.allowance) }, { label: 'Khấu trừ', value: money(selected.deduction) }, { label: 'Thực nhận', value: money(selected.totalSalary) }, { label: 'Nguồn', value: selected.sourceType === 'TIMEKEEPING' ? 'Ca làm & chấm công' : 'Ngoại lệ thủ công' }, { label: 'Trạng thái', value: STATUS_LABELS[selected.status] }]} />{selected.sourceType === 'TIMEKEEPING' ? <DetailGrid items={[{ label: 'Phút ca', value: selected.scheduledMinutes }, { label: 'Phút công', value: selected.workedMinutes }, { label: 'Nghỉ hưởng lương', value: selected.paidLeaveMinutes }, { label: 'Tăng ca', value: selected.overtimeMinutes }]} /> : null}<div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-sm leading-6 text-zinc-500"><p><span className="font-black text-zinc-300">Người lập:</span> {selected.createdBy ? `Account #${selected.createdBy}` : 'Tác vụ hệ thống'}</p><p><span className="font-black text-zinc-300">Người duyệt:</span> {selected.approvedBy ? `Account #${selected.approvedBy}` : '—'}</p><p><span className="font-black text-zinc-300">Lô ngân hàng:</span> {selected.bankBatchReference || '—'}</p><p><span className="font-black text-zinc-300">Giao dịch:</span> {selected.paymentReference || '—'}</p><p><span className="font-black text-zinc-300">Bút toán:</span> {selected.accountingReference || '—'}</p><p><span className="font-black text-zinc-300">Đối soát:</span> {selected.reconciliationStatus}</p>{selected.cancellationReason ? <p><span className="font-black text-zinc-300">Lý do hủy:</span> {selected.cancellationReason}</p> : null}</div></div> : null}
+      <DetailDrawer open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.employeeName || 'Phiếu lương'} subtitle={selected ? `${selected.employeeCode} · ${monthLabel(selected.salaryMonth)}` : ''} footer={drawerActions}>
+        {detailLoading ? <p className="text-sm text-zinc-500">Đang tải phiếu…</p> : selected ? (
+          <div className="space-y-5">
+            <section className={'rounded-2xl border p-4 ' + guidanceClass}>
+              <div className="flex gap-3">
+                {selected.status === 'PAID' ? <CheckCircle2 className="mt-0.5 shrink-0" size={20} /> : <AlertTriangle className="mt-0.5 shrink-0" size={20} />}
+                <div><p className="text-sm font-black">{guidance.title}</p><p className="mt-1 text-xs leading-5 opacity-70">{guidance.description}</p></div>
+              </div>
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]">
+              <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3"><Banknote size={17} className="text-orange-300" /><h3 className="text-sm font-black text-zinc-200">Thu nhập và thực nhận</h3></div>
+              <div className="border-b border-white/10 bg-orange-500/[0.05] px-4 py-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-300/70">Nhân viên nhận</p>
+                <p className="mt-1 text-2xl font-black text-orange-300">{money(selected.totalSalary)}</p>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-y divide-white/10 text-sm">
+                {[
+                  ['Lương theo hợp đồng', selected.basicSalary],
+                  ['Phụ cấp', selected.allowance],
+                  ['Thưởng', selected.bonus],
+                  ['Khấu trừ', selected.deduction]
+                ].map(([label, value]) => <div key={label} className="p-4"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">{label}</p><p className={'mt-1 font-black ' + (label === 'Khấu trừ' && Number(value) ? 'text-red-300' : 'text-zinc-200')}>{label === 'Khấu trừ' && Number(value) ? '− ' : ''}{money(value)}</p></div>)}
+              </div>
+              <p className="px-4 py-3 text-[11px] leading-5 text-zinc-600">Thực nhận = lương theo hợp đồng + phụ cấp + thưởng − khấu trừ.</p>
+            </section>
+
+            {selected.sourceType === 'TIMEKEEPING' ? (
+              <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                <div className="flex items-center gap-2"><CalendarDays size={17} className="text-blue-300" /><h3 className="text-sm font-black text-zinc-200">Đối chiếu lịch làm và chấm công</h3></div>
+                <p className="mt-1 text-xs leading-5 text-zinc-600">Số liệu được tổng hợp tự động từ lịch ca trong {monthLabel(selected.salaryMonth).toLowerCase()}.</p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {[
+                    ['Thời gian đã xếp lịch', minutesLabel(scheduledMinutes)],
+                    ['Thời gian đã chấm công', minutesLabel(workedMinutes)],
+                    ['Nghỉ vẫn hưởng lương', minutesLabel(selected.paidLeaveMinutes)],
+                    ['Thời gian làm thêm', minutesLabel(selected.overtimeMinutes)]
+                  ].map(([label, value]) => <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">{label}</p><p className="mt-1 text-sm font-black text-zinc-200">{value}</p></div>)}
+                </div>
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center justify-between text-xs"><span className="font-bold text-zinc-500">Mức độ ghi nhận công</span><span className="font-black text-zinc-300">{attendancePercent}%</span></div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-blue-500" style={{ width: attendancePercent + '%' }} /></div>
+                </div>
+                {missingMinutes > 0 ? <div className="mt-4 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-5 text-amber-200/80"><AlertTriangle className="mt-0.5 shrink-0" size={15} /><span>Còn <strong>{minutesLabel(missingMinutes)}</strong> chưa có dữ liệu chấm công so với lịch. Admin nên kiểm tra trước khi duyệt.</span></div> : <div className="mt-4 flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-xs leading-5 text-emerald-200/80"><CheckCircle2 className="mt-0.5 shrink-0" size={15} /><span>Dữ liệu chấm công đã đủ so với lịch làm việc.</span></div>}
+              </section>
+            ) : (
+              <section className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.05] p-4 text-xs leading-5 text-blue-100/70">Đây là phiếu điều chỉnh được lập thủ công cho trường hợp ngoại lệ, không lấy số giờ từ dữ liệu chấm công.</section>
+            )}
+
+            {selected.details?.length ? <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4"><h3 className="text-sm font-black text-zinc-200">Các khoản điều chỉnh chi tiết</h3><div className="mt-3 divide-y divide-white/5">{selected.details.map(detail => <div key={detail.id} className="flex items-start justify-between gap-4 py-3 text-sm"><div><p className="font-bold text-zinc-300">{detail.description}</p><p className="mt-1 text-xs text-zinc-600">{DETAIL_TYPE_LABELS[detail.type] || 'Điều chỉnh'}</p></div><p className="shrink-0 font-black text-zinc-200">{detail.type === 'DEDUCTION' ? '− ' : '+ '}{money(detail.amount)}</p></div>)}</div></section> : null}
+
+            <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+              <div className="flex items-center gap-2"><UserRound size={17} className="text-violet-300" /><h3 className="text-sm font-black text-zinc-200">Tiến độ xử lý phiếu</h3></div>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Nguồn số liệu</span><span className="max-w-[240px] text-right font-bold text-zinc-300">{selected.sourceType === 'TIMEKEEPING' ? 'Tự động từ ca làm và chấm công' : 'Điều chỉnh thủ công'}</span></div>
+                <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Người lập phiếu</span><span className="max-w-[240px] text-right font-bold text-zinc-300">{actorLabel(selected.createdByName, selected.createdBy, 'Hệ thống tự động')}</span></div>
+                <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Người duyệt</span><span className="max-w-[240px] text-right font-bold text-zinc-300">{actorLabel(selected.approvedByName, selected.approvedBy, 'Chưa có người duyệt')}{selected.approvedAt ? <small className="block font-normal text-zinc-600">{dateTimeLabel(selected.approvedAt)}</small> : null}</span></div>
+                {selected.bankBatchReference ? <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Lô thanh toán ngân hàng</span><span className="max-w-[240px] break-all text-right font-mono text-xs font-bold text-zinc-300">{selected.bankBatchReference}</span></div> : null}
+                {selected.paymentReference ? <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Giao dịch ngân hàng</span><span className="max-w-[240px] break-all text-right font-mono text-xs font-bold text-zinc-300">{selected.paymentReference}</span></div> : null}
+                {selected.accountingReference ? <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Bút toán kế toán</span><span className="max-w-[240px] break-all text-right font-mono text-xs font-bold text-zinc-300">{selected.accountingReference}</span></div> : null}
+                <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Đối soát thanh toán</span><span className="max-w-[240px] text-right font-bold text-zinc-300">{RECONCILIATION_LABELS[selected.reconciliationStatus] || 'Chưa có thông tin'}</span></div>
+                {selected.reconciledBy || selected.reconciledByName ? <div className="flex items-start justify-between gap-4"><span className="text-zinc-600">Người đối soát</span><span className="max-w-[240px] text-right font-bold text-zinc-300">{actorLabel(selected.reconciledByName, selected.reconciledBy, 'Chưa đối soát')}{selected.reconciledAt ? <small className="block font-normal text-zinc-600">{dateTimeLabel(selected.reconciledAt)}</small> : null}</span></div> : null}
+                {selected.cancellationReason ? <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-3 text-red-200/80"><p className="font-black">Lý do hủy phiếu</p><p className="mt-1 text-xs leading-5">{selected.cancellationReason}</p></div> : null}
+              </div>
+            </section>
+          </div>
+        ) : null}
       </DetailDrawer>
 
       <ActionModal open={payrollOpen} onClose={() => setPayrollOpen(false)} title={editing ? 'Điều chỉnh phiếu lương' : 'Tạo phiếu lương ngoại lệ'} description="Tác vụ tháng tự sinh phiếu từ lương cơ bản. Form này dành cho trường hợp ngoại lệ và mọi phiếu đều phải qua bước duyệt độc lập." onSubmit={submitPayroll} submitLabel={editing ? 'Lưu số liệu' : 'Tạo phiếu'} submitting={submitting}>
