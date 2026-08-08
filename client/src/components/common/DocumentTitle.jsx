@@ -6,7 +6,6 @@ const siteName = 'LoraFilm';
 
 const roleLabels = {
   ADMIN: 'Quản trị viên',
-  STAFF: 'Nhân viên',
   EMPLOYEE: 'Nhân viên',
   CUSTOMER: 'Khách hàng',
 };

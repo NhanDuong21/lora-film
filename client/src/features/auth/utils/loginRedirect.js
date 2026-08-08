@@ -21,7 +21,7 @@ export const resolvePostLoginPath = ({ role, permissions = [], from }) => {
   }
 
   const normalizedRole = String(role || '').replace(/^ROLE_/, '');
-  if (normalizedRole === 'STAFF' || normalizedRole === 'EMPLOYEE') {
+  if (normalizedRole === 'EMPLOYEE') {
     return '/employee';
   }
 

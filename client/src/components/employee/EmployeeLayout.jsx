@@ -1,20 +1,46 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Banknote, CalendarDays, Clock3, Home, LayoutDashboard, LogOut, User, WalletCards } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import {
+  EMPLOYEE_PERMISSIONS,
+  hasEmployeeAccess,
+} from '@/features/internal-staff/employee/employeeAccess';
 
 const EMPLOYEE_MENUS = [
-  { id: 'dashboard', path: '/employee/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
-  { id: 'schedules', path: '/employee/schedules', label: 'Lịch làm & nghỉ phép', icon: CalendarDays },
-  { id: 'checkin', path: '/employee/checkin', label: 'Chấm công', icon: Clock3 },
-  { id: 'payroll', path: '/employee/payroll', label: 'Phiếu lương', icon: WalletCards },
-  { id: 'cash-payment', path: '/employee/payments/cash', label: 'Thu tiền tại quầy', icon: Banknote }
+  {
+    id: 'dashboard', path: '/employee/dashboard', label: 'Tổng quan', icon: LayoutDashboard,
+    permissions: [EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW],
+  },
+  {
+    id: 'schedules', path: '/employee/schedules', label: 'Lịch làm & nghỉ phép', icon: CalendarDays,
+    permissions: [EMPLOYEE_PERMISSIONS.SCHEDULE_VIEW],
+  },
+  {
+    id: 'checkin', path: '/employee/checkin', label: 'Chấm công', icon: Clock3,
+    permissions: [EMPLOYEE_PERMISSIONS.ATTENDANCE_VIEW, EMPLOYEE_PERMISSIONS.ATTENDANCE_UPDATE],
+    requireAll: true,
+  },
+  {
+    id: 'payroll', path: '/employee/payroll', label: 'Phiếu lương', icon: WalletCards,
+    permissions: [EMPLOYEE_PERMISSIONS.PAYROLL_VIEW],
+  },
+  {
+    id: 'cash-payment', path: '/employee/payments/cash', label: 'Thu tiền tại quầy', icon: Banknote,
+    permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+  }
 ];
 
 export default function EmployeeLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const activeTab = EMPLOYEE_MENUS.find(menu => location.pathname.startsWith(menu.path))?.id || 'dashboard';
+  const visibleMenus = EMPLOYEE_MENUS.filter(menu => hasEmployeeAccess(
+    user?.role,
+    user?.permissions || [],
+    menu.permissions,
+    menu.requireAll,
+  ));
+  const activeTab = visibleMenus.find(menu => location.pathname.startsWith(menu.path))?.id;
 
   const handleLogout = async () => {
     await logout();
@@ -31,7 +57,7 @@ export default function EmployeeLayout() {
             <p className="mt-1 hidden text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 md:block">Cổng nhân viên</p>
           </div>
           <nav className="space-y-1 p-3">
-            {EMPLOYEE_MENUS.map(menu => {
+            {visibleMenus.map(menu => {
               const Icon = menu.icon;
               const active = activeTab === menu.id;
               return <button key={menu.id} type="button" onClick={() => navigate(menu.path)} className={`flex w-full items-center justify-center rounded-xl py-3 text-sm transition md:justify-start md:px-5 ${active ? 'bg-amber-500/10 font-bold text-amber-400' : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-white'}`}>
@@ -39,12 +65,17 @@ export default function EmployeeLayout() {
                 <span className="hidden md:inline">{menu.label}</span>
               </button>;
             })}
+            {!visibleMenus.length && (
+              <p className="px-3 py-4 text-center text-xs text-zinc-500 md:text-left">
+                Chưa có chức năng được cấp quyền.
+              </p>
+            )}
           </nav>
         </div>
         <div className="mt-auto space-y-2 border-t border-zinc-800 p-4">
           <div className="hidden items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 md:flex">
             <span className="grid h-8 w-8 place-items-center rounded-full bg-zinc-800 text-amber-500"><User size={16} /></span>
-            <div className="min-w-0"><p className="text-[10px] font-black uppercase text-zinc-500">Nhân viên</p><p className="truncate text-xs font-bold text-white">{user?.fullName || user?.name || 'Staff'}</p></div>
+            <div className="min-w-0"><p className="text-[10px] font-black uppercase text-zinc-500">Nhân viên</p><p className="truncate text-xs font-bold text-white">{user?.fullName || user?.name || 'Employee'}</p></div>
           </div>
           <button type="button" onClick={() => navigate('/')} className="flex w-full items-center justify-center rounded-xl py-2.5 text-xs text-zinc-400 hover:bg-zinc-800 md:justify-start md:px-5"><Home className="h-4 w-4 md:mr-3" /><span className="hidden md:inline">Trang chủ</span></button>
           <button type="button" onClick={handleLogout} className="flex w-full items-center justify-center rounded-xl py-2.5 text-xs text-red-400 hover:bg-red-950/20 md:justify-start md:px-5"><LogOut className="h-4 w-4 md:mr-3" /><span className="hidden md:inline">Đăng xuất</span></button>

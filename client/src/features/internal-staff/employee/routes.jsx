@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense } from 'react';
-import { PageLoader } from '@/components/common/RouteGuards';
+import { PageLoader, PermissionRoute } from '@/components/common/RouteGuards';
+import EmployeeIndexRedirect from './components/EmployeeIndexRedirect';
+import { EMPLOYEE_PERMISSIONS } from './employeeAccess';
 
 const EmployeeCheckInView = lazy(() => import('./pages/EmployeeCheckInPage'));
 const EmployeeScheduleView = lazy(() => import('./pages/EmployeeSchedulePage'));
@@ -13,9 +15,41 @@ const lazyPage = (element) => (
     </Suspense>
 );
 
+const requirePermission = (element, requiredPermissions, requireAll = false) => (
+    <PermissionRoute requiredPermissions={requiredPermissions} requireAll={requireAll}>
+        {element}
+    </PermissionRoute>
+);
+
 export const employeeStaffRoutes = [
-    { path: 'dashboard', element: lazyPage(<EmployeeDashboardPage />) },
-    { path: 'checkin', element: lazyPage(<EmployeeCheckInView />) },
-    { path: 'schedules', element: lazyPage(<EmployeeScheduleView />) },
-    { path: 'payroll', element: lazyPage(<EmployeePayrollPage />) }
+    { index: true, element: <EmployeeIndexRedirect /> },
+    {
+        path: 'dashboard',
+        element: requirePermission(
+            lazyPage(<EmployeeDashboardPage />),
+            [EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW]
+        )
+    },
+    {
+        path: 'checkin',
+        element: requirePermission(
+            lazyPage(<EmployeeCheckInView />),
+            [EMPLOYEE_PERMISSIONS.ATTENDANCE_VIEW, EMPLOYEE_PERMISSIONS.ATTENDANCE_UPDATE],
+            true
+        )
+    },
+    {
+        path: 'schedules',
+        element: requirePermission(
+            lazyPage(<EmployeeScheduleView />),
+            [EMPLOYEE_PERMISSIONS.SCHEDULE_VIEW]
+        )
+    },
+    {
+        path: 'payroll',
+        element: requirePermission(
+            lazyPage(<EmployeePayrollPage />),
+            [EMPLOYEE_PERMISSIONS.PAYROLL_VIEW]
+        )
+    }
 ];

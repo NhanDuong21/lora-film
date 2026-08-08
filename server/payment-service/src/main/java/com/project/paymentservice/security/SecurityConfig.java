@@ -7,6 +7,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.http.HttpMethod;
 
 @Configuration
@@ -43,7 +44,8 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "ACCOUNTANT")
                 .requestMatchers("/api/admin/payments/**").hasRole("ADMIN")
                 .requestMatchers("/api/employee/**")
-                    .hasAnyRole("STAFF", "EMPLOYEE", "SUPERVISOR", "ADMIN")
+                    .access(new WebExpressionAuthorizationManager(
+                            "hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('PAYMENT_CASH_COLLECT'))"))
                 .requestMatchers("/api/payments/**").authenticated()
                 .anyRequest().authenticated()
             )

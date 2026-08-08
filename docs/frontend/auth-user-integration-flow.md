@@ -108,9 +108,9 @@ sequenceDiagram
   - Gọi API `POST /api/auth/login`.
   - **Đăng nhập thành công**:
     - Ghi nhận thông tin đăng nhập tập trung tại `AuthContext`.
-    - Điều hướng dựa trên quyền hạn (Role-based):
+    - Điều hướng dựa trên role và permission trong access token:
       - Tài khoản có quyền `ADMIN` $\rightarrow$ Chuyển sang Trang Quản Trị Viên `/admin`.
-      - Tài khoản có quyền `EMPLOYEE` / `STAFF` $\rightarrow$ Chuyển sang Trang Nhân Viên `/employee`.
+      - Tài khoản có role `EMPLOYEE` $\rightarrow$ Chuyển sang Trang Nhân Viên `/employee`; màn đích được chọn theo permission.
       - Khách hàng (`CUSTOMER`) $\rightarrow$ Chuyển về Trang Chủ `/`.
   - **Đăng nhập thất bại do chưa xác thực (Unverified)**:
     - Nếu API trả lỗi `AUTH_ACCOUNT_NOT_VERIFIED`:
@@ -145,5 +145,5 @@ sequenceDiagram
 2. **`RoleRoute`**:
    - Bảo vệ các đường dẫn quản trị và vận hành rạp chiếu.
    - Đối với Admin (`/admin/*`): Yêu cầu role là `ADMIN`.
-   - Đối với Nhân viên (`/employee/*`): Yêu cầu role là `EMPLOYEE` hoặc `STAFF`.
+   - Đối với Nhân viên (`/employee/*`): Yêu cầu role `EMPLOYEE`; mỗi route con tiếp tục yêu cầu permission chức năng tương ứng.
    - Khớp nối chính xác kể cả khi quyền được trả về dưới dạng có tiền tố `ROLE_` (ví dụ: `ROLE_ADMIN` được chuẩn hóa thành `ADMIN` trước khi so khớp).

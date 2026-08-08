@@ -87,6 +87,15 @@ public class SystemBootstrap {
             new PermissionData("EMPLOYEE_UPDATE", "Update employee", "Employee Management"),
             new PermissionData("EMPLOYEE_DELETE", "Delete employee", "Employee Management"),
             new PermissionData("EMPLOYEE_ASSIGN_POSITION", "Assign employee position", "Employee Management"),
+
+            // Employee self-service
+            new PermissionData("EMPLOYEE_DASHBOARD_VIEW", "View employee dashboard", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_SCHEDULE_VIEW", "View own work schedule and leave requests", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_LEAVE_CREATE", "Create and cancel own leave requests", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_ATTENDANCE_VIEW", "View own attendance", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_ATTENDANCE_UPDATE", "Check in and check out own shifts", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_PAYROLL_VIEW", "View own payroll", "Employee Self Service"),
+            new PermissionData("PAYMENT_CASH_COLLECT", "Collect cash payments at the counter", "Payment Operations"),
             
             // Department Management
             new PermissionData("DEPARTMENT_VIEW", "View departments", "Department Management"),
@@ -150,8 +159,19 @@ public class SystemBootstrap {
             ).contains(p.getCode()))
             .collect(Collectors.toSet());
 
+        Set<Permission> employeePermissions = allPermissions.stream()
+            .filter(p -> Arrays.asList(
+                "AUTH_LOGIN", "AUTH_LOGOUT", "AUTH_REFRESH_TOKEN",
+                "AUTH_VIEW_PROFILE", "AUTH_UPDATE_PROFILE", "AUTH_CHANGE_PASSWORD",
+                "EMPLOYEE_DASHBOARD_VIEW", "EMPLOYEE_SCHEDULE_VIEW",
+                "EMPLOYEE_LEAVE_CREATE", "EMPLOYEE_ATTENDANCE_VIEW",
+                "EMPLOYEE_ATTENDANCE_UPDATE", "EMPLOYEE_PAYROLL_VIEW",
+                "PAYMENT_CASH_COLLECT"
+            ).contains(p.getCode()))
+            .collect(Collectors.toSet());
+
         createRoleIfNotExists("ADMIN", "Administrator", new HashSet<>(allPermissions));
-        createRoleIfNotExists("EMPLOYEE", "Employee", new HashSet<>()); // Base employee, gets more via position
+        createRoleIfNotExists("EMPLOYEE", "Employee", employeePermissions);
         createRoleIfNotExists("CUSTOMER", "Customer", customerPermissions);
     }
 

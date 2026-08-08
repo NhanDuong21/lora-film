@@ -39,7 +39,7 @@ public class PayrollController {
     }
 
     @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('EMPLOYEE','MANAGER','ADMIN','STAFF')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_PAYROLL_VIEW'))")
     public ResponseEntity<ApiResponse<Page<PayrollResponse>>> mine(
             @RequestParam(required = false) String month,
             Pageable pageable) {

@@ -36,7 +36,8 @@ public class WorkforceTimeController {
     }
 
     @GetMapping("/shifts/me")
-    @PreAuthorize("hasAnyRole('EMPLOYEE','STAFF','MANAGER','ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('EMPLOYEE') and "
+            + "hasAnyAuthority('EMPLOYEE_SCHEDULE_VIEW','EMPLOYEE_ATTENDANCE_VIEW'))")
     public ResponseEntity<ApiResponse<Page<WorkShiftResponse>>> myShifts(
             @RequestParam LocalDate from, @RequestParam LocalDate to, Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("My work shifts retrieved",
@@ -79,7 +80,7 @@ public class WorkforceTimeController {
     }
 
     @GetMapping("/attendance/me")
-    @PreAuthorize("hasAnyRole('EMPLOYEE','STAFF','MANAGER','ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_ATTENDANCE_VIEW'))")
     public ResponseEntity<ApiResponse<Page<AttendanceResponse>>> myAttendance(
             @RequestParam LocalDate from, @RequestParam LocalDate to, Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("My attendance retrieved",
@@ -87,14 +88,14 @@ public class WorkforceTimeController {
     }
 
     @PostMapping("/attendance/check-in")
-    @PreAuthorize("hasAnyRole('EMPLOYEE','STAFF','MANAGER','ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_ATTENDANCE_UPDATE'))")
     public ResponseEntity<ApiResponse<AttendanceResponse>> checkIn(
             @Valid @RequestBody AttendanceActionRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Checked in", service.checkIn(request)));
     }
 
     @PostMapping("/attendance/check-out")
-    @PreAuthorize("hasAnyRole('EMPLOYEE','STAFF','MANAGER','ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_ATTENDANCE_UPDATE'))")
     public ResponseEntity<ApiResponse<AttendanceResponse>> checkOut(
             @Valid @RequestBody AttendanceActionRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Checked out", service.checkOut(request)));
@@ -121,7 +122,7 @@ public class WorkforceTimeController {
     }
 
     @GetMapping("/leave-requests/me")
-    @PreAuthorize("hasAnyRole('EMPLOYEE','STAFF','MANAGER','ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_SCHEDULE_VIEW'))")
     public ResponseEntity<ApiResponse<Page<LeaveResponse>>> myLeaves(
             @RequestParam(required = false) LeaveStatus status,
             @RequestParam LocalDate from,
@@ -132,7 +133,7 @@ public class WorkforceTimeController {
     }
 
     @PostMapping("/leave-requests")
-    @PreAuthorize("hasAnyRole('EMPLOYEE','STAFF','MANAGER','ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_LEAVE_CREATE'))")
     public ResponseEntity<ApiResponse<LeaveResponse>> createLeave(
             @Valid @RequestBody LeaveCreateRequest request) {
         return ResponseEntity.status(201).body(ApiResponse.success("Leave requested",
@@ -141,7 +142,7 @@ public class WorkforceTimeController {
 
     @PostMapping("/leave-requests/{id}/actions")
     @PreAuthorize("#request.type != null and ((#request.type.name() == 'CANCEL' and "
-            + "hasAnyRole('ADMIN','MANAGER','EMPLOYEE','STAFF')) or "
+            + "(hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_LEAVE_CREATE')))) or "
             + "(#request.type.name() != 'CANCEL' and "
             + "(hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_UPDATE'))))")
     public ResponseEntity<ApiResponse<LeaveResponse>> leaveAction(

@@ -77,7 +77,7 @@ function AppRoutes() {
 
                 {/* Employee Routes */}
                 <Route path="/employee" element={
-                    <RoleRoute allowedRoles={["STAFF", "ADMIN"]}>
+                    <RoleRoute allowedRoles={["EMPLOYEE", "ADMIN"]}>
                         <EmployeeLayout />
                     </RoleRoute>
                 }>
@@ -87,7 +87,9 @@ function AppRoutes() {
                             <Route key={`conc-emp-${index}`} path={route.path} element={route.element} />
                     ))}
                     {employeeStaffRoutes.map((route, index) => (
-                        <Route key={`staff-emp-${index}`} path={route.path} element={route.element} />
+                        route.index
+                            ? <Route key={`staff-emp-${index}`} index element={route.element} />
+                            : <Route key={`staff-emp-${index}`} path={route.path} element={route.element} />
                     ))}
                     {employeePaymentRoutes.map((route, index) => (
                         <Route key={`payment-emp-${index}`} path={route.path} element={route.element} />

@@ -441,7 +441,7 @@ export default function Header() {
                             type="button"
                             onClick={() => {
                               setProfileDropdownOpen(false);
-                              navigate(normalizedRole === 'EMPLOYEE' || normalizedRole === 'STAFF' ? '/employee' : '/admin');
+                              navigate(normalizedRole === 'EMPLOYEE' ? '/employee' : '/admin');
                             }}
                             className={`${dropdownItemClass} text-brand-orange`}
                           >
