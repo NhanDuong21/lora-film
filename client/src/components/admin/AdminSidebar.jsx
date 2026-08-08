@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Award,
-  BadgeDollarSign,
   BadgePercent,
   BellRing,
   Building,
@@ -18,6 +17,7 @@ import {
   Film,
   Gift,
   History,
+  Inbox,
   Home,
   Key,
   LayoutDashboard,
@@ -30,6 +30,7 @@ import {
   Ticket,
   TrendingUp,
   UserCircle,
+  UsersRound,
   Users,
   Zap,
   Armchair,
@@ -191,14 +192,15 @@ export default function AdminSidebar({
     },
     {
       key: 'people',
-      label: 'Nhân sự',
+      label: 'Nhân sự & tiền lương',
       visible: hasHumanResourcesAccess,
       items: [
-        ...(canManageEmployees ? [{ key: 'staff', label: 'Nhân viên', path: '/admin/staff', icon: Shield }] : []),
-        ...(canManageEmployees ? [{ key: 'workforce', label: 'Ca làm & chấm công', path: '/admin/workforce', icon: CalendarClock }] : []),
-        ...(canManageDepartments ? [{ key: 'departments', label: 'Phòng ban', path: '/admin/departments', icon: Building }] : []),
-        ...(canManagePositions ? [{ key: 'positions', label: 'Vị trí', path: '/admin/positions', icon: BadgeDollarSign }] : []),
-        ...(canManagePayroll ? [{ key: 'payroll', label: 'Bảng lương', path: '/admin/payroll', icon: TrendingUp }] : []),
+        ...(canManageEmployees ? [{ key: 'hr', label: 'Trung tâm nhân sự', path: '/admin/hr', icon: LayoutDashboard }] : []),
+        ...(canManageEmployees ? [{ key: 'approvals', label: 'Việc chờ duyệt', path: '/admin/approvals', icon: Inbox }] : []),
+        ...(canManageEmployees ? [{ key: 'staff', label: 'Hồ sơ nhân viên', path: '/admin/staff', icon: Shield }] : []),
+        ...(canManageEmployees ? [{ key: 'workforce', label: 'Lịch ca & chấm công', path: '/admin/workforce', icon: CalendarClock }] : []),
+        ...(canManagePayroll ? [{ key: 'payroll', label: 'Quy trình bảng lương', path: '/admin/payroll', icon: TrendingUp }] : []),
+        ...(canManageDepartments || canManagePositions ? [{ key: 'organization', label: 'Sơ đồ tổ chức', path: '/admin/organization', icon: UsersRound }] : []),
       ],
     },
     {

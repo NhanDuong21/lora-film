@@ -41,6 +41,9 @@ const pageTitle = pathname => {
   if (path === '/payments/return') return 'Kết quả thanh toán';
 
   const adminTitles = [
+    ['/admin/hr', 'Trung tâm nhân sự'],
+    ['/admin/approvals', 'Việc chờ duyệt'],
+    ['/admin/organization', 'Sơ đồ tổ chức'],
     ['/admin/analytics', 'Phân tích và báo cáo'],
     ['/admin/members', 'Quản lý khách hàng'],
     ['/admin/staff', 'Quản lý nhân viên'],

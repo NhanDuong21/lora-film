@@ -19,10 +19,9 @@ import {
   ConsolePanel,
   DetailDrawer,
   DetailGrid,
-  MetricStrip,
-  OperationsHeader
 } from '../components/OperationsConsole';
-import { CalendarClock, FileText, Search, UserCheck, UserMinus, UserPlus, Users } from 'lucide-react';
+import { CalendarDays, FileText, Mail, Phone, Search, UserPlus } from 'lucide-react';
+import { HrHero, PersonAvatar, UatGuide } from '../components/HrWorkspace';
 
 const EMPTY_PAGE = { content: [], totalPages: 0, totalElements: 0 };
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -162,27 +161,25 @@ export default function AdminStaffPage() {
   };
 
   const statusCounts = dashboard?.employeesByStatus || {};
-  const metrics = [
-    { label: 'Tổng nhân sự', value: dashboard?.totalEmployees ?? result.totalElements, hint: 'Hồ sơ chưa xóa', icon: Users, tone: 'border-blue-500/20 bg-blue-500/10 text-blue-400' },
-    { label: 'Đang làm việc', value: statusCounts.ACTIVE ?? '—', hint: 'Có hiệu lực công việc', icon: UserCheck, tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' },
-    { label: 'Nghỉ / tạm ngưng', value: dashboard ? (statusCounts.ON_LEAVE || 0) + (statusCounts.SUSPENDED || 0) : '—', hint: 'Cần theo dõi ngày hiệu lực', icon: CalendarClock, tone: 'border-amber-500/20 bg-amber-500/10 text-amber-400' },
-    { label: 'Đã nghỉ việc', value: statusCounts.RESIGNED ?? '—', hint: 'Đã khóa vòng đời nhân sự', icon: UserMinus, tone: 'border-red-500/20 bg-red-500/10 text-red-400' }
-  ];
-
   return (
-    <section className="min-h-full space-y-6 bg-[#050506] p-5 text-white md:p-8">
-      <OperationsHeader
-        eyebrow="Workforce operations"
-        title="Điều hành nhân sự"
-        description="Quản lý vòng đời nhân viên bằng các hành động có ngày hiệu lực, lý do và lịch sử. Tài khoản đăng nhập và hồ sơ việc làm được xử lý như hai lớp riêng biệt."
-        actions={canCreate ? (
-          <button type="button" onClick={() => { setHireForm(initialHireForm()); setHireOpen(true); }} className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500"><UserPlus size={18} /> Tạo hồ sơ nhân viên</button>
-        ) : null}
+    <section className="min-h-full space-y-5 text-white">
+      <HrHero
+        context="Hồ sơ thay cho danh sách tài khoản"
+        title="Hồ sơ nhân viên"
+        description="Mỗi nhân viên có một hồ sơ công việc, thông tin liên hệ và dòng thời gian thay đổi. Mở một thẻ để xem toàn bộ hành trình thay vì sửa trực tiếp trên bảng."
+        actions={<><UatGuide compact />{canCreate ? <button type="button" onClick={() => { setHireForm(initialHireForm()); setHireOpen(true); }} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black hover:bg-orange-400"><UserPlus size={18} /> Thêm nhân viên</button> : null}</>}
       />
 
-      <MetricStrip items={metrics} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ['Tất cả hồ sơ', dashboard?.totalEmployees ?? result.totalElements, 'text-blue-300'],
+          ['Đang làm việc', statusCounts.ACTIVE ?? '—', 'text-emerald-300'],
+          ['Đang nghỉ / tạm ngưng', dashboard ? (statusCounts.ON_LEAVE || 0) + (statusCounts.SUSPENDED || 0) : '—', 'text-amber-300'],
+          ['Đã nghỉ việc', statusCounts.RESIGNED ?? '—', 'text-red-300']
+        ].map(item => <div key={item[0]} className="rounded-2xl border border-white/10 bg-[#0b0b0e] p-4"><p className="text-xs font-bold text-zinc-500">{item[0]}</p><p className={'mt-2 text-2xl font-black ' + item[2]}>{item[1]}</p></div>)}
+      </div>
 
-      <ConsolePanel>
+      <ConsolePanel className="overflow-hidden rounded-[24px]">
         <div className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_220px_220px_220px]">
           <label className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
@@ -194,7 +191,22 @@ export default function AdminStaffPage() {
         </div>
 
         <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!result.content.length} emptyMessage="Không có nhân viên phù hợp">
-          <div className="overflow-x-auto">
+          <div className="grid gap-3 p-4 lg:grid-cols-2 2xl:grid-cols-3">
+            {result.content.map(employee => (
+              <button key={employee.accountId} type="button" onClick={() => openEmployee(employee)} className="group rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:-translate-y-0.5 hover:border-orange-500/30 hover:bg-orange-500/[0.03]">
+                <div className="flex items-start gap-3">
+                  <PersonAvatar name={employee.fullName} size="lg" />
+                  <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate font-black text-zinc-100">{employee.fullName}</p><p className="mt-1 font-mono text-[10px] text-zinc-600">{employee.employeeCode}</p></div><StatusBadge status={employee.status} label={STATUS_LABELS[employee.status]} /></div></div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-4 text-xs">
+                  <div><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Phòng ban</p><p className="mt-1 truncate font-bold text-zinc-300">{employee.departmentName || 'Chưa phân bổ'}</p></div>
+                  <div><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Vị trí</p><p className="mt-1 truncate font-bold text-zinc-300">{employee.positionName || 'Chưa phân bổ'}</p></div>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-zinc-500"><span className="flex items-center gap-1.5"><CalendarDays size={14} /> Vào làm {employee.hireDate}</span><span className="font-black text-orange-300 opacity-0 transition group-hover:opacity-100">Mở hồ sơ →</span></div>
+              </button>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-white/[0.025] text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600"><tr><th className="px-5 py-4">Nhân viên</th><th className="px-5 py-4">Bộ phận</th><th className="px-5 py-4">Ngày vào làm</th><th className="px-5 py-4">Trạng thái</th><th className="px-5 py-4 text-right">Hồ sơ</th></tr></thead>
               <tbody className="divide-y divide-white/5">
@@ -228,6 +240,13 @@ export default function AdminStaffPage() {
       >
         {detailLoading ? <p className="text-sm text-zinc-500">Đang tải hồ sơ…</p> : selected ? (
           <div className="space-y-7">
+            <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 to-transparent p-5">
+              <div className="flex items-center gap-4"><PersonAvatar name={selected.fullName} size="lg" /><div><p className="text-lg font-black">{selected.fullName}</p><p className="mt-1 text-xs text-zinc-500">{selected.employeeCode} · {STATUS_LABELS[selected.status]}</p></div></div>
+              <div className="mt-5 grid gap-2 text-sm">
+                <div className="flex items-center gap-3 rounded-xl bg-black/20 p-3 text-zinc-300"><Mail size={16} className="text-zinc-600" /> {selected.email || 'Chưa có email'}</div>
+                <div className="flex items-center gap-3 rounded-xl bg-black/20 p-3 text-zinc-300"><Phone size={16} className="text-zinc-600" /> {selected.phoneNumber || 'Thông tin được ẩn theo quyền'}</div>
+              </div>
+            </div>
             <DetailGrid items={[
               { label: 'Email', value: selected.email }, { label: 'Số điện thoại', value: selected.phoneNumber },
               { label: 'Phòng ban', value: selected.departmentName }, { label: 'Vị trí', value: selected.positionName },
@@ -236,11 +255,14 @@ export default function AdminStaffPage() {
             ]} />
             <div>
               <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-black text-white">Lịch sử nhân sự</h3><span className="text-xs text-zinc-600">{history.length} hành động gần nhất</span></div>
-              <div className="space-y-2">
+              <div className="relative space-y-3 before:absolute before:bottom-3 before:left-[7px] before:top-3 before:w-px before:bg-white/10">
                 {history.length ? history.map(action => (
-                  <div key={action.id} className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
-                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-black text-zinc-200">{ACTION_LABELS[action.type] || action.type}</p><time className="text-xs text-zinc-600">{action.effectiveDate}</time></div>
-                    <p className="mt-2 text-sm leading-5 text-zinc-500">{action.reason}</p>
+                  <div key={action.id} className="relative pl-7">
+                    <span className="absolute left-0 top-4 h-[15px] w-[15px] rounded-full border-4 border-[#09090b] bg-orange-400" />
+                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                      <div className="flex items-center justify-between gap-3"><p className="text-sm font-black text-zinc-200">{ACTION_LABELS[action.type] || action.type}</p><time className="text-xs text-zinc-600">{action.effectiveDate}</time></div>
+                      <p className="mt-2 text-sm leading-5 text-zinc-500">{action.reason}</p>
+                    </div>
                   </div>
                 )) : <p className="rounded-xl border border-dashed border-white/10 p-5 text-sm text-zinc-600">Chưa có hành động nhân sự nào được ghi nhận theo workflow mới.</p>}
               </div>

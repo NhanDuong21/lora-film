@@ -12,6 +12,9 @@ const AdminPayrollPage = lazy(() => import('./pages/AdminPayrollPage'));
 const AdminDepartmentPage = lazy(() => import('./pages/AdminDepartmentPage'));
 const AdminPositionPage = lazy(() => import('./pages/AdminPositionPage'));
 const AdminWorkforcePage = lazy(() => import('./pages/AdminWorkforcePage'));
+const AdminHrCommandCenterPage = lazy(() => import('./pages/AdminHrCommandCenterPage'));
+const AdminApprovalInboxPage = lazy(() => import('./pages/AdminApprovalInboxPage'));
+const AdminOrganizationPage = lazy(() => import('./pages/AdminOrganizationPage'));
 const AdminRolePage = lazy(() => import('./pages/AdminRolePage'));
 const AdminPermissionPage = lazy(() => import('./pages/AdminPermissionPage'));
 const AdminAuthAuditPage = lazy(() => import('./pages/AdminAuthAuditPage'));
@@ -51,10 +54,13 @@ export const adminStaffRoutes = [
     { path: 'finance', element: <Navigate to="/admin/analytics" replace /> },
     { path: 'analytics', element: requirePermission(<AdminAnalyticsPage />, 'PERM_VIEW_FINANCE', 'DASHBOARD_VIEW') },
     { path: 'members', element: requirePermission(<AdminMembersView />, 'CUSTOMER_VIEW') },
+    { path: 'hr', element: requirePermission(<AdminHrCommandCenterPage />, 'EMPLOYEE_VIEW') },
+    { path: 'approvals', element: requirePermission(<AdminApprovalInboxPage />, 'EMPLOYEE_VIEW', 'PAYROLL_VIEW') },
     { path: 'staff', element: requirePermission(<AdminStaffView />, 'EMPLOYEE_VIEW') },
     { path: 'departments', element: requirePermission(<AdminDepartmentPage />, 'DEPARTMENT_VIEW') },
     { path: 'positions', element: requirePermission(<AdminPositionPage />, 'POSITION_VIEW') },
     { path: 'workforce', element: requirePermission(<AdminWorkforcePage />, 'EMPLOYEE_VIEW') },
+    { path: 'organization', element: requirePermission(<AdminOrganizationPage />, 'DEPARTMENT_VIEW', 'POSITION_VIEW') },
     { path: 'payroll', element: requirePermission(<AdminPayrollPage />, 'PAYROLL_VIEW') },
     { path: 'roles', element: requirePermission(<AdminRolePage />, 'ROLE_VIEW') },
     { path: 'accounts', element: requirePermission(<AdminAccountPage />, 'SYSTEM_CONFIGURATION') },
