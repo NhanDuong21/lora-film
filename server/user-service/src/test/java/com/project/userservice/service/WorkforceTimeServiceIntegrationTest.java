@@ -10,6 +10,7 @@ import com.project.userservice.exception.BusinessException;
 import com.project.userservice.repository.DepartmentRepository;
 import com.project.userservice.repository.PositionRepository;
 import com.project.userservice.repository.UserRepository;
+import com.project.userservice.repository.WorkShiftRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,7 @@ class WorkforceTimeServiceIntegrationTest {
     @Autowired UserRepository userRepository;
     @Autowired DepartmentRepository departmentRepository;
     @Autowired PositionRepository positionRepository;
+    @Autowired WorkShiftRepository workShiftRepository;
 
     private static final Long EMPLOYEE_ID = 9201L;
 
@@ -96,6 +98,53 @@ class WorkforceTimeServiceIntegrationTest {
                         "Stale correction without version", null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("version is required");
+    }
+
+    @Test
+    void createsSplitShiftAtomicallyAsSeparateAttendancePeriods() {
+        LocalDateTime morningStart = LocalDateTime.of(2026, 8, 11, 8, 0);
+        LocalDateTime afternoonStart = LocalDateTime.of(2026, 8, 11, 14, 0);
+
+        List<WorkShiftResponse> created = workforceTimeService.createShiftBatch(
+                new WorkShiftBatchRequest(EMPLOYEE_ID, List.of(
+                        new WorkShiftPeriodRequest(morningStart, morningStart.plusHours(4)),
+                        new WorkShiftPeriodRequest(afternoonStart, afternoonStart.plusHours(4))
+                ), "LoraFilm Quận 1", "Ca gãy theo lịch vận hành"));
+
+        assertThat(created).hasSize(2);
+        assertThat(created).extracting(WorkShiftResponse::location)
+                .containsOnly("LoraFilm Quận 1");
+        assertThat(created).extracting(WorkShiftResponse::scheduledStart)
+                .containsExactly(morningStart, afternoonStart);
+    }
+
+    @Test
+    void rejectsWholeSplitShiftWhenItsPeriodsOverlap() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 13, 8, 0);
+        long countBefore = workShiftRepository.count();
+
+        assertThatThrownBy(() -> workforceTimeService.createShiftBatch(
+                new WorkShiftBatchRequest(EMPLOYEE_ID, List.of(
+                        new WorkShiftPeriodRequest(start, start.plusHours(5)),
+                        new WorkShiftPeriodRequest(start.plusHours(4), start.plusHours(8))
+                ), "LoraFilm Quận 1", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cannot overlap");
+
+        assertThat(workShiftRepository.count()).isEqualTo(countBefore);
+    }
+
+    @Test
+    void rejectsSplitShiftLongerThanDailyLimit() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 14, 0, 0);
+
+        assertThatThrownBy(() -> workforceTimeService.createShiftBatch(
+                new WorkShiftBatchRequest(EMPLOYEE_ID, List.of(
+                        new WorkShiftPeriodRequest(start, start.plusHours(8)),
+                        new WorkShiftPeriodRequest(start.plusHours(9), start.plusHours(18))
+                ), "LoraFilm Quận 1", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cannot exceed 16 hours");
     }
 
     @Test

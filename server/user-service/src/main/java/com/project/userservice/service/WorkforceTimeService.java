@@ -18,6 +18,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -28,6 +30,8 @@ public class WorkforceTimeService {
     private static final int LATE_GRACE_MINUTES = 5;
     private static final int MAX_ATTENDANCE_HOURS = 24;
     private static final int MAX_CHECK_OUT_DELAY_HOURS = 8;
+    private static final int MAX_SHIFT_SEGMENTS = 8;
+    private static final int MAX_DAILY_ASSIGNMENT_MINUTES = 16 * 60;
 
     private final WorkShiftRepository shiftRepository;
     private final AttendanceRecordRepository attendanceRepository;
@@ -70,7 +74,7 @@ public class WorkforceTimeService {
 
     @Transactional
     public WorkShiftResponse createShift(WorkShiftRequest request) {
-        Employee employee = activeEmployee(request.employeeId());
+        Employee employee = activeEmployeeForScheduling(request.employeeId());
         validateShiftTimes(request.scheduledStart(), request.scheduledEnd());
         if (!shiftRepository.findOverlaps(request.employeeId(), request.scheduledStart(), request.scheduledEnd()).isEmpty()) {
             throw new BusinessException("Employee already has an overlapping shift", "USER_SHIFT_OVERLAP");
@@ -88,6 +92,58 @@ public class WorkforceTimeService {
         eventService.record("WORK_SHIFT_CREATED", "WORK_SHIFT", shift.getId(),
                 Map.of("shiftId", shift.getId(), "employeeId", employee.getAccountId()));
         return toShiftResponse(shift, userRepository.findById(employee.getAccountId()).orElse(null));
+    }
+
+    @Transactional
+    public List<WorkShiftResponse> createShiftBatch(WorkShiftBatchRequest request) {
+        Employee employee = activeEmployeeForScheduling(request.employeeId());
+        if (request.periods().size() > MAX_SHIFT_SEGMENTS) {
+            throw new BusinessException("A shift assignment cannot contain more than 8 periods",
+                    "USER_SHIFT_TOO_MANY_PERIODS");
+        }
+
+        List<WorkShiftPeriodRequest> periods = request.periods().stream()
+                .sorted(Comparator.comparing(WorkShiftPeriodRequest::scheduledStart))
+                .toList();
+        long totalMinutes = 0;
+        WorkShiftPeriodRequest previous = null;
+        for (WorkShiftPeriodRequest period : periods) {
+            validateShiftTimes(period.scheduledStart(), period.scheduledEnd());
+            totalMinutes += Duration.between(period.scheduledStart(), period.scheduledEnd()).toMinutes();
+            if (previous != null && period.scheduledStart().isBefore(previous.scheduledEnd())) {
+                throw new BusinessException("Shift periods in the same assignment cannot overlap",
+                        "USER_SHIFT_BATCH_OVERLAP");
+            }
+            if (!shiftRepository.findOverlaps(request.employeeId(), period.scheduledStart(),
+                    period.scheduledEnd()).isEmpty()) {
+                throw new BusinessException("Employee already has an overlapping shift",
+                        "USER_SHIFT_OVERLAP");
+            }
+            previous = period;
+        }
+        if (totalMinutes > MAX_DAILY_ASSIGNMENT_MINUTES) {
+            throw new BusinessException("Total assigned time cannot exceed 16 hours",
+                    "USER_SHIFT_TOTAL_TOO_LONG");
+        }
+
+        User user = userRepository.findById(employee.getAccountId()).orElse(null);
+        List<WorkShiftResponse> created = new java.util.ArrayList<>();
+        for (WorkShiftPeriodRequest period : periods) {
+            WorkShift shift = new WorkShift();
+            shift.setEmployee(employee);
+            shift.setScheduledStart(period.scheduledStart());
+            shift.setScheduledEnd(period.scheduledEnd());
+            shift.setLocation(request.location().trim());
+            shift.setNote(trim(request.note()));
+            shift.setCreatedBy(CurrentActor.accountId());
+            shift = shiftRepository.save(shift);
+            auditService.log("WORK_SHIFT_CREATED", "WORK_SHIFT", shift.getId(),
+                    "employeeId=" + employee.getAccountId() + ", batchSize=" + periods.size());
+            eventService.record("WORK_SHIFT_CREATED", "WORK_SHIFT", shift.getId(),
+                    Map.of("shiftId", shift.getId(), "employeeId", employee.getAccountId()));
+            created.add(toShiftResponse(shift, user));
+        }
+        return List.copyOf(created);
     }
 
     @Transactional
@@ -300,6 +356,15 @@ public class WorkforceTimeService {
 
     private Employee activeEmployee(Long accountId) {
         Employee employee = employeeRepository.findById(accountId)
+                .orElseThrow(() -> new BusinessException("Employee not found", "USER_003"));
+        if (employee.isDeleted() || employee.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new BusinessException("Operation requires an active employee", "USER_010");
+        }
+        return employee;
+    }
+
+    private Employee activeEmployeeForScheduling(Long accountId) {
+        Employee employee = employeeRepository.findByAccountIdForScheduling(accountId)
                 .orElseThrow(() -> new BusinessException("Employee not found", "USER_003"));
         if (employee.isDeleted() || employee.getStatus() != EmployeeStatus.ACTIVE) {
             throw new BusinessException("Operation requires an active employee", "USER_010");

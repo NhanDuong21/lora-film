@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users/workforce")
@@ -48,6 +49,14 @@ public class WorkforceTimeController {
             @Valid @RequestBody WorkShiftRequest request) {
         return ResponseEntity.status(201).body(ApiResponse.success("Work shift created",
                 service.createShift(request)));
+    }
+
+    @PostMapping("/shifts/batch")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_UPDATE')")
+    public ResponseEntity<ApiResponse<List<WorkShiftResponse>>> createShiftBatch(
+            @Valid @RequestBody WorkShiftBatchRequest request) {
+        return ResponseEntity.status(201).body(ApiResponse.success("Work shift periods created",
+                service.createShiftBatch(request)));
     }
 
     @PostMapping("/shifts/{id}/cancel")

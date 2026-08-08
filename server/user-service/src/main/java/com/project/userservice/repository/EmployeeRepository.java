@@ -8,8 +8,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.util.Optional;
 import com.project.userservice.security.PiiCrypto;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSpecificationExecutor<Employee> {
@@ -22,6 +25,10 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     long countByDepartmentIdAndIsDeletedFalse(Long departmentId);
     long countByPositionIdAndIsDeletedFalse(Long positionId);
     List<Employee> findByStatusAndIsDeletedFalse(EmployeeStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from Employee e where e.accountId = :accountId")
+    Optional<Employee> findByAccountIdForScheduling(@Param("accountId") Long accountId);
 
     @EntityGraph(attributePaths = {"department", "position"})
     @Query("""
