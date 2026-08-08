@@ -53,6 +53,16 @@ public class AccountController {
         return ResponseEntity.ok(ApiResponse.success("Role updated successfully", account));
     }
 
+    @PutMapping("/{id}/access-profile")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
+    public ResponseEntity<ApiResponse<AccountDto>> updateAccessProfile(
+            @PathVariable Long id,
+            @RequestParam Long accessProfileId) {
+        log.info("Update account access profile called: id={}, accessProfileId={}", id, accessProfileId);
+        AccountDto account = accountService.updateAccountAccessProfile(id, accessProfileId);
+        return ResponseEntity.ok(ApiResponse.success("Access profile updated successfully", account));
+    }
+
     @PostMapping("/employee")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')")
     public ResponseEntity<ApiResponse<AccountDto>> createEmployeeAccount(@jakarta.validation.Valid @RequestBody com.project.authservice.dto.request.EmployeeAccountRequest request) {

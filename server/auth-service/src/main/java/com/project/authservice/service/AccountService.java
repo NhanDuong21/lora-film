@@ -11,5 +11,6 @@ public interface AccountService {
     AccountDto getAccountByEmail(String email);
     AccountDto updateAccountStatus(Long id, AccountStatus status);
     AccountDto updateAccountRole(Long id, Long roleId);
+    AccountDto updateAccountAccessProfile(Long id, Long accessProfileId);
     AccountDto createEmployeeAccount(com.project.authservice.dto.request.EmployeeAccountRequest request);
 }

@@ -155,6 +155,47 @@ ON permissions(module);
 
 
 -- =====================================================
+-- TABLE: access_profiles
+-- Nhóm quyền nghiệp vụ dành cho tài khoản EMPLOYEE
+-- =====================================================
+
+CREATE TABLE access_profiles
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    description VARCHAR(500) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_access_profiles_code UNIQUE(code)
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE access_profile_permissions
+(
+    access_profile_id BIGINT NOT NULL,
+    permission_id BIGINT NOT NULL,
+    PRIMARY KEY (access_profile_id, permission_id),
+    CONSTRAINT fk_access_profile_permissions_profile
+        FOREIGN KEY (access_profile_id) REFERENCES access_profiles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_access_profile_permissions_permission
+        FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE accounts
+    ADD COLUMN access_profile_id BIGINT NULL AFTER is_deleted,
+    ADD INDEX idx_accounts_access_profile (access_profile_id),
+    ADD CONSTRAINT fk_accounts_access_profile
+        FOREIGN KEY (access_profile_id) REFERENCES access_profiles(id);
+
+
+-- =====================================================
 -- TABLE: account_roles
 -- Quan hệ N-N giữa Account và Role
 -- =====================================================

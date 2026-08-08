@@ -5,6 +5,7 @@ import com.project.authservice.entity.Role;
 import com.project.authservice.enums.AccountStatus;
 import com.project.authservice.exception.BusinessException;
 import com.project.authservice.repository.AccountRepository;
+import com.project.authservice.repository.AccessProfileRepository;
 import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.service.impl.AccountServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,13 +44,16 @@ class AccountServiceImplTest {
     private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     @Mock
     private com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher;
+    @Mock
+    private AccessProfileRepository accessProfileRepository;
 
     private AccountServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AccountServiceImpl(accountRepository, roleRepository, auditLogService,
-                request, credentialRevocationService, authOutboxService, passwordEncoder, eventPublisher);
+                request, credentialRevocationService, authOutboxService, passwordEncoder, eventPublisher,
+                accessProfileRepository);
     }
 
     @Test
@@ -101,9 +105,17 @@ class AccountServiceImplTest {
         createRequest.setEmail("  new.staff@lorafilm.local ");
         createRequest.setPassword("Temporary@123");
         createRequest.setFullName("New Staff");
+        createRequest.setAccessProfileId(7L);
+
+        var accessProfile = new com.project.authservice.entity.AccessProfile();
+        accessProfile.setId(7L);
+        accessProfile.setCode("BOX_OFFICE");
+        accessProfile.setName("Nhân viên bán vé");
+        accessProfile.setActive(true);
 
         when(accountRepository.existsByEmail("new.staff@lorafilm.local")).thenReturn(false);
         when(roleRepository.findByCode("EMPLOYEE")).thenReturn(Optional.of(employee));
+        when(accessProfileRepository.findById(7L)).thenReturn(Optional.of(accessProfile));
         when(passwordEncoder.encode("Temporary@123")).thenReturn("encoded");
         when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
             Account saved = invocation.getArgument(0);
@@ -116,6 +128,7 @@ class AccountServiceImplTest {
         verify(accountRepository).save(argThat(account ->
                         "new.staff@lorafilm.local".equals(account.getEmail())
                         && "EMPLOYEE".equals(account.getRole().getCode())
+                        && "BOX_OFFICE".equals(account.getAccessProfile().getCode())
                         && account.getAccountStatus() == AccountStatus.ACTIVE));
         verify(eventPublisher).publishEmployeeAccountCreated(any(Account.class), eq("New Staff"));
     }

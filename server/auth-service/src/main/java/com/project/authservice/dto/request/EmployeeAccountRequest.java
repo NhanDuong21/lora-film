@@ -2,6 +2,7 @@ package com.project.authservice.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public class EmployeeAccountRequest {
@@ -16,6 +17,9 @@ public class EmployeeAccountRequest {
 
     @NotBlank(message = "Full name is required")
     private String fullName;
+
+    @NotNull(message = "Vui lòng chọn nhóm nghiệp vụ")
+    private Long accessProfileId;
 
     public String getEmail() {
         return email;
@@ -40,4 +44,7 @@ public class EmployeeAccountRequest {
     public void setFullName(String fullName) {
         this.fullName = fullName;
     }
+
+    public Long getAccessProfileId() { return accessProfileId; }
+    public void setAccessProfileId(Long accessProfileId) { this.accessProfileId = accessProfileId; }
 }

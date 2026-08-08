@@ -13,8 +13,8 @@ export const SYSTEM_ROLE_PRESENTATION = {
   },
   EMPLOYEE: {
     label: 'Nhân viên',
-    description: 'Thực hiện các nghiệp vụ được cấp cho toàn bộ nhân viên.',
-    scope: 'Theo quyền được cấp',
+    description: 'Thực hiện công việc theo nhóm nghiệp vụ được phân công.',
+    scope: 'Theo nhóm nghiệp vụ',
   },
   CUSTOMER: {
     label: 'Khách hàng',
@@ -52,10 +52,10 @@ const PERMISSION_LABELS = {
   DEPARTMENT_CREATE: 'Thêm phòng ban',
   DEPARTMENT_UPDATE: 'Cập nhật phòng ban',
   DEPARTMENT_DELETE: 'Xóa phòng ban',
-  POSITION_VIEW: 'Xem chức vụ',
-  POSITION_CREATE: 'Thêm chức vụ',
-  POSITION_UPDATE: 'Cập nhật chức vụ',
-  POSITION_DELETE: 'Xóa chức vụ',
+  POSITION_VIEW: 'Xem vị trí công việc',
+  POSITION_CREATE: 'Thêm vị trí công việc',
+  POSITION_UPDATE: 'Cập nhật vị trí công việc',
+  POSITION_DELETE: 'Xóa vị trí công việc',
   PAYROLL_VIEW: 'Xem bảng lương',
   PAYROLL_CREATE: 'Lập bảng lương',
   PAYROLL_UPDATE: 'Điều chỉnh bảng lương',
@@ -101,9 +101,9 @@ const PERMISSION_LABELS = {
 
 const PERMISSION_GROUPS = {
   AUTH: 'Tài khoản cá nhân',
-  EMPLOYEE_SELF: 'Công việc của nhân viên',
+  EMPLOYEE_SELF: 'Quyền cá nhân dùng chung',
   BOOKING: 'Vé và đặt chỗ',
-  PAYMENT: 'Thanh toán tại quầy',
+  PAYMENT: 'Thanh toán và đối soát',
   MOVIE: 'Phim, suất chiếu và giá vé',
   CINEMA: 'Rạp, phòng chiếu và ghế',
   CUSTOMER: 'Khách hàng và thành viên',

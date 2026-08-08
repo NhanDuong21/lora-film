@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -70,6 +71,10 @@ public class Account {
 	)
 	private Set<Role> roles = new HashSet<>();
 
+	@ManyToOne(fetch = FetchType.EAGER)
+	@JoinColumn(name = "access_profile_id")
+	private AccessProfile accessProfile;
+
 	@PrePersist
 	void prePersist() {
 		if (status == null) {
@@ -121,6 +126,8 @@ public class Account {
 
 	public Set<Role> getRoles() { return roles; }
 	public void setRoles(Set<Role> roles) { this.roles = roles; }
+	public AccessProfile getAccessProfile() { return accessProfile; }
+	public void setAccessProfile(AccessProfile accessProfile) { this.accessProfile = accessProfile; }
 
 	public Role getRole() {
 		if (roles != null && !roles.isEmpty()) {

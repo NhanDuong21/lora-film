@@ -549,7 +549,7 @@ public class AuthServiceImpl implements AuthService {
 
 			Role role = requirePrimaryRole(account);
 			String newAccessToken = jwtUtil.generateToken(account.getId(), account.getEmail(),
-					role.getCode(), permissionCodes(role), session.getId(),
+					role.getCode(), permissionCodes(account, role), session.getId(),
 					account.getStatus() == com.project.authservice.enums.AccountStatus.ACTIVE);
 			auditLogService.log(account.getId(), "REFRESH_TOKEN_SUCCESS", servletRequest);
 
@@ -835,7 +835,7 @@ public class AuthServiceImpl implements AuthService {
 				.build();
 		session = userSessionRepository.save(session);
 		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), role.getCode(),
-				permissionCodes(role), session.getId(),
+				permissionCodes(account, role), session.getId(),
 				account.getStatus() == com.project.authservice.enums.AccountStatus.ACTIVE);
 		return new JwtResponse(accessToken, plainRefreshToken, jwtUtil.getJwtExpirationMs() / 1000L,
 				account.getEmail(), role.getCode(), account.getId());
@@ -864,8 +864,14 @@ public class AuthServiceImpl implements AuthService {
 		return role;
 	}
 
-	private Set<String> permissionCodes(Role role) {
-		return role.getPermissions().stream()
+	private Set<String> permissionCodes(Account account, Role role) {
+		java.util.stream.Stream<com.project.authservice.entity.Permission> rolePermissions =
+				role.getPermissions().stream();
+		java.util.stream.Stream<com.project.authservice.entity.Permission> profilePermissions =
+				account.getAccessProfile() == null
+						? java.util.stream.Stream.empty()
+						: account.getAccessProfile().getPermissions().stream();
+		return java.util.stream.Stream.concat(rolePermissions, profilePermissions)
 				.map(com.project.authservice.entity.Permission::getCode)
 				.collect(java.util.stream.Collectors.toUnmodifiableSet());
 	}

@@ -9,6 +9,7 @@ public class AccountDto {
     private String email;
     private String roleName;
     private RoleDto role;
+    private AccessProfileDto accessProfile;
     private Boolean enabled;
     private AccountStatus status;
     private LocalDateTime createdAt;
@@ -25,6 +26,7 @@ public class AccountDto {
     public RoleDto getRole() {
         return role;
     }
+    public AccessProfileDto getAccessProfile() { return accessProfile; }
     public Boolean getEnabled() {
         return enabled;
     }
@@ -49,6 +51,7 @@ public class AccountDto {
     public void setRole(RoleDto role) {
         this.role = role;
     }
+    public void setAccessProfile(AccessProfileDto accessProfile) { this.accessProfile = accessProfile; }
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
     }
@@ -79,6 +82,7 @@ public class AccountDto {
         private String email;
         private String roleName;
         private RoleDto role;
+        private AccessProfileDto accessProfile;
         private Boolean enabled;
         private AccountStatus status;
         private LocalDateTime createdAt;
@@ -100,6 +104,10 @@ public class AccountDto {
             this.role = role;
             return this;
         }
+        public AccountDtoBuilder accessProfile(AccessProfileDto accessProfile) {
+            this.accessProfile = accessProfile;
+            return this;
+        }
         public AccountDtoBuilder enabled(Boolean enabled) {
             this.enabled = enabled;
             return this;
@@ -119,6 +127,7 @@ public class AccountDto {
         public AccountDto build() {
             AccountDto dto = new AccountDto(this.id, this.email, this.roleName, this.status, this.createdAt, this.updatedAt);
             dto.setRole(this.role);
+            dto.setAccessProfile(this.accessProfile);
             dto.setEnabled(this.enabled);
             return dto;
         }

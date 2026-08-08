@@ -36,4 +36,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 			Pageable pageable);
 
 	java.util.List<Account> findAllByRolesId(Long roleId);
+	java.util.List<Account> findAllByAccessProfileId(Long accessProfileId);
+	long countByAccessProfileId(Long accessProfileId);
 }
