@@ -4,6 +4,7 @@ import { ChevronRight, Home } from 'lucide-react';
 const routeNameMap = {
   'admin': 'Quản trị viên',
   'employee': 'Nhân viên',
+  'manager': 'Quản lý rạp',
   'staff': 'Hồ sơ nhân viên',
   'hr': 'Trung tâm nhân sự',
   'approvals': 'Việc chờ duyệt',

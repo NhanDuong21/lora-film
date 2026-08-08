@@ -80,8 +80,9 @@ export function AdminRedirectGuard({ children }) {
     }
 
     const normalizedRole = userRole ? userRole.replace(/^ROLE_/, "") : "";
-    if (isAuthenticated && normalizedRole === "ADMIN" && location.pathname === "/") {
-        return <Navigate to="/admin" replace />;
+    if (isAuthenticated && location.pathname === "/") {
+        if (normalizedRole === "ADMIN") return <Navigate to="/admin" replace />;
+        if (normalizedRole === "MANAGER") return <Navigate to="/manager" replace />;
     }
 
     return children;

@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .requestMatchers("/internal/**").permitAll() // Internal security is verified by InternalTokenFilter
                 .requestMatchers("/api/admin/tmdb/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/api/manager/**").hasAuthority("ROLE_MANAGER")
                 .anyRequest().permitAll()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

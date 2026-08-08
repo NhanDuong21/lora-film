@@ -35,6 +35,13 @@ public class JwtUtil {
 
 	public String generateToken(Long userId, String email, String role,
 			Set<String> permissions, Long sessionId, boolean identityVerified) {
+		return generateToken(userId, email, role, permissions, sessionId,
+				identityVerified, Set.of());
+	}
+
+	public String generateToken(Long userId, String email, String role,
+			Set<String> permissions, Long sessionId, boolean identityVerified,
+			Set<String> cinemaPublicIds) {
 		long issuedAtMs = System.currentTimeMillis();
 		Date issuedAt = new Date(issuedAtMs);
 		return Jwts.builder()
@@ -42,6 +49,7 @@ public class JwtUtil {
 				.claim("userId", userId)
 				.claim("role", role)
 				.claim("permissions", permissions == null ? Set.of() : permissions)
+				.claim("cinemaPublicIds", cinemaPublicIds == null ? Set.of() : cinemaPublicIds)
 				.claim("sid", sessionId)
 				.claim("identityVerified", identityVerified)
 				.claim("tokenType", "access")
@@ -102,6 +110,15 @@ public class JwtUtil {
 
 	public Set<String> extractPermissions(String token) {
 		Object value = extractClaims(token).get("permissions");
+		if (!(value instanceof List<?> list)) {
+			return Set.of();
+		}
+		return list.stream().filter(String.class::isInstance).map(String.class::cast)
+				.collect(java.util.stream.Collectors.toUnmodifiableSet());
+	}
+
+	public Set<String> extractCinemaPublicIds(String token) {
+		Object value = extractClaims(token).get("cinemaPublicIds");
 		if (!(value instanceof List<?> list)) {
 			return Set.of();
 		}

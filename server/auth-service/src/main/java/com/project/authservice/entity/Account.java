@@ -15,9 +15,12 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import com.project.authservice.enums.AccountStatus;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Entity
@@ -75,6 +78,14 @@ public class Account {
 	@JoinColumn(name = "access_profile_id")
 	private AccessProfile accessProfile;
 
+	@ElementCollection(fetch = FetchType.EAGER)
+	@CollectionTable(
+			name = "manager_cinema_assignments",
+			joinColumns = @JoinColumn(name = "account_id")
+	)
+	@Column(name = "cinema_public_id", nullable = false, length = 36)
+	private Set<String> assignedCinemaPublicIds = new LinkedHashSet<>();
+
 	@PrePersist
 	void prePersist() {
 		if (status == null) {
@@ -128,6 +139,12 @@ public class Account {
 	public void setRoles(Set<Role> roles) { this.roles = roles; }
 	public AccessProfile getAccessProfile() { return accessProfile; }
 	public void setAccessProfile(AccessProfile accessProfile) { this.accessProfile = accessProfile; }
+	public Set<String> getAssignedCinemaPublicIds() { return assignedCinemaPublicIds; }
+	public void setAssignedCinemaPublicIds(Set<String> assignedCinemaPublicIds) {
+		this.assignedCinemaPublicIds = assignedCinemaPublicIds == null
+				? new LinkedHashSet<>()
+				: new LinkedHashSet<>(assignedCinemaPublicIds);
+	}
 
 	public Role getRole() {
 		if (roles != null && !roles.isEmpty()) {

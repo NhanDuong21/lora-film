@@ -3,6 +3,8 @@ package com.project.authservice.dto;
 import com.project.authservice.enums.AccountStatus;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class AccountDto {
     private Long id;
@@ -10,6 +12,7 @@ public class AccountDto {
     private String roleName;
     private RoleDto role;
     private AccessProfileDto accessProfile;
+    private Set<String> assignedCinemaPublicIds = new LinkedHashSet<>();
     private Boolean enabled;
     private AccountStatus status;
     private LocalDateTime createdAt;
@@ -27,6 +30,7 @@ public class AccountDto {
         return role;
     }
     public AccessProfileDto getAccessProfile() { return accessProfile; }
+    public Set<String> getAssignedCinemaPublicIds() { return assignedCinemaPublicIds; }
     public Boolean getEnabled() {
         return enabled;
     }
@@ -52,6 +56,11 @@ public class AccountDto {
         this.role = role;
     }
     public void setAccessProfile(AccessProfileDto accessProfile) { this.accessProfile = accessProfile; }
+    public void setAssignedCinemaPublicIds(Set<String> assignedCinemaPublicIds) {
+        this.assignedCinemaPublicIds = assignedCinemaPublicIds == null
+                ? new LinkedHashSet<>()
+                : new LinkedHashSet<>(assignedCinemaPublicIds);
+    }
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
     }
@@ -83,6 +92,7 @@ public class AccountDto {
         private String roleName;
         private RoleDto role;
         private AccessProfileDto accessProfile;
+        private Set<String> assignedCinemaPublicIds;
         private Boolean enabled;
         private AccountStatus status;
         private LocalDateTime createdAt;
@@ -108,6 +118,10 @@ public class AccountDto {
             this.accessProfile = accessProfile;
             return this;
         }
+        public AccountDtoBuilder assignedCinemaPublicIds(Set<String> assignedCinemaPublicIds) {
+            this.assignedCinemaPublicIds = assignedCinemaPublicIds;
+            return this;
+        }
         public AccountDtoBuilder enabled(Boolean enabled) {
             this.enabled = enabled;
             return this;
@@ -128,6 +142,7 @@ public class AccountDto {
             AccountDto dto = new AccountDto(this.id, this.email, this.roleName, this.status, this.createdAt, this.updatedAt);
             dto.setRole(this.role);
             dto.setAccessProfile(this.accessProfile);
+            dto.setAssignedCinemaPublicIds(this.assignedCinemaPublicIds);
             dto.setEnabled(this.enabled);
             return dto;
         }

@@ -20,6 +20,10 @@ describe('resolvePostLoginPath', () => {
     expect(resolvePostLoginPath({ role: 'ROLE_EMPLOYEE' })).toBe('/employee');
   });
 
+  it('keeps MANAGER inside the assigned-cinema workspace', () => {
+    expect(resolvePostLoginPath({ role: 'ROLE_MANAGER' })).toBe('/manager');
+  });
+
   it('does not treat the retired STAFF role as an employee identity', () => {
     expect(resolvePostLoginPath({ role: 'ROLE_STAFF' })).toBe('/');
   });

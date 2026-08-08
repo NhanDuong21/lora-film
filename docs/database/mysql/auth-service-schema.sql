@@ -234,6 +234,32 @@ CREATE INDEX idx_account_roles_role
 ON account_roles(role_id);
 
 
+-- =====================================================
+-- TABLE: manager_cinema_assignments
+-- Phạm vi rạp mà mỗi tài khoản MANAGER được phép điều hành
+-- =====================================================
+
+CREATE TABLE manager_cinema_assignments
+(
+    account_id BIGINT NOT NULL,
+    cinema_public_id VARCHAR(36) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (account_id, cinema_public_id),
+
+    CONSTRAINT fk_manager_cinema_assignments_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON DELETE CASCADE
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_manager_cinema_assignments_cinema
+ON manager_cinema_assignments(cinema_public_id);
+
+
 
 
 

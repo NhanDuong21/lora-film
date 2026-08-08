@@ -23,7 +23,9 @@ import {
   updateAccountAccessProfile,
   updateAccountRole,
   updateAccountStatus,
+  updateManagerCinemaAssignments,
 } from '../services/authAdminService';
+import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import {
   ActionModal,
   ConsolePagination,
@@ -68,6 +70,12 @@ const sameIds = (left, right) => {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 };
 
+const sameStrings = (left = [], right = []) => {
+  const a = [...left].map(String).sort();
+  const b = [...right].map(String).sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+};
+
 export default function AdminAccountPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
@@ -79,6 +87,7 @@ export default function AdminAccountPage() {
   const [accounts, setAccounts] = useState({ content: [], totalPages: 0, totalElements: 0 });
   const [roles, setRoles] = useState([]);
   const [accessProfiles, setAccessProfiles] = useState([]);
+  const [cinemas, setCinemas] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [accountState, setAccountState] = useState({ loading: true, error: '' });
   const [accessState, setAccessState] = useState({ loading: true, error: '' });
@@ -89,6 +98,7 @@ export default function AdminAccountPage() {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [draftRoleId, setDraftRoleId] = useState('');
   const [draftAccessProfileId, setDraftAccessProfileId] = useState('');
+  const [draftCinemaPublicIds, setDraftCinemaPublicIds] = useState([]);
   const [selectedAccessProfileId, setSelectedAccessProfileId] = useState('');
   const [selectedPermissionIds, setSelectedPermissionIds] = useState([]);
   const [permissionSearch, setPermissionSearch] = useState('');
@@ -118,16 +128,19 @@ export default function AdminAccountPage() {
   const loadAccessConfiguration = useCallback(async (preferredProfileId = '') => {
     setAccessState({ loading: true, error: '' });
     try {
-      const [roleData, permissionData, profileData] = await Promise.all([
+      const [roleData, permissionData, profileData, cinemaResponse] = await Promise.all([
         getRoles(),
         getPermissions(),
         getAccessProfiles(),
+        adminCinemaService.getCinemas({ page: 0, size: 100, showDeleted: false, sort: 'name,asc' })
+          .catch(() => null),
       ]);
       const nextRoles = roleData || [];
       const nextProfiles = profileData || [];
       setRoles(nextRoles);
       setPermissions(permissionData || []);
       setAccessProfiles(nextProfiles);
+      setCinemas(cinemaResponse?.data?.data || []);
       const selectedProfile = nextProfiles.find(profile => String(profile.id) === String(preferredProfileId))
         || nextProfiles.find(profile => profile.code === 'BOX_OFFICE')
         || nextProfiles[0];
@@ -155,6 +168,10 @@ export default function AdminAccountPage() {
   const employeeRole = useMemo(
     () => roles.find(role => normalizeRoleCode(role) === 'EMPLOYEE'),
     [roles],
+  );
+  const cinemaByPublicId = useMemo(
+    () => new Map(cinemas.map(cinema => [String(cinema.publicId), cinema])),
+    [cinemas],
   );
   const selectedAccessProfile = useMemo(
     () => accessProfiles.find(profile => String(profile.id) === selectedAccessProfileId),
@@ -230,6 +247,7 @@ export default function AdminAccountPage() {
     setSelectedAccount(account);
     setDraftRoleId(String(account.role?.id || ''));
     setDraftAccessProfileId(String(account.accessProfile?.id || ''));
+    setDraftCinemaPublicIds(account.assignedCinemaPublicIds || []);
   };
 
   const handleAccountAccessSave = async () => {
@@ -241,12 +259,22 @@ export default function AdminAccountPage() {
     const nextRoleCode = normalizeRoleCode(nextRole);
     const roleChanged = String(selectedAccount.role?.id || '') !== draftRoleId;
     const profileChanged = String(selectedAccount.accessProfile?.id || '') !== draftAccessProfileId;
-    if (!roleChanged && !(nextRoleCode === 'EMPLOYEE' && profileChanged)) {
+    const cinemaAssignmentsChanged = !sameStrings(
+      selectedAccount.assignedCinemaPublicIds || [],
+      draftCinemaPublicIds,
+    );
+    if (!roleChanged
+      && !(nextRoleCode === 'EMPLOYEE' && profileChanged)
+      && !(nextRoleCode === 'MANAGER' && cinemaAssignmentsChanged)) {
       setSelectedAccount(null);
       return;
     }
     if (nextRoleCode === 'EMPLOYEE' && !draftAccessProfileId) {
       notify('Vui lòng chọn nhóm nghiệp vụ cho nhân viên.', 'error');
+      return;
+    }
+    if (nextRoleCode === 'MANAGER' && !draftCinemaPublicIds.length) {
+      notify('Vui lòng chọn ít nhất một rạp cho tài khoản Quản lý rạp.', 'error');
       return;
     }
     if (isCurrentAccount(selectedAccount) && normalizeRoleCode(nextRole) !== 'ADMIN') {
@@ -257,7 +285,9 @@ export default function AdminAccountPage() {
       title: 'Xác nhận phân quyền tài khoản',
       message: nextRoleCode === 'EMPLOYEE'
         ? `${selectedAccount.email} sẽ là Nhân viên thuộc nhóm “${accessProfiles.find(profile => String(profile.id) === draftAccessProfileId)?.name}”. Phiên đăng nhập hiện tại sẽ được làm mới.`
-        : `${selectedAccount.email} sẽ chuyển sang “${getRolePresentation(nextRole).label}”. Phiên đăng nhập hiện tại sẽ được làm mới.`,
+        : nextRoleCode === 'MANAGER'
+          ? `${selectedAccount.email} sẽ quản lý ${draftCinemaPublicIds.length} rạp đã chọn và không thể truy cập rạp khác. Phiên đăng nhập hiện tại sẽ được làm mới.`
+          : `${selectedAccount.email} sẽ chuyển sang “${getRolePresentation(nextRole).label}”. Phiên đăng nhập hiện tại sẽ được làm mới.`,
       confirmLabel: 'Lưu phân quyền',
       tone: 'warning',
     });
@@ -269,6 +299,9 @@ export default function AdminAccountPage() {
       }
       if (nextRoleCode === 'EMPLOYEE' && (roleChanged || profileChanged)) {
         await updateAccountAccessProfile(selectedAccount.id, Number(draftAccessProfileId));
+      }
+      if (nextRoleCode === 'MANAGER' && (roleChanged || cinemaAssignmentsChanged)) {
+        await updateManagerCinemaAssignments(selectedAccount.id, draftCinemaPublicIds);
       }
       setSelectedAccount(null);
       await loadAccounts();
@@ -352,11 +385,16 @@ export default function AdminAccountPage() {
 
   const selectedRole = roles.find(role => String(role.id) === draftRoleId);
   const selectedRoleInfo = getRolePresentation(selectedRole);
+  const selectedCinemaNames = draftCinemaPublicIds
+    .map(publicId => cinemaByPublicId.get(String(publicId))?.name)
+    .filter(Boolean);
   const isAccessChanged = !sameIds(profilePermissionIds, selectedPermissionIds);
   const accountAccessChanged = Boolean(selectedAccount) && (
     String(selectedAccount.role?.id || '') !== draftRoleId
     || (normalizeRoleCode(selectedRole) === 'EMPLOYEE'
       && String(selectedAccount.accessProfile?.id || '') !== draftAccessProfileId)
+    || (normalizeRoleCode(selectedRole) === 'MANAGER'
+      && !sameStrings(selectedAccount.assignedCinemaPublicIds || [], draftCinemaPublicIds))
   );
 
   return (
@@ -427,7 +465,27 @@ export default function AdminAccountPage() {
                         <tr key={account.id} className="hover:bg-white/[0.025]">
                           <td className="p-4"><p className="font-bold text-white">{account.email}</p><p className="mt-1 text-[10px] text-zinc-600">Mã tài khoản #{account.id} · {account.enabled ? 'Đã xác minh' : 'Chưa xác minh'}</p></td>
                           <td className="p-4"><span className="inline-flex rounded-full border border-brand-orange/25 bg-brand-orange/10 px-2.5 py-1 text-xs font-bold text-brand-orange">{roleInfo.label}</span></td>
-                          <td className="p-4">{normalizeRoleCode(role) === 'EMPLOYEE' ? <><p className={`font-bold ${account.accessProfile?.code === 'GENERAL_STAFF' ? 'text-amber-300' : 'text-zinc-200'}`}>{account.accessProfile?.name || 'Chưa phân nhóm nghiệp vụ'}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{account.accessProfile?.description || 'Cần chọn công việc để cấp đúng quyền.'}</p></> : <><p className="text-zinc-300">{roleInfo.scope}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{roleInfo.description}</p></>}</td>
+                          <td className="p-4">
+                            {normalizeRoleCode(role) === 'EMPLOYEE' ? (
+                              <><p className={`font-bold ${account.accessProfile?.code === 'GENERAL_STAFF' ? 'text-amber-300' : 'text-zinc-200'}`}>{account.accessProfile?.name || 'Chưa phân nhóm nghiệp vụ'}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{account.accessProfile?.description || 'Cần chọn công việc để cấp đúng quyền.'}</p></>
+                            ) : normalizeRoleCode(role) === 'MANAGER' ? (
+                              <>
+                                <p className={`font-bold ${(account.assignedCinemaPublicIds || []).length ? 'text-zinc-200' : 'text-amber-300'}`}>
+                                  {(account.assignedCinemaPublicIds || []).length
+                                    ? `${account.assignedCinemaPublicIds.length} rạp được phân công`
+                                    : 'Chưa phân công rạp'}
+                                </p>
+                                <p className="mt-1 max-w-xs text-xs text-zinc-600">
+                                  {(account.assignedCinemaPublicIds || [])
+                                    .map(publicId => cinemaByPublicId.get(String(publicId))?.name)
+                                    .filter(Boolean)
+                                    .join(' · ') || 'Cần chọn rạp trước khi bàn giao tài khoản.'}
+                                </p>
+                              </>
+                            ) : (
+                              <><p className="text-zinc-300">{roleInfo.scope}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{roleInfo.description}</p></>
+                            )}
+                          </td>
                           <td className="p-4"><StatusBadge status={account.status} label={STATUS_LABELS[account.status]} /></td>
                           <td className="p-4 text-right"><button type="button" onClick={() => openAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-brand-orange/40 hover:text-brand-orange"><Settings2 size={14} /> Quản lý</button></td>
                         </tr>
@@ -604,10 +662,51 @@ export default function AdminAccountPage() {
                 <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100"><Info size={18} className="mt-0.5 shrink-0" /><p>Tài khoản sẽ nhận <strong>quyền cá nhân dùng chung</strong> cộng với quyền của nhóm nghiệp vụ đã chọn.</p></div>
               </div>
             ) : null}
+            {normalizeRoleCode(selectedRole) === 'MANAGER' ? (
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-sm font-black text-white">Chọn rạp được phân công</h3>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">Quản lý rạp chỉ xem và điều hành dữ liệu của những rạp được chọn tại đây. Hệ thống sẽ chặn truy cập sang rạp khác.</p>
+                </div>
+                {cinemas.length ? (
+                  <div className="space-y-2">
+                    {cinemas.map(cinema => {
+                      const checked = draftCinemaPublicIds.includes(String(cinema.publicId));
+                      return (
+                        <button
+                          key={cinema.publicId}
+                          type="button"
+                          onClick={() => setDraftCinemaPublicIds(current => checked
+                            ? current.filter(publicId => publicId !== String(cinema.publicId))
+                            : [...current, String(cinema.publicId)])}
+                          className={`w-full rounded-xl border p-4 text-left transition-colors ${checked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}
+                        >
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="font-bold text-white">{cinema.name}</span>
+                            {checked ? <CheckCircle2 size={17} className="shrink-0 text-brand-orange" /> : null}
+                          </span>
+                          <span className="mt-1 block text-xs leading-5 text-zinc-500">{[cinema.address, cinema.city].filter(Boolean).join(', ') || 'Chưa cập nhật địa chỉ'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><AlertTriangle size={18} className="mt-0.5 shrink-0" /><p>Chưa tải được danh sách rạp. Vui lòng kiểm tra dịch vụ rạp trước khi phân quyền.</p></div>
+                )}
+                <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100"><Info size={18} className="mt-0.5 shrink-0" /><p>Đã chọn <strong>{draftCinemaPublicIds.length} rạp</strong>. Khi đổi phạm vi, tài khoản Manager sẽ phải đăng nhập lại để nhận quyền mới.</p></div>
+              </div>
+            ) : null}
             {normalizeRoleCode(selectedRole) === 'ADMIN' ? (
               <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><AlertTriangle size={18} className="mt-0.5 shrink-0" /><p>Quản trị hệ thống có toàn quyền. Chỉ cấp vai trò này cho người chịu trách nhiệm cao nhất.</p></div>
             ) : null}
-            <div className="rounded-xl border border-white/10 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Phạm vi sau khi lưu</p><p className="mt-2 font-bold text-zinc-200">{selectedRoleInfo.scope}</p></div>
+            <div className="rounded-xl border border-white/10 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Phạm vi sau khi lưu</p>
+              <p className="mt-2 font-bold text-zinc-200">
+                {normalizeRoleCode(selectedRole) === 'MANAGER'
+                  ? selectedCinemaNames.join(' · ') || 'Chưa chọn rạp'
+                  : selectedRoleInfo.scope}
+              </p>
+            </div>
           </div>
         ) : null}
       </DetailDrawer>

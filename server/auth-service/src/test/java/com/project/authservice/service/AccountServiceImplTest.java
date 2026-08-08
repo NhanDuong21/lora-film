@@ -16,7 +16,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -93,6 +95,41 @@ class AccountServiceImplTest {
         assertThatThrownBy(() -> service.updateAccountRole(10L, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("already assigned");
+
+        verify(accountRepository, never()).save(any());
+        verify(credentialRevocationService, never()).revokeAll(any());
+    }
+
+    @Test
+    void managerCinemaAssignmentsAreNormalizedAndCredentialsAreRevoked() {
+        Role manager = Role.builder().id(2L).code("MANAGER").roleName("Cinema manager").build();
+        Account account = account(10L, manager, AccountStatus.ACTIVE);
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(account)).thenReturn(account);
+
+        service.updateManagerCinemaAssignments(10L, Set.of(
+                "B1575C2D-9081-11F1-BF65-0EBAB02BF6F5",
+                "b1576780-9081-11f1-bf65-0ebab02bf6f5"));
+
+        assertThat(account.getAssignedCinemaPublicIds()).containsExactly(
+                "b1575c2d-9081-11f1-bf65-0ebab02bf6f5",
+                "b1576780-9081-11f1-bf65-0ebab02bf6f5");
+        verify(credentialRevocationService).revokeAll(10L);
+        verify(authOutboxService).record(eq("MANAGER_CINEMA_ASSIGNMENTS_CHANGED"), eq(10L), any());
+        verify(auditLogService).log(10L, "UPDATE_MANAGER_CINEMA_ASSIGNMENTS", request);
+    }
+
+    @Test
+    void cinemaAssignmentsAreRejectedForNonManagerAccount() {
+        Account account = account(10L,
+                Role.builder().id(3L).code("EMPLOYEE").roleName("Employee").build(),
+                AccountStatus.ACTIVE);
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.updateManagerCinemaAssignments(
+                10L, Set.of("b1575c2d-9081-11f1-bf65-0ebab02bf6f5")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("MANAGER");
 
         verify(accountRepository, never()).save(any());
         verify(credentialRevocationService, never()).revokeAll(any());

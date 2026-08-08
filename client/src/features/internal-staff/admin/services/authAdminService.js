@@ -10,6 +10,8 @@ export const updateAccountRole = async (id, roleId) =>
   data(await apiClient.put(`/api/accounts/${id}/role`, null, { params: { roleId } }));
 export const updateAccountAccessProfile = async (id, accessProfileId) =>
   data(await apiClient.put(`/api/accounts/${id}/access-profile`, null, { params: { accessProfileId } }));
+export const updateManagerCinemaAssignments = async (id, cinemaPublicIds) =>
+  data(await apiClient.put(`/api/accounts/${id}/cinema-assignments`, { cinemaPublicIds }));
 export const createEmployeeAccount = async (payload) => 
   data(await apiClient.post('/api/accounts/employee', payload));
 

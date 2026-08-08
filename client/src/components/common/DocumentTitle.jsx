@@ -81,6 +81,10 @@ const pageTitle = pathname => {
   if (adminTitle) return adminTitle[1];
   if (path === '/admin') return 'Tổng quan quản trị';
 
+  if (path === '/manager') return 'Tổng quan vận hành rạp';
+  if (path === '/manager/showtimes') return 'Lịch chiếu tại rạp';
+  if (path === '/manager/cinema') return 'Thông tin và giờ mở cửa';
+
   if (path === '/employee' || path === '/employee/dashboard') return 'Bảng điều khiển nhân viên';
   if (path === '/employee/checkin') return 'Chấm công nhân viên';
   if (path === '/employee/schedules') return 'Lịch làm việc';

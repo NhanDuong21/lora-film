@@ -550,7 +550,8 @@ public class AuthServiceImpl implements AuthService {
 			Role role = requirePrimaryRole(account);
 			String newAccessToken = jwtUtil.generateToken(account.getId(), account.getEmail(),
 					role.getCode(), permissionCodes(account, role), session.getId(),
-					account.getStatus() == com.project.authservice.enums.AccountStatus.ACTIVE);
+					account.getStatus() == com.project.authservice.enums.AccountStatus.ACTIVE,
+					account.getAssignedCinemaPublicIds());
 			auditLogService.log(account.getId(), "REFRESH_TOKEN_SUCCESS", servletRequest);
 
 			long expiresInSeconds = jwtUtil.getJwtExpirationMs() / 1000;
@@ -836,7 +837,8 @@ public class AuthServiceImpl implements AuthService {
 		session = userSessionRepository.save(session);
 		String accessToken = jwtUtil.generateToken(account.getId(), account.getEmail(), role.getCode(),
 				permissionCodes(account, role), session.getId(),
-				account.getStatus() == com.project.authservice.enums.AccountStatus.ACTIVE);
+				account.getStatus() == com.project.authservice.enums.AccountStatus.ACTIVE,
+				account.getAssignedCinemaPublicIds());
 		return new JwtResponse(accessToken, plainRefreshToken, jwtUtil.getJwtExpirationMs() / 1000L,
 				account.getEmail(), role.getCode(), account.getId());
 	}

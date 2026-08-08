@@ -96,6 +96,9 @@ public class AccountServiceImpl implements AccountService {
         if (!"EMPLOYEE".equals(role.getCode())) {
             account.setAccessProfile(null);
         }
+        if (!"MANAGER".equals(role.getCode())) {
+            account.setAssignedCinemaPublicIds(java.util.Set.of());
+        }
         account = accountRepository.save(account);
         
         credentialRevocationService.revokeAll(account.getId());
@@ -103,6 +106,40 @@ public class AccountServiceImpl implements AccountService {
         authOutboxService.record("ACCOUNT_ROLE_CHANGED", account.getId(),
                 java.util.Map.of("accountId", account.getId(), "role", roleCode));
         auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ROLE", servletRequest);
+        return mapToDto(account);
+    }
+
+    @Override
+    @Transactional
+    public AccountDto updateManagerCinemaAssignments(Long id, java.util.Set<String> cinemaPublicIds) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        if (account.getRole() == null || !"MANAGER".equals(account.getRole().getCode())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Cinema assignments can only be applied to MANAGER accounts");
+        }
+
+        java.util.Set<String> normalizedIds = cinemaPublicIds == null
+                ? java.util.Set.of()
+                : cinemaPublicIds.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(String::trim)
+                        .filter(value -> !value.isEmpty())
+                        .map(value -> value.toLowerCase(java.util.Locale.ROOT))
+                        .sorted()
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (account.getAssignedCinemaPublicIds().equals(normalizedIds)) {
+            return mapToDto(account);
+        }
+
+        account.setAssignedCinemaPublicIds(normalizedIds);
+        account = accountRepository.save(account);
+        credentialRevocationService.revokeAll(account.getId());
+        authOutboxService.record("MANAGER_CINEMA_ASSIGNMENTS_CHANGED", account.getId(),
+                java.util.Map.of(
+                        "accountId", account.getId(),
+                        "cinemaPublicIds", normalizedIds));
+        auditLogService.log(account.getId(), "UPDATE_MANAGER_CINEMA_ASSIGNMENTS", servletRequest);
         return mapToDto(account);
     }
 
@@ -144,6 +181,7 @@ public class AccountServiceImpl implements AccountService {
                         .name(account.getRole().getRoleName())
                         .build())
                 .accessProfile(mapAccessProfile(account.getAccessProfile()))
+                .assignedCinemaPublicIds(account.getAssignedCinemaPublicIds())
                 .enabled(account.getIsEnabled())
                 .status(account.getAccountStatus())
                 .createdAt(account.getCreatedAt())

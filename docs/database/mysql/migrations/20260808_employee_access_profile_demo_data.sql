@@ -1,8 +1,18 @@
 -- Dữ liệu demo để kiểm thử các nhóm nghiệp vụ nhân viên.
--- Chạy sau 20260808_employee_access_profiles.sql và có thể chạy lại an toàn.
+-- Chạy sau 20260808_employee_access_profiles.sql và 20260808_manager_cinema_scope.sql.
+-- Có thể chạy lại an toàn.
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE auth_db;
 
 START TRANSACTION;
+
+INSERT IGNORE INTO auth_db.manager_cinema_assignments (account_id, cinema_public_id)
+SELECT account.id, cinema.public_id
+FROM auth_db.accounts account
+JOIN auth_db.account_roles account_role ON account_role.account_id = account.id
+JOIN auth_db.roles role ON role.id = account_role.role_id AND role.code = 'MANAGER'
+JOIN movie_db.cinemas cinema ON cinema.slug = 'lorafilm-landmark-81' AND cinema.deleted_at IS NULL
+WHERE account.email = 'nhandt.ce190741@gmail.com';
 
 INSERT INTO user_db.positions (code, title, description, department_id, is_deleted)
 SELECT 'TICKET_CHECKER', 'Nhân viên soát vé',
