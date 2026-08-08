@@ -45,6 +45,8 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/scores/viewer')) return 'scores-viewer';
     if (path.endsWith('/scores/reconciliation')) return 'scores-reconciliation';
     if (path.endsWith('/staff')) return 'staff';
+    if (path.endsWith('/hr')) return 'hr';
+    if (path.endsWith('/approvals')) return 'approvals';
     if (path.endsWith('/workforce')) return 'workforce';
     if (path.endsWith('/payroll')) return 'payroll';
     if (path.endsWith('/accounts')) return 'accounts';
@@ -57,6 +59,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.includes('/notification-operations')) return 'notification-operations';
     if (path.endsWith('/departments')) return 'departments';
     if (path.endsWith('/positions')) return 'positions';
+    if (path.endsWith('/organization')) return 'organization';
     return 'dashboard';
   })();
 
@@ -302,7 +305,7 @@ export default function AdminLayout({ onBackHome }) {
       )}
 
       {/* Right Column Workspace (Fluid layout) */}
-      <div className="flex-1 min-h-0 h-full flex flex-col overflow-clip">
+      <div className="min-w-0 flex-1 min-h-0 h-full flex flex-col overflow-clip">
         
         {/* Sticky top Navigation Bar */}
         <header className="w-full h-[72px] bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800 flex items-center justify-between px-4 sm:px-8 shrink-0 z-20">
@@ -337,7 +340,7 @@ export default function AdminLayout({ onBackHome }) {
         </header>
 
         {/* Dynamic View Body Content */}
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 space-y-6">
           <Outlet context={outletContext} />
         </main>
       </div>

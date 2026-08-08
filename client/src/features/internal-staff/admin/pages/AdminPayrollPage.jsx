@@ -19,9 +19,8 @@ import {
   ConsolePanel,
   DetailDrawer,
   DetailGrid,
-  MetricStrip,
-  OperationsHeader
 } from '../components/OperationsConsole';
+import { HrHero, UatGuide, WorkflowSteps } from '../components/HrWorkspace';
 
 const currentMonth = () => {
   const now = new Date();
@@ -78,6 +77,14 @@ export default function AdminPayrollPage() {
     { label: 'Chờ kiểm soát', value: summary?.pendingApproval || 0, hint: 'Cần người khác với người tạo duyệt', icon: Clock3, tone: 'amber' },
     { label: 'Duyệt / chờ đối soát', value: `${summary?.approved || 0} / ${summary?.paymentPending || 0}`, hint: 'Lệnh ngân hàng chưa được coi là đã trả', icon: ShieldCheck, tone: 'blue' },
     { label: 'Đã thanh toán', value: summary?.paid || 0, hint: `${summary?.cancelled || 0} phiếu đã hủy`, icon: CheckCircle2, tone: 'green' }
+  ], [summary]);
+
+  const workflow = useMemo(() => [
+    { label: 'Lấy dữ liệu công', hint: 'Tạo phiếu từ ca làm', state: summary?.totalRecords ? 'done' : 'active' },
+    { label: 'Kiểm tra & duyệt', hint: (summary?.pendingApproval || 0) + ' phiếu đang chờ', state: summary?.pendingApproval ? 'active' : summary?.totalRecords ? 'done' : 'waiting' },
+    { label: 'Chờ thanh toán', hint: (summary?.approved || 0) + ' phiếu đã duyệt', state: summary?.approved ? 'active' : summary?.paymentPending || summary?.paid ? 'done' : 'waiting' },
+    { label: 'Đối soát chứng từ', hint: (summary?.paymentPending || 0) + ' phiếu cần khớp', state: summary?.paymentPending ? 'active' : summary?.paid ? 'done' : 'waiting' },
+    { label: 'Hoàn tất', hint: (summary?.paid || 0) + ' phiếu đã trả', state: summary?.paid ? 'done' : 'waiting' }
   ], [summary]);
 
   const openDetail = async payroll => {
@@ -180,9 +187,22 @@ export default function AdminPayrollPage() {
   </div> : null;
 
   return (
-    <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-5 text-white md:p-8">
-      <OperationsHeader eyebrow="Payroll control" title="Kiểm soát kỳ lương" description="Phiếu lương được sinh từ snapshot ca làm, chấm công và nghỉ phép; thanh toán chỉ hoàn tất sau khi khớp chứng từ ngân hàng với bút toán kế toán." actions={can('PAYROLL_CREATE') ? <><button disabled={submitting} type="button" onClick={generatePeriod} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white"><RefreshCcw size={18} /> Sinh từ chấm công</button><button type="button" onClick={() => openPayrollForm()} className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black"><FilePlus2 size={18} /> Phiếu ngoại lệ</button></> : null} />
-      <MetricStrip items={metrics} />
+    <section className="flex-1 space-y-5 overflow-auto text-white">
+      <HrHero context={'Kỳ lương ' + query.month} title="Quy trình bảng lương" description="Làm lần lượt từ dữ liệu chấm công đến đối soát. Mỗi phiếu luôn cho biết đang ở bước nào và nút tiếp theo cần bấm là gì." actions={<><UatGuide compact />{can('PAYROLL_CREATE') ? <><button disabled={submitting} type="button" onClick={generatePeriod} className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-black text-white hover:bg-white/5"><RefreshCcw size={18} /> Lấy dữ liệu chấm công</button><button type="button" onClick={() => openPayrollForm()} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black hover:bg-orange-400"><FilePlus2 size={18} /> Tạo phiếu ngoại lệ</button></> : null}</>} />
+      <WorkflowSteps steps={workflow} />
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((item, index) => {
+          const Icon = item.icon;
+          const statuses = ['', 'PENDING_APPROVAL', 'PAYMENT_PENDING', 'PAID'];
+          const selectedStage = query.status === statuses[index];
+          return <button key={item.label} type="button" onClick={() => setQuery(value => ({ ...value, status: statuses[index], page: 0 }))} className={'flex items-center justify-between rounded-2xl border p-4 text-left transition ' + (selectedStage ? 'border-orange-500/40 bg-orange-500/[0.06]' : 'border-white/10 bg-[#0b0b0e] hover:bg-white/[0.035]')}><div><p className="text-xs font-bold text-zinc-500">{item.label}</p><p className="mt-2 text-xl font-black text-white">{item.value}</p><p className="mt-1 text-[10px] text-zinc-600">{item.hint}</p></div><span className={'rounded-xl p-3 ' + (index === 0 ? 'bg-orange-500/10 text-orange-300' : index === 1 ? 'bg-amber-500/10 text-amber-300' : index === 2 ? 'bg-blue-500/10 text-blue-300' : 'bg-emerald-500/10 text-emerald-300')}><Icon size={20} /></span></button>;
+        })}
+      </div>
+
+      <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.05] px-5 py-4 text-sm leading-6 text-blue-100/75">
+        <span className="font-black text-blue-200">Cách vận hành đúng:</span> lấy dữ liệu chấm công → kiểm tra từng phiếu → tài khoản khác duyệt → nhập mã lô ngân hàng → nhập mã giao dịch và bút toán để đối soát. Chỉ sau bước cuối hệ thống mới ghi nhận “Đã trả”.
+      </div>
       <ConsolePanel>
         <div className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-[1fr_260px]"><label className="relative"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={18} /><input type="month" aria-label="Kỳ lương" value={query.month} onChange={event => setQuery(value => ({ ...value, month: event.target.value, page: 0 }))} className="h-11 w-full rounded-xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm outline-none focus:border-brand-orange" /></label><select aria-label="Lọc trạng thái phiếu lương" value={query.status} onChange={event => setQuery(value => ({ ...value, status: event.target.value, page: 0 }))} className="h-11 rounded-xl border border-white/10 bg-black/30 px-4 text-sm outline-none focus:border-brand-orange"><option value="">Tất cả trạng thái</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
         <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!result.content?.length} emptyMessage="Kỳ này chưa có phiếu lương">

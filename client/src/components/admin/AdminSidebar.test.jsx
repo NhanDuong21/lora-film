@@ -63,6 +63,17 @@ describe('AdminSidebar', () => {
     expect(screen.queryByText('Bảo mật')).not.toBeInTheDocument();
   });
 
+  it('organizes human resources around daily workflows', () => {
+    renderSidebar({ role: 'ADMIN', permissions: [] }, 'hr');
+
+    expect(screen.getByRole('button', { name: 'Nhân sự & tiền lương' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trung tâm nhân sự' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Việc chờ duyệt' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lịch ca & chấm công' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quy trình bảng lương' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sơ đồ tổ chức' })).toBeInTheDocument();
+  });
+
   it('renders the current avatar in the admin account card', () => {
     const avatarUrl = 'https://res.cloudinary.com/demo/image/upload/avatar.jpg';
     renderSidebar({
