@@ -5,7 +5,7 @@ import {
   formatCinemaDateTime,
   formatCinemaTime,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
-import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import { getOperationalShowtimePresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const PRICING_STATUS_LABELS = {
   COMPLETE: 'Đã đủ giá',
@@ -88,7 +88,7 @@ export default function ShowtimeQuickDrawer({ showtime, onClose, onViewDetail })
   const timezone = showtime.cinema?.timezone;
   const cleaningMinutes = Number(showtime.auditorium?.cleaningBufferMinutes || 0);
   const occupancyEndTime = addMinutes(showtime.endTime, cleaningMinutes);
-  const statusLabel = getShowtimeStatusPresentation(showtime.status).label;
+  const statusLabel = getOperationalShowtimePresentation(showtime).label;
   const pricingPresentation = getPricingStatusPresentation(pricingState.data, showtime.pricingStatus);
   const pricingLabel = pricingState.isLoading
     ? 'Đang kiểm tra…'

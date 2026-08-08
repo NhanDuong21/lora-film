@@ -119,6 +119,24 @@ describe('ShowtimeTable cinema timezone', () => {
     expect(onClearFilters).toHaveBeenLastCalledWith({ preserveBatch: true });
   });
 
+  it('hides expired drafts from operational views and keeps them in the audit list', () => {
+    const expiredDraft = {
+      ...showtime(),
+      status: 'DRAFT',
+      startTime: '2020-07-24T18:30:00Z',
+      endTime: '2020-07-24T20:00:00Z',
+    };
+    render(<ShowtimeTable {...defaultProps} showtimes={[expiredDraft]} />);
+
+    expect(screen.getByRole('region', { name: 'Tóm tắt lịch chiếu' })).toHaveTextContent('1 đã quá giờ');
+    expect(screen.getByText('Không còn suất nào có thể xử lý trong trang này')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Phòng chiếu × thời gian' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem dữ liệu đối soát' }));
+    expect(screen.getByRole('region', { name: 'Danh sách suất chiếu' })).toHaveTextContent('Đã quá giờ');
+    expect(screen.getByRole('region', { name: 'Danh sách suất chiếu' })).toHaveTextContent('không thể mở bán');
+  });
+
   it('warns when the room diagram only represents the current data page', () => {
     render(<ShowtimeTable {...defaultProps} totalElements={196} totalPages={2} />);
 
@@ -243,5 +261,33 @@ describe('ShowtimeTable cinema timezone', () => {
     );
     expect(screen.getByRole('button', { name: 'Mở bán 0 suất' })).toBeDisabled();
     expect(screen.queryByText(/1 cần xử lý/i)).not.toBeInTheDocument();
+  });
+
+  it('routes an expired auto-schedule batch to the replacement flow', () => {
+    render(
+      <MemoryRouter>
+        <ShowtimeTable
+          {...defaultProps}
+          batchId="preview-expired"
+          batchReadiness={{
+            batchId: 'preview-expired',
+            totalCount: 1,
+            eligibleCount: 0,
+            alreadyTargetCount: 0,
+            skippedCount: 1,
+            atomic: true,
+            actionAllowed: false,
+            reasonGroups: [{ reasonCode: 'SHOWTIME_CANNOT_OPEN_AFTER_START', count: 1 }],
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Suất chiếu đã bắt đầu hoặc thời điểm bắt đầu đã qua')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tạo lịch thay thế' })).toHaveAttribute(
+      'href',
+      '/admin/showtimes/auto?replaceBatchId=preview-expired',
+    );
+    expect(screen.getByRole('button', { name: 'Mở bán 0 suất' })).toBeDisabled();
   });
 });

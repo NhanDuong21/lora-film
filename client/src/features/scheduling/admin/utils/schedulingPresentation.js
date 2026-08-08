@@ -57,6 +57,11 @@ export const CANDIDATE_APPLY_PRESENTATION = Object.freeze({
 
 export const SHOWTIME_STATUS_PRESENTATION = Object.freeze({
   DRAFT: { label: 'Đang soạn', tone: 'zinc' },
+  EXPIRED_DRAFT: {
+    label: 'Đã quá giờ',
+    description: 'Suất chiếu vẫn được giữ để đối soát nhưng không còn có thể mở bán.',
+    tone: 'red',
+  },
   OPEN_FOR_BOOKING: { label: 'Đang mở bán', tone: 'green' },
   CLOSED: { label: 'Đã đóng bán', tone: 'amber' },
   CANCELLED: { label: 'Đã hủy', tone: 'red' },
@@ -170,6 +175,29 @@ export const getCandidateApplyPresentation = value => getPresentation(
 export const getShowtimeStatusPresentation = value => getPresentation(
   SHOWTIME_STATUS_PRESENTATION,
   value,
+);
+
+const toTimestamp = value => {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  return new Date(value).getTime();
+};
+
+export const isExpiredDraftShowtime = (showtime, now = Date.now()) => {
+  if (showtime?.status !== 'DRAFT') return false;
+  const startTimestamp = toTimestamp(showtime?.startTime);
+  const nowTimestamp = toTimestamp(now);
+  return Number.isFinite(startTimestamp)
+    && Number.isFinite(nowTimestamp)
+    && startTimestamp <= nowTimestamp;
+};
+
+export const getOperationalShowtimeStatus = (showtime, now = Date.now()) => (
+  isExpiredDraftShowtime(showtime, now) ? 'EXPIRED_DRAFT' : showtime?.status
+);
+
+export const getOperationalShowtimePresentation = (showtime, now = Date.now()) => (
+  getShowtimeStatusPresentation(getOperationalShowtimeStatus(showtime, now))
 );
 
 export const getShowtimeTransitionActionPresentation = value => getPresentation(

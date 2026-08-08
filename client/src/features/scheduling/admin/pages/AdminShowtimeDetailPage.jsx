@@ -10,9 +10,11 @@ import {
 import {
   getHistoryActorLabel,
   getLocalizedHistoryReason,
+  getOperationalShowtimeStatus,
   getShowtimeSourcePresentation,
   getShowtimeStatusPresentation,
   getShowtimeTransitionActionPresentation,
+  isExpiredDraftShowtime,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const transitionConsequences = {
@@ -30,6 +32,7 @@ const formatCurrency = (amount, currency = 'VND') => {
 const getStatusColor = (status) => {
   switch (status) {
     case 'DRAFT': return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
+    case 'EXPIRED_DRAFT': return 'bg-red-500/10 text-red-300 border-red-500/25';
     case 'OPEN_FOR_BOOKING': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
     case 'CLOSED': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
     case 'CANCELLED': return 'bg-red-500/10 text-red-400 border-red-500/20';
@@ -78,7 +81,10 @@ const AdminShowtimeDetailPage = () => {
     );
   }
 
-  const transitions = getAvailableTransitions(showtime.status);
+  const expiredDraft = isExpiredDraftShowtime(showtime);
+  const operationalStatus = getOperationalShowtimeStatus(showtime);
+  const transitions = getAvailableTransitions(showtime.status)
+    .filter(target => !(expiredDraft && target === 'OPEN_FOR_BOOKING'));
   const cinemaTimezone = showtime.cinema?.timezone;
   const timezoneResolution = resolveShowtimeCinemaTimezone(cinemaTimezone);
 
@@ -106,10 +112,10 @@ const AdminShowtimeDetailPage = () => {
                 Chi tiết suất chiếu
               </h1>
               <span
-                aria-label={`Trạng thái hiện tại: ${getShowtimeStatusPresentation(showtime.status).label}`}
-                className={`px-2.5 py-1 text-xs font-bold rounded-full border ${getStatusColor(showtime.status)}`}
+                aria-label={`Trạng thái hiện tại: ${getShowtimeStatusPresentation(operationalStatus).label}`}
+                className={`px-2.5 py-1 text-xs font-bold rounded-full border ${getStatusColor(operationalStatus)}`}
               >
-                {getShowtimeStatusPresentation(showtime.status).label}
+                {getShowtimeStatusPresentation(operationalStatus).label}
               </span>
             </div>
             <p className="text-zinc-500 text-sm mt-1">Kiểm tra thông tin phim, phòng và giá trước khi mở bán.</p>
@@ -149,6 +155,16 @@ const AdminShowtimeDetailPage = () => {
           )}
         </div>
       </div>
+
+      {expiredDraft && (
+        <div className="mx-6 mt-5 flex items-start gap-3 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-red-100 md:mx-8" role="alert">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" aria-hidden="true" />
+          <div>
+            <p className="font-black">Suất chiếu đã qua giờ bắt đầu</p>
+            <p className="mt-1 text-sm text-red-100/70">Hệ thống không cho phép mở bán suất này. Dữ liệu vẫn được giữ để đối soát; bạn có thể hủy suất để hoàn tất xử lý.</p>
+          </div>
+        </div>
+      )}
 
       <div className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
         

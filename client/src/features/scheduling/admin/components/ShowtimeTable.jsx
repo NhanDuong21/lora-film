@@ -13,12 +13,16 @@ import {
 } from '@/features/scheduling/admin/utils/showtimeCinemaDateTime';
 import {
   getBatchStatusReasonPresentation,
+  getOperationalShowtimePresentation,
+  getOperationalShowtimeStatus,
   getPreviewShortCode,
   getShowtimeStatusPresentation,
+  isExpiredDraftShowtime,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const statusStyles = {
   DRAFT: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
+  EXPIRED_DRAFT: 'border-red-500/30 bg-red-500/10 text-red-300',
   OPEN_FOR_BOOKING: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
   CLOSED: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
   CANCELLED: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
@@ -27,18 +31,22 @@ const statusStyles = {
 
 const statusDescriptions = {
   DRAFT: 'Đang soạn, chưa bán vé',
+  EXPIRED_DRAFT: 'Đã qua giờ bắt đầu, không thể mở bán',
   OPEN_FOR_BOOKING: 'Khách có thể đặt vé',
   CLOSED: 'Đã đóng bán',
   CANCELLED: 'Đã hủy',
   FINISHED: 'Đã chiếu',
 };
 
-const StatusBadge = ({ status }) => (
-  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${statusStyles[status] || statusStyles.DRAFT}`}>
-    {status === 'OPEN_FOR_BOOKING' && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />}
-    {getShowtimeStatusPresentation(status).label}
+const StatusBadge = ({ showtime }) => {
+  const operationalStatus = getOperationalShowtimeStatus(showtime);
+  return (
+  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${statusStyles[operationalStatus] || statusStyles.DRAFT}`}>
+    {operationalStatus === 'OPEN_FOR_BOOKING' && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />}
+    {getOperationalShowtimePresentation(showtime).label}
   </span>
-);
+  );
+};
 
 const formatCount = value => new Intl.NumberFormat('vi-VN').format(Number(value || 0));
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
@@ -117,7 +125,9 @@ export default function ShowtimeTable({
     .map(value => ({ value, label: getShowtimeStatusPresentation(value).label }));
 
   const activeCount = showtimes.filter(item => item.status === 'OPEN_FOR_BOOKING').length;
-  const draftCount = showtimes.filter(item => item.status === 'DRAFT').length;
+  const expiredDraftCount = showtimes.filter(item => isExpiredDraftShowtime(item)).length;
+  const operationalShowtimes = showtimes.filter(item => !isExpiredDraftShowtime(item));
+  const draftCount = operationalShowtimes.filter(item => item.status === 'DRAFT').length;
   const totalBatchCount = Number(batchReadiness?.totalCount ?? totalElements ?? 0);
   const readyBatchCount = Number(batchReadiness?.eligibleCount ?? 0);
   const blockedBatchCount = Number(batchReadiness?.skippedCount ?? 0);
@@ -162,6 +172,12 @@ export default function ShowtimeTable({
     }
     if (cinemaCodes.has(reasonCode) && cinema?.publicId) {
       return { label: 'Mở cấu hình rạp', path: `/admin/cinemas/${encodeURIComponent(cinema.publicId)}` };
+    }
+    if (reasonCode === 'SHOWTIME_CANNOT_OPEN_AFTER_START' && batchId) {
+      return {
+        label: 'Tạo lịch thay thế',
+        path: `/admin/showtimes/auto?replaceBatchId=${encodeURIComponent(batchId)}`,
+      };
     }
     return { label: 'Xem danh sách suất', path: '' };
   };
@@ -211,6 +227,7 @@ export default function ShowtimeTable({
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm">
           <span><strong className="text-emerald-300">{formatCount(activeCount)}</strong> <span className="text-zinc-500">mở bán</span></span>
           <span><strong className="text-blue-300">{formatCount(draftCount)}</strong> <span className="text-zinc-500">đang soạn</span></span>
+          {expiredDraftCount > 0 && <span><strong className="text-red-300">{formatCount(expiredDraftCount)}</strong> <span className="text-zinc-500">đã quá giờ</span></span>}
           <span className="text-xs text-zinc-600">{formatCount(totalElements)} suất theo bộ lọc</span>
         </div>
         <div className="flex max-w-full flex-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Chế độ xem lịch chiếu">
@@ -357,21 +374,21 @@ export default function ShowtimeTable({
       </section>
       </details>
 
-      {!isLoading && showtimes.length > 0 && viewMode === 'DAY' && (
+      {!isLoading && operationalShowtimes.length > 0 && viewMode === 'DAY' && (
         <>
-          <ShowtimeDayView showtimes={showtimes} onOpenQuickDetail={setSelectedShowtime} />
+          <ShowtimeDayView showtimes={operationalShowtimes} onOpenQuickDetail={setSelectedShowtime} />
           <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang lịch theo ngày" />
         </>
       )}
 
-      {!isLoading && showtimes.length > 0 && viewMode === 'MOVIE' && (
+      {!isLoading && operationalShowtimes.length > 0 && viewMode === 'MOVIE' && (
         <>
-          <ShowtimeMovieView showtimes={showtimes} movies={movies} onOpenQuickDetail={setSelectedShowtime} />
+          <ShowtimeMovieView showtimes={operationalShowtimes} movies={movies} onOpenQuickDetail={setSelectedShowtime} />
           <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang lịch theo phim" />
         </>
       )}
 
-      {!isLoading && showtimes.length > 0 && viewMode === 'TIMELINE' && (
+      {!isLoading && operationalShowtimes.length > 0 && viewMode === 'TIMELINE' && (
         <>
           {Number(totalElements) > showtimes.length && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-100" role="note">
@@ -382,9 +399,18 @@ export default function ShowtimeTable({
               </p>
             </div>
           )}
-          <OperationalShowtimeTimeline showtimes={showtimes} requestedDate={date} onViewDetail={onViewDetail} />
+          <OperationalShowtimeTimeline showtimes={operationalShowtimes} requestedDate={date} onViewDetail={onViewDetail} />
           <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang sơ đồ lịch chiếu" />
         </>
+      )}
+
+      {!isLoading && showtimes.length > 0 && operationalShowtimes.length === 0 && viewMode !== 'LIST' && (
+        <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-8 text-center" role="status">
+          <CheckCircle2 className="mx-auto h-9 w-9 text-emerald-300" aria-hidden="true" />
+          <h2 className="mt-3 font-black text-emerald-100">Không còn suất nào có thể xử lý trong trang này</h2>
+          <p className="mt-2 text-sm text-emerald-100/70">Các suất đang soạn đã qua giờ được ẩn khỏi góc nhìn vận hành.</p>
+          <button type="button" onClick={() => setViewMode('LIST')} className="mt-4 rounded-xl border border-emerald-400/30 px-4 py-2 text-xs font-black text-emerald-100">Xem dữ liệu đối soát</button>
+        </section>
       )}
 
       {(viewMode === 'LIST' || isLoading || showtimes.length === 0) && <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/30" aria-label="Danh sách suất chiếu">
@@ -438,8 +464,8 @@ export default function ShowtimeTable({
                     {timezoneResolution.usedFallback && <span className="mt-1 inline-flex text-[10px] font-bold text-amber-300">Giờ hiển thị tạm thời</span>}
                   </div>
                   <div>
-                    <StatusBadge status={showtime.status} />
-                    <p className="mt-1 text-[11px] text-zinc-500">{statusDescriptions[showtime.status]}</p>
+                    <StatusBadge showtime={showtime} />
+                    <p className="mt-1 text-[11px] text-zinc-500">{statusDescriptions[getOperationalShowtimeStatus(showtime)]}</p>
                   </div>
                   <button type="button" onClick={() => setSelectedShowtime(showtime)} className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-brand-orange/30 px-3 text-xs font-black text-brand-orange hover:bg-brand-orange/10">
                     Xem nhanh

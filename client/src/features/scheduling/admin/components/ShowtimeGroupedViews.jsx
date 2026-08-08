@@ -4,21 +4,28 @@ import {
   formatShowtimeCinemaTime,
 } from '@/features/scheduling/admin/utils/showtimeCinemaDateTime';
 import { formatServiceDateKey, getCinemaDateKey } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
-import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import {
+  getOperationalShowtimePresentation,
+  getOperationalShowtimeStatus,
+} from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const statusTone = {
   DRAFT: 'border-zinc-700 bg-zinc-800 text-zinc-300',
+  EXPIRED_DRAFT: 'border-red-500/30 bg-red-500/10 text-red-300',
   OPEN_FOR_BOOKING: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
   CLOSED: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
   CANCELLED: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
   FINISHED: 'border-zinc-700 bg-zinc-900 text-zinc-500',
 };
 
-const CompactStatus = ({ status }) => (
-  <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${statusTone[status] || statusTone.DRAFT}`}>
-    {getShowtimeStatusPresentation(status).label}
+const CompactStatus = ({ showtime }) => {
+  const operationalStatus = getOperationalShowtimeStatus(showtime);
+  return (
+  <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${statusTone[operationalStatus] || statusTone.DRAFT}`}>
+    {getOperationalShowtimePresentation(showtime).label}
   </span>
-);
+  );
+};
 
 const showtimeSort = (left, right) => (
   new Date(left.startTime).getTime() - new Date(right.startTime).getTime()
@@ -49,7 +56,7 @@ const ShowtimeLine = ({ showtime, onOpenQuickDetail, includeDate = false }) => {
           {showtime.auditorium?.name || 'Chưa có phòng'} · {showtime.movieVersion?.versionName || showtime.movieVersion?.format || 'Chưa có phiên bản'}
         </p>
       </div>
-      <CompactStatus status={showtime.status} />
+      <CompactStatus showtime={showtime} />
       <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600 group-hover:text-brand-orange" aria-hidden="true" />
     </button>
   );

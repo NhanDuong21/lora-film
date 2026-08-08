@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -20,11 +21,13 @@ import {
   getMoviePalette,
   TIMELINE_ZOOM_MODES,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewViewModel';
+import { getOperationalShowtimeStatus } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const FILTERS = [
   { value: 'ALL', label: 'Tất cả' },
   { value: 'OPEN_FOR_BOOKING', label: 'Đang mở bán' },
   { value: 'DRAFT', label: 'Đang soạn' },
+  { value: 'EXPIRED_DRAFT', label: 'Đã quá giờ' },
   { value: 'CLOSED', label: 'Đã đóng bán' },
 ];
 
@@ -65,7 +68,7 @@ const buildViewModel = showtime => {
     auditoriumKey: `${cinemaKey}:${roomKey}`,
     auditoriumName: `${showtime.auditorium?.name || 'Chưa có phòng'}${showtime.cinema?.name ? ` · ${showtime.cinema.name}` : ''}`,
     auditoriumPublicId: showtime.auditorium?.publicId || null,
-    operationalStatus: showtime.status,
+    operationalStatus: getOperationalShowtimeStatus(showtime),
     selected: true,
     timelineEligible: serviceDate !== UNKNOWN_SERVICE_DATE_KEY && offsets.valid,
     palette: getMoviePalette(movieKey),
@@ -74,7 +77,7 @@ const buildViewModel = showtime => {
   };
 };
 
-export default function OperationalShowtimeTimeline({ showtimes = [], requestedDate, onViewDetail }) {
+export default function OperationalShowtimeTimeline({ showtimes = [], requestedDate, onViewDetail, readOnly = false }) {
   const [dateChoice, setDateChoice] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [zoomMode, setZoomMode] = useState(TIMELINE_ZOOM_MODES.FIT);
@@ -102,6 +105,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
     return Array.from(values.values()).sort((left, right) => left.name.localeCompare(right.name, 'vi'));
   }, [dateModels]);
   const draftCount = dateModels.filter(item => item.operationalStatus === 'DRAFT').length;
+  const expiredDraftCount = dateModels.filter(item => item.operationalStatus === 'EXPIRED_DRAFT').length;
   const openCount = dateModels.filter(item => item.operationalStatus === 'OPEN_FOR_BOOKING').length;
 
   if (models.length === 0) return null;
@@ -117,6 +121,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
         <div className="flex flex-wrap gap-2 text-xs font-bold">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />{openCount} mở bán</span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-blue-300"><Clock3 className="h-3.5 w-3.5" />{draftCount} đang soạn</span>
+          {expiredDraftCount > 0 && <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-red-300"><AlertTriangle className="h-3.5 w-3.5" />{expiredDraftCount} đã quá giờ</span>}
         </div>
       </div>
 
@@ -147,11 +152,11 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
         auditoriums={auditoriums}
         zoomMode={zoomMode}
         onZoomChange={setZoomMode}
-        onOpenDetails={candidate => setDrawerCandidate(candidate)}
+        onOpenDetails={readOnly ? undefined : candidate => setDrawerCandidate(candidate)}
         variant="operations"
       />
       <p className="flex items-center gap-2 text-xs text-zinc-500"><Clock3 className="h-3.5 w-3.5" />Đang hiển thị {filteredModels.length}/{dateModels.length} suất thuộc trang dữ liệu hiện tại.</p>
-      <ShowtimeQuickDrawer showtime={drawerCandidate?.raw || null} onClose={() => setDrawerCandidate(null)} onViewDetail={onViewDetail} />
+      {!readOnly && <ShowtimeQuickDrawer showtime={drawerCandidate?.raw || null} onClose={() => setDrawerCandidate(null)} onViewDetail={onViewDetail} />}
     </section>
   );
 }

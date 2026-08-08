@@ -25,6 +25,9 @@ const ZOOM_OPTIONS = [
 ];
 
 const getStatePresentation = candidate => {
+  if (candidate.operationalStatus === 'EXPIRED_DRAFT') {
+    return { marker: 'Đã quá giờ', icon: AlertTriangle, className: 'border-dashed border-red-300 opacity-60' };
+  }
   if (candidate.operationalStatus === 'OPEN_FOR_BOOKING') {
     return { marker: 'Đang mở bán', icon: CheckCircle2, className: 'border-solid' };
   }
@@ -71,6 +74,7 @@ const AutoScheduleTimeline = ({
   variant = 'proposal',
 }) => {
   const isOperations = variant === 'operations';
+  const canOpenDetails = typeof onOpenDetails === 'function';
   const viewportRef = useRef(null);
   const [viewportWidth, setViewportWidth] = useState(FALLBACK_VIEWPORT_WIDTH);
   const timelineWindow = useMemo(
@@ -226,17 +230,19 @@ const AutoScheduleTimeline = ({
                         const runtimeWidth = totalDuration > 0 ? (runtimeDuration / totalDuration) * 100 : 100;
                         const cleaningWidth = Math.max(100 - runtimeWidth, 0);
 
+                        const CandidateElement = canOpenDetails ? 'button' : 'div';
                         return (
-                          <button
+                          <CandidateElement
                             key={candidate.id}
-                            type="button"
-                            onClick={event => onOpenDetails(candidate, event.currentTarget)}
-                            aria-label={`${candidate.diagnostic ? 'Suất đang kiểm tra. ' : ''}${candidate.movieTitle}, ${candidate.startTimeDisplay}, ${state.marker}. Mở chi tiết`}
+                            type={canOpenDetails ? 'button' : undefined}
+                            role={canOpenDetails ? undefined : 'img'}
+                            onClick={canOpenDetails ? event => onOpenDetails(candidate, event.currentTarget) : undefined}
+                            aria-label={`${candidate.diagnostic ? 'Suất đang kiểm tra. ' : ''}${candidate.movieTitle}, ${candidate.startTimeDisplay}, ${state.marker}${canOpenDetails ? '. Mở chi tiết' : ''}`}
                             data-testid={`timeline-candidate-${candidate.id}`}
                             data-palette-index={candidate.palette.index}
                             data-state-marker={state.marker}
                             data-diagnostic={candidate.diagnostic ? 'true' : 'false'}
-                            className={`absolute top-1 h-[52px] min-w-11 overflow-hidden rounded-lg border-2 text-left shadow-lg transition-transform hover:z-20 hover:scale-[1.02] focus-visible:z-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${state.className}`}
+                            className={`absolute top-1 h-[52px] min-w-11 overflow-hidden rounded-lg border-2 text-left shadow-lg ${canOpenDetails ? 'transition-transform hover:z-20 hover:scale-[1.02] focus-visible:z-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white' : ''} ${state.className}`}
                             style={{ left: `${left}%`, width: `${width}%`, borderColor: candidate.diagnostic ? '#ffffff' : candidate.palette.border }}
                           >
                             <span className="absolute inset-y-0 left-0" data-testid={`runtime-segment-${candidate.id}`} style={{ width: `${runtimeWidth}%`, backgroundColor: candidate.palette.solid }} />
@@ -259,7 +265,7 @@ const AutoScheduleTimeline = ({
                               </span>
                               <span className="truncate text-[9px] font-bold opacity-80">{candidate.startTimeDisplay} · {state.marker}</span>
                             </span>
-                          </button>
+                          </CandidateElement>
                         );
                       })}
                     </div>

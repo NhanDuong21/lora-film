@@ -13,12 +13,15 @@ import {
   getCandidateValidationPresentation,
   getHistoryActorLabel,
   getLocalizedHistoryReason,
+  getOperationalShowtimePresentation,
+  getOperationalShowtimeStatus,
   getPreviewShortCode,
   getPreviewStatusPresentation,
   getScoreBreakdownRows,
   getShowtimeSourcePresentation,
   getShowtimeStatusPresentation,
   getShowtimeTransitionActionPresentation,
+  isExpiredDraftShowtime,
 } from './schedulingPresentation';
 
 describe('schedulingPresentation', () => {
@@ -31,7 +34,7 @@ describe('schedulingPresentation', () => {
       'PENDING', 'CREATED', 'SKIPPED', 'CONFLICT', 'FAILED',
     ]);
     expect(Object.keys(SHOWTIME_STATUS_PRESENTATION)).toEqual([
-      'DRAFT', 'OPEN_FOR_BOOKING', 'CLOSED', 'CANCELLED', 'FINISHED',
+      'DRAFT', 'EXPIRED_DRAFT', 'OPEN_FOR_BOOKING', 'CLOSED', 'CANCELLED', 'FINISHED',
     ]);
     expect(Object.keys(SHOWTIME_TRANSITION_ACTION_PRESENTATION)).toEqual([
       'OPEN_FOR_BOOKING', 'CLOSED', 'CANCELLED', 'FINISHED',
@@ -56,6 +59,16 @@ describe('schedulingPresentation', () => {
       'SHOWTIME_OVERLAPS_CINEMA_CLOSURE',
       'SHOWTIME_OVERLAPS_AUDITORIUM_MAINTENANCE',
     ]);
+  });
+
+  it('derives a display-only expired state for draft showtimes after their start time', () => {
+    const showtime = { status: 'DRAFT', startTime: '2026-08-08T04:00:00Z' };
+
+    expect(isExpiredDraftShowtime(showtime, '2026-08-08T04:00:00Z')).toBe(true);
+    expect(getOperationalShowtimeStatus(showtime, '2026-08-08T05:00:00Z')).toBe('EXPIRED_DRAFT');
+    expect(getOperationalShowtimePresentation(showtime, '2026-08-08T05:00:00Z').label).toBe('Đã quá giờ');
+    expect(getOperationalShowtimeStatus(showtime, '2026-08-08T03:59:59Z')).toBe('DRAFT');
+    expect(isExpiredDraftShowtime({ ...showtime, status: 'OPEN_FOR_BOOKING' }, '2026-08-08T05:00:00Z')).toBe(false);
   });
 
   it('localizes scheduling lifecycle values without losing technical values', () => {

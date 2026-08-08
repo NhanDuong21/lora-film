@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
-import { Building2, CalendarCheck2, CheckCircle2, Clock3, MapPin, RefreshCw } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { Building2, CalendarCheck2, CheckCircle2, MapPin } from 'lucide-react';
 import managerCinemaService from '../services/managerCinemaService';
-import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import ManagerTodayShowtimeViews from '../components/ManagerTodayShowtimeViews';
 
 const todayInputValue = () => {
   const now = new Date();
   const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
   return local.toISOString().slice(0, 10);
 };
-
-const formatTime = value => value
-  ? new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
-  : '—';
 
 const SummaryCard = ({ icon: Icon, label, value, note, tone = 'orange' }) => (
   <article className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
@@ -44,10 +40,8 @@ export default function ManagerDashboardPage() {
   }, [selectedCinemaId]);
 
   const showtimes = showtimeState.data;
-  const upcoming = useMemo(() => [...showtimes]
-    .filter(showtime => new Date(showtime.endTime) >= new Date())
-    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
-    .slice(0, 6), [showtimes]);
+  const todayShowtimes = useMemo(() => [...showtimes]
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime)), [showtimes]);
   const activeRooms = selectedCinema?.activeAuditoriums?.filter(room => room.status === 'ACTIVE').length
     ?? selectedCinema?.activeAuditoriums?.length
     ?? 0;
@@ -79,14 +73,13 @@ export default function ManagerDashboardPage() {
         <SummaryCard icon={CheckCircle2} label="Đang mở bán" value={openForBooking} note="Khách hàng có thể đặt vé ngay lúc này." tone="green" />
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
-        <header className="flex items-center justify-between gap-3 border-b border-white/10 p-5"><div><h2 className="font-black">Các suất sắp diễn ra</h2><p className="mt-1 text-xs text-zinc-600">Danh sách gần nhất trong ngày để quản lý dễ theo dõi.</p></div><Link to="/manager/showtimes" className="text-xs font-black text-brand-orange hover:underline">Xem toàn bộ lịch</Link></header>
-        {showtimeState.loading ? <p className="p-8 text-center text-sm text-zinc-500">Đang tải lịch chiếu…</p> : showtimeState.error ? <div className="p-8 text-center"><p className="text-sm text-red-300">{showtimeState.error}</p><button type="button" onClick={() => window.location.reload()} className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-brand-orange"><RefreshCw size={14} /> Tải lại</button></div> : upcoming.length ? (
-          <div className="divide-y divide-white/5">
-            {upcoming.map(showtime => <article key={showtime.showtimePublicId} className="grid gap-3 p-4 md:grid-cols-[110px_1fr_180px_150px] md:items-center md:px-5"><div className="flex items-center gap-2 text-xl font-black text-white"><Clock3 size={17} className="text-brand-orange" /> {formatTime(showtime.startTime)}</div><div><p className="font-bold text-white">{showtime.movie?.title || 'Chưa có tên phim'}</p><p className="mt-1 text-xs text-zinc-600">{showtime.movieVersion?.versionName || showtime.movieVersion?.format || 'Bản chiếu tiêu chuẩn'}</p></div><p className="text-sm font-semibold text-zinc-300">{showtime.auditorium?.name || 'Chưa xếp phòng'}</p><span className="w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-zinc-300">{getShowtimeStatusPresentation(showtime.status).label}</span></article>)}
-          </div>
-        ) : <p className="p-8 text-center text-sm text-zinc-500">Không còn suất chiếu nào sắp diễn ra hôm nay.</p>}
-      </section>
+      <ManagerTodayShowtimeViews
+        showtimes={todayShowtimes}
+        serviceDate={todayInputValue()}
+        isLoading={showtimeState.loading}
+        error={showtimeState.error}
+        onRetry={() => window.location.reload()}
+      />
     </div>
   );
 }

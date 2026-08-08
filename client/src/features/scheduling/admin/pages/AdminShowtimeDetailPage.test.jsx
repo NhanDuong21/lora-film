@@ -64,7 +64,7 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
   it('uses action verbs while keeping the current status badge distinct', () => {
     useShowtimeDetail.mockReturnValue({
       ...detailValue(),
-      showtime: { ...detailValue().showtime, status: 'DRAFT' },
+      showtime: { ...detailValue().showtime, status: 'DRAFT', startTime: '2099-07-24T18:30:00Z', endTime: '2099-07-24T20:00:00Z' },
     });
     const { unmount } = renderPage();
     expect(screen.getByRole('button', { name: 'Mở bán' })).toBeInTheDocument();
@@ -95,6 +95,19 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
     expect(screen.queryByRole('button', { name: 'Mở bán' })).not.toBeInTheDocument();
   });
 
+  it('marks a past draft as expired and removes the open-sale action', () => {
+    useShowtimeDetail.mockReturnValue({
+      ...detailValue(),
+      showtime: { ...detailValue().showtime, status: 'DRAFT', startTime: '2020-07-24T18:30:00Z', endTime: '2020-07-24T20:00:00Z' },
+    });
+    renderPage();
+
+    expect(screen.getByLabelText('Trạng thái hiện tại: Đã quá giờ')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Hệ thống không cho phép mở bán suất này');
+    expect(screen.queryByRole('button', { name: 'Mở bán' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hủy suất chiếu' })).toBeInTheDocument();
+  });
+
   it('explains temporarily disabled status actions without changing transition capability rules', () => {
     useShowtimeDetail.mockReturnValue({
       ...detailValue(),
@@ -112,7 +125,7 @@ describe('AdminShowtimeDetailPage cinema timezone', () => {
   it('disables opening when the backend reports incomplete pricing', () => {
     useShowtimeDetail.mockReturnValue({
       ...detailValue(),
-      showtime: { ...detailValue().showtime, status: 'DRAFT' },
+      showtime: { ...detailValue().showtime, status: 'DRAFT', startTime: '2099-07-24T18:30:00Z', endTime: '2099-07-24T20:00:00Z' },
       prices: {
         complete: false,
         prices: [],
