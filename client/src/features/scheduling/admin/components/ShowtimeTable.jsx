@@ -213,9 +213,11 @@ export default function ShowtimeTable({
           <span><strong className="text-blue-300">{formatCount(draftCount)}</strong> <span className="text-zinc-500">đang soạn</span></span>
           <span className="text-xs text-zinc-600">{formatCount(totalElements)} suất theo bộ lọc</span>
         </div>
-        <div className="flex rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Chế độ xem lịch chiếu">
-          <button type="button" aria-pressed={viewMode === 'TIMELINE'} onClick={() => setViewMode('TIMELINE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'TIMELINE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><PanelsTopLeft className="h-4 w-4" />Sơ đồ</button>
+        <div className="flex max-w-full flex-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Chế độ xem lịch chiếu">
+          <button type="button" aria-pressed={viewMode === 'DAY'} onClick={() => setViewMode('DAY')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'DAY' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><CalendarDays className="h-4 w-4" />Theo ngày</button>
+          <button type="button" aria-pressed={viewMode === 'MOVIE'} onClick={() => setViewMode('MOVIE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'MOVIE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><Film className="h-4 w-4" />Theo phim</button>
           <button type="button" aria-pressed={viewMode === 'LIST'} onClick={() => setViewMode('LIST')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'LIST' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><LayoutList className="h-4 w-4" />Danh sách</button>
+          <button type="button" aria-pressed={viewMode === 'TIMELINE'} onClick={() => setViewMode('TIMELINE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'TIMELINE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><PanelsTopLeft className="h-4 w-4" />Sơ đồ</button>
         </div>
       </section>}
 

@@ -62,6 +62,28 @@ describe('ShowtimeTable cinema timezone', () => {
     expect(onViewDetail).toHaveBeenCalledWith('showtime-1');
   });
 
+  it('offers day, movie, list, and timeline views on the regular showtime page', () => {
+    render(<ShowtimeTable {...defaultProps} movies={[{ title: 'Phim thử nghiệm', primaryPoster: '/poster.jpg' }]} />);
+
+    const viewGroup = screen.getByRole('group', { name: 'Chế độ xem lịch chiếu' });
+    expect(viewGroup).toHaveTextContent('Theo ngày');
+    expect(viewGroup).toHaveTextContent('Theo phim');
+    expect(viewGroup).toHaveTextContent('Danh sách');
+    expect(viewGroup).toHaveTextContent('Sơ đồ');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Theo ngày' }));
+    expect(screen.getByRole('region', { name: 'Lịch chiếu theo ngày' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Theo phim' }));
+    expect(screen.getByRole('region', { name: 'Lịch chiếu theo phim' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách', exact: true }));
+    expect(screen.getByRole('region', { name: 'Danh sách suất chiếu' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sơ đồ' }));
+    expect(screen.getByRole('region', { name: 'Phòng chiếu × thời gian' })).toBeInTheDocument();
+  });
+
   it('formats list start and end in each Showtime cinema timezone', () => {
     render(<ShowtimeTable {...defaultProps} />);
     fireEvent.click(screen.getByRole('button', { name: 'Danh sách', exact: true }));
