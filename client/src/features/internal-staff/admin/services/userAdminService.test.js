@@ -10,6 +10,7 @@ import {
   getPayrollSummary,
   generatePayrollFromTimekeeping,
   createWorkShift,
+  createWorkShiftBatch,
   correctAttendance,
   applyLeaveRequestAction,
   getEmployeeDocuments,
@@ -100,16 +101,32 @@ describe('userAdminService employee document contracts', () => {
 
   it('uses controlled workforce time and payroll generation contracts', async () => {
     await createWorkShift({ employeeId: 42, scheduledStart: '2026-08-10T08:00:00', scheduledEnd: '2026-08-10T16:00:00' });
+    await createWorkShiftBatch({
+      employeeId: 42,
+      periods: [
+        { scheduledStart: '2026-08-11T08:00:00', scheduledEnd: '2026-08-11T12:00:00' },
+        { scheduledStart: '2026-08-11T14:00:00', scheduledEnd: '2026-08-11T18:00:00' }
+      ],
+      location: 'LoraFilm Quận 1'
+    });
     await correctAttendance(7, { checkInAt: '2026-08-10T08:00:00', checkOutAt: '2026-08-10T17:00:00', reason: 'Verified' });
     await applyLeaveRequestAction(8, { type: 'APPROVE', note: 'Coverage confirmed' });
     await generatePayrollFromTimekeeping('2026-08');
 
     expect(apiClient.post).toHaveBeenNthCalledWith(1, '/api/users/workforce/shifts',
       { employeeId: 42, scheduledStart: '2026-08-10T08:00:00', scheduledEnd: '2026-08-10T16:00:00' });
-    expect(apiClient.post).toHaveBeenNthCalledWith(2, '/api/users/workforce/attendance/7/correction',
+    expect(apiClient.post).toHaveBeenNthCalledWith(2, '/api/users/workforce/shifts/batch', {
+      employeeId: 42,
+      periods: [
+        { scheduledStart: '2026-08-11T08:00:00', scheduledEnd: '2026-08-11T12:00:00' },
+        { scheduledStart: '2026-08-11T14:00:00', scheduledEnd: '2026-08-11T18:00:00' }
+      ],
+      location: 'LoraFilm Quận 1'
+    });
+    expect(apiClient.post).toHaveBeenNthCalledWith(3, '/api/users/workforce/attendance/7/correction',
       { checkInAt: '2026-08-10T08:00:00', checkOutAt: '2026-08-10T17:00:00', reason: 'Verified' });
-    expect(apiClient.post).toHaveBeenNthCalledWith(3, '/api/users/workforce/leave-requests/8/actions',
+    expect(apiClient.post).toHaveBeenNthCalledWith(4, '/api/users/workforce/leave-requests/8/actions',
       { type: 'APPROVE', note: 'Coverage confirmed' });
-    expect(apiClient.post).toHaveBeenNthCalledWith(4, '/api/users/payrolls/generate', { month: '2026-08' });
+    expect(apiClient.post).toHaveBeenNthCalledWith(5, '/api/users/payrolls/generate', { month: '2026-08' });
   });
 });

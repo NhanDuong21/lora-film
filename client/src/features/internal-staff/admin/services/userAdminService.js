@@ -68,6 +68,8 @@ export const getMyWorkShifts = async (params = {}) =>
   data(await apiClient.get('/api/users/workforce/shifts/me', { params }));
 export const createWorkShift = async (payload) =>
   data(await apiClient.post('/api/users/workforce/shifts', payload));
+export const createWorkShiftBatch = async (payload) =>
+  data(await apiClient.post('/api/users/workforce/shifts/batch', payload));
 export const cancelWorkShift = async (id, payload) =>
   data(await apiClient.post(`/api/users/workforce/shifts/${id}/cancel`, payload));
 export const getAttendance = async (params = {}) =>

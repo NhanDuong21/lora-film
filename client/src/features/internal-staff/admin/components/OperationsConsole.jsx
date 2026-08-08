@@ -66,12 +66,12 @@ export function DetailDrawer({ open, onClose, title, subtitle, children, footer 
   );
 }
 
-export function ActionModal({ open, onClose, title, description, children, onSubmit, submitLabel, submitting = false, tone = 'orange' }) {
+export function ActionModal({ open, onClose, title, description, children, onSubmit, submitLabel, submitting = false, tone = 'orange', wide = false }) {
   if (!open) return null;
   const submitTone = tone === 'danger' ? 'bg-red-500 hover:bg-red-400 text-white' : 'bg-brand-orange hover:bg-orange-500 text-black';
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center bg-black/75 p-4 backdrop-blur-sm">
-      <form onSubmit={onSubmit} className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0b0b0e] p-6 shadow-2xl">
+      <form onSubmit={onSubmit} className={'max-h-[92vh] w-full overflow-y-auto rounded-2xl border border-white/10 bg-[#0b0b0e] p-6 shadow-2xl ' + (wide ? 'max-w-2xl' : 'max-w-lg')}>
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-black text-white">{title}</h2>
