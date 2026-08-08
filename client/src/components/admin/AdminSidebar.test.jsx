@@ -94,11 +94,23 @@ describe('AdminSidebar', () => {
 
   it('shows notification administration links for full administrators', () => {
     renderSidebar();
-    openSection('Hệ thống & thông báo');
+    openSection('Thông báo');
 
     expect(screen.getByRole('button', { name: 'Tổng quan thông báo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mẫu thông báo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Vận hành gửi thông báo' })).toBeInTheDocument();
+  });
+
+  it('separates system administration from notification operations', () => {
+    renderSidebar();
+
+    expect(screen.getByRole('button', { name: 'Hệ thống' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thông báo' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hệ thống & thông báo' })).not.toBeInTheDocument();
+
+    openSection('Hệ thống');
+    expect(screen.getByRole('button', { name: 'Quản lý vai trò' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tổng quan thông báo' })).not.toBeInTheDocument();
   });
 
   it('allows each operational group to be collapsed independently', () => {

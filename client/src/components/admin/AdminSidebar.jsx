@@ -205,7 +205,7 @@ export default function AdminSidebar({
     },
     {
       key: 'system',
-      label: 'Hệ thống & thông báo',
+      label: 'Hệ thống',
       visible: hasSystemAccess,
       items: [
         ...(canManageRoles ? [{ key: 'roles', label: 'Quản lý vai trò', path: '/admin/roles', icon: ShieldAlert }] : []),
@@ -213,13 +213,16 @@ export default function AdminSidebar({
         ...(canManagePermissions ? [{ key: 'permissions', label: 'Quản lý quyền hạn', path: '/admin/permissions', icon: Key }] : []),
         ...(canConfigureSystem ? [{ key: 'audits', label: 'Nhật ký truy cập', path: '/admin/audits', icon: FileSearch }] : []),
         ...(canViewUserAudits ? [{ key: 'user-audits', label: 'Nhật ký nghiệp vụ', path: '/admin/user-audits', icon: FileSearch }] : []),
-        ...(isFullAdmin
-          ? [
-              { key: 'notification-dashboard', label: 'Tổng quan thông báo', path: '/admin/notifications', icon: BellRing },
-              { key: 'notification-templates', label: 'Mẫu thông báo', path: '/admin/notification-templates', icon: Mail },
-              { key: 'notification-operations', label: 'Vận hành gửi thông báo', path: '/admin/notification-operations', icon: ListChecks },
-            ]
-          : []),
+      ],
+    },
+    {
+      key: 'notifications',
+      label: 'Thông báo',
+      visible: isFullAdmin,
+      items: [
+        { key: 'notification-dashboard', label: 'Tổng quan thông báo', path: '/admin/notifications', icon: BellRing },
+        { key: 'notification-templates', label: 'Mẫu thông báo', path: '/admin/notification-templates', icon: Mail },
+        { key: 'notification-operations', label: 'Vận hành gửi thông báo', path: '/admin/notification-operations', icon: ListChecks },
       ],
     },
   ].filter(section => section.visible && section.items.length > 0);
