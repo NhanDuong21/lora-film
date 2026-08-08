@@ -19,6 +19,7 @@ public class EmployeeMapper {
                 employee.getDepartment().getId(), employee.getDepartment().getCode(),
                 employee.getDepartment().getName(), employee.getPosition().getId(),
                 employee.getPosition().getCode(), employee.getPosition().getTitle(),
-                employee.getHireDate(), employee.getBaseSalary(), employee.getStatus(), employee.getVersion());
+                employee.getHireDate(), employee.getBaseSalary(), employee.getCinemaPublicId(),
+                employee.getStatus(), employee.getVersion());
     }
 }

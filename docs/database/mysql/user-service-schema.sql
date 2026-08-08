@@ -355,6 +355,8 @@ CREATE TABLE employees
 
     hire_date DATE NULL,
 
+    cinema_public_id VARCHAR(36) NULL,
+
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
 
     version INT NOT NULL DEFAULT 0,
@@ -397,6 +399,9 @@ COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_employee_department
 ON employees(department_id);
+
+CREATE INDEX idx_employee_cinema
+ON employees(cinema_public_id, is_deleted, status);
 
 CREATE INDEX idx_employee_position
 ON employees(position_id);

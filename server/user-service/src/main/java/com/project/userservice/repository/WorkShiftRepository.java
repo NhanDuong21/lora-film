@@ -41,4 +41,15 @@ public interface WorkShiftRepository extends JpaRepository<WorkShift, Long> {
 
     List<WorkShift> findByEmployeeAccountIdAndScheduledStartGreaterThanEqualAndScheduledStartLessThanAndStatusNot(
             Long employeeId, LocalDateTime from, LocalDateTime to, ShiftStatus status);
+
+    @Query("""
+            select s from WorkShift s
+            where s.employee.accountId in :employeeIds
+              and s.scheduledStart < :to
+              and s.scheduledEnd > :from
+            order by s.scheduledStart asc
+            """)
+    List<WorkShift> findForEmployees(@Param("employeeIds") Collection<Long> employeeIds,
+                                     @Param("from") LocalDateTime from,
+                                     @Param("to") LocalDateTime to);
 }

@@ -40,4 +40,17 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 
     List<LeaveRequest> findByEmployeeAccountIdInAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
             Collection<Long> employeeIds, LeaveStatus status, LocalDate to, LocalDate from);
+
+    @Query("""
+            select l from LeaveRequest l
+            where l.employee.accountId in :employeeIds
+              and (:status is null or l.status = :status)
+              and l.startDate <= :to
+              and l.endDate >= :from
+            order by l.createdAt desc
+            """)
+    List<LeaveRequest> findForEmployees(@Param("employeeIds") Collection<Long> employeeIds,
+                                        @Param("status") LeaveStatus status,
+                                        @Param("from") LocalDate from,
+                                        @Param("to") LocalDate to);
 }

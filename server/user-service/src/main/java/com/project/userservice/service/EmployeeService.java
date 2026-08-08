@@ -81,6 +81,19 @@ public class EmployeeService {
         return employeeMapper.toResponse(employee, user);
     }
 
+    @Transactional
+    @CacheEvict(value = "userDashboard", allEntries = true)
+    public EmployeeResponse assignCinema(Long accountId, String cinemaPublicId) {
+        Employee employee = find(accountId);
+        String normalized = cinemaPublicId == null || cinemaPublicId.isBlank()
+                ? null : cinemaPublicId.trim().toLowerCase(java.util.Locale.ROOT);
+        employee.setCinemaPublicId(normalized);
+        employeeRepository.save(employee);
+        auditService.log("EMPLOYEE_CINEMA_ASSIGNED", "EMPLOYEE", accountId,
+                normalized == null ? "cinema=UNASSIGNED" : "cinema=" + normalized);
+        return get(accountId);
+    }
+
     @Transactional(readOnly = true)
     public Page<EligibleEmployeeAccountResponse> eligibleAccounts(String keyword, Pageable pageable) {
         Pageable safe = com.project.userservice.util.PageableUtils.sanitize(pageable,

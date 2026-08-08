@@ -1,6 +1,7 @@
 package com.project.userservice.controller;
 
 import com.project.userservice.dto.request.EmployeeRequest;
+import com.project.userservice.dto.request.CinemaAssignmentRequest;
 import com.project.userservice.dto.request.EmploymentActionRequest;
 import com.project.userservice.dto.response.ApiResponse;
 import com.project.userservice.dto.response.EmployeeResponse;
@@ -74,6 +75,15 @@ public class EmployeeController {
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')")
     public ResponseEntity<ApiResponse<EmployeeResponse>> create(@Valid @RequestBody EmployeeRequest request) {
         return ResponseEntity.status(201).body(ApiResponse.success("Employee created", service.create(request)));
+    }
+
+    @PutMapping("/{accountId}/cinema-assignment")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> assignCinema(
+            @PathVariable Long accountId,
+            @Valid @RequestBody CinemaAssignmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật rạp làm việc",
+                service.assignCinema(accountId, request.cinemaPublicId())));
     }
 
 }

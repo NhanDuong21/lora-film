@@ -19,6 +19,7 @@ public record EmployeeResponse(
         String positionName,
         LocalDate hireDate,
         BigDecimal baseSalary,
+        String cinemaPublicId,
         EmployeeStatus status,
         Integer version
 ) {

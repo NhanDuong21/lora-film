@@ -18,6 +18,48 @@ const managerCinemaService = {
     `/api/manager/cinemas/${cinemaPublicId}/operating-hours`,
     operatingHours,
   )),
+
+  transitionShowtimeStatus: async (showtimePublicId, status, reason) => unwrap(await apiClient.put(
+    `/api/manager/showtimes/${showtimePublicId}/status`,
+    { status, reason: reason || null },
+  )),
+
+  getMaintenanceWindows: async cinemaPublicId => unwrap(await apiClient.get(
+    `/api/manager/cinemas/${cinemaPublicId}/maintenance-windows`,
+  )) || [],
+
+  createMaintenanceWindow: async (cinemaPublicId, auditoriumPublicId, payload) => unwrap(await apiClient.post(
+    `/api/manager/cinemas/${cinemaPublicId}/auditoriums/${auditoriumPublicId}/maintenance-windows`,
+    payload,
+  )),
+
+  cancelMaintenanceWindow: async (cinemaPublicId, maintenanceWindowId) => unwrap(await apiClient.put(
+    `/api/manager/cinemas/${cinemaPublicId}/maintenance-windows/${maintenanceWindowId}/cancel`,
+  )),
+
+  getStaff: async cinemaPublicId => unwrap(await apiClient.get('/api/users/manager/staff', {
+    params: { cinemaPublicId },
+  })) || [],
+
+  getShifts: async params => unwrap(await apiClient.get('/api/users/manager/shifts', { params })) || [],
+
+  getAttendance: async params => unwrap(await apiClient.get('/api/users/manager/attendance', { params })) || [],
+
+  getLeaveRequests: async params => unwrap(await apiClient.get('/api/users/manager/leave-requests', { params })) || [],
+
+  createShift: async (cinemaPublicId, payload) => unwrap(await apiClient.post(
+    '/api/users/manager/shifts', payload, { params: { cinemaPublicId } },
+  )),
+
+  cancelShift: async (cinemaPublicId, shiftId, payload) => unwrap(await apiClient.post(
+    `/api/users/manager/shifts/${shiftId}/cancel`, payload, { params: { cinemaPublicId } },
+  )),
+
+  reviewLeave: async (cinemaPublicId, leaveId, payload) => unwrap(await apiClient.post(
+    `/api/users/manager/leave-requests/${leaveId}/actions`, payload, { params: { cinemaPublicId } },
+  )),
+
+  getCinemaReport: async params => unwrap(await apiClient.get('/api/analytics/dashboard', { params })),
 };
 
 export default managerCinemaService;

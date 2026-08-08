@@ -25,6 +25,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     long countByDepartmentIdAndIsDeletedFalse(Long departmentId);
     long countByPositionIdAndIsDeletedFalse(Long positionId);
     List<Employee> findByStatusAndIsDeletedFalse(EmployeeStatus status);
+    List<Employee> findByCinemaPublicIdAndIsDeletedFalseOrderByEmployeeCodeAsc(String cinemaPublicId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from Employee e where e.accountId = :accountId")

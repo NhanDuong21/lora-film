@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { CalendarDays, ChevronLeft, ChevronRight, Film, Search } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Film, Search, XCircle } from 'lucide-react';
 import managerCinemaService from '../services/managerCinemaService';
 import { getShowtimeStatusPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
@@ -30,6 +30,29 @@ export default function ManagerShowtimesPage() {
   const [keyword, setKeyword] = useState('');
   const [page, setPage] = useState(0);
   const [state, setState] = useState({ loading: true, error: '', response: { data: [], totalElements: 0, totalPages: 0 } });
+  const [actionId, setActionId] = useState('');
+
+  const transition = async (showtime, targetStatus) => {
+    const reason = targetStatus === 'CANCELLED'
+      ? window.prompt('Nhập lý do hủy suất chiếu. Khách đã đặt vé sẽ được đưa vào quy trình hoàn tiền:')
+      : null;
+    if (targetStatus === 'CANCELLED' && !reason?.trim()) return;
+    setActionId(showtime.showtimePublicId);
+    setState(current => ({ ...current, error: '' }));
+    try {
+      const updated = await managerCinemaService.transitionShowtimeStatus(
+        showtime.showtimePublicId, targetStatus, reason,
+      );
+      setState(current => ({ ...current, response: {
+        ...current.response,
+        data: (current.response.data || []).map(item => item.showtimePublicId === updated.showtimePublicId ? updated : item),
+      } }));
+    } catch (error) {
+      setState(current => ({ ...current, error: error?.message || 'Không thể cập nhật trạng thái suất chiếu.' }));
+    } finally {
+      setActionId('');
+    }
+  };
 
   useEffect(() => {
     if (!selectedCinemaId) return;
@@ -40,8 +63,15 @@ export default function ManagerShowtimesPage() {
     return () => { active = false; };
   }, [date, page, selectedCinemaId, status]);
 
+  const now = Date.now();
   const showtimes = (state.response.data || []).filter(showtime => !keyword.trim()
-    || `${showtime.movie?.title || ''} ${showtime.auditorium?.name || ''}`.toLocaleLowerCase('vi').includes(keyword.trim().toLocaleLowerCase('vi')));
+    || `${showtime.movie?.title || ''} ${showtime.auditorium?.name || ''}`.toLocaleLowerCase('vi').includes(keyword.trim().toLocaleLowerCase('vi')))
+    .sort((first, second) => {
+      const firstFinished = new Date(first.endTime).getTime() < now;
+      const secondFinished = new Date(second.endTime).getTime() < now;
+      if (firstFinished !== secondFinished) return firstFinished ? 1 : -1;
+      return new Date(first.startTime) - new Date(second.startTime);
+    });
 
   if (cinemaState.loading) return <p className="py-24 text-center text-sm font-bold text-zinc-500">Đang tải phạm vi rạp…</p>;
   if (!selectedCinema) return <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-8 text-center"><h1 className="text-xl font-black">Chưa có rạp để xem lịch chiếu</h1><p className="mt-2 text-sm text-amber-100/70">Quản trị viên cần phân công rạp cho tài khoản này trước.</p></div>;
@@ -59,7 +89,7 @@ export default function ManagerShowtimesPage() {
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
         <header className="flex items-center justify-between border-b border-white/10 p-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-orange/10 text-brand-orange"><CalendarDays size={19} /></span><div><h2 className="font-black">Danh sách suất chiếu</h2><p className="mt-0.5 text-xs text-zinc-600">{state.response.totalElements || 0} suất theo bộ lọc</p></div></div></header>
         {state.loading ? <p className="p-12 text-center text-sm text-zinc-500">Đang tải lịch chiếu…</p> : state.error ? <p className="p-12 text-center text-sm text-red-300">{state.error}</p> : showtimes.length ? (
-          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-white/[0.035] text-[10px] uppercase tracking-wider text-zinc-600"><tr><th className="p-4">Thời gian</th><th className="p-4">Phim</th><th className="p-4">Phòng chiếu</th><th className="p-4">Phiên bản</th><th className="p-4">Trạng thái</th></tr></thead><tbody className="divide-y divide-white/5">{showtimes.map(showtime => <tr key={showtime.showtimePublicId} className="hover:bg-white/[0.025]"><td className="whitespace-nowrap p-4"><p className="text-lg font-black text-white">{formatTime(showtime.startTime)}</p><p className="mt-1 text-xs text-zinc-600">đến {formatTime(showtime.endTime)}</p></td><td className="p-4"><p className="flex items-center gap-2 font-bold text-white"><Film size={15} className="text-brand-orange" /> {showtime.movie?.title || 'Chưa có tên phim'}</p></td><td className="p-4 font-semibold text-zinc-300">{showtime.auditorium?.name || 'Chưa xếp phòng'}</td><td className="p-4 text-zinc-400">{showtime.movieVersion?.versionName || showtime.movieVersion?.format || 'Tiêu chuẩn'}</td><td className="p-4"><span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-zinc-300">{getShowtimeStatusPresentation(showtime.status).label}</span></td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-white/[0.035] text-[10px] uppercase tracking-wider text-zinc-600"><tr><th className="p-4">Thời gian</th><th className="p-4">Phim</th><th className="p-4">Phòng chiếu</th><th className="p-4">Phiên bản</th><th className="p-4">Trạng thái</th><th className="p-4">Điều phối</th></tr></thead><tbody className="divide-y divide-white/5">{showtimes.map(showtime => { const canOpen = showtime.status === 'DRAFT' && new Date(showtime.startTime).getTime() > now; const next = canOpen ? ['OPEN_FOR_BOOKING', 'Mở bán'] : showtime.status === 'OPEN_FOR_BOOKING' ? ['CLOSED', 'Đóng bán'] : showtime.status === 'CLOSED' && new Date(showtime.endTime).getTime() <= now ? ['FINISHED', 'Xác nhận đã chiếu'] : null; const acting = actionId === showtime.showtimePublicId; return <tr key={showtime.showtimePublicId} className="hover:bg-white/[0.025]"><td className="whitespace-nowrap p-4"><p className="text-lg font-black text-white">{formatTime(showtime.startTime)}</p><p className="mt-1 text-xs text-zinc-600">đến {formatTime(showtime.endTime)}</p></td><td className="p-4"><p className="flex items-center gap-2 font-bold text-white"><Film size={15} className="text-brand-orange" /> {showtime.movie?.title || 'Chưa có tên phim'}</p></td><td className="p-4 font-semibold text-zinc-300">{showtime.auditorium?.name || 'Chưa xếp phòng'}</td><td className="p-4 text-zinc-400">{showtime.movieVersion?.versionName || showtime.movieVersion?.format || 'Tiêu chuẩn'}</td><td className="p-4"><span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-zinc-300">{getShowtimeStatusPresentation(showtime.status).label}</span></td><td className="p-4"><div className="flex min-w-max gap-2">{next ? <button disabled={acting} type="button" onClick={() => transition(showtime, next[0])} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-black text-emerald-300 disabled:opacity-40"><CheckCircle2 size={14} /> {acting ? 'Đang xử lý…' : next[1]}</button> : null}{!['CANCELLED', 'FINISHED'].includes(showtime.status) ? <button disabled={acting} type="button" onClick={() => transition(showtime, 'CANCELLED')} className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-black text-red-300 disabled:opacity-40"><XCircle size={14} /> Hủy suất</button> : <span className="text-xs text-zinc-600">Không còn thao tác</span>}</div></td></tr>; })}</tbody></table></div>
         ) : <div className="p-12 text-center"><CalendarDays className="mx-auto text-zinc-700" size={32} /><p className="mt-3 font-bold text-zinc-400">Không có suất chiếu phù hợp</p><p className="mt-1 text-xs text-zinc-600">Hãy chọn ngày khác hoặc bỏ bớt bộ lọc.</p></div>}
         <footer className="flex items-center justify-between gap-3 border-t border-white/10 p-4"><p className="text-xs text-zinc-600">Trang {Math.min(page + 1, Math.max(state.response.totalPages || 1, 1))}/{Math.max(state.response.totalPages || 1, 1)}</p><div className="flex gap-2"><button type="button" aria-label="Trang trước" disabled={page === 0 || state.loading} onClick={() => setPage(current => current - 1)} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-zinc-300 disabled:opacity-30"><ChevronLeft size={17} /></button><button type="button" aria-label="Trang sau" disabled={page >= (state.response.totalPages || 1) - 1 || state.loading} onClick={() => setPage(current => current + 1)} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-zinc-300 disabled:opacity-30"><ChevronRight size={17} /></button></div></footer>
       </section>

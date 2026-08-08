@@ -415,7 +415,7 @@ public class WorkforceTimeService {
                 .collect(Collectors.toMap(User::getAccountId, Function.identity()));
     }
 
-    private WorkShiftResponse toShiftResponse(WorkShift shift, User user) {
+    WorkShiftResponse toShiftResponse(WorkShift shift, User user) {
         return new WorkShiftResponse(shift.getId(), shift.getEmployee().getAccountId(),
                 shift.getEmployee().getEmployeeCode(), user == null ? null : user.getFullName(),
                 shift.getScheduledStart(), shift.getScheduledEnd(), shift.getLocation(), shift.getNote(),
@@ -423,7 +423,7 @@ public class WorkforceTimeService {
                 shift.getCancellationReason(), shift.getVersion());
     }
 
-    private AttendanceResponse toAttendanceResponse(AttendanceRecord item, User user) {
+    AttendanceResponse toAttendanceResponse(AttendanceRecord item, User user) {
         return new AttendanceResponse(item.getId(), item.getShift().getId(), item.getEmployee().getAccountId(),
                 item.getEmployee().getEmployeeCode(), user == null ? null : user.getFullName(),
                 item.getShift().getScheduledStart(), item.getShift().getScheduledEnd(),
@@ -432,7 +432,7 @@ public class WorkforceTimeService {
                 item.getVersion());
     }
 
-    private LeaveResponse toLeaveResponse(LeaveRequest item, User user) {
+    LeaveResponse toLeaveResponse(LeaveRequest item, User user) {
         return new LeaveResponse(item.getId(), item.getEmployee().getAccountId(),
                 item.getEmployee().getEmployeeCode(), user == null ? null : user.getFullName(),
                 item.getLeaveType(), item.getLeaveType().isPaid(), item.getStartDate(), item.getEndDate(),

@@ -83,6 +83,9 @@ const pageTitle = pathname => {
 
   if (path === '/manager') return 'Tổng quan vận hành rạp';
   if (path === '/manager/showtimes') return 'Lịch chiếu tại rạp';
+  if (path === '/manager/rooms') return 'Phòng chiếu và bảo trì';
+  if (path === '/manager/staff') return 'Nhân sự và ca làm tại rạp';
+  if (path === '/manager/reports') return 'Báo cáo vận hành rạp';
   if (path === '/manager/cinema') return 'Thông tin và giờ mở cửa';
 
   if (path === '/employee' || path === '/employee/dashboard') return 'Bảng điều khiển nhân viên';

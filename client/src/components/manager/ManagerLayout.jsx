@@ -2,20 +2,26 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Building2,
+  BarChart3,
   CalendarDays,
   ChevronDown,
   CircleGauge,
   LogOut,
   MapPin,
   ShieldCheck,
+  UsersRound,
   User,
+  Wrench,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import managerCinemaService from '@/features/internal-staff/manager/services/managerCinemaService';
 
 const MANAGER_MENUS = [
-  { path: '/manager', end: true, label: 'Tổng quan vận hành', icon: CircleGauge },
-  { path: '/manager/showtimes', label: 'Lịch chiếu tại rạp', icon: CalendarDays },
+  { path: '/manager', end: true, label: 'Việc cần xử lý hôm nay', icon: CircleGauge },
+  { path: '/manager/showtimes', label: 'Điều phối suất chiếu', icon: CalendarDays },
+  { path: '/manager/rooms', label: 'Phòng chiếu & bảo trì', icon: Wrench },
+  { path: '/manager/staff', label: 'Nhân sự & ca làm', icon: UsersRound },
+  { path: '/manager/reports', label: 'Báo cáo vận hành', icon: BarChart3 },
   { path: '/manager/cinema', label: 'Thông tin & giờ mở cửa', icon: Building2 },
 ];
 

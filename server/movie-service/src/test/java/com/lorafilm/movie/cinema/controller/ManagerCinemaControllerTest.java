@@ -11,6 +11,9 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.security.ManagerCinemaScopeService;
 import com.lorafilm.movie.showtime.service.AdminShowtimeQueryService;
+import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
+import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
+import com.lorafilm.movie.auditorium.service.AuditoriumMaintenanceService;
 import java.time.LocalDate;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -27,6 +30,12 @@ class ManagerCinemaControllerTest {
     private CinemaService cinemaService;
     @Mock
     private AdminShowtimeQueryService showtimeQueryService;
+    @Mock
+    private ShowtimeStatusTransitionService transitionService;
+    @Mock
+    private ShowtimeStatusHistoryService historyService;
+    @Mock
+    private AuditoriumMaintenanceService maintenanceService;
     @Mock
     private ManagerCinemaScopeService cinemaScope;
 
@@ -62,6 +71,7 @@ class ManagerCinemaControllerTest {
     }
 
     private ManagerCinemaController controller() {
-        return new ManagerCinemaController(cinemaService, showtimeQueryService, cinemaScope);
+        return new ManagerCinemaController(cinemaService, showtimeQueryService, transitionService,
+                historyService, maintenanceService, cinemaScope);
     }
 }
