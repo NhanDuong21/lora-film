@@ -17,6 +17,7 @@ public record MaintenanceWindowResponse(
         Long resolvedBy,
         String resolutionNote,
         String extensionNote,
+        EmergencyMaintenanceSummaryResponse emergencySummary,
         Instant createdAt,
         Instant updatedAt,
         Long createdBy,

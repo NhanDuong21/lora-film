@@ -450,6 +450,7 @@ CREATE TABLE auditorium_maintenance_windows (
     resolved_by BIGINT NULL,
     resolution_note VARCHAR(500) NULL,
     extension_note VARCHAR(500) NULL,
+    emergency_summary_json TEXT NULL COMMENT 'Kết quả đồng bộ giữ ghế, thanh toán và danh sách khách cần bàn giao',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,

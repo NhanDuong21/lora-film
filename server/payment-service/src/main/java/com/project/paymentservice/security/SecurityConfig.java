@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
                         "/v3/api-docs", "/health", "/", "/error").permitAll()
                 .requestMatchers("/api/payments/callback/**", "/api/payments/return/**").permitAll()
-                .requestMatchers("/internal/payments/refunds/**").permitAll()
+                .requestMatchers("/internal/payments/refunds/**", "/internal/payments/emergency/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/admin/payments/**")
                     .hasAnyRole("ADMIN", "ACCOUNTANT")
                 .requestMatchers("/api/admin/payments/**").hasRole("ADMIN")

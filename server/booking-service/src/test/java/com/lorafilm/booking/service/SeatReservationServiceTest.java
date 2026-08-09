@@ -95,7 +95,7 @@ public class SeatReservationServiceTest {
                 1001L,
                 Instant.now().plusSeconds(3600),
                 Instant.now().plusSeconds(7200),
-                "OPEN",
+                "OPEN_FOR_BOOKING",
                 1L,
                 List.of(
                         new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto(
@@ -150,6 +150,28 @@ public class SeatReservationServiceTest {
 
         assertEquals("SEAT_009", ex.getErrorCode());
         assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+    }
+
+    @Test
+    public void holdSeats_ClosedShowtime_IsRejected() {
+        var closedLayout = new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse(
+                1001L,
+                Instant.now().plusSeconds(3600),
+                Instant.now().plusSeconds(7200),
+                "CLOSED",
+                1L,
+                List.of(new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto(
+                        15L, "A1", "STANDARD", null, false, 1, 1)));
+        when(movieServiceClient.getShowtimeSeatLayout(1001L)).thenReturn(closedLayout);
+        when(redisLockService.acquireHoldLocks(eq(1001L), anyList(), anyString(), anyLong()))
+                .thenReturn(true);
+
+        SeatReservationException ex = assertThrows(SeatReservationException.class, () ->
+                seatReservationService.holdSeats(100L, new HoldSeatRequest(1001L, List.of(15L))));
+
+        assertEquals("SHOWTIME_NOT_OPEN_FOR_BOOKING", ex.getErrorCode());
+        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+        verify(redisLockService).releaseLocks(eq(1001L), eq(List.of(15L)), anyString());
     }
 
     @Test

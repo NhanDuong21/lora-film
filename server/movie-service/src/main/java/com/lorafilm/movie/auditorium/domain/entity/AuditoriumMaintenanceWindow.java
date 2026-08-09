@@ -58,6 +58,10 @@ public class AuditoriumMaintenanceWindow {
     @Column(name = "extension_note", length = 500)
     private String extensionNote;
 
+    @Lob
+    @Column(name = "emergency_summary_json", columnDefinition = "TEXT")
+    private String emergencySummaryJson;
+
     public AuditoriumMaintenanceWindow() {}
 
     public Long getId() {
@@ -178,6 +182,14 @@ public class AuditoriumMaintenanceWindow {
 
     public void setExtensionNote(String extensionNote) {
         this.extensionNote = extensionNote;
+    }
+
+    public String getEmergencySummaryJson() {
+        return emergencySummaryJson;
+    }
+
+    public void setEmergencySummaryJson(String emergencySummaryJson) {
+        this.emergencySummaryJson = emergencySummaryJson;
     }
 
     @PrePersist

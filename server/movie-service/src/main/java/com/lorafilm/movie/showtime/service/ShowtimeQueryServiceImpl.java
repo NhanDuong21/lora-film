@@ -257,6 +257,7 @@ public class ShowtimeQueryServiceImpl implements ShowtimeQueryService {
 
         layout.setStartTime(showtime.getStartTime());
         layout.setEndTime(showtime.getEndTime());
+        layout.setStatus(showtime.getStatus().name());
         layout.setSeats(seatPriceDtos);
         return layout;
     }

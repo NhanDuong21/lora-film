@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpecificationExecutor<Payment> {
     Optional<Payment> findByPublicId(String publicId);
@@ -39,4 +40,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.publicId = :publicId")
     Optional<Payment> findByPublicIdForUpdate(@Param("publicId") String publicId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select p from Payment p
+            where p.bookingPublicId in :bookingPublicIds
+            order by p.id
+            """)
+    List<Payment> findByBookingPublicIdInForEmergencyUpdate(
+            @Param("bookingPublicIds") List<String> bookingPublicIds);
 }

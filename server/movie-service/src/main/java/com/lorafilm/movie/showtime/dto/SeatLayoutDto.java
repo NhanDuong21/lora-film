@@ -13,6 +13,7 @@ public class SeatLayoutDto {
     private ShowtimeAuditoriumDto auditorium;
     private Instant startTime;
     private Instant endTime;
+    private String status;
     private List<SeatPriceDto> seats;
 
     public SeatLayoutDto() {}
@@ -33,6 +34,8 @@ public class SeatLayoutDto {
     public void setStartTime(Instant startTime) { this.startTime = startTime; }
     public Instant getEndTime() { return endTime; }
     public void setEndTime(Instant endTime) { this.endTime = endTime; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
     public List<SeatPriceDto> getSeats() { return seats; }
     public void setSeats(List<SeatPriceDto> seats) { this.seats = seats; }
 

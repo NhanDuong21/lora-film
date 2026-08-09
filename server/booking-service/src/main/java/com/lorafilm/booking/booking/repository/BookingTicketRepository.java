@@ -15,4 +15,6 @@ public interface BookingTicketRepository extends JpaRepository<BookingTicket, Lo
     Optional<BookingTicket> findByTicketCode(String ticketCode);
 
     List<BookingTicket> findByBookingId(Long bookingId);
+
+    List<BookingTicket> findByBookingIdOrderBySeatLabelAsc(Long bookingId);
 }

@@ -1,6 +1,7 @@
 package com.lorafilm.booking.booking.service;
 
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
+import com.lorafilm.booking.booking.dto.response.EmergencyShowtimeClosureResponse;
 
 public interface InternalBookingService {
 
@@ -11,4 +12,6 @@ public interface InternalBookingService {
     BookingAdminResponse refundBooking(String publicId);
 
     BookingAdminResponse getBookingByCode(String bookingCode);
+
+    EmergencyShowtimeClosureResponse closeShowtimeForEmergency(String showtimePublicId, String reason);
 }

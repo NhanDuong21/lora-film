@@ -18,6 +18,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+import { getAccountDisplayNames } from '@/features/auth/services/userService';
 import { getErrorMessage } from '@/utils/apiErrorHandler';
 
 const STATUS_LABELS = {
@@ -79,7 +80,20 @@ const formatTime = value => value
     }).format(new Date(value))
   : '--:--';
 
-const formatAccount = accountId => accountId ? `Tài khoản #${accountId}` : 'Chưa có dữ liệu';
+const formatAccount = (accountId, accountNames = {}) => {
+  if (!accountId) return 'Chưa có dữ liệu';
+  return accountNames[String(accountId)] || `Tài khoản #${accountId}`;
+};
+
+const formatMoney = (amount, currency = 'VND') => new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: currency || 'VND',
+  maximumFractionDigits: 0,
+}).format(Number(amount || 0));
+
+const handoffStatusLabel = status => status === 'PAYMENT_SUCCESS_DURING_CLOSURE'
+  ? 'Vừa thanh toán khi đóng phòng'
+  : status === 'COMPLETED' ? 'Đã hoàn tất' : 'Đã thanh toán';
 
 const normalizeRoom = room => ({
   publicId: room.publicId,
@@ -124,6 +138,7 @@ export default function MaintenanceWorkspace({
   initialRoomId = '',
   viewerRole = 'operator',
   onNotify,
+  loadAccountProfiles = getAccountDisplayNames,
 }) {
   const normalizedRooms = useMemo(() => rooms.map(normalizeRoom), [rooms]);
   const [windows, setWindows] = useState([]);
@@ -140,6 +155,7 @@ export default function MaintenanceWorkspace({
   const [extendForm, setExtendForm] = useState({ endTime: '', note: '' });
   const [extendImpact, setExtendImpact] = useState(null);
   const [listFilter, setListFilter] = useState('active');
+  const [accountNames, setAccountNames] = useState({});
   const [state, setState] = useState({
     loading: true,
     checking: false,
@@ -177,6 +193,43 @@ export default function MaintenanceWorkspace({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const visibleAccountIds = useMemo(() => Array.from(new Set(
+    windows.flatMap(item => [
+      item.createdBy,
+      item.updatedBy,
+      item.resolvedBy,
+      ...(item.emergencySummary?.paidBookings || []).map(booking => booking.userId),
+    ])
+      .filter(accountId => accountId !== null && accountId !== undefined)
+      .map(String),
+  )), [windows]);
+
+  useEffect(() => {
+    let active = true;
+    if (!visibleAccountIds.length || typeof loadAccountProfiles !== 'function') {
+      setAccountNames({});
+      return () => {
+        active = false;
+      };
+    }
+
+    Promise.resolve(loadAccountProfiles(visibleAccountIds.map(Number)))
+      .then(profiles => {
+        if (!active) return;
+        const names = Object.fromEntries((Array.isArray(profiles) ? profiles : [])
+          .filter(profile => profile?.accountId && profile?.fullName?.trim())
+          .map(profile => [String(profile.accountId), profile.fullName.trim()]));
+        setAccountNames(names);
+      })
+      .catch(() => {
+        if (active) setAccountNames({});
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loadAccountProfiles, visibleAccountIds]);
 
   const activeWindows = useMemo(() => windows.filter(item => (
     item.status === 'ACTIVE' && new Date(item.endTime).getTime() > Date.now()
@@ -315,11 +368,14 @@ export default function MaintenanceWorkspace({
 
     setState(current => ({ ...current, saving: true, error: '' }));
     try {
-      await createWindow(form.auditoriumPublicId, payload());
+      const createdWindow = await createWindow(form.auditoriumPublicId, payload());
       setFormOpen(false);
       await refresh();
+      const summary = createdWindow?.emergencySummary;
       const message = form.maintenanceType === 'EMERGENCY'
-        ? `Đã đóng phòng khẩn cấp. ${impact.openForBookingCount || 0} suất đang mở bán đã được đóng bán; ${impact.affectedShowtimeCount || 0} suất cần tiếp tục xử lý.`
+        ? summary
+          ? `Đã đóng phòng: ${summary.closedShowtimeCount || 0} suất đóng bán, ${summary.releasedSeatHoldCount || 0} ghế tạm giữ được giải phóng, ${summary.cancelledPendingBookingCount || 0} đơn chờ bị hủy và ${summary.stoppedPaymentAttemptCount || 0} lần thanh toán được dừng. Có ${summary.paidBookings?.length || 0} đơn đã trả tiền cần bàn giao.`
+          : `Đã đóng phòng khẩn cấp. ${impact.openForBookingCount || 0} suất đang mở bán đã được đóng bán; ${impact.affectedShowtimeCount || 0} suất cần tiếp tục xử lý.`
         : 'Đã tạo lịch bảo trì có kế hoạch. Không có suất chiếu nào bị ảnh hưởng.';
       setState(current => ({ ...current, saving: false, success: message }));
       onNotify?.(message, 'success');
@@ -710,15 +766,15 @@ export default function MaintenanceWorkspace({
                     )}
                   </div>
                   <div className="text-xs leading-5 text-zinc-400">
-                    <p><span className="text-zinc-600">Tạo bởi:</span> {formatAccount(item.createdBy)}</p>
+                    <p><span className="text-zinc-600">Tạo bởi:</span> {formatAccount(item.createdBy, accountNames)}</p>
                     <p><span className="text-zinc-600">Tạo lúc:</span> {formatDateTime(item.createdAt)}</p>
                     {item.status === 'CANCELLED' && (
-                      <p><span className="text-zinc-600">Hủy bởi:</span> {formatAccount(item.updatedBy)}</p>
+                      <p><span className="text-zinc-600">Hủy bởi:</span> {formatAccount(item.updatedBy, accountNames)}</p>
                     )}
                     {item.status === 'RESOLVED' && (
                       <>
                         <p><span className="text-zinc-600">Hoạt động lại:</span> {formatDateTime(item.actualEndTime)}</p>
-                        <p><span className="text-zinc-600">Xác nhận bởi:</span> {formatAccount(item.resolvedBy)}</p>
+                        <p><span className="text-zinc-600">Xác nhận bởi:</span> {formatAccount(item.resolvedBy, accountNames)}</p>
                       </>
                     )}
                   </div>
@@ -754,6 +810,87 @@ export default function MaintenanceWorkspace({
                     </div>
                   ) : (
                     <span className="text-xs font-bold text-zinc-600">Không còn thao tác</span>
+                  )}
+                  {item.maintenanceType === 'EMERGENCY' && item.emergencySummary && (
+                    <section className="space-y-4 rounded-2xl border border-red-500/15 bg-black/20 p-4 lg:col-span-5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-black text-white">Kết quả xử lý tự động khi đóng phòng</p>
+                          <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                            Các số liệu này được lưu cùng mã bảo trì để ca sau tiếp tục bàn giao.
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-[10px] font-black ${
+                          item.emergencySummary.processingComplete
+                            ? 'bg-emerald-500/10 text-emerald-300'
+                            : 'bg-amber-500/10 text-amber-300'
+                        }`}>
+                          {item.emergencySummary.processingComplete
+                            ? 'Đã đồng bộ đơn và thanh toán'
+                            : 'Cần kiểm tra thủ công'}
+                        </span>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        {[
+                          ['Suất đã đóng bán', item.emergencySummary.closedShowtimeCount || 0],
+                          ['Ghế tạm giữ đã trả', item.emergencySummary.releasedSeatHoldCount || 0],
+                          ['Đơn chờ đã hủy', item.emergencySummary.cancelledPendingBookingCount || 0],
+                          ['Lần thanh toán đã dừng', item.emergencySummary.stoppedPaymentAttemptCount || 0],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                            <p className="text-xl font-black text-white">{value}</p>
+                            <p className="mt-1 text-[10px] font-bold text-zinc-500">{label}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {item.emergencySummary.warnings?.length > 0 && (
+                        <div className="space-y-1 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-5 text-amber-100">
+                          {item.emergencySummary.warnings.map(warning => (
+                            <p key={warning} className="flex gap-2">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                              <span>{warning}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
+                      <div>
+                        <p className="text-xs font-black text-white">
+                          Khách đã thanh toán cần liên hệ ({item.emergencySummary.paidBookings?.length || 0})
+                        </p>
+                        {item.emergencySummary.paidBookings?.length > 0 ? (
+                          <div className="mt-2 grid gap-2 xl:grid-cols-2">
+                            {item.emergencySummary.paidBookings.map(booking => (
+                              <article
+                                key={booking.bookingPublicId}
+                                className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-3"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-sm font-black text-white">Đơn {booking.bookingCode}</p>
+                                    <p className="mt-1 text-[11px] text-zinc-500">
+                                      {formatAccount(booking.userId, accountNames)} · Ghế {booking.seatLabels?.join(', ') || 'chưa có dữ liệu'}
+                                    </p>
+                                  </div>
+                                  <p className="text-sm font-black text-amber-200">
+                                    {formatMoney(booking.finalAmount, booking.currency)}
+                                  </p>
+                                </div>
+                                <p className="mt-2 text-[10px] font-black text-amber-300">
+                                  {handoffStatusLabel(booking.bookingStatus)} · Cần đổi suất hoặc hủy/hoàn theo quyết định vận hành
+                                </p>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.05] p-3 text-xs text-emerald-200/80">
+                            Không có đơn đã thanh toán cần bàn giao tại thời điểm đóng phòng.
+                          </p>
+                        )}
+                      </div>
+                    </section>
                   )}
                 </article>
               );
@@ -982,6 +1119,33 @@ export default function MaintenanceWorkspace({
                       </div>
                     )}
 
+                    {form.maintenanceType === 'EMERGENCY' && (
+                      <section className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.05] p-4">
+                        <p className="text-xs font-black text-blue-100">Hệ thống sẽ tự động làm 4 việc</p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {[
+                            ['1', 'Ngừng giữ ghế mới', 'Suất đang mở bán được chuyển sang đóng bán ngay.'],
+                            ['2', 'Trả ghế tạm giữ', 'Ghế đang giữ nhưng chưa tạo đơn được giải phóng.'],
+                            ['3', 'Dừng đơn và thanh toán chờ', 'Đơn chờ thanh toán bị hủy; lần thanh toán PENDING/PROCESSING được dừng.'],
+                            ['4', 'Lập danh sách khách đã trả tiền', 'Đơn đã thanh toán được giữ nguyên để đổi suất hoặc hủy/hoàn có kiểm soát.'],
+                          ].map(([number, title, description]) => (
+                            <div key={number} className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-blue-500 text-[10px] font-black text-white">
+                                {number}
+                              </span>
+                              <div>
+                                <p className="text-xs font-black text-white">{title}</p>
+                                <p className="mt-1 text-[11px] leading-5 text-zinc-500">{description}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-[11px] leading-5 text-blue-100/70">
+                          Suất đang soạn vẫn giữ trạng thái “Đang soạn” để điều phối viên quyết định đổi phòng, đổi giờ hoặc xóa sau.
+                        </p>
+                      </section>
+                    )}
+
                     {!impact.bookingDataComplete && (
                       <div className="flex gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs leading-5 text-red-100">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1157,7 +1321,7 @@ export default function MaintenanceWorkspace({
                 </div>
                 <div className="sm:col-span-2 flex items-center gap-2 border-t border-zinc-800 pt-3 text-xs text-zinc-400">
                   <UserRound className="h-4 w-4 text-zinc-500" />
-                  Tạo bởi {formatAccount(cancelTarget.createdBy)} lúc {formatDateTime(cancelTarget.createdAt)}
+                  Tạo bởi {formatAccount(cancelTarget.createdBy, accountNames)} lúc {formatDateTime(cancelTarget.createdAt)}
                 </div>
               </section>
 

@@ -90,7 +90,7 @@ class BookingReservationAuthorityTest {
                 77L,
                 Instant.now().plusSeconds(3600),
                 Instant.now().plusSeconds(7200),
-                "OPEN",
+                "OPEN_FOR_BOOKING",
                 1L,
                 List.of(
                         new com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto(

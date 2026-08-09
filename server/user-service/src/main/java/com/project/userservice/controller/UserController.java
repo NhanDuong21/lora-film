@@ -1,6 +1,7 @@
 package com.project.userservice.controller;
 
 import com.project.userservice.dto.response.ApiResponse;
+import com.project.userservice.dto.response.AccountDisplayNameResponse;
 import com.project.userservice.dto.response.UserProfileResponse;
 import com.project.userservice.service.UserService;
 import com.project.userservice.service.AvatarService;
@@ -115,6 +116,25 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(
                 "User profiles retrieved successfully",
                 userService.getUserProfiles(accountIds)));
+    }
+
+    @GetMapping("/directory/display-names")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<AccountDisplayNameResponse>>> getAccountDisplayNames(
+            @RequestParam List<Long> accountIds) {
+        List<Long> requestedIds = accountIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .limit(100)
+                .toList();
+        List<AccountDisplayNameResponse> displayNames = userService.getUserProfiles(requestedIds)
+                .stream()
+                .map(profile -> new AccountDisplayNameResponse(
+                        profile.getAccountId(), profile.getFullName()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Account display names retrieved successfully",
+                displayNames));
     }
 
     @GetMapping("/admin/search")

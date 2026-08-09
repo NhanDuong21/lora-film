@@ -38,6 +38,7 @@ function renderWorkspace(overrides = {}) {
       bookingDataComplete: true,
       showtimes: [],
     }),
+    loadAccountProfiles: vi.fn().mockResolvedValue([]),
     viewerRole: 'manager',
     ...overrides,
   };
@@ -153,6 +154,84 @@ describe('MaintenanceWorkspace', () => {
       expect.objectContaining({ maintenanceType: 'EMERGENCY', reason: 'Máy chiếu mất hình' }),
     ));
     expect(await screen.findByRole('status')).toHaveTextContent('1 suất đang mở bán đã được đóng bán');
+  });
+
+  it('shows the four automatic results and paid-customer handoff list', async () => {
+    const emergencyWindow = {
+      ...maintenanceWindow,
+      maintenanceType: 'EMERGENCY',
+      emergencySummary: {
+        closedShowtimeCount: 1,
+        releasedSeatHoldCount: 2,
+        cancelledPendingBookingCount: 1,
+        stoppedPaymentAttemptCount: 1,
+        processingComplete: true,
+        warnings: [],
+        paidBookings: [{
+          showtimePublicId: 'showtime-open',
+          bookingPublicId: 'booking-paid',
+          bookingCode: 'BK-260809-01',
+          userId: 88,
+          bookingStatus: 'CONFIRMED',
+          finalAmount: 180000,
+          currency: 'VND',
+          seatLabels: ['F5', 'F6'],
+        }],
+      },
+    };
+    renderWorkspace({ loadWindows: vi.fn().mockResolvedValue([emergencyWindow]) });
+
+    expect(await screen.findByText('Kết quả xử lý tự động khi đóng phòng')).toBeInTheDocument();
+    expect(screen.getByText('Ghế tạm giữ đã trả').previousSibling).toHaveTextContent('2');
+    expect(screen.getByText('Đơn chờ đã hủy').previousSibling).toHaveTextContent('1');
+    expect(screen.getByText('Lần thanh toán đã dừng').previousSibling).toHaveTextContent('1');
+    expect(screen.getByText('Đơn BK-260809-01')).toBeInTheDocument();
+    expect(screen.getByText(/Tài khoản #88 · Ghế F5, F6/)).toBeInTheDocument();
+    expect(screen.getByText(/180.000/)).toBeInTheDocument();
+  });
+
+  it('shows profile names for the creator, resolver and paid customer', async () => {
+    const resolvedEmergencyWindow = {
+      ...maintenanceWindow,
+      status: 'RESOLVED',
+      maintenanceType: 'EMERGENCY',
+      resolvedBy: 24,
+      actualEndTime: '2099-08-09T06:30:00.000Z',
+      resolutionNote: 'Đã chạy thử ổn định',
+      emergencySummary: {
+        closedShowtimeCount: 1,
+        releasedSeatHoldCount: 0,
+        cancelledPendingBookingCount: 0,
+        stoppedPaymentAttemptCount: 0,
+        processingComplete: true,
+        warnings: [],
+        paidBookings: [{
+          bookingPublicId: 'booking-paid',
+          bookingCode: 'BK-01',
+          userId: 88,
+          bookingStatus: 'CONFIRMED',
+          finalAmount: 180000,
+          currency: 'VND',
+          seatLabels: ['F5', 'F6'],
+        }],
+      },
+    };
+    const loadAccountProfiles = vi.fn().mockResolvedValue([
+      { accountId: 42, fullName: 'Admin Tối Cao' },
+      { accountId: 24, fullName: 'Đặng Thành Nhân' },
+      { accountId: 88, fullName: 'Nguyễn Văn Khách' },
+    ]);
+
+    renderWorkspace({
+      loadWindows: vi.fn().mockResolvedValue([resolvedEmergencyWindow]),
+      loadAccountProfiles,
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Đã hoàn tất' }));
+
+    expect(await screen.findByText(/Admin Tối Cao/)).toBeInTheDocument();
+    expect(screen.getByText(/Đặng Thành Nhân/)).toBeInTheDocument();
+    expect(screen.getByText(/Nguyễn Văn Khách · Ghế F5, F6/)).toBeInTheDocument();
+    expect(loadAccountProfiles).toHaveBeenCalledWith(expect.arrayContaining([42, 24, 88]));
   });
 
   it('uses a separate readiness flow when an active room can operate again', async () => {

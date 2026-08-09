@@ -4,6 +4,8 @@ import com.lorafilm.booking.booking.dto.BookingAdminResponse;
 import com.lorafilm.booking.booking.service.InternalBookingService;
 import com.lorafilm.booking.booking.service.InternalBookingPaymentService;
 import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
+import com.lorafilm.booking.booking.dto.request.EmergencyShowtimeClosureRequest;
+import com.lorafilm.booking.booking.dto.response.EmergencyShowtimeClosureResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
 import com.lorafilm.booking.common.constant.ValidationConstants;
@@ -39,6 +41,18 @@ public class InternalBookingController {
                                      InternalBookingPaymentService internalBookingPaymentService) {
         this.internalBookingService = internalBookingService;
         this.internalBookingPaymentService = internalBookingPaymentService;
+    }
+
+    @PostMapping("/showtimes/{showtimePublicId:[a-fA-F0-9-]{36}}/emergency-close")
+    @Operation(summary = "Release pending capacity when a showtime is closed for an auditorium incident")
+    public ResponseEntity<ApiResponse<EmergencyShowtimeClosureResponse>> closeShowtimeForEmergency(
+            @PathVariable String showtimePublicId,
+            @Valid @RequestBody EmergencyShowtimeClosureRequest request) {
+        EmergencyShowtimeClosureResponse response = internalBookingService
+                .closeShowtimeForEmergency(showtimePublicId, request.reason());
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã dừng nhận đặt vé và bàn giao các đơn bị ảnh hưởng",
+                response));
     }
 
     @PostMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/confirm")

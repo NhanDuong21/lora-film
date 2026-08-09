@@ -211,8 +211,11 @@ public class SeatReservationServiceImpl implements SeatReservationService {
         }
         Map<Long, com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto> seatMap = new java.util.HashMap<>();
 
-        if ("CANCELLED".equalsIgnoreCase(layout.getStatus()) || "INACTIVE".equalsIgnoreCase(layout.getStatus())) {
-            throw new SeatReservationException("SHOWTIME_001", "Showtime is cancelled or inactive", HttpStatus.BAD_REQUEST);
+        if (!"OPEN_FOR_BOOKING".equalsIgnoreCase(layout.getStatus())) {
+            throw new SeatReservationException(
+                    "SHOWTIME_NOT_OPEN_FOR_BOOKING",
+                    "Suất chiếu hiện không mở bán nên không thể giữ ghế mới",
+                    HttpStatus.CONFLICT);
         }
         if (layout.getStartTime() != null && layout.getStartTime().isBefore(now)) {
             throw new SeatReservationException("SHOWTIME_002", "Cannot hold seats for a past showtime", HttpStatus.BAD_REQUEST);
