@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import apiClient from '@/services/apiClient';
 import { getErrorMessage } from '@/utils/apiErrorHandler';
+import { buildSeatUnits } from '@/features/booking/customer/utils/seatUnits';
+import { seatTypePresentation } from '@/features/booking/customer/utils/seatPresentation';
 
 const REASON_PRESETS = [
   'Ghế hỏng, cần kiểm tra',
@@ -51,9 +53,10 @@ const seatTone = ({ seat, occupied, selected, mode }) => {
       ? 'border-amber-400/60 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
       : 'cursor-not-allowed border-amber-500/35 bg-amber-500/10 text-amber-200';
   }
+  const typeTone = seatTypePresentation(seat.seatTypeCode).className;
   return mode === 'block'
-    ? 'border-zinc-700 bg-zinc-900 text-zinc-100 hover:border-orange-400 hover:bg-orange-500/10'
-    : 'cursor-not-allowed border-zinc-800 bg-zinc-950 text-zinc-600';
+    ? `${typeTone} hover:ring-2 hover:ring-brand-orange/60 hover:brightness-125`
+    : `${typeTone} cursor-not-allowed opacity-35`;
 };
 
 export default function ShowtimeSeatControlDrawer({
@@ -105,28 +108,50 @@ export default function ShowtimeSeatControlDrawer({
     (availability?.occupiedSeats || []).map(item => [item.seatPublicId, item]),
   ), [availability]);
 
+  const seatUnits = useMemo(() => buildSeatUnits(
+    (layout?.seats || []).map(seat => ({
+      ...seat,
+      seatType: seat.seatTypeCode,
+      priced: true,
+      price: 1,
+      sellable: true,
+      blockedForShowtime: seat.blocked,
+      reservationStatus: occupiedBySeat.get(seat.publicId)?.status,
+    })),
+  ), [layout, occupiedBySeat]);
+
   const rows = useMemo(() => {
     const grouped = new Map();
-    (layout?.seats || []).forEach(seat => {
-      const row = seat.rowLabel || '?';
+    seatUnits.forEach(seatUnit => {
+      const row = seatUnit.rowLabel || '?';
       if (!grouped.has(row)) grouped.set(row, []);
-      grouped.get(row).push(seat);
+      grouped.get(row).push(seatUnit);
     });
     return Array.from(grouped.entries())
       .sort((left, right) => left[0].localeCompare(right[0], 'vi', { numeric: true }))
-      .map(([row, seats]) => [
+      .map(([row, units]) => [
         row,
-        seats.sort((left, right) => (
+        units.sort((left, right) => (
           Number(left.positionColumn ?? left.seatNumber ?? 0)
           - Number(right.positionColumn ?? right.seatNumber ?? 0)
         )),
       ]);
-  }, [layout]);
+  }, [seatUnits]);
 
   const maxColumn = useMemo(() => Math.max(
     1,
-    ...(layout?.seats || []).map(seat => Number(seat.positionColumn ?? seat.seatNumber ?? 1) + 1),
-  ), [layout]);
+    ...seatUnits.map(seatUnit => (
+      Number(seatUnit.positionColumn ?? seatUnit.seatNumber ?? 0)
+      + Number(seatUnit.columnSpan || 1)
+    )),
+  ), [seatUnits]);
+
+  const seatTypes = useMemo(() => Array.from(new Map(
+    (layout?.seats || []).map(seat => [seat.seatTypeCode, seat]),
+  ).values()).sort((left, right) => (
+    seatTypePresentation(left.seatTypeCode).order
+    - seatTypePresentation(right.seatTypeCode).order
+  )), [layout]);
 
   const selectedSeats = useMemo(() => (
     (layout?.seats || []).filter(seat => selectedIds.includes(seat.publicId))
@@ -144,15 +169,22 @@ export default function ShowtimeSeatControlDrawer({
     return mode === 'block' ? !seat.blocked : seat.blocked;
   };
 
-  const toggleSeat = seat => {
-    if (!canSelect(seat)) return;
-    const pairIds = seat.pairGroup
-      ? layout.seats.filter(value => value.pairGroup === seat.pairGroup).map(value => value.publicId)
-      : [seat.publicId];
-    const shouldRemove = pairIds.every(id => selectedIds.includes(id));
+  const canSelectUnit = seatUnit => (
+    seatUnit.seats.some(canSelect)
+    && seatUnit.seats.every(seat => (
+      layout?.editable
+      && seat.operationalStatus === 'ACTIVE'
+      && !occupiedBySeat.has(seat.publicId)
+    ))
+  );
+
+  const toggleSeat = seatUnit => {
+    if (!canSelectUnit(seatUnit)) return;
+    const unitIds = seatUnit.seats.map(seat => seat.publicId);
+    const shouldRemove = unitIds.every(id => selectedIds.includes(id));
     setSelectedIds(current => shouldRemove
-      ? current.filter(id => !pairIds.includes(id))
-      : Array.from(new Set([...current, ...pairIds])));
+      ? current.filter(id => !unitIds.includes(id))
+      : Array.from(new Set([...current, ...unitIds])));
     setState(current => ({ ...current, error: '', success: '' }));
   };
 
@@ -195,8 +227,8 @@ export default function ShowtimeSeatControlDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-black/80 backdrop-blur-sm" onMouseDown={event => event.target === event.currentTarget && !state.saving && onClose()}>
-      <aside role="dialog" aria-modal="true" aria-labelledby="seat-control-title" className="flex h-full w-full max-w-5xl flex-col border-l border-zinc-800 bg-zinc-950 text-white shadow-2xl">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-0 backdrop-blur-sm sm:p-4 lg:p-6" onMouseDown={event => event.target === event.currentTarget && !state.saving && onClose()}>
+      <aside role="dialog" aria-modal="true" aria-labelledby="seat-control-title" className="flex h-full w-full max-w-7xl flex-col overflow-hidden border-zinc-800 bg-zinc-950 text-white shadow-2xl sm:h-[calc(100dvh-2rem)] sm:rounded-3xl sm:border lg:h-[calc(100dvh-3rem)]">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4 md:px-7">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Khóa ghế theo từng suất chiếu</p>
@@ -233,7 +265,14 @@ export default function ShowtimeSeatControlDrawer({
                   </div>
 
                   <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-3 text-[10px] font-bold text-zinc-300">
-                    <span className="flex items-center gap-2 rounded-lg bg-zinc-950 px-2.5 py-2"><span className="h-4 w-4 rounded border border-zinc-600 bg-zinc-900" /> Có thể chọn</span>
+                    <span className="self-center px-1 font-black uppercase tracking-wider text-zinc-500">Loại ghế</span>
+                    {seatTypes.map(seat => {
+                      const type = seatTypePresentation(seat.seatTypeCode);
+                      return <span key={seat.seatTypeCode} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-2.5 py-2"><span className={`h-4 rounded border ${type.wide ? 'w-7' : 'w-4'} ${type.className}`} /> {seat.seatTypeName || type.label}</span>;
+                    })}
+                    <span className="mx-1 hidden w-px self-stretch bg-zinc-800 sm:block" />
+                    <span className="self-center px-1 font-black uppercase tracking-wider text-zinc-500">Trạng thái</span>
+                    <span className="flex items-center gap-2 rounded-lg bg-zinc-950 px-2.5 py-2"><span className="h-4 w-4 rounded border-2 border-brand-orange bg-brand-orange" /> Đang chọn</span>
                     <span className="flex items-center gap-2 rounded-lg bg-zinc-950 px-2.5 py-2"><span className="h-4 w-4 rounded border border-amber-500 bg-amber-500/20" /> Đã khóa vận hành</span>
                     <span className="flex items-center gap-2 rounded-lg bg-zinc-950 px-2.5 py-2"><span className="h-4 w-4 rounded border border-fuchsia-500 bg-fuchsia-950" /> Khách đang giữ</span>
                     <span className="flex items-center gap-2 rounded-lg bg-zinc-950 px-2.5 py-2"><span className="h-4 w-4 rounded border border-zinc-700 bg-zinc-800 opacity-60" /> Đã bán / không dùng được</span>
@@ -245,15 +284,29 @@ export default function ShowtimeSeatControlDrawer({
                     <div className="mx-auto min-w-[680px]">
                       <div className="mx-auto mb-10 max-w-3xl"><div className="h-2 rounded-[100%] bg-gradient-to-r from-transparent via-brand-orange to-transparent shadow-[0_8px_28px_rgba(255,122,0,0.28)]" /><p className="mt-3 text-center text-[10px] font-black tracking-[.35em] text-zinc-500">MÀN HÌNH CHIẾU</p></div>
                       <div className="space-y-3">
-                        {rows.map(([rowLabel, seats]) => (
+                        {rows.map(([rowLabel, units]) => (
                           <div key={rowLabel} className="flex items-center gap-3">
                             <span className="w-7 text-center text-xs font-black text-zinc-500">{rowLabel}</span>
                             <div className="grid flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${maxColumn}, minmax(38px, 1fr))` }}>
-                              {seats.map(seat => {
-                                const occupied = occupiedBySeat.get(seat.publicId);
-                                const selected = selectedIds.includes(seat.publicId);
-                                const column = Number(seat.positionColumn ?? seat.seatNumber ?? 0) + 1;
-                                const isCouple = Boolean(seat.pairGroup);
+                              {units.map(seatUnit => {
+                                const occupied = seatUnit.seats
+                                  .map(seat => occupiedBySeat.get(seat.publicId))
+                                  .find(item => item?.status === 'BOOKED')
+                                  || seatUnit.seats
+                                    .map(seat => occupiedBySeat.get(seat.publicId))
+                                    .find(item => item?.status === 'HELD');
+                                const selected = seatUnit.seats.every(seat => selectedIds.includes(seat.publicId));
+                                const column = Number(seatUnit.positionColumn ?? seatUnit.seatNumber ?? 0) + 1;
+                                const seat = {
+                                  ...seatUnit,
+                                  seatTypeCode: seatUnit.seatType,
+                                  operationalStatus: seatUnit.seats.every(item => item.operationalStatus === 'ACTIVE')
+                                    ? 'ACTIVE'
+                                    : seatUnit.seats.find(item => item.operationalStatus !== 'ACTIVE')?.operationalStatus,
+                                  blocked: seatUnit.seats.some(item => item.blocked),
+                                  blockReason: seatUnit.seats.find(item => item.blocked)?.blockReason,
+                                };
+                                const type = seatTypePresentation(seat.seatTypeCode);
                                 const detail = occupied?.status === 'BOOKED'
                                   ? 'Ghế đã bán'
                                   : occupied?.status === 'HELD'
@@ -261,9 +314,10 @@ export default function ShowtimeSeatControlDrawer({
                                     : seat.blocked
                                       ? `Đã khóa: ${seat.blockReason || 'Không ghi lý do'}`
                                       : seat.operationalStatus !== 'ACTIVE'
-                                        ? 'Ghế đang bảo trì hoặc đã ngưng hoạt động'
-                                        : 'Có thể thao tác';
-                                return <button key={seat.publicId} type="button" disabled={!canSelect(seat)} onClick={() => toggleSeat(seat)} aria-pressed={selected} title={`${seat.seatCode} · ${detail}`} style={{ gridColumnStart: column }} className={`relative h-10 border px-1 text-[10px] font-black transition-all ${isCouple ? 'rounded-xl border-2' : 'rounded-t-lg rounded-b-xl'} ${seatTone({ seat, occupied, selected, mode })}`}><span>{seat.seatCode}</span>{occupied?.status === 'HELD' && <Clock3 className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-fuchsia-950 p-0.5" />}{seat.blocked && <LockKeyhole className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-zinc-950 p-0.5 text-amber-300" />}</button>;
+                                      ? 'Ghế đang bảo trì hoặc đã ngưng hoạt động'
+                                      : 'Có thể thao tác';
+                                const label = `${seat.isCouple ? 'Ghế đôi' : 'Ghế'} ${seat.seatCode} · ${seat.seatTypeName || type.label} · ${detail}`;
+                                return <button key={seat.key} type="button" disabled={!canSelectUnit(seatUnit)} onClick={() => toggleSeat(seatUnit)} aria-pressed={selected} aria-label={label} title={label} style={{ gridColumnStart: column, gridColumnEnd: `span ${seat.columnSpan || 1}` }} className={`relative h-10 border px-1 text-[10px] font-black transition-all ${type.wide ? 'rounded-xl border-2' : 'rounded-t-lg rounded-b-xl'} ${seatTone({ seat, occupied, selected, mode })}`}><span>{seat.seatCode}</span>{occupied?.status === 'HELD' && <Clock3 className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-fuchsia-950 p-0.5" />}{seat.blocked && <LockKeyhole className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-zinc-950 p-0.5 text-amber-300" />}</button>;
                               })}
                             </div>
                             <span className="w-7 text-center text-xs font-black text-zinc-500">{rowLabel}</span>
