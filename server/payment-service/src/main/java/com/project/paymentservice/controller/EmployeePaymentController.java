@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @RestController
 @RequestMapping("/api/employee/payments")
@@ -111,8 +112,12 @@ public class EmployeePaymentController {
     @GetMapping("/booking")
     public ResponseEntity<ApiResponse<EmployeeBookingPaymentResponse>> lookupBooking(
             @RequestParam String reference) {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinema(employeeId);
+        EmployeeBookingPaymentResponse booking = paymentService.lookupBookingForCash(reference);
+        requireBookingCinema(cinemaPublicId, booking.getCinemaPublicId());
         return ResponseEntity.ok(ApiResponse.success(
-                paymentService.lookupBookingForCash(reference)));
+                booking));
     }
 
     @PostMapping("/cash")
@@ -120,17 +125,25 @@ public class EmployeePaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateCashPaymentRequest request) {
         requireKey(idempotencyKey);
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinema(employeeId);
+        EmployeeBookingPaymentResponse booking = paymentService.lookupBookingForCash(
+                request.getBookingPublicId() != null
+                        ? request.getBookingPublicId() : request.getBookingCode());
+        requireBookingCinema(cinemaPublicId, booking.getCinemaPublicId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
                 "Đã tạo giao dịch tiền mặt",
                 paymentService.createCashPayment(
-                        currentUserProvider.getCurrentUserId(), idempotencyKey, request)));
+                        employeeId, idempotencyKey, request)));
     }
 
     @GetMapping("/{paymentPublicId:[a-fA-F0-9-]{36}}")
     public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPayment(
             @PathVariable String paymentPublicId) {
+        PaymentDetailResponse detail = paymentService.getPaymentForEmployee(paymentPublicId);
+        requirePaymentCinema(currentUserProvider.getCurrentUserId(), paymentPublicId);
         return ResponseEntity.ok(ApiResponse.success(
-                paymentService.getPaymentForEmployee(paymentPublicId)));
+                detail));
     }
 
     @PostMapping("/{paymentPublicId:[a-fA-F0-9-]{36}}/cash/collect")
@@ -139,8 +152,10 @@ public class EmployeePaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CashCollectRequest request) {
         requireKey(idempotencyKey);
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        requirePaymentCinema(employeeId, paymentPublicId);
         CashCollectResponse response = paymentService.collectCashPayment(
-                currentUserProvider.getCurrentUserId(), idempotencyKey, paymentPublicId, request);
+                employeeId, idempotencyKey, paymentPublicId, request);
         return ResponseEntity.status("PENDING".equals(response.getBookingDeliveryStatus())
                 ? HttpStatus.ACCEPTED : HttpStatus.OK)
                 .body(ApiResponse.success("Đã ghi nhận thu tiền mặt", response));
@@ -152,10 +167,12 @@ public class EmployeePaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody(required = false) CashCancelRequest request) {
         requireKey(idempotencyKey);
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        requirePaymentCinema(employeeId, paymentPublicId);
         CashCancelRequest actual = request == null ? new CashCancelRequest() : request;
         return ResponseEntity.ok(ApiResponse.success("Đã hủy giao dịch tiền mặt",
                 paymentService.cancelCashPayment(
-                        currentUserProvider.getCurrentUserId(),
+                        employeeId,
                         idempotencyKey,
                         paymentPublicId,
                         actual)));
@@ -167,8 +184,11 @@ public class EmployeePaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CashCollectRequest request) {
         requireKey(idempotencyKey);
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        PaymentDetailResponse detail = paymentService.getPaymentForEmployee(paymentId);
+        requirePaymentCinema(employeeId, detail.getPaymentPublicId());
         return ResponseEntity.ok(ApiResponse.success(paymentService.collectCashPayment(
-                currentUserProvider.getCurrentUserId(), idempotencyKey, paymentId, request)));
+                employeeId, idempotencyKey, paymentId, request)));
     }
 
     @PostMapping("/{paymentId:\\d+}/cash/cancel")
@@ -177,8 +197,11 @@ public class EmployeePaymentController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody(required = false) CashCancelRequest request) {
         requireKey(idempotencyKey);
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        PaymentDetailResponse detail = paymentService.getPaymentForEmployee(paymentId);
+        requirePaymentCinema(employeeId, detail.getPaymentPublicId());
         return ResponseEntity.ok(ApiResponse.success(paymentService.cancelCashPayment(
-                currentUserProvider.getCurrentUserId(),
+                employeeId,
                 idempotencyKey,
                 paymentId,
                 request == null ? new CashCancelRequest() : request)));
@@ -188,6 +211,30 @@ public class EmployeePaymentController {
         if (value == null || value.isBlank() || value.length() > 100) {
             throw new BusinessException("IDEMPOTENCY_KEY_REQUIRED",
                     "Idempotency-Key là bắt buộc", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private String employeeCinema(Long employeeId) {
+        boolean admin = SecurityContextHolder.getContext().getAuthentication()
+                .getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        return admin ? null : employeeCinemaScopeClient.requireActiveCinema(employeeId);
+    }
+
+    private void requirePaymentCinema(Long employeeId, String paymentPublicId) {
+        String cinemaPublicId = employeeCinema(employeeId);
+        if (cinemaPublicId != null) {
+            adminPaymentService.detailForCinema(cinemaPublicId, paymentPublicId);
+        }
+    }
+
+    private void requireBookingCinema(String expectedCinema, String actualCinema) {
+        if (expectedCinema == null) return;
+        if (actualCinema == null || !expectedCinema.equalsIgnoreCase(actualCinema)) {
+            throw new BusinessException(
+                    "EMPLOYEE_PAYMENT_CINEMA_SCOPE_DENIED",
+                    "Đơn đặt vé không thuộc rạp mà nhân viên đang được phân công.",
+                    HttpStatus.FORBIDDEN);
         }
     }
 }

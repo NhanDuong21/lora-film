@@ -43,6 +43,25 @@ describe('EmployeeLayout permission menu', () => {
     expect(screen.getByText('Phiếu lương')).toBeInTheDocument();
     expect(screen.queryByText('Chấm công')).not.toBeInTheDocument();
     expect(screen.queryByText('Thu tiền tại quầy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bán vé tại quầy')).not.toBeInTheDocument();
+  });
+
+  it('chỉ hiện bán vé tại quầy khi có đủ quyền tạo đơn và thu tiền', () => {
+    useAuth.mockReturnValue({
+      user: {
+        role: 'EMPLOYEE',
+        permissions: [
+          EMPLOYEE_PERMISSIONS.BOOKING_MANAGE,
+          EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT,
+        ],
+      },
+      logout: vi.fn(),
+    });
+
+    renderLayout();
+
+    expect(screen.getByText('Bán vé tại quầy')).toBeInTheDocument();
+    expect(screen.getByText('Thu tiền tại quầy')).toBeInTheDocument();
   });
 
   it('requires both attendance permissions before showing check-in', () => {

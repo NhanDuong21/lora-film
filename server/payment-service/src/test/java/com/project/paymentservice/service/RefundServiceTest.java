@@ -251,6 +251,30 @@ class RefundServiceTest {
     }
 
     @Test
+    void employeePartialRefundMustBeStrictlyLessThanRemainingAmount() {
+        PaymentAnalyticsSnapshot snapshot = new PaymentAnalyticsSnapshot();
+        snapshot.setCinemaPublicId("cinema-a");
+        when(snapshotRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(snapshot));
+        when(refundRepository.sumReservedAmount(eq(payment.getId()), anyCollection()))
+                .thenReturn(BigDecimal.ZERO);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.createEmployeeRefundRequest(
+                        payment.getPublicId(),
+                        "partial-equals-full",
+                        31L,
+                        "cinema-a",
+                        request(
+                                RefundType.PARTIAL,
+                                RefundComponent.PRICE_DIFFERENCE,
+                                new BigDecimal("100000.00"))));
+
+        assertEquals("REFUND_PARTIAL_MUST_BE_LESS_THAN_REMAINING", exception.getErrorCode());
+        verify(refundRepository, never()).saveAndFlush(any(PaymentRefund.class));
+    }
+
+    @Test
     void cashRefundRequiresManualSettlementAndCompletesExactlyOnce() {
         payment.setProviderCode(ProviderCode.CASH);
         when(refundRepository.sumReservedAmount(eq(payment.getId()), anyCollection()))

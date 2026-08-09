@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Banknote, CalendarDays, Clock3, Home, LayoutDashboard, LogOut, RotateCcw, User, WalletCards } from 'lucide-react';
+import { Banknote, CalendarDays, Clock3, Home, LayoutDashboard, LogOut, RotateCcw, Ticket, User, WalletCards } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   EMPLOYEE_PERMISSIONS,
@@ -23,6 +23,11 @@ const EMPLOYEE_MENUS = [
   {
     id: 'payroll', path: '/employee/payroll', label: 'Phiếu lương', icon: WalletCards,
     permissions: [EMPLOYEE_PERMISSIONS.PAYROLL_VIEW],
+  },
+  {
+    id: 'box-office', path: '/employee/box-office', label: 'Bán vé tại quầy', icon: Ticket,
+    permissions: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+    requireAll: true,
   },
   {
     id: 'cash-payment', path: '/employee/payments/cash', label: 'Thu tiền tại quầy', icon: Banknote,

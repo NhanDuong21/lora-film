@@ -24,6 +24,9 @@ const payment = {
   amount: 180000,
   refundedAmount: 0,
   refundableAmount: 180000,
+  ticketAmount: 180000,
+  foodAmount: 0,
+  concessionRefundableAmount: 0,
   currency: 'VND',
 };
 
@@ -86,5 +89,19 @@ describe('EmployeeRefundRequestPage', () => {
       { providerReference: 'PC-LM81-001', note: 'Đã giao đủ tiền cho khách' },
     ));
     expect(await screen.findByText('Đã xác nhận hoàn tiền mặt')).toBeInTheDocument();
+  });
+
+  it('không gợi ý toàn bộ số tiền khi chọn hoàn một phần', async () => {
+    render(<EmployeeRefundRequestPage />);
+
+    fireEvent.change(screen.getByLabelText('Mã giao dịch cần hoàn tiền'), { target: { value: 'PAY-001' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tra cứu giao dịch' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Hoàn một phần/ }));
+
+    expect(screen.getByRole('button', { name: /Đồ ăn & thức uống/ })).toBeDisabled();
+    expect(screen.getByRole('spinbutton', { name: /Số tiền đề nghị hoàn/ }))
+      .toHaveAttribute('max', '179000');
+    expect(screen.getByPlaceholderText(/tối đa 179\.000/)).toHaveValue(null);
+    expect(screen.getByText(/Nếu cần hoàn đủ 180\.000/)).toBeInTheDocument();
   });
 });

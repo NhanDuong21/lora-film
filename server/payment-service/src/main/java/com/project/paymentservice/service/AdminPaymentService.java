@@ -52,6 +52,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.EnumSet;
 import com.project.paymentservice.enumtype.RefundStatus;
+import com.project.paymentservice.enumtype.RefundComponent;
 
 @Service
 public class AdminPaymentService {
@@ -421,6 +422,19 @@ public class AdminPaymentService {
                 payment.getId(), EnumSet.of(RefundStatus.SUCCESS));
         response.setRefundedAmount(succeeded);
         response.setRefundableAmount(payment.getAmount().subtract(reserved).max(BigDecimal.ZERO));
+        BigDecimal concessionReserved = refundRepository.sumReservedAmountByComponent(
+                payment.getId(),
+                RefundComponent.CONCESSION,
+                EnumSet.of(
+                        RefundStatus.REQUESTED,
+                        RefundStatus.PROCESSING,
+                        RefundStatus.SUCCESS,
+                        RefundStatus.REQUIRES_ACTION));
+        concessionReserved = concessionReserved == null ? BigDecimal.ZERO : concessionReserved;
+        BigDecimal foodAmount = snapshot == null || snapshot.getFoodAmount() == null
+                ? BigDecimal.ZERO : snapshot.getFoodAmount();
+        response.setConcessionRefundableAmount(
+                foodAmount.subtract(concessionReserved).max(BigDecimal.ZERO));
         return response;
     }
 

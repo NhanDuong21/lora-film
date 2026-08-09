@@ -40,6 +40,7 @@ const ERROR_MESSAGES = {
   REFUND_IDEMPOTENCY_CONFLICT: 'Mã chống xử lý trùng đã được dùng cho một yêu cầu hoàn tiền khác.',
   REFUND_AMOUNT_REQUIRED: 'Vui lòng nhập số tiền cần hoàn.',
   REFUND_AMOUNT_EXCEEDS_AVAILABLE: 'Số tiền hoàn vượt quá số tiền còn có thể hoàn.',
+  REFUND_PARTIAL_MUST_BE_LESS_THAN_REMAINING: 'Hoàn một phần phải nhỏ hơn số tiền còn lại. Nếu cần hoàn hết, hãy chọn “Hoàn toàn bộ”.',
   REFUND_COMPONENT_INVALID: 'Phạm vi hoàn tiền không phù hợp với hình thức đã chọn.',
   TICKET_REFUND_NOT_SUPPORTED: 'Hiện chưa hỗ trợ hoàn riêng từng vé. Vui lòng xử lý ở cấp toàn bộ đơn.',
   REFUND_NOT_RETRYABLE: 'Yêu cầu hoàn tiền này không thể thử lại ở trạng thái hiện tại.',

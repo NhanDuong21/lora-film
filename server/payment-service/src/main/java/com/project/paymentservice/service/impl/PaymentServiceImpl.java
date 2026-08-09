@@ -291,6 +291,12 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    public PaymentDetailResponse getPaymentForEmployee(Long paymentId) {
+        return detail(paymentRepository.findById(paymentId)
+                .orElseThrow(() -> notFound(String.valueOf(paymentId))));
+    }
+
+    @Override
     public CreatePaymentResponse createCashPayment(
             Long employeeId, String idempotencyKey, CreateCashPaymentRequest request) {
         validateCreateIdentity(request.getBookingPublicId(), null, request.getBookingCode());

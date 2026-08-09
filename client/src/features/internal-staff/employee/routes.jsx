@@ -8,6 +8,7 @@ const EmployeeCheckInView = lazy(() => import('./pages/EmployeeCheckInPage'));
 const EmployeeScheduleView = lazy(() => import('./pages/EmployeeSchedulePage'));
 const EmployeePayrollPage = lazy(() => import('./pages/EmployeePayrollPage'));
 const EmployeeDashboardPage = lazy(() => import('./pages/EmployeeDashboardPage'));
+const EmployeeBoxOfficePage = lazy(() => import('./pages/EmployeeBoxOfficePage'));
 
 const lazyPage = (element) => (
     <Suspense fallback={<PageLoader />}>
@@ -23,6 +24,14 @@ const requirePermission = (element, requiredPermissions, requireAll = false) => 
 
 export const employeeStaffRoutes = [
     { index: true, element: <EmployeeIndexRedirect /> },
+    {
+        path: 'box-office',
+        element: requirePermission(
+            lazyPage(<EmployeeBoxOfficePage />),
+            [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+            true
+        )
+    },
     {
         path: 'dashboard',
         element: requirePermission(

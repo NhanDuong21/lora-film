@@ -9,6 +9,7 @@ import com.project.userservice.dto.response.EligibleEmployeeAccountResponse;
 import com.project.userservice.dto.response.EmploymentActionResponse;
 import com.project.userservice.enumtype.EmployeeStatus;
 import com.project.userservice.service.EmployeeService;
+import com.project.userservice.security.CurrentActor;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +25,13 @@ public class EmployeeController {
 
     public EmployeeController(EmployeeService service) {
         this.service = service;
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> getMyWorkContext() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Employee work context retrieved",
+                service.get(CurrentActor.accountId())));
     }
 
     @GetMapping

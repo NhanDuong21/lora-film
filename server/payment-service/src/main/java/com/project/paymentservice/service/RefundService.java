@@ -149,6 +149,13 @@ public class RefundService {
         BigDecimal amount = request.getRefundType() == RefundType.FULL
                 ? remaining : request.getAmount();
         requireAvailableAmount(amount, remaining);
+        if (request.getRefundType() == RefundType.PARTIAL
+                && amount.compareTo(remaining) >= 0) {
+            throw new BusinessException(
+                    "REFUND_PARTIAL_MUST_BE_LESS_THAN_REMAINING",
+                    "Hoàn một phần phải nhỏ hơn số tiền còn có thể hoàn. Hãy chọn hoàn toàn bộ nếu cần hoàn hết.",
+                    HttpStatus.BAD_REQUEST);
+        }
         if (request.getRefundComponent() == RefundComponent.CONCESSION) {
             PaymentAnalyticsSnapshot snapshot = snapshotRepository
                     .findByPaymentId(payment.getId())
