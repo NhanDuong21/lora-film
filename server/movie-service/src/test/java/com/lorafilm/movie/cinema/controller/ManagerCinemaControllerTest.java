@@ -15,6 +15,7 @@ import com.lorafilm.movie.showtime.service.ShowtimeStatusHistoryService;
 import com.lorafilm.movie.showtime.service.ShowtimeStatusTransitionService;
 import com.lorafilm.movie.auditorium.service.AuditoriumMaintenanceService;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,6 +69,13 @@ class ManagerCinemaControllerTest {
 
         verify(cinemaScope).requireAssigned("another-cinema");
         verifyNoInteractions(cinemaService, showtimeQueryService);
+    }
+
+    @Test
+    void managerDoesNotExposeWeeklyOperatingHoursMutation() {
+        assertThat(Arrays.stream(ManagerCinemaController.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName))
+                .doesNotContain("updateOperatingHours");
     }
 
     private ManagerCinemaController controller() {

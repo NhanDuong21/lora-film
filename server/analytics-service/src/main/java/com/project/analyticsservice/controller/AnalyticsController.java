@@ -71,7 +71,10 @@ public class AnalyticsController {
             @PathVariable long id, Principal principal) {
         return ApiResponse.success(
                 "Alert acknowledged successfully",
-                lifecycleService.acknowledgeAlert(id, principal == null ? null : principal.getName()));
+                lifecycleService.acknowledgeAlert(
+                        id,
+                        principal == null ? null : principal.getName(),
+                        cinemaScope.isManager() ? cinemaScope.assignedCinemaKeys() : null));
     }
 
     @PatchMapping("/recommendations/{id}/status")
@@ -83,7 +86,10 @@ public class AnalyticsController {
         return ApiResponse.success(
                 "Recommendation updated successfully",
                 lifecycleService.updateRecommendation(
-                        id, request.status(), principal == null ? null : principal.getName()));
+                        id,
+                        request.status(),
+                        principal == null ? null : principal.getName(),
+                        cinemaScope.isManager() ? cinemaScope.assignedCinemaKeys() : null));
     }
 
     @PostMapping("/jobs/rebuild")

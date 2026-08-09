@@ -6,8 +6,6 @@ import com.lorafilm.movie.auditorium.dto.MaintenanceWindowResponse;
 import com.lorafilm.movie.auditorium.dto.ResolveMaintenanceWindowRequest;
 import com.lorafilm.movie.auditorium.service.AuditoriumMaintenanceService;
 import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
-import com.lorafilm.movie.cinema.dto.OperatingHourResponse;
-import com.lorafilm.movie.cinema.dto.OperatingHourUpdateRequest;
 import com.lorafilm.movie.cinema.service.CinemaService;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
@@ -80,15 +78,6 @@ public class ManagerCinemaController {
         cinemaScope.requireAssigned(cinemaPublicId);
         return ResponseEntity.ok(ApiResponse.ok(
                 cinemaService.getAdminCinemaDetail(cinemaPublicId)));
-    }
-
-    @PutMapping("/cinemas/{cinemaPublicId}/operating-hours")
-    public ResponseEntity<ApiResponse<List<OperatingHourResponse>>> updateOperatingHours(
-            @PathVariable String cinemaPublicId,
-            @Valid @RequestBody List<OperatingHourUpdateRequest> requests) {
-        cinemaScope.requireAssigned(cinemaPublicId);
-        return ResponseEntity.ok(ApiResponse.ok(
-                cinemaService.updateOperatingHours(cinemaPublicId, requests)));
     }
 
     @GetMapping("/showtimes")

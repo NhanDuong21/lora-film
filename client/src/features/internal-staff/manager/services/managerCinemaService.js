@@ -14,11 +14,6 @@ const managerCinemaService = {
     last: true,
   },
 
-  updateOperatingHours: async (cinemaPublicId, operatingHours) => unwrap(await apiClient.put(
-    `/api/manager/cinemas/${cinemaPublicId}/operating-hours`,
-    operatingHours,
-  )),
-
   transitionShowtimeStatus: async (showtimePublicId, status, reason) => unwrap(await apiClient.put(
     `/api/manager/showtimes/${showtimePublicId}/status`,
     { status, reason: reason || null },
@@ -89,6 +84,15 @@ const managerCinemaService = {
   )),
 
   getCinemaReport: async params => unwrap(await apiClient.get('/api/analytics/dashboard', { params })),
+
+  acknowledgeAlert: async id => unwrap(await apiClient.patch(
+    `/api/analytics/alerts/${id}/acknowledge`,
+  )),
+
+  updateRecommendation: async (id, status) => unwrap(await apiClient.patch(
+    `/api/analytics/recommendations/${id}/status`,
+    { status },
+  )),
 };
 
 export default managerCinemaService;
