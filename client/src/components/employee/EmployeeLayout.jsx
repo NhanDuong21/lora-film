@@ -32,6 +32,7 @@ const EMPLOYEE_MENUS = [
   {
     id: 'cash-payment', path: '/employee/payments/cash', label: 'Thu tiền tại quầy', icon: Banknote,
     permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+    hiddenWhenGranted: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE],
   },
   {
     id: 'refund-request', path: '/employee/payments/refunds', label: 'Yêu cầu hoàn tiền', icon: RotateCcw,
@@ -43,11 +44,15 @@ export default function EmployeeLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const visibleMenus = EMPLOYEE_MENUS.filter(menu => hasEmployeeAccess(
-    user?.role,
-    user?.permissions || [],
-    menu.permissions,
-    menu.requireAll,
+  const permissions = user?.permissions || [];
+  const visibleMenus = EMPLOYEE_MENUS.filter(menu => (
+    !menu.hiddenWhenGranted?.some(permission => permissions.includes(permission))
+    && hasEmployeeAccess(
+      user?.role,
+      permissions,
+      menu.permissions,
+      menu.requireAll,
+    )
   ));
   const activeTab = visibleMenus.find(menu => location.pathname.startsWith(menu.path))?.id;
 
