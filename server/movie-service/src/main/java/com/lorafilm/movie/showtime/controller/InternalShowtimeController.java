@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.lorafilm.movie.common.api.ApiResponse;
 import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
 import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
+import com.lorafilm.movie.showtime.dto.ShowtimeMovieDto;
 import com.lorafilm.movie.showtime.service.ShowtimeBookingContextService;
 import com.lorafilm.movie.showtime.service.ShowtimeQueryService;
 import com.lorafilm.movie.showtime.dto.SeatLayoutDto;
@@ -46,7 +47,14 @@ public class InternalShowtimeController {
             @Valid @RequestBody java.util.Map<String, java.util.List<String>> request) {
         return ResponseEntity.ok(ApiResponse.ok(
                 showtimeBookingContextService.getBookingContextByPublicId(
-                        showtimePublicId, request.get("seatPublicIds"))));
+                showtimePublicId, request.get("seatPublicIds"))));
+    }
+
+    @GetMapping("/by-public-id/{showtimePublicId}/presentation")
+    public ResponseEntity<ApiResponse<ShowtimeMovieDto>> getPresentationByPublicId(
+            @PathVariable String showtimePublicId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                showtimeBookingContextService.getPresentationByPublicId(showtimePublicId)));
     }
 
     @GetMapping("/{showtimeId}/seat-layout")

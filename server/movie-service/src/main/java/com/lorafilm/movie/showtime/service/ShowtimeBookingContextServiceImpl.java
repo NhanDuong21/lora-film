@@ -155,6 +155,9 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         movieDto.setPublicId(showtime.getMovie().getPublicId());
         movieDto.setSlug(showtime.getMovie().getSlug());
         movieDto.setTitle(showtime.getMovie().getTitle());
+        movieDto.setDurationMinutes(showtime.getMovie().getDurationMinutes());
+        movieDto.setAgeRating(showtime.getMovie().getAgeRating() == null
+                ? null : showtime.getMovie().getAgeRating().name());
         movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
                         showtime.getMovie().getId(), MovieMediaType.POSTER, ActiveStatus.ACTIVE)
                 .ifPresent(media -> movieDto.setPosterUrl(media.getUrl()));
@@ -194,6 +197,23 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         response.setBookingExpiredAt(OffsetDateTime.now().plusMinutes(15));
 
         return response;
+    }
+
+    @Override
+    public ShowtimeMovieDto getPresentationByPublicId(String showtimePublicId) {
+        Showtime showtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(showtimePublicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
+        ShowtimeMovieDto movieDto = new ShowtimeMovieDto();
+        movieDto.setPublicId(showtime.getMovie().getPublicId());
+        movieDto.setSlug(showtime.getMovie().getSlug());
+        movieDto.setTitle(showtime.getMovie().getTitle());
+        movieDto.setDurationMinutes(showtime.getMovie().getDurationMinutes());
+        movieDto.setAgeRating(showtime.getMovie().getAgeRating() == null
+                ? null : showtime.getMovie().getAgeRating().name());
+        movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                        showtime.getMovie().getId(), MovieMediaType.POSTER, ActiveStatus.ACTIVE)
+                .ifPresent(media -> movieDto.setPosterUrl(media.getUrl()));
+        return movieDto;
     }
 
     @Override

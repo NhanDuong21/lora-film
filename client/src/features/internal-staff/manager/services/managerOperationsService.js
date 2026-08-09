@@ -20,6 +20,11 @@ const managerOperationsService = {
     { params: { cinemaPublicId } },
   )),
 
+  getBookingFoods: async (cinemaPublicId, bookingPublicId) => unwrap(await apiClient.get(
+    `/api/manager/bookings/${bookingPublicId}/foods`,
+    { params: { cinemaPublicId } },
+  )),
+
   cancelBookingHold: async (cinemaPublicId, bookingPublicId, reason) => unwrap(await apiClient.put(
     `/api/manager/bookings/${bookingPublicId}/cancel-hold`,
     { reason },

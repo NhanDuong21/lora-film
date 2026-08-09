@@ -301,6 +301,8 @@ public class BookingServiceImpl implements BookingService {
         snapshotRequest.setMovieId(context.movieId());
         snapshotRequest.setMovieTitle(context.movieTitle());
         snapshotRequest.setMoviePoster(context.moviePosterUrl());
+        snapshotRequest.setDuration(context.movieDurationMinutes());
+        snapshotRequest.setAgeRating(context.movieAgeRating());
         snapshotRequest.setShowtimeId(context.showtimeId());
         snapshotRequest.setShowtimeStart(context.startsAt());
         snapshotRequest.setShowtimeEnd(context.endsAt());
@@ -517,6 +519,8 @@ public class BookingServiceImpl implements BookingService {
         snapshotRequest.setMovieId(context.movieId());
         snapshotRequest.setMovieTitle(context.movieTitle());
         snapshotRequest.setMoviePoster(context.moviePosterUrl());
+        snapshotRequest.setDuration(context.movieDurationMinutes());
+        snapshotRequest.setAgeRating(context.movieAgeRating());
         snapshotRequest.setShowtimeId(context.showtimeId());
         snapshotRequest.setShowtimeStart(context.startsAt());
         snapshotRequest.setShowtimeEnd(context.endsAt());

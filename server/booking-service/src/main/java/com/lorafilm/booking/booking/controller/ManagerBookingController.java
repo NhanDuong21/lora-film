@@ -8,6 +8,7 @@ import com.lorafilm.booking.booking.dto.ManagerCancelBookingRequest;
 import com.lorafilm.booking.booking.service.ManagerBookingService;
 import com.lorafilm.booking.common.response.ApiResponse;
 import com.lorafilm.booking.common.response.PagedResponse;
+import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -51,6 +52,14 @@ public class ManagerBookingController {
             @PathVariable String bookingPublicId) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Chi tiết đơn tại rạp", service.detail(cinemaPublicId, bookingPublicId)));
+    }
+
+    @GetMapping("/{bookingPublicId}/foods")
+    public ResponseEntity<ApiResponse<FoodOrderResponse>> foodOrder(
+            @RequestParam String cinemaPublicId,
+            @PathVariable String bookingPublicId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Chi tiết bắp nước của đơn", service.foodOrder(cinemaPublicId, bookingPublicId)));
     }
 
     @PutMapping("/{bookingPublicId}/cancel-hold")

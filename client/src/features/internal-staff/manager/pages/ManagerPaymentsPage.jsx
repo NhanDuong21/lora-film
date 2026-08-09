@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Check,
@@ -19,8 +19,6 @@ import {
   ActionModal,
   ConsolePagination,
   ConsolePanel,
-  DetailDrawer,
-  DetailGrid,
   MetricStrip,
 } from '../../admin/components/OperationsConsole';
 import managerOperationsService from '../services/managerOperationsService';
@@ -42,7 +40,7 @@ const REFUND_STATUS = {
   REQUESTED: 'Đã chuyển hệ thống xử lý',
   PROCESSING: 'Đang hoàn tiền',
   REQUIRES_ACTION: 'Cần trả tiền tại quầy',
-  SUCCEEDED: 'Đã hoàn tiền',
+  SUCCESS: 'Đã hoàn tiền',
   FAILED: 'Hoàn tiền lỗi',
   REJECTED: 'Đã từ chối',
   CANCELLED: 'Đã hủy',
@@ -82,17 +80,18 @@ const StatusPill = ({ status, refund = false }) => (
 const emptyPage = { content: [], number: 0, totalPages: 0, totalElements: 0 };
 
 export default function ManagerPaymentsPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialQuery = searchParams.get('query') || '';
   const { selectedCinema, selectedCinemaId, cinemaState } = useOutletContext();
   const [tab, setTab] = useState('transactions');
-  const [filters, setFilters] = useState({ query: '', status: '', provider: '', page: 0, size: 20 });
+  const [filters, setFilters] = useState({ query: initialQuery, status: '', provider: '', page: 0, size: 20 });
   const [refundFilters, setRefundFilters] = useState({ status: 'PENDING_APPROVAL', page: 0, size: 20 });
-  const [draftQuery, setDraftQuery] = useState('');
+  const [draftQuery, setDraftQuery] = useState(initialQuery);
   const [payments, setPayments] = useState(emptyPage);
   const [refunds, setRefunds] = useState(emptyPage);
   const [summary, setSummary] = useState({});
   const [state, setState] = useState({ loading: false, error: '' });
-  const [detail, setDetail] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [decision, setDecision] = useState(null);
   const [note, setNote] = useState('');
   const [actionState, setActionState] = useState({ loading: false, error: '', success: '' });
@@ -129,18 +128,6 @@ export default function ManagerPaymentsPage() {
   const submitSearch = event => {
     event.preventDefault();
     setFilters(value => ({ ...value, query: draftQuery.trim(), page: 0 }));
-  };
-
-  const openDetail = async payment => {
-    setDetail({ payment, bookingSnapshot: null, refundRequests: [] });
-    setDetailLoading(true);
-    try {
-      setDetail(await managerOperationsService.getPaymentDetail(selectedCinemaId, payment.paymentPublicId));
-    } catch (error) {
-      setActionState({ loading: false, success: '', error: error?.response?.data?.message || 'Không thể tải chi tiết giao dịch.' });
-    } finally {
-      setDetailLoading(false);
-    }
   };
 
   const openDecision = (refund, type) => {
@@ -217,7 +204,7 @@ export default function ManagerPaymentsPage() {
             <button className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 text-sm font-black text-black"><Search size={17} /> Tra cứu</button>
           </form>
           {state.loading ? <p className="py-20 text-center text-sm font-bold text-zinc-500">Đang tải giao dịch…</p> : state.error ? <EmptyWorkspace title="Không thể tải dữ liệu" description={state.error} /> : paymentRows.length ? (
-            <div className="overflow-x-auto"><table className="min-w-[960px] w-full text-left text-sm"><thead className="bg-white/[0.025] text-[10px] font-black uppercase tracking-wider text-zinc-600"><tr><th className="p-4">Giao dịch</th><th className="p-4">Đơn / phim</th><th className="p-4">Phương thức</th><th className="p-4">Giá trị</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Thao tác</th></tr></thead><tbody className="divide-y divide-white/5">{paymentRows.map(payment => <tr key={payment.paymentPublicId} className="hover:bg-white/[0.02]"><td className="p-4"><p className="font-black text-zinc-100">{payment.paymentTransactionCode || 'Chưa có mã'}</p><p className="mt-1 text-xs text-zinc-600">{formatDateTime(payment.createdAt)}</p></td><td className="p-4"><p className="max-w-60 truncate font-bold text-zinc-300">{payment.movieTitle || 'Đơn đặt vé'}</p><p className="mt-1 max-w-48 truncate font-mono text-[10px] text-zinc-600">{payment.bookingPublicId}</p></td><td className="p-4"><p className="font-bold text-zinc-300">{PROVIDERS[payment.provider] || payment.provider || payment.paymentMethod}</p><p className="mt-1 text-xs text-zinc-600">{payment.ticketCount || 0} vé</p></td><td className="p-4"><p className="font-black text-zinc-100">{formatMoney(payment.amount, payment.currency)}</p>{Number(payment.refundedAmount || 0) > 0 ? <p className="mt-1 text-xs text-amber-300">Đã hoàn {formatMoney(payment.refundedAmount, payment.currency)}</p> : null}</td><td className="p-4"><StatusPill status={payment.status} />{payment.reconciliationStatus && payment.reconciliationStatus !== 'NOT_REQUIRED' ? <p className="mt-2 text-[10px] font-black text-red-300">Kế toán cần kiểm tra</p> : null}</td><td className="p-4 text-right"><button type="button" onClick={() => openDetail(payment)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 hover:bg-white/5"><Eye size={15} /> Chi tiết</button></td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto"><table className="min-w-[960px] w-full text-left text-sm"><thead className="bg-white/[0.025] text-[10px] font-black uppercase tracking-wider text-zinc-600"><tr><th className="p-4">Giao dịch</th><th className="p-4">Đơn / phim</th><th className="p-4">Phương thức</th><th className="p-4">Giá trị</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Thao tác</th></tr></thead><tbody className="divide-y divide-white/5">{paymentRows.map(payment => <tr key={payment.paymentPublicId} className="hover:bg-white/[0.02]"><td className="p-4"><p className="font-black text-zinc-100">{payment.paymentTransactionCode || 'Chưa có mã'}</p><p className="mt-1 text-xs text-zinc-600">{formatDateTime(payment.createdAt)}</p></td><td className="p-4"><p className="max-w-60 truncate font-bold text-zinc-300">{payment.movieTitle || 'Đơn đặt vé'}</p><p className="mt-1 max-w-48 truncate font-mono text-[10px] text-zinc-600">{payment.bookingPublicId}</p></td><td className="p-4"><p className="font-bold text-zinc-300">{PROVIDERS[payment.provider] || payment.provider || payment.paymentMethod}</p><p className="mt-1 text-xs text-zinc-600">{payment.ticketCount || 0} vé</p></td><td className="p-4"><p className="font-black text-zinc-100">{formatMoney(payment.amount, payment.currency)}</p>{Number(payment.refundedAmount || 0) > 0 ? <p className="mt-1 text-xs text-amber-300">Đã hoàn {formatMoney(payment.refundedAmount, payment.currency)}</p> : null}</td><td className="p-4"><StatusPill status={payment.status} />{payment.reconciliationStatus && payment.reconciliationStatus !== 'NOT_REQUIRED' ? <p className="mt-2 text-[10px] font-black text-red-300">Kế toán cần kiểm tra</p> : null}</td><td className="p-4 text-right"><button type="button" onClick={() => navigate(`/manager/payments/${payment.paymentPublicId}`)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 hover:bg-white/5"><Eye size={15} /> Xem hồ sơ</button></td></tr>)}</tbody></table></div>
           ) : <EmptyWorkspace title="Không có giao dịch phù hợp" description="Thử đổi từ khóa, trạng thái hoặc phương thức thanh toán." />}
           <ConsolePagination page={payments.number || 0} totalPages={payments.totalPages || 0} totalElements={payments.totalElements || 0} onPage={page => setFilters(value => ({ ...value, page }))} />
         </ConsolePanel>
@@ -230,19 +217,6 @@ export default function ManagerPaymentsPage() {
       )}
 
       <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.05] p-4 text-xs leading-5 text-sky-100/70"><p className="flex items-center gap-2 font-black text-sky-300"><ShieldCheck size={15} /> Ranh giới trách nhiệm</p><p className="mt-2">Quản lý rạp xác minh nghiệp vụ tại rạp và duyệt yêu cầu. Nếu có lệch tiền, giao dịch treo, lỗi cổng thanh toán hoặc cần đối soát sổ sách, hãy chuyển Quản trị viên/kế toán; không tự sửa trạng thái giao dịch.</p></div>
-
-      <DetailDrawer open={Boolean(detail)} onClose={() => setDetail(null)} title={`Chi tiết giao dịch ${detail?.payment?.paymentTransactionCode || ''}`} subtitle={detailLoading ? 'Đang tải dữ liệu đầy đủ…' : selectedCinema.name}>
-        <div className="space-y-5"><div className="flex flex-wrap gap-2"><StatusPill status={detail?.payment?.status} />{detail?.payment?.reconciliationStatus && detail.payment.reconciliationStatus !== 'NOT_REQUIRED' ? <span className="inline-flex rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-black text-red-300">Cần kế toán kiểm tra</span> : null}</div><DetailGrid items={[
-          { label: 'Phim', value: detail?.payment?.movieTitle || detail?.bookingSnapshot?.movieTitle || 'Đơn đặt vé' },
-          { label: 'Phương thức', value: PROVIDERS[detail?.payment?.provider] || detail?.payment?.provider || detail?.payment?.paymentMethod },
-          { label: 'Số tiền', value: formatMoney(detail?.payment?.amount, detail?.payment?.currency) },
-          { label: 'Có thể hoàn', value: formatMoney(detail?.payment?.refundableAmount, detail?.payment?.currency) },
-          { label: 'Mã đơn đặt vé', value: detail?.payment?.bookingPublicId },
-          { label: 'Mã từ cổng thanh toán', value: detail?.payment?.externalTransactionId || 'Chưa có' },
-          { label: 'Tình trạng phát vé', value: detail?.payment?.bookingDeliveryStatus || 'Chưa xác định' },
-          { label: 'Tạo lúc', value: formatDateTime(detail?.payment?.createdAt) },
-        ]} />{detail?.refundRequests?.length ? <div><p className="mb-3 text-xs font-black uppercase tracking-wider text-zinc-500">Lịch sử yêu cầu hoàn tiền</p><div className="space-y-2">{detail.refundRequests.map(refund => <div key={refund.refundPublicId} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3"><div><p className="text-sm font-black text-zinc-200">{refund.refundCode}</p><p className="mt-1 text-xs text-zinc-600">{formatMoney(refund.amount, refund.currency)}</p></div><StatusPill status={refund.status} refund /></div>)}</div></div> : null}</div>
-      </DetailDrawer>
 
       <ActionModal open={Boolean(decision)} onClose={() => { setDecision(null); setActionState(value => ({ ...value, error: '' })); }} title={decision?.type === 'approve' ? 'Duyệt yêu cầu hoàn tiền' : 'Từ chối yêu cầu hoàn tiền'} description={decision ? `${decision.refund.refundCode} · ${formatMoney(decision.refund.amount, decision.refund.currency)}` : ''} onSubmit={submitDecision} submitLabel={decision?.type === 'approve' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'} submitting={actionState.loading} tone={decision?.type === 'reject' ? 'danger' : 'orange'}>
         {actionState.error ? <p role="alert" className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs font-bold text-red-200">{actionState.error}</p> : null}

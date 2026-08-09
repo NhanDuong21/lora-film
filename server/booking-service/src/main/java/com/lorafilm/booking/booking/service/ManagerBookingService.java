@@ -12,6 +12,8 @@ import com.lorafilm.booking.booking.repository.BookingRepository;
 import com.lorafilm.booking.booking.repository.BookingSpecification;
 import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.common.response.PagedResponse;
+import com.lorafilm.booking.food.dto.response.FoodOrderResponse;
+import com.lorafilm.booking.food.service.FoodOrderService;
 import com.lorafilm.booking.security.service.ManagerCinemaScopeService;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
@@ -25,18 +27,21 @@ public class ManagerBookingService {
     private final BookingLifecycleService lifecycleService;
     private final BookingMapper bookingMapper;
     private final ManagerCinemaScopeService cinemaScope;
+    private final FoodOrderService foodOrderService;
 
     public ManagerBookingService(
             AdminBookingService adminBookingService,
             BookingRepository bookingRepository,
             BookingLifecycleService lifecycleService,
             BookingMapper bookingMapper,
-            ManagerCinemaScopeService cinemaScope) {
+            ManagerCinemaScopeService cinemaScope,
+            FoodOrderService foodOrderService) {
         this.adminBookingService = adminBookingService;
         this.bookingRepository = bookingRepository;
         this.lifecycleService = lifecycleService;
         this.bookingMapper = bookingMapper;
         this.cinemaScope = cinemaScope;
+        this.foodOrderService = foodOrderService;
     }
 
     @Transactional(readOnly = true)
@@ -72,6 +77,12 @@ public class ManagerBookingService {
         return adminBookingService.getBookingDetail(booking.getPublicId());
     }
 
+    @Transactional(readOnly = true)
+    public FoodOrderResponse foodOrder(String cinemaPublicId, String bookingPublicId) {
+        Booking booking = scopedBooking(cinemaPublicId, bookingPublicId);
+        return foodOrderService.getFoodOrderByBookingId(booking.getId());
+    }
+
     @Transactional
     public BookingAdminResponse cancelHold(
             String cinemaPublicId, String bookingPublicId, String reason) {
@@ -79,7 +90,7 @@ public class ManagerBookingService {
         if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BusinessException(
                     "MANAGER_CAN_ONLY_CANCEL_PENDING_HOLD",
-                    "Manager chỉ được hủy đơn đang giữ ghế và chưa thanh toán.",
+                    "Quản lý rạp chỉ được hủy đơn đang giữ ghế và chưa thanh toán.",
                     HttpStatus.CONFLICT);
         }
         Booking saved = lifecycleService.cancel(

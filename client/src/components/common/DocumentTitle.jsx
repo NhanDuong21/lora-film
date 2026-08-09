@@ -85,7 +85,9 @@ const pageTitle = pathname => {
   if (path === '/manager/showtimes') return 'Lịch chiếu tại rạp';
   if (path === '/manager/rooms') return 'Phòng chiếu và bảo trì';
   if (path === '/manager/bookings') return 'Đơn đặt vé và giữ ghế';
+  if (path.startsWith('/manager/bookings/')) return 'Chi tiết đơn đặt vé';
   if (path === '/manager/payments') return 'Giao dịch tại rạp';
+  if (path.startsWith('/manager/payments/')) return 'Chi tiết giao dịch tại rạp';
   if (path === '/manager/staff') return 'Nhân sự và ca làm tại rạp';
   if (path === '/manager/reports') return 'Báo cáo vận hành rạp';
   if (path === '/manager/cinema') return 'Thông tin và giờ mở cửa';

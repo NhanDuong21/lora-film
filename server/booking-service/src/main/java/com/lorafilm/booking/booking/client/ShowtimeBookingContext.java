@@ -29,7 +29,25 @@ public record ShowtimeBookingContext(
         String auditoriumName,
         List<SeatContext> seats,
         String auditoriumPublicId,
-        Integer auditoriumCapacity) {
+        Integer auditoriumCapacity,
+        Integer movieDurationMinutes,
+        String movieAgeRating) {
+
+    /** Compatibility constructor for contexts created before movie presentation facts. */
+    public ShowtimeBookingContext(
+            Long showtimeId, String showtimePublicId, Long movieId, String moviePublicId,
+            Long cinemaId, String cinemaPublicId, Long auditoriumId, String status,
+            Instant startsAt, Instant endsAt, Instant paymentExpiresAt,
+            BigDecimal ticketAmount, BigDecimal serviceFee, BigDecimal discountAmount,
+            BigDecimal totalAmount, String currency, String format, String roomType,
+            String movieTitle, String moviePosterUrl, String cinemaName, String auditoriumName,
+            List<SeatContext> seats, String auditoriumPublicId, Integer auditoriumCapacity) {
+        this(showtimeId, showtimePublicId, movieId, moviePublicId, cinemaId, cinemaPublicId,
+                auditoriumId, status, startsAt, endsAt, paymentExpiresAt, ticketAmount,
+                serviceFee, discountAmount, totalAmount, currency, format, roomType,
+                movieTitle, moviePosterUrl, cinemaName, auditoriumName, seats,
+                auditoriumPublicId, auditoriumCapacity, null, null);
+    }
 
     /** Compatibility constructor for callers before auditorium analytics facts. */
     public ShowtimeBookingContext(
@@ -43,7 +61,8 @@ public record ShowtimeBookingContext(
         this(showtimeId, showtimePublicId, movieId, moviePublicId, cinemaId, cinemaPublicId,
                 auditoriumId, status, startsAt, endsAt, paymentExpiresAt, ticketAmount,
                 serviceFee, discountAmount, totalAmount, currency, format, roomType,
-                movieTitle, moviePosterUrl, cinemaName, auditoriumName, seats, null, null);
+                movieTitle, moviePosterUrl, cinemaName, auditoriumName, seats,
+                null, null, null, null);
     }
 
     /** Compatibility constructor for contexts created before format snapshots. */
@@ -73,7 +92,7 @@ public record ShowtimeBookingContext(
                 cinemaId, cinemaPublicId, auditoriumId, status, startsAt, endsAt,
                 paymentExpiresAt, ticketAmount, serviceFee, discountAmount,
                 totalAmount, currency, null, null, movieTitle, moviePosterUrl,
-                cinemaName, auditoriumName, seats, null, null);
+                cinemaName, auditoriumName, seats, null, null, null, null);
     }
 
     /** Compatibility constructor for historical numeric-only Movie contexts. */
@@ -100,7 +119,8 @@ public record ShowtimeBookingContext(
         this(showtimeId, showtimePublicId, movieId, null, cinemaId, null,
                 auditoriumId, status, startsAt, endsAt, paymentExpiresAt,
                 ticketAmount, serviceFee, discountAmount, totalAmount, currency, null, null,
-                movieTitle, moviePosterUrl, cinemaName, auditoriumName, seats, null, null);
+                movieTitle, moviePosterUrl, cinemaName, auditoriumName, seats,
+                null, null, null, null);
     }
 
     public record SeatContext(Long seatId, String seatPublicId, String seatLabel, String seatType,

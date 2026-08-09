@@ -10,6 +10,8 @@ import com.lorafilm.booking.booking.dto.BookingOperationsSummaryResponse;
 import com.lorafilm.booking.booking.dto.BookingReservationAdminDto;
 import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
+import com.lorafilm.booking.booking.client.ShowtimeClient;
+import com.lorafilm.booking.booking.client.ShowtimePresentationContext;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingAttentionFilter;
 import com.lorafilm.booking.booking.enums.BookingStatus;
@@ -70,6 +72,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
     private final BookingLifecycleService lifecycleService;
     private final SeatReservationRepository seatReservationRepository;
     private final BookingPaymentEventRepository paymentEventRepository;
+    private ShowtimeClient showtimeClient;
 
     @Autowired
     public AdminBookingServiceImpl(BookingRepository bookingRepository,
@@ -116,6 +119,11 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         this(bookingRepository, bookingMapper, statusTransitionService, historyService,
                 auditService, operationLogService, outboxService, ticketService,
                 snapshotService, bookingMetricsManager, null, null, null, null);
+    }
+
+    @Autowired(required = false)
+    void setShowtimeClient(ShowtimeClient showtimeClient) {
+        this.showtimeClient = showtimeClient;
     }
 
     @Override
@@ -178,7 +186,9 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         BookingDetailResponse detailResponse = bookingMapper.toAdminDetailResponse(booking);
         Long dbBookingId = booking.getId();
 
-        detailResponse.setSnapshot(snapshotService.findByBooking(dbBookingId));
+        BookingSnapshotDto snapshot = snapshotService.findByBooking(dbBookingId);
+        enrichMissingPresentation(snapshot, booking.getShowtimePublicId());
+        detailResponse.setSnapshot(snapshot);
         detailResponse.setTickets(ticketService.findByBooking(dbBookingId));
         detailResponse.setStatusHistories(historyService.findByBooking(dbBookingId));
         List<SeatReservation> reservations = seatReservationRepository == null
@@ -193,6 +203,42 @@ public class AdminBookingServiceImpl implements AdminBookingService {
                 toOperationalInfo(booking, reservations, paymentAttempted, Instant.now()));
 
         return detailResponse;
+    }
+
+    private void enrichMissingPresentation(BookingSnapshotDto snapshot, String showtimePublicId) {
+        if (snapshot == null) return;
+        if (snapshot.getDuration() == null
+                && snapshot.getShowtimeStart() != null
+                && snapshot.getShowtimeEnd() != null) {
+            long minutes = ChronoUnit.MINUTES.between(
+                    snapshot.getShowtimeStart(), snapshot.getShowtimeEnd());
+            if (minutes > 0 && minutes <= Integer.MAX_VALUE) {
+                snapshot.setDuration((int) minutes);
+            }
+        }
+        boolean durationMissing = snapshot.getDuration() == null;
+        boolean ageRatingMissing = snapshot.getAgeRating() == null
+                || snapshot.getAgeRating().isBlank();
+        if ((!durationMissing && !ageRatingMissing)
+                || showtimeClient == null
+                || showtimePublicId == null
+                || showtimePublicId.isBlank()) {
+            return;
+        }
+        try {
+            ShowtimePresentationContext presentation =
+                    showtimeClient.getPresentationByPublicId(showtimePublicId);
+            if (presentation == null) return;
+            if (durationMissing && presentation.durationMinutes() != null) {
+                snapshot.setDuration(presentation.durationMinutes());
+            }
+            if (ageRatingMissing && presentation.ageRating() != null) {
+                snapshot.setAgeRating(presentation.ageRating());
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Cannot enrich legacy booking snapshot for showtimePublicId={}",
+                    showtimePublicId, exception);
+        }
     }
 
     private BookingAdminResponse toAdminSummary(Booking booking, boolean paymentAttempted) {

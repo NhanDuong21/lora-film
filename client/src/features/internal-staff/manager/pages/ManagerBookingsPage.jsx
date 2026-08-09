@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
   Ban,
@@ -16,8 +16,6 @@ import {
   ActionModal,
   ConsolePagination,
   ConsolePanel,
-  DetailDrawer,
-  DetailGrid,
   MetricStrip,
 } from '../../admin/components/OperationsConsole';
 import managerOperationsService from '../services/managerOperationsService';
@@ -54,6 +52,14 @@ const formatDateTime = value => value
   ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
   : 'Chưa có';
 
+const localizeAuditoriumName = value => {
+  if (!value) return 'Chưa rõ phòng';
+  return String(value)
+    .replace(/\bScreen\b/gi, 'Phòng')
+    .replace(/\bStandard\b/gi, 'Tiêu chuẩn')
+    .replace(/\bDeluxe\b/gi, 'Cao cấp');
+};
+
 const statusTone = status => {
   if (['CONFIRMED', 'COMPLETED', 'SUCCESS'].includes(status)) return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
   if (['CANCELLED', 'EXPIRED', 'FAILED'].includes(status)) return 'border-red-500/20 bg-red-500/10 text-red-300';
@@ -70,14 +76,13 @@ const StatusPill = ({ status, kind = 'booking' }) => (
 const emptyPage = { data: [], pageNo: 0, totalPages: 0, totalElements: 0 };
 
 export default function ManagerBookingsPage() {
+  const navigate = useNavigate();
   const { selectedCinema, selectedCinemaId, cinemaState } = useOutletContext();
   const [filters, setFilters] = useState({ bookingCode: '', status: '', attention: '', page: 0, size: 20 });
   const [draftQuery, setDraftQuery] = useState('');
   const [pageData, setPageData] = useState(emptyPage);
   const [summary, setSummary] = useState({});
   const [state, setState] = useState({ loading: false, error: '' });
-  const [detail, setDetail] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [actionState, setActionState] = useState({ loading: false, error: '', success: '' });
@@ -112,19 +117,6 @@ export default function ManagerBookingsPage() {
     setFilters(value => ({ ...value, bookingCode: draftQuery.trim(), page: 0 }));
   };
 
-  const openDetail = async booking => {
-    setDetail(booking);
-    setDetailLoading(true);
-    try {
-      const result = await managerOperationsService.getBookingDetail(selectedCinemaId, booking.publicId);
-      setDetail(result);
-    } catch (error) {
-      setActionState({ loading: false, success: '', error: error?.response?.data?.message || 'Không thể tải chi tiết đơn.' });
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
   const cancelHold = async event => {
     event.preventDefault();
     if (cancelReason.trim().length < 5) {
@@ -136,7 +128,6 @@ export default function ManagerBookingsPage() {
       await managerOperationsService.cancelBookingHold(selectedCinemaId, cancelTarget.publicId, cancelReason.trim());
       setCancelTarget(null);
       setCancelReason('');
-      setDetail(null);
       setActionState({ loading: false, error: '', success: 'Đã hủy lượt giữ ghế chưa thanh toán và trả ghế về kho.' });
       await load();
     } catch (error) {
@@ -192,11 +183,11 @@ export default function ManagerBookingsPage() {
               <tbody className="divide-y divide-white/5">
                 {rows.map(booking => <tr key={booking.publicId} className="hover:bg-white/[0.02]">
                   <td className="p-4"><p className="font-black text-zinc-100">{booking.bookingCode}</p><p className="mt-1 max-w-56 truncate text-xs text-zinc-500">{booking.movieTitle || 'Chưa có tên phim'}</p>{booking.attentionCode ? <p className="mt-2 text-[10px] font-black text-amber-300">{ATTENTION[booking.attentionCode] || 'Cần kiểm tra'}</p> : null}</td>
-                  <td className="p-4"><p className="font-bold text-zinc-300">{booking.auditoriumName || 'Chưa rõ phòng'}</p><p className="mt-1 text-xs text-zinc-600">{formatDateTime(booking.showtimeStart)}</p></td>
+                  <td className="p-4"><p className="font-bold text-zinc-300">{localizeAuditoriumName(booking.auditoriumName)}</p><p className="mt-1 text-xs text-zinc-600">{formatDateTime(booking.showtimeStart)}</p></td>
                   <td className="p-4"><p className="font-black text-zinc-200">{booking.seatCount || 0} ghế</p>{booking.bookingStatus === 'PENDING_PAYMENT' ? <p className="mt-1 text-xs text-zinc-600">Hết hạn {formatDateTime(booking.expiresAt)}</p> : null}</td>
                   <td className="p-4"><p className="font-black text-zinc-100">{formatMoney(booking.finalAmount, booking.currency)}</p><div className="mt-2"><StatusPill status={booking.paymentStatus} kind="payment" /></div></td>
                   <td className="p-4"><StatusPill status={booking.bookingStatus} /></td>
-                  <td className="p-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => openDetail(booking)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 hover:bg-white/5"><Eye size={15} /> Chi tiết</button>{booking.bookingStatus === 'PENDING_PAYMENT' && booking.paymentStatus !== 'SUCCESS' ? <button type="button" onClick={() => { setCancelTarget(booking); setCancelReason(''); setActionState(value => ({ ...value, error: '' })); }} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs font-black text-red-300"><Ban size={15} /> Hủy giữ ghế</button> : null}</div></td>
+                  <td className="p-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => navigate(`/manager/bookings/${booking.publicId}`)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 hover:bg-white/5"><Eye size={15} /> Xem hồ sơ</button>{booking.bookingStatus === 'PENDING_PAYMENT' && booking.paymentStatus !== 'SUCCESS' ? <button type="button" onClick={() => { setCancelTarget(booking); setCancelReason(''); setActionState(value => ({ ...value, error: '' })); }} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs font-black text-red-300"><Ban size={15} /> Hủy giữ ghế</button> : null}</div></td>
                 </tr>)}
               </tbody>
             </table>
@@ -206,23 +197,6 @@ export default function ManagerBookingsPage() {
       </ConsolePanel>
 
       <p className="flex items-center gap-2 text-xs text-zinc-600"><TimerReset size={15} /> Lượt giữ ghế quá hạn được hệ thống tự giải phóng. Quản lý rạp chỉ hủy thủ công khi cần xử lý vận hành tại rạp.</p>
-
-      <DetailDrawer open={Boolean(detail)} onClose={() => setDetail(null)} title={`Chi tiết đơn ${detail?.bookingCode || ''}`} subtitle={detailLoading ? 'Đang tải dữ liệu đầy đủ…' : selectedCinema.name} footer={detail?.bookingStatus === 'PENDING_PAYMENT' && detail?.paymentStatus !== 'SUCCESS' ? <button type="button" onClick={() => { setCancelTarget(detail); setCancelReason(''); }} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-sm font-black text-white"><Ban size={17} /> Hủy lượt giữ ghế chưa thanh toán</button> : null}>
-        <div className="space-y-5">
-          <div className="flex flex-wrap gap-2"><StatusPill status={detail?.bookingStatus} /><StatusPill status={detail?.paymentStatus} kind="payment" /></div>
-          <DetailGrid items={[
-            { label: 'Phim', value: detail?.snapshot?.movieTitle || detail?.movieTitle || 'Chưa có tên phim' },
-            { label: 'Rạp / phòng', value: `${detail?.snapshot?.cinemaName || selectedCinema.name} · ${detail?.snapshot?.auditoriumName || detail?.auditoriumName || 'Chưa rõ phòng'}` },
-            { label: 'Suất chiếu', value: formatDateTime(detail?.snapshot?.showtimeStart || detail?.showtimeStart) },
-            { label: 'Số ghế', value: `${detail?.tickets?.length ?? detail?.seatCount ?? 0} ghế` },
-            { label: 'Tổng thanh toán', value: formatMoney(detail?.finalAmount, detail?.currency) },
-            { label: 'Hạn giữ ghế', value: formatDateTime(detail?.expiresAt) },
-            { label: 'Mã tham chiếu thanh toán', value: detail?.paymentReference || 'Chưa phát sinh' },
-            { label: 'Tạo lúc', value: formatDateTime(detail?.createdAt) },
-          ]} />
-          {detail?.cancelReasonDetail ? <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-red-300">Lý do hủy</p><p className="mt-2 text-sm leading-6 text-red-100/80">{detail.cancelReasonDetail}</p></div> : null}
-        </div>
-      </DetailDrawer>
 
       <ActionModal open={Boolean(cancelTarget)} onClose={() => { setCancelTarget(null); setActionState(value => ({ ...value, error: '' })); }} title="Hủy lượt giữ ghế" description={`${cancelTarget?.bookingCode || ''} · Chỉ áp dụng cho đơn chưa thanh toán.`} onSubmit={cancelHold} submitLabel="Xác nhận hủy giữ ghế" submitting={actionState.loading} tone="danger">
         {actionState.error ? <p role="alert" className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs font-bold text-red-200">{actionState.error}</p> : null}
