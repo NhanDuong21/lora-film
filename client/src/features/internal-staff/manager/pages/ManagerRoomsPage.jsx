@@ -9,7 +9,6 @@ export default function ManagerRoomsPage() {
     selectedCinemaId,
     cinemaState,
     triggerToast,
-    triggerConfirm,
   } = useOutletContext();
   const rooms = useMemo(() => selectedCinema?.activeAuditoriums || [], [selectedCinema]);
 
@@ -52,8 +51,8 @@ export default function ManagerRoomsPage() {
           roomId,
           payload,
         )}
+        viewerRole="manager"
         onNotify={triggerToast}
-        onConfirm={triggerConfirm}
       />
     </div>
   );

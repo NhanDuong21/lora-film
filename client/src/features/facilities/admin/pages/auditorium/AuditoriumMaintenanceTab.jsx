@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import MaintenanceWorkspace from '@/features/facilities/shared/components/MaintenanceWorkspace';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
 
@@ -8,7 +7,6 @@ export default function AuditoriumMaintenanceTab({
   auditorium,
   triggerToast,
 }) {
-  const { triggerConfirm } = useOutletContext() || {};
   const rooms = useMemo(() => auditorium ? [auditorium] : [], [auditorium]);
 
   return (
@@ -37,8 +35,8 @@ export default function AuditoriumMaintenanceTab({
           }
           return response.data;
         }}
+        viewerRole="admin"
         onNotify={triggerToast}
-        onConfirm={triggerConfirm}
       />
     </div>
   );
