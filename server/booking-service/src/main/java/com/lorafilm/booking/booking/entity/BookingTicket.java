@@ -84,6 +84,15 @@ public class BookingTicket extends BaseEntity {
     @Column(name = "used_at")
     private Instant usedAt;
 
+    @Column(name = "used_by_account_id")
+    private Long usedByAccountId;
+
+    @Column(name = "used_cinema_public_id", length = 36)
+    private String usedCinemaPublicId;
+
+    @Column(name = "used_gate_label", length = 80)
+    private String usedGateLabel;
+
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
@@ -257,6 +266,30 @@ public class BookingTicket extends BaseEntity {
 
     public void setUsedAt(Instant usedAt) {
         this.usedAt = usedAt;
+    }
+
+    public Long getUsedByAccountId() {
+        return usedByAccountId;
+    }
+
+    public void setUsedByAccountId(Long usedByAccountId) {
+        this.usedByAccountId = usedByAccountId;
+    }
+
+    public String getUsedCinemaPublicId() {
+        return usedCinemaPublicId;
+    }
+
+    public void setUsedCinemaPublicId(String usedCinemaPublicId) {
+        this.usedCinemaPublicId = usedCinemaPublicId;
+    }
+
+    public String getUsedGateLabel() {
+        return usedGateLabel;
+    }
+
+    public void setUsedGateLabel(String usedGateLabel) {
+        this.usedGateLabel = usedGateLabel;
     }
 
     public Instant getUpdatedAt() {

@@ -7,6 +7,7 @@ import {
   ChevronDown,
   CircleGauge,
   CreditCard,
+  ScanLine,
   LogOut,
   MapPin,
   ShieldCheck,
@@ -25,6 +26,7 @@ const MANAGER_MENUS = [
   { path: '/manager/bookings', label: 'Đơn đặt vé & giữ ghế', icon: Ticket },
   { path: '/manager/payments', label: 'Giao dịch tại rạp', icon: CreditCard },
   { path: '/manager/staff', label: 'Nhân sự & ca làm', icon: UsersRound },
+  { path: '/manager/ticket-control', label: 'Soát vé & bàn giao', icon: ScanLine },
   { path: '/manager/reports', label: 'Báo cáo vận hành', icon: BarChart3 },
   { path: '/manager/cinema', label: 'Thông tin & giờ mở cửa', icon: Building2 },
 ];

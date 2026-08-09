@@ -3,6 +3,7 @@ import {
   ArrowLeft, Banknote, CalendarClock, CheckCircle2, Film, LoaderCircle,
   MapPin, Popcorn, Printer, RotateCcw, Ticket, User,
 } from 'lucide-react';
+import TicketQrCode from '@/features/booking/customer/components/TicketQrCode';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getBookingDetails, getBookingTickets } from '@/features/booking/customer/services/bookingService';
 import { getPaymentsForBooking } from '@/features/payment/services/paymentService';
@@ -132,7 +133,7 @@ export default function EmployeeOrderDetailPage() {
 
         <article className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6 print:border-black print:bg-white">
           <div className="flex items-center gap-2 border-b border-zinc-800 pb-4 print:border-black"><Ticket className="text-sky-400 print:text-black" size={20} /><h2 className="font-black">Vé đã phát hành ({tickets.length})</h2></div>
-          {tickets.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{tickets.map(ticketItem => <div key={ticketItem.publicId || ticketItem.ticketCode} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 print:border-black print:bg-white"><div className="flex items-center justify-between"><p className="font-black">Ghế {ticketItem.seatLabel}</p><CheckCircle2 size={17} className="text-emerald-400 print:text-black" /></div><p className="mt-2 break-all font-mono text-xs text-zinc-500 print:text-black">{ticketItem.ticketCode}</p></div>)}</div> : <p className="py-8 text-center text-sm text-zinc-500 print:text-black">Đơn chưa phát hành vé.</p>}
+          {tickets.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{tickets.map(ticketItem => <div key={ticketItem.publicId || ticketItem.ticketCode} className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 print:border-black print:bg-white"><TicketQrCode ticketCode={ticketItem.qrCode || ticketItem.ticketCode} size={140} className="h-24 w-24 shrink-0 rounded-lg bg-white p-1" /><div className="min-w-0"><div className="flex items-center gap-2"><p className="font-black">Ghế {ticketItem.seatLabel}</p><CheckCircle2 size={17} className="text-emerald-400 print:text-black" /></div><p className="mt-2 break-all font-mono text-xs text-zinc-500 print:text-black">{ticketItem.ticketCode}</p><p className="mt-2 text-[10px] text-zinc-600 print:text-black">Quét QR này tại cửa phòng chiếu.</p></div></div>)}</div> : <p className="py-8 text-center text-sm text-zinc-500 print:text-black">Đơn chưa phát hành vé.</p>}
         </article>
 
         <div className="hidden border-t border-black pt-4 text-xs print:block"><p><strong>Thời điểm in:</strong> {dateTime(new Date())}</p><p className="mt-1">Vui lòng giữ vé để xuất trình khi vào phòng chiếu.</p></div>

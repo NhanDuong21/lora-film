@@ -97,4 +97,27 @@ describe('EmployeeLayout permission menu', () => {
 
     expect(screen.queryByText('Chấm công')).not.toBeInTheDocument();
   });
+
+  it('hiển thị không gian kiểm soát lối vào cho nhân viên soát vé', () => {
+    useAuth.mockReturnValue({
+      user: {
+        role: 'EMPLOYEE',
+        fullName: 'Trần Minh Nhân',
+        permissions: [
+          EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW,
+          EMPLOYEE_PERMISSIONS.TICKET_SCAN,
+        ],
+      },
+      logout: vi.fn(),
+    });
+
+    renderLayout();
+
+    expect(screen.getByText('Kiểm soát lối vào')).toBeInTheDocument();
+    expect(screen.getByText('Soát vé')).toBeInTheDocument();
+    expect(screen.getByText('Suất chiếu & cửa phòng')).toBeInTheDocument();
+    expect(screen.getByText('Lịch sử soát & sự cố')).toBeInTheDocument();
+    expect(screen.getByText('Bàn giao ca soát vé')).toBeInTheDocument();
+    expect(screen.queryByText('Bán vé tại quầy')).not.toBeInTheDocument();
+  });
 });

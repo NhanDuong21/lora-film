@@ -23,6 +23,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
+import TicketQrCode from '@/features/booking/customer/components/TicketQrCode';
 import { getCinemas, getSeatLayout, getShowtimes } from '@/features/catalog/customer/services/movieService';
 import {
   cancelBooking,
@@ -784,9 +785,9 @@ export default function EmployeeBoxOfficePage() {
                     <p>Phương thức: <strong className="text-zinc-300 print:text-black">{payment?.paymentMethod === 'FULL_DISCOUNT' ? 'Ưu đãi thanh toán toàn bộ' : 'Tiền mặt tại quầy'}</strong></p>
                     <p className="pt-1">Doanh thu ghi nhận là tổng tiền đơn; tiền thối không tính vào doanh thu.</p>
                   </div>
-                  {tickets.length ? <div className="hidden space-y-1 border-t border-black pt-3 text-xs print:block">{tickets.map(item => <p key={`receipt-${item.publicId || item.ticketCode}`}><strong>Vé ghế {item.seatLabel}:</strong> {item.ticketCode}</p>)}</div> : null}
+                  {tickets.length ? <div className="hidden grid-cols-2 gap-4 border-t border-black pt-3 text-xs print:grid">{tickets.map(item => <div key={`receipt-${item.publicId || item.ticketCode}`} className="text-center"><TicketQrCode ticketCode={item.qrCode || item.ticketCode} size={180} className="mx-auto h-28 w-28 bg-white p-1" /><p className="mt-2"><strong>Vé ghế {item.seatLabel}</strong></p><p className="break-all font-mono text-[9px]">{item.ticketCode}</p></div>)}</div> : null}
                 </section>
-                <div className="space-y-2">{tickets.length ? tickets.map(item => <div key={item.publicId || item.ticketCode} className="flex items-center justify-between rounded-xl bg-zinc-950 p-3"><span className="font-black">Ghế {item.seatLabel}</span><span className="font-mono text-xs text-zinc-400">{item.ticketCode}</span></div>) : <p className="rounded-xl bg-zinc-950 p-3 text-center text-xs text-zinc-500">Vé đang đồng bộ; có thể tra cứu lại bằng mã đơn.</p>}</div>
+                <div className="space-y-2">{tickets.length ? tickets.map(item => <div key={item.publicId || item.ticketCode} className="flex items-center gap-3 rounded-xl bg-zinc-950 p-3"><TicketQrCode ticketCode={item.qrCode || item.ticketCode} size={96} className="h-16 w-16 shrink-0 rounded-lg bg-white p-1" /><div className="min-w-0"><p className="font-black">Ghế {item.seatLabel}</p><p className="mt-1 break-all font-mono text-[10px] text-zinc-500">{item.ticketCode}</p></div></div>) : <p className="rounded-xl bg-zinc-950 p-3 text-center text-xs text-zinc-500">Vé đang đồng bộ; có thể tra cứu lại bằng mã đơn.</p>}</div>
                 <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] p-3 text-xs text-sky-200"><p className="flex items-center gap-2 font-black"><MailX size={15} /> Không gửi email nhân viên</p><p className="mt-1 text-sky-200/60">Giao vé in trực tiếp cho khách tại quầy.</p></div>
                 <button type="button" onClick={printCounterReceipt} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-600 font-black"><Printer size={18} /> In vé / biên nhận</button>
                 <button type="button" onClick={resetSale} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white font-black text-black"><RotateCcw size={18} /> Bán đơn tiếp theo</button>

@@ -12,6 +12,7 @@ const ManagerBookingsPage = lazy(() => import('./pages/ManagerBookingsPage'));
 const ManagerPaymentsPage = lazy(() => import('./pages/ManagerPaymentsPage'));
 const ManagerBookingDetailPage = lazy(() => import('./pages/ManagerBookingDetailPage'));
 const ManagerPaymentDetailPage = lazy(() => import('./pages/ManagerPaymentDetailPage'));
+const ManagerTicketControlPage = lazy(() => import('./pages/ManagerTicketControlPage'));
 
 const lazyPage = element => <Suspense fallback={<PageLoader />}>{element}</Suspense>;
 
@@ -24,6 +25,7 @@ export const managerRoutes = [
   { path: 'payments', element: lazyPage(<ManagerPaymentsPage />) },
   { path: 'payments/:paymentPublicId', element: lazyPage(<ManagerPaymentDetailPage />) },
   { path: 'staff', element: lazyPage(<ManagerStaffPage />) },
+  { path: 'ticket-control', element: lazyPage(<ManagerTicketControlPage />) },
   { path: 'reports', element: lazyPage(<ManagerReportsPage />) },
   { path: 'cinema', element: lazyPage(<ManagerCinemaPage />) },
 ];

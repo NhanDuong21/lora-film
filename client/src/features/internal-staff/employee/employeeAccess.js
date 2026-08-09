@@ -9,6 +9,7 @@ export const EMPLOYEE_PERMISSIONS = Object.freeze({
   BOOKING_VIEW: 'BOOKING_VIEW',
   BOOKING_MANAGE: 'BOOKING_MANAGE',
   MOVIE_VIEW: 'MOVIE_VIEW',
+  TICKET_SCAN: 'TICKET_SCAN',
 });
 
 export const hasEmployeeAccess = (
@@ -35,6 +36,7 @@ export const hasEmployeeAccess = (
 const EMPLOYEE_LANDING_ROUTES = [
   [EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW, '/employee/dashboard'],
   [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, '/employee/box-office'],
+  [EMPLOYEE_PERMISSIONS.TICKET_SCAN, '/employee/ticket-scan'],
   [EMPLOYEE_PERMISSIONS.SCHEDULE_VIEW, '/employee/schedules'],
   [EMPLOYEE_PERMISSIONS.ATTENDANCE_VIEW, '/employee/checkin'],
   [EMPLOYEE_PERMISSIONS.PAYROLL_VIEW, '/employee/payroll'],

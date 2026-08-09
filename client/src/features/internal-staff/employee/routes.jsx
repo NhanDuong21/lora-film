@@ -12,6 +12,10 @@ const EmployeeBoxOfficePage = lazy(() => import('./pages/EmployeeBoxOfficePage')
 const EmployeeOrdersPage = lazy(() => import('./pages/EmployeeOrdersPage'));
 const EmployeeOrderDetailPage = lazy(() => import('./pages/EmployeeOrderDetailPage'));
 const EmployeeCashSessionPage = lazy(() => import('./pages/EmployeeCashSessionPage'));
+const EmployeeTicketScanPage = lazy(() => import('./pages/EmployeeTicketScanPage'));
+const EmployeeTicketShowtimesPage = lazy(() => import('./pages/EmployeeTicketShowtimesPage'));
+const EmployeeTicketHistoryPage = lazy(() => import('./pages/EmployeeTicketHistoryPage'));
+const EmployeeTicketHandoffPage = lazy(() => import('./pages/EmployeeTicketHandoffPage'));
 
 const lazyPage = (element) => (
     <Suspense fallback={<PageLoader />}>
@@ -62,6 +66,34 @@ export const employeeStaffRoutes = [
         element: requirePermission(
             lazyPage(<EmployeeDashboardPage />),
             [EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW]
+        )
+    },
+    {
+        path: 'ticket-scan',
+        element: requirePermission(
+            lazyPage(<EmployeeTicketScanPage />),
+            [EMPLOYEE_PERMISSIONS.TICKET_SCAN]
+        )
+    },
+    {
+        path: 'ticket-showtimes',
+        element: requirePermission(
+            lazyPage(<EmployeeTicketShowtimesPage />),
+            [EMPLOYEE_PERMISSIONS.TICKET_SCAN]
+        )
+    },
+    {
+        path: 'ticket-history',
+        element: requirePermission(
+            lazyPage(<EmployeeTicketHistoryPage />),
+            [EMPLOYEE_PERMISSIONS.TICKET_SCAN]
+        )
+    },
+    {
+        path: 'ticket-handoff',
+        element: requirePermission(
+            lazyPage(<EmployeeTicketHandoffPage />),
+            [EMPLOYEE_PERMISSIONS.TICKET_SCAN]
         )
     },
     {

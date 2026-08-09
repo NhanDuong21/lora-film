@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Banknote, CalendarDays, ClipboardList, Clock3, Home, LayoutDashboard,
-  LogOut, RotateCcw, Ticket, User, WalletCards,
+  Banknote, CalendarDays, ClipboardCheck, ClipboardList, Clock3, Clapperboard,
+  History, Home, LayoutDashboard, LogOut, QrCode, RotateCcw, Ticket, User, WalletCards,
 } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -41,6 +41,22 @@ const EMPLOYEE_MENU_GROUPS = [
         permissions: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
         requireAll: true,
       },
+      {
+        id: 'ticket-scan', path: '/employee/ticket-scan', label: 'Soát vé', icon: QrCode,
+        permissions: [EMPLOYEE_PERMISSIONS.TICKET_SCAN],
+      },
+      {
+        id: 'ticket-showtimes', path: '/employee/ticket-showtimes', label: 'Suất chiếu & cửa phòng', icon: Clapperboard,
+        permissions: [EMPLOYEE_PERMISSIONS.TICKET_SCAN],
+      },
+      {
+        id: 'ticket-history', path: '/employee/ticket-history', label: 'Lịch sử soát & sự cố', icon: History,
+        permissions: [EMPLOYEE_PERMISSIONS.TICKET_SCAN],
+      },
+      {
+        id: 'ticket-handoff', path: '/employee/ticket-handoff', label: 'Bàn giao ca soát vé', icon: ClipboardCheck,
+        permissions: [EMPLOYEE_PERMISSIONS.TICKET_SCAN],
+      },
     ],
   },
   {
@@ -71,6 +87,9 @@ export default function EmployeeLayout() {
   const permissions = user?.permissions || [];
   const visibleGroups = EMPLOYEE_MENU_GROUPS.map(group => ({
     ...group,
+    label: group.id === 'operations' && permissions.includes(EMPLOYEE_PERMISSIONS.TICKET_SCAN)
+      ? 'Kiểm soát lối vào'
+      : group.label,
     items: group.items.filter(menu => (
       !menu.hiddenWhenGranted?.some(permission => permissions.includes(permission))
       && hasEmployeeAccess(

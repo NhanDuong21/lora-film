@@ -103,6 +103,29 @@ export const auditoriumLabel = value => (value || 'Chưa ghi nhận phòng')
   .replace(/\bStandard\b/gi, 'Tiêu chuẩn')
   .replace(/\bPremium\b/gi, 'Cao cấp');
 
+export const TICKET_SCAN_RESULTS = {
+  ADMITTED: { label: 'Đã cho khách vào', shortLabel: 'Hợp lệ', tone: 'emerald' },
+  ALREADY_USED: { label: 'Vé đã được sử dụng', shortLabel: 'Đã dùng', tone: 'red' },
+  NOT_FOUND: { label: 'Không tìm thấy vé', shortLabel: 'Không tìm thấy', tone: 'red' },
+  WRONG_CINEMA: { label: 'Vé không thuộc rạp này', shortLabel: 'Sai rạp', tone: 'red' },
+  TOO_EARLY: { label: 'Chưa đến giờ vào phòng', shortLabel: 'Quá sớm', tone: 'amber' },
+  TOO_LATE: { label: 'Suất chiếu đã kết thúc', shortLabel: 'Quá muộn', tone: 'red' },
+  REFUNDED: { label: 'Vé đã hoàn tiền', shortLabel: 'Đã hoàn', tone: 'red' },
+  CANCELLED: { label: 'Vé đã bị hủy', shortLabel: 'Đã hủy', tone: 'red' },
+  NOT_PAID: { label: 'Đơn chưa thanh toán', shortLabel: 'Chưa thanh toán', tone: 'amber' },
+  INVALID_STATUS: { label: 'Vé chưa sẵn sàng để sử dụng', shortLabel: 'Không hợp lệ', tone: 'red' },
+};
+
+export const ticketScanResult = result => TICKET_SCAN_RESULTS[result] || {
+  label: 'Đang kiểm tra trạng thái vé', shortLabel: 'Chưa rõ', tone: 'zinc',
+};
+
+export const entryStatus = status => ({
+  OPEN: { label: 'Đang đón khách', tone: 'emerald' },
+  UPCOMING: { label: 'Sắp mở cửa', tone: 'amber' },
+  CLOSED: { label: 'Đã đóng cửa', tone: 'zinc' },
+}[status] || { label: 'Đang cập nhật', tone: 'zinc' });
+
 export const seatCount = booking => booking?.snapshot?.seats?.length
   || booking?.presentation?.seats?.length
   || 0;

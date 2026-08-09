@@ -89,6 +89,7 @@ const pageTitle = pathname => {
   if (path === '/manager/payments') return 'Giao dịch tại rạp';
   if (path.startsWith('/manager/payments/')) return 'Chi tiết giao dịch tại rạp';
   if (path === '/manager/staff') return 'Nhân sự và ca làm tại rạp';
+  if (path === '/manager/ticket-control') return 'Soát vé và bàn giao tại rạp';
   if (path === '/manager/reports') return 'Báo cáo vận hành rạp';
   if (path === '/manager/cinema') return 'Thông tin và giờ mở cửa';
 
@@ -97,6 +98,10 @@ const pageTitle = pathname => {
   if (path === '/employee/orders') return 'Đơn tại quầy';
   if (path.startsWith('/employee/orders/')) return 'Chi tiết đơn tại quầy';
   if (path === '/employee/cash-session') return 'Chốt ca và bàn giao';
+  if (path === '/employee/ticket-scan') return 'Soát vé tại rạp';
+  if (path === '/employee/ticket-showtimes') return 'Suất chiếu và cửa phòng';
+  if (path === '/employee/ticket-history') return 'Lịch sử soát vé và sự cố';
+  if (path === '/employee/ticket-handoff') return 'Bàn giao ca soát vé';
   if (path === '/employee/checkin') return 'Chấm công nhân viên';
   if (path === '/employee/schedules') return 'Lịch làm việc';
   if (path === '/employee/payroll') return 'Bảng lương nhân viên';
