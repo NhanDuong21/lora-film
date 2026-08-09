@@ -8,8 +8,16 @@ import {
   cancelBooking,
   createBooking,
   finalizeCheckout,
+  getBookingDetails,
   getBookingTickets,
+  previewBookingPromotions,
 } from '@/features/booking/customer/services/bookingService';
+import {
+  addFoodItem,
+  getConcessions,
+  removeFoodItem,
+  updateFoodQuantity,
+} from '@/features/booking/customer/services/foodService';
 import {
   cancelCashPayment,
   collectCashPayment,
@@ -27,7 +35,15 @@ vi.mock('@/features/booking/customer/services/bookingService', () => ({
   cancelBooking: vi.fn(),
   createBooking: vi.fn(),
   finalizeCheckout: vi.fn(),
+  getBookingDetails: vi.fn(),
   getBookingTickets: vi.fn(),
+  previewBookingPromotions: vi.fn(),
+}));
+vi.mock('@/features/booking/customer/services/foodService', () => ({
+  addFoodItem: vi.fn(),
+  getConcessions: vi.fn(),
+  removeFoodItem: vi.fn(),
+  updateFoodQuantity: vi.fn(),
 }));
 vi.mock('@/features/payment/services/paymentService', () => ({
   cancelCashPayment: vi.fn(),
@@ -49,6 +65,22 @@ const showtime = {
   startTime: '2099-08-10T02:00:00Z',
   endTime: '2099-08-10T04:30:00Z',
   status: 'OPEN_FOR_BOOKING',
+};
+const booking = {
+  publicId: 'booking-1',
+  bookingCode: 'LORAFILM-001',
+  ticketAmount: 90000,
+  foodAmount: 0,
+  finalAmount: 90000,
+  foodOrder: null,
+};
+const concession = {
+  id: 1,
+  code: 'POP_S',
+  name: 'Small popcorn',
+  imageUrl: '/images/popcorn.png',
+  price: 45000,
+  sellable: true,
 };
 
 describe('EmployeeBoxOfficePage', () => {
@@ -76,28 +108,70 @@ describe('EmployeeBoxOfficePage', () => {
       }],
     });
     getSeatAvailability.mockResolvedValue({ occupiedSeats: [], maxSeatsPerBooking: 8 });
-    createBooking.mockResolvedValue({ publicId: 'booking-1', bookingCode: 'LORAFILM-001' });
-    finalizeCheckout.mockResolvedValue({ publicId: 'booking-1', finalAmount: 90000 });
+    getConcessions.mockResolvedValue([concession]);
+    createBooking.mockResolvedValue(booking);
+    getBookingDetails.mockResolvedValue(booking);
+    previewBookingPromotions.mockResolvedValue({
+      eligible: true,
+      originalAmount: 90000,
+      discountAmount: 9000,
+      finalAmount: 81000,
+      appliedPromotions: [{ promotionPublicId: 'promotion-1', name: 'Ưu đãi hệ thống 10%' }],
+    });
+    finalizeCheckout.mockResolvedValue({ ...booking, discountAmount: 9000, finalAmount: 81000 });
     createCashPayment.mockResolvedValue({ paymentPublicId: 'payment-1', status: 'PENDING' });
     cancelCashPayment.mockResolvedValue({ status: 'CANCELLED' });
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
-    collectCashPayment.mockResolvedValue({ status: 'SUCCESS', changeAmount: 10000 });
+    collectCashPayment.mockResolvedValue({ status: 'SUCCESS', changeAmount: 19000 });
     getBookingTickets.mockResolvedValue([{ publicId: 'ticket-1', ticketCode: 'TICKET-A1', seatLabel: 'A1' }]);
+    addFoodItem.mockResolvedValue({
+      items: [{ id: 11, productId: 1, quantity: 1, finalAmount: 45000 }],
+      finalAmount: 45000,
+    });
+    updateFoodQuantity.mockResolvedValue({ items: [], finalAmount: 0 });
+    removeFoodItem.mockResolvedValue(undefined);
   });
 
-  it('hoàn tất luồng chọn suất, chọn ghế, thu tiền và phát hành vé', async () => {
-    render(<EmployeeBoxOfficePage />);
-
-    expect(await screen.findByText('LoraFilm Landmark 81')).toBeInTheDocument();
+  const holdSeatAndOpenOrder = async () => {
     fireEvent.click((await screen.findAllByRole('button', { name: /Người Nhện/ }))[0]);
     fireEvent.click(await screen.findByRole('button', { name: 'A1' }));
-    fireEvent.click(screen.getByRole('button', { name: /Tạo đơn & chuyển sang thu tiền/ }));
-
+    fireEvent.click(screen.getByRole('button', { name: 'Giữ ghế & chọn bắp nước' }));
     await waitFor(() => expect(createBooking).toHaveBeenCalledWith(expect.objectContaining({
       showtimePublicId: 'showtime-1',
       seatPublicIds: ['seat-1'],
     })));
-    expect(finalizeCheckout).toHaveBeenCalledWith('booking-1', { paymentMethod: 'CASH' });
+  };
+
+  it('chỉ hiển thị ngày thực sự có suất chiếu', async () => {
+    getShowtimes
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: [showtime] })
+      .mockResolvedValue({ data: [] });
+
+    render(<EmployeeBoxOfficePage />);
+
+    expect(await screen.findByText('1 suất')).toBeInTheDocument();
+    expect(screen.queryByText('0 suất')).not.toBeInTheDocument();
+  });
+
+  it('giữ ghế, tự áp dụng ưu đãi, chọn bắp nước rồi thu tiền và phát hành vé', async () => {
+    render(<EmployeeBoxOfficePage />);
+
+    expect(await screen.findByText('LoraFilm Landmark 81')).toBeInTheDocument();
+    await holdSeatAndOpenOrder();
+
+    expect(await screen.findByText('Ưu đãi hệ thống 10%')).toBeInTheDocument();
+    expect(screen.getByText('Không gửi vé vào email của tài khoản nhân viên.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm Bắp rang cỡ nhỏ' }));
+    await waitFor(() => expect(addFoodItem).toHaveBeenCalledWith('booking-1', {
+      productId: 1,
+      quantity: 1,
+    }));
+    expect(previewBookingPromotions).toHaveBeenLastCalledWith('booking-1', { paymentMethod: 'CASH' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chốt đơn & chuyển sang thu tiền' }));
+    await waitFor(() => expect(finalizeCheckout).toHaveBeenCalledWith('booking-1', { paymentMethod: 'CASH' }));
     expect(createCashPayment).toHaveBeenCalledWith(
       { bookingPublicId: 'booking-1' },
       expect.any(String),
@@ -116,25 +190,18 @@ describe('EmployeeBoxOfficePage', () => {
     expect(screen.getByRole('button', { name: /In vé/ })).toBeInTheDocument();
   });
 
-  it('hủy giao dịch chưa thu và trả lại ghế khi khách đổi ý', async () => {
+  it('hủy đơn đang giữ ghế trước khi mở giao dịch tiền mặt', async () => {
     render(<EmployeeBoxOfficePage />);
+    await holdSeatAndOpenOrder();
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /Người Nhện/ }))[0]);
-    fireEvent.click(await screen.findByRole('button', { name: 'A1' }));
-    fireEvent.click(screen.getByRole('button', { name: /Tạo đơn & chuyển sang thu tiền/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hủy đơn và trả ghế' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Hủy đơn và trả ghế' }).at(-1));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Hủy đơn chưa thu' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy đơn và trả ghế' }));
-
-    await waitFor(() => expect(cancelCashPayment).toHaveBeenCalledWith(
-      'payment-1',
-      expect.any(String),
-    ));
-    expect(cancelBooking).toHaveBeenCalledWith(
+    await waitFor(() => expect(cancelBooking).toHaveBeenCalledWith(
       'booking-1',
       'Khách đổi ý trước khi thu tiền tại quầy',
-    );
+    ));
+    expect(cancelCashPayment).not.toHaveBeenCalled();
     expect(await screen.findByText('Đã hủy đơn chưa thu')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Tạo đơn & chuyển sang thu tiền/ })).toBeInTheDocument();
   });
 });

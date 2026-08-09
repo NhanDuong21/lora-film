@@ -3,10 +3,13 @@ package com.lorafilm.booking.service;
 import com.lorafilm.booking.booking.dto.BookingTicketDto;
 import com.lorafilm.booking.booking.dto.CreateTicketRequest;
 import com.lorafilm.booking.booking.entity.Booking;
+import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
+import com.lorafilm.booking.booking.entity.BookingSnapshot;
 import com.lorafilm.booking.booking.entity.BookingTicket;
 import com.lorafilm.booking.booking.enums.TicketStatus;
 import com.lorafilm.booking.booking.mapper.BookingTicketMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingTicketRepository;
 import com.lorafilm.booking.booking.service.impl.BookingTicketServiceImpl;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
@@ -26,6 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +48,12 @@ public class BookingTicketServiceTest {
     @Mock
     private com.lorafilm.booking.booking.repository.BookingSnapshotRepository bookingSnapshotRepository;
 
+    @Mock
+    private BookingPriceSnapshotRepository bookingPriceSnapshotRepository;
+
+    @Mock
+    private com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
+
     private BookingTicketServiceImpl bookingTicketService;
 
     private Booking sampleBooking;
@@ -51,7 +62,9 @@ public class BookingTicketServiceTest {
 
     @BeforeEach
     public void setUp() {
-        bookingTicketService = new BookingTicketServiceImpl(bookingTicketRepository, bookingRepository, bookingTicketMapper, bookingSnapshotRepository, new com.fasterxml.jackson.databind.ObjectMapper());
+        bookingTicketService = new BookingTicketServiceImpl(bookingTicketRepository, bookingRepository, bookingTicketMapper,
+                bookingSnapshotRepository, bookingPriceSnapshotRepository, new com.fasterxml.jackson.databind.ObjectMapper());
+        bookingTicketService.setOutboxService(outboxService);
 
         sampleBooking = new Booking();
         sampleBooking.setId(10L);
@@ -144,5 +157,25 @@ public class BookingTicketServiceTest {
 
         // Should not throw any exception and should just return
         bookingTicketService.deleteTickets(10L);
+    }
+
+    @Test
+    public void generateTickets_BoxOfficeSale_DoesNotNotifyEmployeeAccount() {
+        sampleBooking.setPublicId("b0658f1e-8c5f-4f6e-93c0-9caa8d847f15");
+        BookingSnapshot snapshot = new BookingSnapshot();
+        snapshot.setSnapshotJson("[{\"seatId\":15,\"seatLabel\":\"A1\",\"seatType\":\"STANDARD\",\"price\":100000}]");
+        BookingPriceSnapshot priceSnapshot = new BookingPriceSnapshot();
+        priceSnapshot.setPricingBreakdownJson("{\"channel\":\"BOX_OFFICE\"}");
+
+        when(bookingTicketRepository.findByBookingId(10L)).thenReturn(Collections.emptyList());
+        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingSnapshotRepository.findByBookingId(10L)).thenReturn(Optional.of(snapshot));
+        when(bookingPriceSnapshotRepository.findByBookingId(10L)).thenReturn(Optional.of(priceSnapshot));
+        when(bookingTicketRepository.saveAll(anyList())).thenReturn(List.of(sampleTicket));
+
+        bookingTicketService.generateTicketsForConfirmedBooking(10L);
+
+        verify(bookingTicketRepository).saveAll(anyList());
+        verify(outboxService, never()).createOutboxEvent(any(), any(), any(), any());
     }
 }
