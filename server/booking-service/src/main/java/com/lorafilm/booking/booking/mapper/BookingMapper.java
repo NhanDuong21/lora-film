@@ -20,6 +20,7 @@ public class BookingMapper {
         response.setShowtimePublicId(booking.getShowtimePublicId());
         response.setMovieId(booking.getMovieId());
         response.setCinemaId(booking.getCinemaId());
+        response.setCinemaPublicId(booking.getCinemaPublicId());
         response.setAuditoriumId(booking.getAuditoriumId());
         response.setTicketAmount(booking.getTicketAmount());
         response.setFoodAmount(booking.getFoodAmount());
@@ -53,6 +54,7 @@ public class BookingMapper {
         response.setShowtimePublicId(booking.getShowtimePublicId());
         response.setMovieId(booking.getMovieId());
         response.setCinemaId(booking.getCinemaId());
+        response.setCinemaPublicId(booking.getCinemaPublicId());
         response.setAuditoriumId(booking.getAuditoriumId());
         response.setTicketAmount(booking.getTicketAmount());
         response.setFoodAmount(booking.getFoodAmount());

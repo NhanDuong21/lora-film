@@ -43,6 +43,9 @@ public class Booking extends FullAuditableEntity {
     @Column(name = "cinema_id", nullable = false)
     private Long cinemaId;
 
+    @Column(name = "cinema_public_id", length = 36)
+    private String cinemaPublicId;
+
     @Column(name = "auditorium_id", nullable = false)
     private Long auditoriumId;
 
@@ -339,6 +342,14 @@ public class Booking extends FullAuditableEntity {
 
     public void setCinemaId(Long cinemaId) {
         this.cinemaId = cinemaId;
+    }
+
+    public String getCinemaPublicId() {
+        return cinemaPublicId;
+    }
+
+    public void setCinemaPublicId(String cinemaPublicId) {
+        this.cinemaPublicId = cinemaPublicId == null ? null : cinemaPublicId.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     public Long getAuditoriumId() {

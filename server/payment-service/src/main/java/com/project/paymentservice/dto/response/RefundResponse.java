@@ -21,11 +21,15 @@ public class RefundResponse {
     private BigDecimal amount;
     private String currency;
     private boolean automatic;
+    private Long requestedByAccountId;
+    private Long reviewedByAccountId;
+    private String reviewNote;
     private String status;
     private String providerRefundId;
     private String failureCode;
     private String failureMessage;
     private Instant requestedAt;
+    private Instant reviewedAt;
     private Instant succeededAt;
     private Instant failedAt;
 
@@ -43,11 +47,15 @@ public class RefundResponse {
         response.amount = refund.getRequestedAmount();
         response.currency = refund.getCurrency();
         response.automatic = refund.isAutomatic();
+        response.requestedByAccountId = refund.getRequestedByAccountId();
+        response.reviewedByAccountId = refund.getReviewedByAccountId();
+        response.reviewNote = refund.getReviewNoteSanitized();
         response.status = refund.getStatus().name();
         response.providerRefundId = refund.getProviderRefundId();
         response.failureCode = refund.getFailureCode();
         response.failureMessage = refund.getFailureMessageSanitized();
         response.requestedAt = refund.getRequestedAt();
+        response.reviewedAt = refund.getReviewedAt();
         response.succeededAt = refund.getSucceededAt();
         response.failedAt = refund.getFailedAt();
         return response;
@@ -65,11 +73,15 @@ public class RefundResponse {
     public BigDecimal getAmount() { return amount; }
     public String getCurrency() { return currency; }
     public boolean isAutomatic() { return automatic; }
+    public Long getRequestedByAccountId() { return requestedByAccountId; }
+    public Long getReviewedByAccountId() { return reviewedByAccountId; }
+    public String getReviewNote() { return reviewNote; }
     public String getStatus() { return status; }
     public String getProviderRefundId() { return providerRefundId; }
     public String getFailureCode() { return failureCode; }
     public String getFailureMessage() { return failureMessage; }
     public Instant getRequestedAt() { return requestedAt; }
+    public Instant getReviewedAt() { return reviewedAt; }
     public Instant getSucceededAt() { return succeededAt; }
     public Instant getFailedAt() { return failedAt; }
 }

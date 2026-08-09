@@ -39,6 +39,9 @@ CREATE TABLE bookings (
     cinema_id BIGINT NOT NULL
         COMMENT 'ID rạp chiếu tại thời điểm đặt vé (Snapshot)',
 
+    cinema_public_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL
+        COMMENT 'UUID rạp dùng để khóa phạm vi vận hành của Manager',
+
     auditorium_id BIGINT NOT NULL
         COMMENT 'ID phòng chiếu tại thời điểm đặt vé (Snapshot)',
 

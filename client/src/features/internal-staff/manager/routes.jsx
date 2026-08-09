@@ -8,6 +8,8 @@ const ManagerCinemaPage = lazy(() => import('./pages/ManagerCinemaPage'));
 const ManagerRoomsPage = lazy(() => import('./pages/ManagerRoomsPage'));
 const ManagerStaffPage = lazy(() => import('./pages/ManagerStaffPage'));
 const ManagerReportsPage = lazy(() => import('./pages/ManagerReportsPage'));
+const ManagerBookingsPage = lazy(() => import('./pages/ManagerBookingsPage'));
+const ManagerPaymentsPage = lazy(() => import('./pages/ManagerPaymentsPage'));
 
 const lazyPage = element => <Suspense fallback={<PageLoader />}>{element}</Suspense>;
 
@@ -15,6 +17,8 @@ export const managerRoutes = [
   { index: true, element: lazyPage(<ManagerDashboardPage />) },
   { path: 'showtimes', element: lazyPage(<ManagerShowtimesPage />) },
   { path: 'rooms', element: lazyPage(<ManagerRoomsPage />) },
+  { path: 'bookings', element: lazyPage(<ManagerBookingsPage />) },
+  { path: 'payments', element: lazyPage(<ManagerPaymentsPage />) },
   { path: 'staff', element: lazyPage(<ManagerStaffPage />) },
   { path: 'reports', element: lazyPage(<ManagerReportsPage />) },
   { path: 'cinema', element: lazyPage(<ManagerCinemaPage />) },

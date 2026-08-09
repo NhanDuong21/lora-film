@@ -5,6 +5,7 @@ import { EMPLOYEE_PERMISSIONS } from '@/features/internal-staff/employee/employe
 
 const PaymentReturnPage = lazy(() => import('./customer/pages/PaymentReturnPage'));
 const EmployeeCashPaymentPage = lazy(() => import('./employee/pages/EmployeeCashPaymentPage'));
+const EmployeeRefundRequestPage = lazy(() => import('./employee/pages/EmployeeRefundRequestPage'));
 const AdminPaymentsPage = lazy(() => import('./admin/pages/AdminPaymentsPage'));
 const AdminPaymentDetailPage = lazy(() => import('./admin/pages/AdminPaymentDetailPage'));
 
@@ -34,6 +35,14 @@ export const employeePaymentRoutes = [
     element: (
       <PermissionRoute requiredPermissions={[EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT]}>
         {lazyPage(EmployeeCashPaymentPage)}
+      </PermissionRoute>
+    ),
+  },
+  {
+    path: 'payments/refunds',
+    element: (
+      <PermissionRoute requiredPermissions={[EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT]}>
+        {lazyPage(EmployeeRefundRequestPage)}
       </PermissionRoute>
     ),
   },

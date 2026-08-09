@@ -560,6 +560,9 @@ CREATE TABLE `payment_refunds` (
   `automatic` boolean NOT NULL DEFAULT FALSE,
   `requested_by_actor` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `requested_by_account_id` bigint NULL,
+  `reviewed_by_account_id` bigint NULL,
+  `reviewed_at` datetime(6) NULL,
+  `review_note_sanitized` text NULL,
 
   `status` varchar(30) CHARACTER SET ascii COLLATE ascii_bin
       NOT NULL DEFAULT 'REQUESTED',
@@ -615,8 +618,8 @@ CREATE TABLE `payment_refunds` (
       ),
   CONSTRAINT `chk_payment_refunds_status`
       CHECK (`status` IN (
-        'REQUESTED', 'PROCESSING', 'SUCCESS', 'FAILED',
-        'REQUIRES_ACTION', 'CANCELLED'
+        'PENDING_APPROVAL', 'REQUESTED', 'PROCESSING', 'SUCCESS', 'FAILED',
+        'REQUIRES_ACTION', 'CANCELLED', 'REJECTED'
       )),
   CONSTRAINT `chk_payment_refunds_retry_count` CHECK (`retry_count` >= 0),
   CONSTRAINT `chk_payment_refunds_terminal_timestamp`

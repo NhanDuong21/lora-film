@@ -14,6 +14,7 @@ public class BookingFilterRequest {
     private List<Long> userIds;
     private BookingStatus status;
     private BookingAttentionFilter attention;
+    private String cinemaPublicId;
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private Instant fromDate;
@@ -65,6 +66,14 @@ public class BookingFilterRequest {
 
     public void setAttention(BookingAttentionFilter attention) {
         this.attention = attention;
+    }
+
+    public String getCinemaPublicId() {
+        return cinemaPublicId;
+    }
+
+    public void setCinemaPublicId(String cinemaPublicId) {
+        this.cinemaPublicId = cinemaPublicId;
     }
 
     public Instant getFromDate() {

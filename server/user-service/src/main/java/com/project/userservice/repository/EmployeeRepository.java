@@ -17,6 +17,7 @@ import com.project.userservice.security.PiiCrypto;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSpecificationExecutor<Employee> {
     boolean existsByAccountIdAndIsDeletedFalse(Long accountId);
+    Optional<Employee> findByAccountIdAndIsDeletedFalse(Long accountId);
     boolean existsByDepartmentIdAndIsDeletedFalse(Long departmentId);
     boolean existsByPositionIdAndIsDeletedFalse(Long positionId);
     Page<Employee> findByIsDeletedFalse(Pageable pageable);

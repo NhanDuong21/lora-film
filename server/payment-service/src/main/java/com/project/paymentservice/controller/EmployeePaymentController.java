@@ -1,18 +1,28 @@
 package com.project.paymentservice.controller;
 
 import com.project.paymentservice.common.ApiResponse;
+import com.project.paymentservice.client.user.EmployeeCinemaScopeClient;
 import com.project.paymentservice.dto.request.CashCancelRequest;
 import com.project.paymentservice.dto.request.CashCollectRequest;
+import com.project.paymentservice.dto.request.CompleteCashRefundRequest;
 import com.project.paymentservice.dto.request.CreateCashPaymentRequest;
+import com.project.paymentservice.dto.request.CreateRefundRequest;
 import com.project.paymentservice.dto.response.CashCancelResponse;
 import com.project.paymentservice.dto.response.CashCollectResponse;
 import com.project.paymentservice.dto.response.CreatePaymentResponse;
 import com.project.paymentservice.dto.response.EmployeeBookingPaymentResponse;
 import com.project.paymentservice.dto.response.PaymentDetailResponse;
+import com.project.paymentservice.dto.response.RefundResponse;
+import com.project.paymentservice.enumtype.RefundStatus;
 import com.project.paymentservice.exception.BusinessException;
 import com.project.paymentservice.security.CurrentUserProvider;
+import com.project.paymentservice.service.AdminPaymentService;
 import com.project.paymentservice.service.PaymentService;
+import com.project.paymentservice.service.RefundService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,11 +39,73 @@ import org.springframework.web.bind.annotation.RestController;
 public class EmployeePaymentController {
     private final PaymentService paymentService;
     private final CurrentUserProvider currentUserProvider;
+    private final AdminPaymentService adminPaymentService;
+    private final RefundService refundService;
+    private final EmployeeCinemaScopeClient employeeCinemaScopeClient;
 
     public EmployeePaymentController(
-            PaymentService paymentService, CurrentUserProvider currentUserProvider) {
+            PaymentService paymentService,
+            CurrentUserProvider currentUserProvider,
+            AdminPaymentService adminPaymentService,
+            RefundService refundService,
+            EmployeeCinemaScopeClient employeeCinemaScopeClient) {
         this.paymentService = paymentService;
         this.currentUserProvider = currentUserProvider;
+        this.adminPaymentService = adminPaymentService;
+        this.refundService = refundService;
+        this.employeeCinemaScopeClient = employeeCinemaScopeClient;
+    }
+
+    @GetMapping("/refund-candidate")
+    public ResponseEntity<ApiResponse<PaymentDetailResponse>> refundCandidate(
+            @RequestParam String reference) {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(
+                adminPaymentService.refundCandidateForCinema(cinemaPublicId, reference)));
+    }
+
+    @PostMapping("/{paymentPublicId:[a-fA-F0-9-]{36}}/refund-requests")
+    public ResponseEntity<ApiResponse<RefundResponse>> createRefundRequest(
+            @PathVariable String paymentPublicId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody CreateRefundRequest request) {
+        requireKey(idempotencyKey);
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
+                "Đã gửi yêu cầu hoàn tiền cho quản lý rạp",
+                refundService.createEmployeeRefundRequest(
+                        paymentPublicId, idempotencyKey, employeeId, cinemaPublicId, request)));
+    }
+
+    @GetMapping("/refund-requests/cash-pending")
+    public ResponseEntity<ApiResponse<Page<RefundResponse>>> cashRefundsPendingAtCounter(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(refundService.listForCinema(
+                cinemaPublicId,
+                RefundStatus.REQUIRES_ACTION,
+                PageRequest.of(page, Math.min(size, 100),
+                        Sort.by(Sort.Direction.DESC, "requestedAt")))));
+    }
+
+    @PostMapping("/refund-requests/{refundPublicId}/cash/complete")
+    public ResponseEntity<ApiResponse<RefundResponse>> completeCashRefund(
+            @PathVariable String refundPublicId,
+            @Valid @RequestBody CompleteCashRefundRequest request) {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã xác nhận trả tiền mặt cho khách",
+                refundService.completeEmployeeCashRefund(
+                        refundPublicId,
+                        employeeId,
+                        cinemaPublicId,
+                        request.getProviderReference(),
+                        request.getNote())));
     }
 
     @GetMapping("/booking")

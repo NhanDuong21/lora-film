@@ -21,4 +21,7 @@ public interface PaymentAnalyticsSnapshotRepository extends JpaRepository<Paymen
             """)
     List<Long> findSuccessfulPaymentIdsByShowtimePublicId(
             @Param("showtimePublicId") String showtimePublicId);
+
+    @Query("select s.payment.id from PaymentAnalyticsSnapshot s where s.cinemaPublicId = :cinemaPublicId")
+    List<Long> findPaymentIdsByCinemaPublicId(@Param("cinemaPublicId") String cinemaPublicId);
 }

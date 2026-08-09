@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Banknote, CalendarDays, Clock3, Home, LayoutDashboard, LogOut, User, WalletCards } from 'lucide-react';
+import { Banknote, CalendarDays, Clock3, Home, LayoutDashboard, LogOut, RotateCcw, User, WalletCards } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   EMPLOYEE_PERMISSIONS,
@@ -27,7 +27,11 @@ const EMPLOYEE_MENUS = [
   {
     id: 'cash-payment', path: '/employee/payments/cash', label: 'Thu tiền tại quầy', icon: Banknote,
     permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
-  }
+  },
+  {
+    id: 'refund-request', path: '/employee/payments/refunds', label: 'Yêu cầu hoàn tiền', icon: RotateCcw,
+    permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+  },
 ];
 
 export default function EmployeeLayout() {

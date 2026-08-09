@@ -23,6 +23,7 @@ public class PaymentDetailResponse {
     private String bookingDeliveryStatus;
     private String externalTransactionId;
     private String movieTitle;
+    private String cinemaPublicId;
     private Integer ticketCount;
     @JsonSerialize(using = MoneyJsonSerializer.class)
     private BigDecimal ticketAmount;
@@ -70,6 +71,8 @@ public class PaymentDetailResponse {
     public void setExternalTransactionId(String value) { this.externalTransactionId = value; }
     public String getMovieTitle() { return movieTitle; }
     public void setMovieTitle(String value) { this.movieTitle = value; }
+    public String getCinemaPublicId() { return cinemaPublicId; }
+    public void setCinemaPublicId(String value) { this.cinemaPublicId = value; }
     public Integer getTicketCount() { return ticketCount; }
     public void setTicketCount(Integer value) { this.ticketCount = value; }
     public BigDecimal getTicketAmount() { return ticketAmount; }

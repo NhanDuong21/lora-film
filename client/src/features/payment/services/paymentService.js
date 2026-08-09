@@ -96,6 +96,25 @@ export const cancelCashPayment = async (paymentPublicId, idempotencyKey) =>
     { headers: { 'Idempotency-Key': idempotencyKey } },
   ));
 
+export const lookupRefundCandidate = async reference =>
+  unwrap(await apiClient.get('/api/employee/payments/refund-candidate', { params: { reference } }));
+
+export const createEmployeeRefundRequest = async (paymentPublicId, payload, idempotencyKey) =>
+  unwrap(await apiClient.post(
+    `/api/employee/payments/${paymentPublicId}/refund-requests`,
+    payload,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  ));
+
+export const getEmployeeCashRefunds = async () =>
+  unwrap(await apiClient.get('/api/employee/payments/refund-requests/cash-pending'));
+
+export const completeEmployeeCashRefund = async (refundPublicId, payload) =>
+  unwrap(await apiClient.post(
+    `/api/employee/payments/refund-requests/${refundPublicId}/cash/complete`,
+    payload,
+  ));
+
 export const searchAdminPayments = async params =>
   unwrap(await apiClient.get('/api/admin/payments', { params }));
 

@@ -34,6 +34,7 @@ import java.util.UUID;
 @Service
 public class RefundService {
     private static final EnumSet<RefundStatus> RESERVED_STATUSES = EnumSet.of(
+            RefundStatus.PENDING_APPROVAL,
             RefundStatus.REQUESTED,
             RefundStatus.PROCESSING,
             RefundStatus.SUCCESS,
@@ -113,7 +114,67 @@ public class RefundService {
                 amount,
                 false,
                 ActorType.ADMIN,
-                adminAccountId);
+                adminAccountId,
+                false);
+        return RefundResponse.from(refundRepository.saveAndFlush(refund));
+    }
+
+    @Transactional
+    public RefundResponse createEmployeeRefundRequest(
+            String paymentPublicId,
+            String idempotencyKey,
+            Long employeeAccountId,
+            String employeeCinemaPublicId,
+            CreateRefundRequest request) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BusinessException(
+                    "REFUND_IDEMPOTENCY_KEY_REQUIRED",
+                    "Yêu cầu hoàn tiền phải có khóa chống trùng",
+                    HttpStatus.BAD_REQUEST);
+        }
+        Payment payment = paymentRepository.findByPublicIdForUpdate(paymentPublicId)
+                .orElseThrow(() -> paymentNotFound(paymentPublicId));
+        requirePaymentCinema(payment, employeeCinemaPublicId);
+        PaymentRefund existing = refundRepository
+                .findByPaymentIdAndRequestKey(payment.getId(), normalizeKey(idempotencyKey))
+                .orElse(null);
+        if (existing != null) {
+            verifyReplay(existing, request);
+            return RefundResponse.from(existing);
+        }
+        validateRefundablePayment(payment);
+        validateAdminRequest(request);
+
+        BigDecimal remaining = refundableRemaining(payment);
+        BigDecimal amount = request.getRefundType() == RefundType.FULL
+                ? remaining : request.getAmount();
+        requireAvailableAmount(amount, remaining);
+        if (request.getRefundComponent() == RefundComponent.CONCESSION) {
+            PaymentAnalyticsSnapshot snapshot = snapshotRepository
+                    .findByPaymentId(payment.getId())
+                    .orElseThrow(() -> new BusinessException(
+                            "PAYMENT_SNAPSHOT_MISSING",
+                            "Không tìm thấy dữ liệu bắp nước của đơn",
+                            HttpStatus.CONFLICT));
+            BigDecimal alreadyReserved = refundRepository.sumReservedAmountByComponent(
+                    payment.getId(), RefundComponent.CONCESSION, RESERVED_STATUSES);
+            requireAvailableAmount(amount, snapshot.getFoodAmount().subtract(alreadyReserved));
+        }
+        RefundType providerOperation = request.getRefundType() == RefundType.FULL
+                && amount.compareTo(payment.getAmount()) < 0
+                ? RefundType.PARTIAL : request.getRefundType();
+        PaymentRefund refund = newRefund(
+                payment,
+                normalizeKey(idempotencyKey),
+                providerOperation,
+                request.getRefundComponent(),
+                normalizeCode(request.getReasonCode()),
+                sanitize(request.getNote(), 2000),
+                amount,
+                false,
+                ActorType.EMPLOYEE,
+                employeeAccountId,
+                true);
         return RefundResponse.from(refundRepository.saveAndFlush(refund));
     }
 
@@ -148,7 +209,8 @@ public class RefundService {
                 remaining,
                 true,
                 ActorType.SYSTEM,
-                null);
+                null,
+                false);
         return refundRepository.saveAndFlush(refund);
     }
 
@@ -180,6 +242,57 @@ public class RefundService {
                 : refundRepository.findByStatus(status, pageable);
         page.getContent().forEach(value -> value.getPayment().getPublicId());
         return page.map(RefundResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RefundResponse> listForCinema(
+            String cinemaPublicId, RefundStatus status, Pageable pageable) {
+        List<Long> paymentIds = snapshotRepository.findPaymentIdsByCinemaPublicId(cinemaPublicId);
+        if (paymentIds.isEmpty()) return Page.empty(pageable);
+        Page<PaymentRefund> page = status == null
+                ? refundRepository.findByPaymentIdIn(paymentIds, pageable)
+                : refundRepository.findByPaymentIdInAndStatus(paymentIds, status, pageable);
+        page.getContent().forEach(value -> value.getPayment().getPublicId());
+        return page.map(RefundResponse::from);
+    }
+
+    @Transactional
+    public RefundResponse approve(
+            String refundPublicId,
+            String cinemaPublicId,
+            Long managerAccountId,
+            String note) {
+        PaymentRefund refund = refundForDecision(refundPublicId, cinemaPublicId);
+        Instant now = Instant.now();
+        refund.setReviewedByAccountId(managerAccountId);
+        refund.setReviewedAt(now);
+        refund.setReviewNoteSanitized(sanitize(note, 1000));
+        if (refund.getProviderCode() == ProviderCode.CASH) {
+            refund.setStatus(RefundStatus.REQUIRES_ACTION);
+            refund.setFailureCode("CASH_REFUND_REQUIRES_MANUAL_SETTLEMENT");
+            refund.setFailureMessageSanitized(
+                    "Hoàn tiền mặt cần được nhân viên xử lý tại quầy");
+            refund.setNextAttemptAt(null);
+        } else {
+            refund.setStatus(RefundStatus.REQUESTED);
+            refund.setNextAttemptAt(now);
+        }
+        return RefundResponse.from(refundRepository.save(refund));
+    }
+
+    @Transactional
+    public RefundResponse reject(
+            String refundPublicId,
+            String cinemaPublicId,
+            Long managerAccountId,
+            String note) {
+        PaymentRefund refund = refundForDecision(refundPublicId, cinemaPublicId);
+        refund.setStatus(RefundStatus.REJECTED);
+        refund.setReviewedByAccountId(managerAccountId);
+        refund.setReviewedAt(Instant.now());
+        refund.setReviewNoteSanitized(sanitize(note, 1000));
+        refund.setNextAttemptAt(null);
+        return RefundResponse.from(refundRepository.save(refund));
     }
 
     @Transactional(readOnly = true)
@@ -226,7 +339,7 @@ public class RefundService {
     @Transactional
     public RefundResponse completeCashRefund(
             String refundPublicId,
-            Long adminAccountId,
+            Long actorAccountId,
             String providerReference,
             String note) {
         PaymentRefund refund = refundRepository.findByPublicId(refundPublicId)
@@ -266,7 +379,7 @@ public class RefundService {
         refund.setProviderRefundId(reference);
         refund.setProviderResponseCode("MANUAL_CASH_SETTLED");
         refund.setProviderSummarySanitized(
-                "{\"settledByAccountId\":" + adminAccountId + "}");
+                "{\"settledByAccountId\":" + actorAccountId + "}");
         refund.setReasonDetailSanitized(sanitize(
                 firstNonBlank(refund.getReasonDetailSanitized(), "")
                         + " | Xác nhận tại quầy: " + auditNote,
@@ -280,6 +393,20 @@ public class RefundService {
         refundRepository.save(refund);
         outboxService.enqueueBookingRefundResult(refund, true, now);
         return RefundResponse.from(refund);
+    }
+
+    @Transactional
+    public RefundResponse completeEmployeeCashRefund(
+            String refundPublicId,
+            Long employeeAccountId,
+            String employeeCinemaPublicId,
+            String providerReference,
+            String note) {
+        PaymentRefund refund = refundRepository.findByPublicId(refundPublicId)
+                .orElseThrow(() -> refundNotFound(refundPublicId));
+        requirePaymentCinema(refund.getPayment(), employeeCinemaPublicId);
+        return completeCashRefund(
+                refundPublicId, employeeAccountId, providerReference, note);
     }
 
     @Transactional
@@ -450,7 +577,8 @@ public class RefundService {
             BigDecimal amount,
             boolean automatic,
             ActorType actor,
-            Long actorAccountId) {
+            Long actorAccountId,
+            boolean approvalRequired) {
         Instant now = Instant.now();
         PaymentRefund refund = new PaymentRefund();
         refund.setPublicId(UUID.randomUUID().toString());
@@ -470,7 +598,10 @@ public class RefundService {
         refund.setRequestedByAccountId(actorAccountId);
         refund.setRequestedAt(now);
         refund.setRetryCount(0);
-        if (payment.getProviderCode() == ProviderCode.CASH) {
+        if (approvalRequired) {
+            refund.setStatus(RefundStatus.PENDING_APPROVAL);
+            refund.setNextAttemptAt(null);
+        } else if (payment.getProviderCode() == ProviderCode.CASH) {
             refund.setStatus(RefundStatus.REQUIRES_ACTION);
             refund.setFailureCode("CASH_REFUND_REQUIRES_MANUAL_SETTLEMENT");
             refund.setFailureMessageSanitized(
@@ -480,6 +611,38 @@ public class RefundService {
             refund.setNextAttemptAt(now);
         }
         return refund;
+    }
+
+    private PaymentRefund refundForDecision(String refundPublicId, String cinemaPublicId) {
+        PaymentRefund existing = refundRepository.findByPublicId(refundPublicId)
+                .orElseThrow(() -> refundNotFound(refundPublicId));
+        PaymentRefund refund = refundRepository.findByIdForUpdate(existing.getId())
+                .orElseThrow(() -> refundNotFound(refundPublicId));
+        requirePaymentCinema(refund.getPayment(), cinemaPublicId);
+        if (refund.getStatus() != RefundStatus.PENDING_APPROVAL) {
+            throw new BusinessException(
+                    "REFUND_ALREADY_REVIEWED",
+                    "Yêu cầu hoàn tiền này đã được xử lý.",
+                    HttpStatus.CONFLICT);
+        }
+        return refund;
+    }
+
+    private void requirePaymentCinema(Payment payment, String cinemaPublicId) {
+        PaymentAnalyticsSnapshot snapshot = snapshotRepository.findByPaymentId(payment.getId())
+                .orElseThrow(() -> new BusinessException(
+                        "PAYMENT_SNAPSHOT_MISSING",
+                        "Không xác định được rạp của giao dịch.",
+                        HttpStatus.CONFLICT));
+        String expected = cinemaPublicId == null ? "" : cinemaPublicId.trim().toLowerCase(Locale.ROOT);
+        String actual = snapshot.getCinemaPublicId() == null
+                ? "" : snapshot.getCinemaPublicId().trim().toLowerCase(Locale.ROOT);
+        if (!expected.equals(actual)) {
+            throw new BusinessException(
+                    "REFUND_CINEMA_SCOPE_DENIED",
+                    "Giao dịch không thuộc rạp được phép xử lý.",
+                    HttpStatus.FORBIDDEN);
+        }
     }
 
     private void validateRefundablePayment(Payment payment) {

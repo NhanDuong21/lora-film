@@ -84,6 +84,8 @@ const pageTitle = pathname => {
   if (path === '/manager') return 'Tổng quan vận hành rạp';
   if (path === '/manager/showtimes') return 'Lịch chiếu tại rạp';
   if (path === '/manager/rooms') return 'Phòng chiếu và bảo trì';
+  if (path === '/manager/bookings') return 'Đơn đặt vé và giữ ghế';
+  if (path === '/manager/payments') return 'Giao dịch tại rạp';
   if (path === '/manager/staff') return 'Nhân sự và ca làm tại rạp';
   if (path === '/manager/reports') return 'Báo cáo vận hành rạp';
   if (path === '/manager/cinema') return 'Thông tin và giờ mở cửa';
@@ -93,6 +95,7 @@ const pageTitle = pathname => {
   if (path === '/employee/schedules') return 'Lịch làm việc';
   if (path === '/employee/payroll') return 'Bảng lương nhân viên';
   if (path === '/employee/payments/cash') return 'Thu tiền mặt tại quầy';
+  if (path === '/employee/payments/refunds') return 'Tạo yêu cầu hoàn tiền';
 
   return 'Trang LoraFilm';
 };

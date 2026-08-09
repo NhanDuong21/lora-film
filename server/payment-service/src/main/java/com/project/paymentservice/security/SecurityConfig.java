@@ -43,6 +43,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/admin/payments/**")
                     .hasAnyRole("ADMIN", "ACCOUNTANT")
                 .requestMatchers("/api/admin/payments/**").hasRole("ADMIN")
+                .requestMatchers("/api/manager/payments/**").hasRole("MANAGER")
                 .requestMatchers("/api/employee/**")
                     .access(new WebExpressionAuthorizationManager(
                             "hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('PAYMENT_CASH_COLLECT'))"))

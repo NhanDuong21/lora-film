@@ -21,6 +21,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
     Optional<Payment> findByPublicId(String publicId);
     Optional<Payment> findByPublicIdAndAccountId(String publicId, Long accountId);
     Optional<Payment> findByPaymentTransactionCode(String paymentTransactionCode);
+    Optional<Payment> findFirstByBookingPublicIdAndStatusOrderByCreatedAtDesc(
+            String bookingPublicId, PaymentStatus status);
     Optional<Payment> findByProviderCodeAndProviderOrderId(ProviderCode providerCode, String providerOrderId);
     Optional<Payment> findByProviderCodeAndExternalTransactionId(ProviderCode providerCode, String externalTransactionId);
     Page<Payment> findByBookingPublicId(String bookingPublicId, Pageable pageable);

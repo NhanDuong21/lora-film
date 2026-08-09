@@ -23,6 +23,10 @@ public interface PaymentRefundRepository extends JpaRepository<PaymentRefund, Lo
     List<PaymentRefund> findByPaymentIdOrderByCreatedAtDesc(Long paymentId);
     Page<PaymentRefund> findByStatus(RefundStatus status, Pageable pageable);
 
+    Page<PaymentRefund> findByPaymentIdIn(Collection<Long> paymentIds, Pageable pageable);
+    Page<PaymentRefund> findByPaymentIdInAndStatus(
+            Collection<Long> paymentIds, RefundStatus status, Pageable pageable);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from PaymentRefund r where r.id = :id")
     Optional<PaymentRefund> findByIdForUpdate(@Param("id") Long id);

@@ -364,6 +364,7 @@ public class BookingServiceImpl implements BookingService {
                     context.ticketAmount(), BigDecimal.ZERO, context.serviceFee(), BigDecimal.ZERO,
                     context.discountAmount(), BigDecimal.ZERO, context.currency(), deadline, null);
             booking.setShowtimePublicId(context.showtimePublicId());
+            booking.setCinemaPublicId(context.cinemaPublicId());
             Booking saved = saveNewPendingBooking(booking);
             persistAuthoritativePriceSnapshot(saved, context);
 

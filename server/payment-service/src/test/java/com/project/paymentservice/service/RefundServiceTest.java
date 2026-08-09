@@ -196,6 +196,61 @@ class RefundServiceTest {
     }
 
     @Test
+    void employeeRequestWaitsForManagerApprovalBeforeProviderProcessing() {
+        PaymentAnalyticsSnapshot snapshot = new PaymentAnalyticsSnapshot();
+        snapshot.setCinemaPublicId("cinema-a");
+        when(snapshotRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(snapshot));
+        when(refundRepository.sumReservedAmount(eq(payment.getId()), anyCollection()))
+                .thenReturn(BigDecimal.ZERO);
+
+        var created = service.createEmployeeRefundRequest(
+                payment.getPublicId(),
+                "employee-refund-key",
+                31L,
+                "cinema-a",
+                request(RefundType.FULL, RefundComponent.FULL_ORDER, null));
+
+        assertEquals(RefundStatus.PENDING_APPROVAL.name(), created.getStatus());
+        assertEquals(31L, created.getRequestedByAccountId());
+        PaymentRefund refund = captureLastSavedRefund();
+        assertEquals(null, refund.getNextAttemptAt());
+
+        when(refundRepository.findByPublicId(refund.getPublicId()))
+                .thenReturn(Optional.of(refund));
+        when(refundRepository.findByIdForUpdate(refund.getId()))
+                .thenReturn(Optional.of(refund));
+        when(refundRepository.save(any(PaymentRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var approved = service.approve(
+                refund.getPublicId(), "cinema-a", 2L, "Đã xác minh tại rạp");
+
+        assertEquals(RefundStatus.REQUESTED.name(), approved.getStatus());
+        assertEquals(2L, approved.getReviewedByAccountId());
+        assertEquals("Đã xác minh tại rạp", approved.getReviewNote());
+        assertTrue(refund.getNextAttemptAt() != null);
+    }
+
+    @Test
+    void employeeCannotCreateRefundForAnotherCinema() {
+        PaymentAnalyticsSnapshot snapshot = new PaymentAnalyticsSnapshot();
+        snapshot.setCinemaPublicId("cinema-b");
+        when(snapshotRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(snapshot));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.createEmployeeRefundRequest(
+                        payment.getPublicId(),
+                        "wrong-cinema-key",
+                        31L,
+                        "cinema-a",
+                        request(RefundType.FULL, RefundComponent.FULL_ORDER, null)));
+
+        assertEquals("REFUND_CINEMA_SCOPE_DENIED", exception.getErrorCode());
+        verify(refundRepository, never()).saveAndFlush(any(PaymentRefund.class));
+    }
+
+    @Test
     void cashRefundRequiresManualSettlementAndCompletesExactlyOnce() {
         payment.setProviderCode(ProviderCode.CASH);
         when(refundRepository.sumReservedAmount(eq(payment.getId()), anyCollection()))
@@ -223,6 +278,47 @@ class RefundServiceTest {
         assertEquals(RefundStatus.SUCCESS.name(), completed.getStatus());
         assertEquals(completed.getRefundPublicId(), replay.getRefundPublicId());
         verify(outboxService).enqueueBookingRefundResult(eq(entity), eq(true), any());
+    }
+
+    @Test
+    void employeeCompletesApprovedCashRefundOnlyInsideAssignedCinema() {
+        payment.setProviderCode(ProviderCode.CASH);
+        PaymentRefund refund = new PaymentRefund();
+        refund.setId(81L);
+        refund.setPublicId("cash-refund-public-id");
+        refund.setRefundCode("RFD-CASH-001");
+        refund.setPayment(payment);
+        refund.setProviderCode(ProviderCode.CASH);
+        refund.setRefundType(RefundType.FULL);
+        refund.setRefundComponent(RefundComponent.FULL_ORDER);
+        refund.setReasonCode("SHOWTIME_CANCELLED");
+        refund.setStatus(RefundStatus.REQUIRES_ACTION);
+        refund.setReasonDetailSanitized("Suất chiếu bị hủy");
+        refund.setRequestedAmount(new BigDecimal("75000.00"));
+        refund.setCurrency("VND");
+
+        PaymentAnalyticsSnapshot snapshot = new PaymentAnalyticsSnapshot();
+        snapshot.setCinemaPublicId("cinema-a");
+        when(snapshotRepository.findByPaymentId(payment.getId())).thenReturn(Optional.of(snapshot));
+        when(refundRepository.findByPublicId(refund.getPublicId())).thenReturn(Optional.of(refund));
+        when(refundRepository.findByIdForUpdate(refund.getId())).thenReturn(Optional.of(refund));
+        when(refundRepository.save(any(PaymentRefund.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        BusinessException denied = assertThrows(
+                BusinessException.class,
+                () -> service.completeEmployeeCashRefund(
+                        refund.getPublicId(), 31L, "cinema-b",
+                        "PC-001", "Đã giao đủ tiền cho khách"));
+        assertEquals("REFUND_CINEMA_SCOPE_DENIED", denied.getErrorCode());
+
+        var completed = service.completeEmployeeCashRefund(
+                refund.getPublicId(), 31L, "cinema-a",
+                "PC-001", "Đã giao đủ tiền cho khách");
+
+        assertEquals(RefundStatus.SUCCESS.name(), completed.getStatus());
+        assertEquals("PC-001", completed.getProviderRefundId());
+        verify(outboxService).enqueueBookingRefundResult(eq(refund), eq(true), any());
     }
 
     @Test
