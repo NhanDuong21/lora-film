@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
@@ -152,6 +153,17 @@ class WorkforceTimeServiceIntegrationTest {
     }
 
     @Test
+    void rejectsSchedulingTheCurrentSystemAdministrator() {
+        authenticate(EMPLOYEE_ID, "ROLE_ADMIN");
+        LocalDateTime start = LocalDateTime.of(2026, 8, 15, 9, 0);
+
+        assertThatThrownBy(() -> workforceTimeService.createShift(
+                new WorkShiftRequest(EMPLOYEE_ID, start, start.plusHours(8), "Cinema A", null)))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo("USER_SHIFT_ADMIN_NOT_SCHEDULABLE"));
+    }
+
+    @Test
     void leaveRequiresDifferentReviewer() {
         authenticate(EMPLOYEE_ID);
         var leave = workforceTimeService.createLeave(new LeaveCreateRequest(LeaveType.ANNUAL,
@@ -183,7 +195,14 @@ class WorkforceTimeServiceIntegrationTest {
     }
 
     private void authenticate(Long accountId) {
+        authenticate(accountId, new String[0]);
+    }
+
+    private void authenticate(Long accountId, String... authorities) {
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(accountId, null, List.of()));
+                new UsernamePasswordAuthenticationToken(accountId, null,
+                        java.util.Arrays.stream(authorities)
+                                .map(SimpleGrantedAuthority::new)
+                                .toList()));
     }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Clock3, MapPin, Plus, ShieldCheck, Trash2, Umbrella } from 'lucide-react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
@@ -96,6 +97,7 @@ const hoursLabel = minutes => {
 
 export default function AdminWorkforcePage() {
   const can = useAdminAccess();
+  const { accountId: currentAccountId } = useAuth();
   const notify = useOutletContext()?.triggerToast || (() => undefined);
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(() => ['attendance', 'leaves'].includes(searchParams.get('view')) ? searchParams.get('view') : 'shifts');
@@ -136,7 +138,12 @@ export default function AdminWorkforcePage() {
     try {
       const params = { ...range, page: 0, size: 200, sort: 'createdAt,desc' };
       const [employeePage, shiftPage, attendancePage, leavePage, piiSummary, cinemaEnvelope] = await Promise.all([
-        getEmployees({ page: 0, size: 200, status: 'ACTIVE' }),
+        getEmployees({
+          page: 0,
+          size: 200,
+          status: 'ACTIVE',
+          excludeCurrentAccount: currentAccountId ? true : undefined,
+        }),
         getWorkShifts({ ...params, sort: 'scheduledStart,asc' }),
         getAttendance(params),
         getLeaveRequests(params),
@@ -144,7 +151,9 @@ export default function AdminWorkforcePage() {
         adminCinemaService.getCinemas({ page: 0, size: 200, status: 'ACTIVE', sort: 'name,asc' })
           .catch(() => null)
       ]);
-      setEmployees(employeePage?.content || []);
+      setEmployees((employeePage?.content || []).filter(
+        employee => String(employee.accountId) !== String(currentAccountId),
+      ));
       setCinemas(cinemaEnvelope?.data?.data || []);
       setShifts(shiftPage || EMPTY_PAGE);
       setAttendance(attendancePage || EMPTY_PAGE);
@@ -154,7 +163,7 @@ export default function AdminWorkforcePage() {
     } catch (error) {
       setState({ loading: false, error: error?.message || 'Không thể tải dữ liệu vận hành nhân sự.' });
     }
-  }, [can, range]);
+  }, [can, currentAccountId, range]);
 
   useEffect(() => {
     // Loading remote workforce state is the synchronization performed by this effect.

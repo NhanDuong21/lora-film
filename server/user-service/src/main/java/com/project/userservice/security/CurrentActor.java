@@ -21,4 +21,16 @@ public final class CurrentActor {
         }
         return Long.valueOf(principal.toString());
     }
+
+    public static boolean hasRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || role == null || role.isBlank()) {
+            return false;
+        }
+        String normalized = role.trim().toUpperCase(java.util.Locale.ROOT).replaceFirst("^ROLE_", "");
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority().toUpperCase(java.util.Locale.ROOT))
+                .map(authority -> authority.replaceFirst("^ROLE_", ""))
+                .anyMatch(normalized::equals);
+    }
 }

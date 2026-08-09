@@ -364,6 +364,10 @@ public class WorkforceTimeService {
     }
 
     private Employee activeEmployeeForScheduling(Long accountId) {
+        if (accountId.equals(CurrentActor.accountId()) && CurrentActor.hasRole("ADMIN")) {
+            throw new BusinessException("System administrator accounts cannot be assigned work shifts",
+                    "USER_SHIFT_ADMIN_NOT_SCHEDULABLE");
+        }
         Employee employee = employeeRepository.findByAccountIdForScheduling(accountId)
                 .orElseThrow(() -> new BusinessException("Employee not found", "USER_003"));
         if (employee.isDeleted() || employee.getStatus() != EmployeeStatus.ACTIVE) {
