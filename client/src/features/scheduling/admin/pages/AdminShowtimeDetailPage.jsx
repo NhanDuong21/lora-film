@@ -41,11 +41,16 @@ const getStatusColor = (status) => {
   }
 };
 
-const getAvailableTransitions = (status) => {
-  switch (status) {
+const getAvailableTransitions = (showtime) => {
+  switch (showtime.status) {
     case 'DRAFT': return ['OPEN_FOR_BOOKING', 'CANCELLED'];
     case 'OPEN_FOR_BOOKING': return ['CLOSED', 'CANCELLED'];
-    case 'CLOSED': return ['FINISHED', 'CANCELLED'];
+    case 'CLOSED': {
+      const now = Date.now();
+      if (new Date(showtime.startTime).getTime() > now) return ['OPEN_FOR_BOOKING', 'CANCELLED'];
+      if (new Date(showtime.endTime).getTime() <= now) return ['FINISHED', 'CANCELLED'];
+      return ['CANCELLED'];
+    }
     default: return [];
   }
 };
@@ -83,7 +88,7 @@ const AdminShowtimeDetailPage = () => {
 
   const expiredDraft = isExpiredDraftShowtime(showtime);
   const operationalStatus = getOperationalShowtimeStatus(showtime);
-  const transitions = getAvailableTransitions(showtime.status)
+  const transitions = getAvailableTransitions(showtime)
     .filter(target => !(expiredDraft && target === 'OPEN_FOR_BOOKING'));
   const cinemaTimezone = showtime.cinema?.timezone;
   const timezoneResolution = resolveShowtimeCinemaTimezone(cinemaTimezone);

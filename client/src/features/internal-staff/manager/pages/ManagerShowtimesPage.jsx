@@ -40,6 +40,9 @@ const getPrimaryTransition = (showtime, now) => {
     return 'OPEN_FOR_BOOKING';
   }
   if (showtime.status === 'OPEN_FOR_BOOKING') return 'CLOSED';
+  if (showtime.status === 'CLOSED' && new Date(showtime.startTime).getTime() > now) {
+    return 'OPEN_FOR_BOOKING';
+  }
   if (showtime.status === 'CLOSED' && new Date(showtime.endTime).getTime() <= now) {
     return 'FINISHED';
   }
@@ -65,7 +68,11 @@ const ManagerShowtimeActions = ({ showtime, now, actionId, onTransition, onCompl
       {primaryTransition && (
         <button type="button" disabled={isActing} onClick={() => runTransition(primaryTransition)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-black text-zinc-950 disabled:opacity-40">
           {isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-          {isActing ? 'Đang xử lý…' : getShowtimeTransitionActionPresentation(primaryTransition).label}
+          {isActing
+            ? 'Đang xử lý…'
+            : showtime.status === 'CLOSED' && primaryTransition === 'OPEN_FOR_BOOKING'
+              ? 'Mở bán lại'
+              : getShowtimeTransitionActionPresentation(primaryTransition).label}
         </button>
       )}
       {canCancel && (

@@ -16,6 +16,8 @@ import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,16 +28,19 @@ public class AuditoriumMaintenanceImpactServiceImpl implements AuditoriumMainten
     private final ShowtimeRepository showtimeRepository;
     private final SeatRepository seatRepository;
     private final BookingSeatAvailabilityClient bookingAvailabilityClient;
+    private final Clock clock;
 
     public AuditoriumMaintenanceImpactServiceImpl(
             AuditoriumRepository auditoriumRepository,
             ShowtimeRepository showtimeRepository,
             SeatRepository seatRepository,
-            BookingSeatAvailabilityClient bookingAvailabilityClient) {
+            BookingSeatAvailabilityClient bookingAvailabilityClient,
+            Clock clock) {
         this.auditoriumRepository = auditoriumRepository;
         this.showtimeRepository = showtimeRepository;
         this.seatRepository = seatRepository;
         this.bookingAvailabilityClient = bookingAvailabilityClient;
+        this.clock = clock;
     }
 
     @Override
@@ -45,15 +50,19 @@ public class AuditoriumMaintenanceImpactServiceImpl implements AuditoriumMainten
             CreateMaintenanceWindowRequest request) {
         Auditorium auditorium = auditoriumRepository.findByPublicIdAndDeletedAtIsNull(auditoriumPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUDITORIUM_NOT_FOUND));
-        if (request.startTime() == null || request.endTime() == null
-                || !request.startTime().isBefore(request.endTime())) {
+        Instant startTime = request.maintenanceType()
+                == com.lorafilm.movie.auditorium.domain.enums.MaintenanceType.EMERGENCY
+                ? Instant.now(clock)
+                : request.startTime();
+        if (startTime == null || request.endTime() == null
+                || !startTime.isBefore(request.endTime())) {
             throw new BusinessException(
                     ErrorCode.INVALID_MAINTENANCE_TIME_RANGE,
                     "Thời gian kết thúc phải sau thời gian bắt đầu.");
         }
 
         List<Showtime> showtimes = showtimeRepository.findPotentialOverlaps(
-                auditorium.getId(), request.startTime(), request.endTime());
+                auditorium.getId(), startTime, request.endTime());
         List<Long> seatIds = seatRepository.findAdminLayoutByAuditoriumId(auditorium.getId())
                 .stream().map(Seat::getId).toList();
         List<MaintenanceImpactResponse.AffectedShowtime> affected = new ArrayList<>();
@@ -81,7 +90,7 @@ public class AuditoriumMaintenanceImpactServiceImpl implements AuditoriumMainten
         return new MaintenanceImpactResponse(
                 auditorium.getPublicId(),
                 auditorium.getName(),
-                request.startTime(),
+                startTime,
                 request.endTime(),
                 showtimes.size(),
                 (int) showtimes.stream().filter(value -> value.getStatus() == ShowtimeStatus.OPEN_FOR_BOOKING).count(),

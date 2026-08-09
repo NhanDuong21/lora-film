@@ -1,7 +1,9 @@
 package com.lorafilm.movie.auditorium.controller;
 
 import com.lorafilm.movie.auditorium.dto.CreateMaintenanceWindowRequest;
+import com.lorafilm.movie.auditorium.dto.ExtendMaintenanceWindowRequest;
 import com.lorafilm.movie.auditorium.dto.MaintenanceWindowResponse;
+import com.lorafilm.movie.auditorium.dto.ResolveMaintenanceWindowRequest;
 import com.lorafilm.movie.auditorium.service.AuditoriumMaintenanceService;
 import com.lorafilm.movie.common.api.ApiResponse;
 import jakarta.validation.Valid;
@@ -61,5 +63,23 @@ public class AdminAuditoriumMaintenanceController {
     public ResponseEntity<ApiResponse<MaintenanceWindowResponse>> cancelWindow(
             @PathVariable Long maintenanceWindowId) {
         return ResponseEntity.ok(ApiResponse.ok(maintenanceService.cancelWindow(maintenanceWindowId)));
+    }
+
+    @Operation(summary = "Confirm that an auditorium is ready to operate again")
+    @PutMapping("/maintenance-windows/{maintenanceWindowId}/resolve")
+    public ResponseEntity<ApiResponse<MaintenanceWindowResponse>> resolveWindow(
+            @PathVariable Long maintenanceWindowId,
+            @Valid @RequestBody ResolveMaintenanceWindowRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                maintenanceService.resolveWindow(maintenanceWindowId, request)));
+    }
+
+    @Operation(summary = "Extend an active maintenance window")
+    @PutMapping("/maintenance-windows/{maintenanceWindowId}/extend")
+    public ResponseEntity<ApiResponse<MaintenanceWindowResponse>> extendWindow(
+            @PathVariable Long maintenanceWindowId,
+            @Valid @RequestBody ExtendMaintenanceWindowRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                maintenanceService.extendWindow(maintenanceWindowId, request)));
     }
 }

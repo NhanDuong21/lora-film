@@ -56,6 +56,16 @@ const managerCinemaService = {
     `/api/manager/cinemas/${cinemaPublicId}/maintenance-windows/${maintenanceWindowId}/cancel`,
   )),
 
+  resolveMaintenanceWindow: async (cinemaPublicId, maintenanceWindowId, payload) => unwrap(await apiClient.put(
+    `/api/manager/cinemas/${cinemaPublicId}/maintenance-windows/${maintenanceWindowId}/resolve`,
+    payload,
+  )),
+
+  extendMaintenanceWindow: async (cinemaPublicId, maintenanceWindowId, payload) => unwrap(await apiClient.put(
+    `/api/manager/cinemas/${cinemaPublicId}/maintenance-windows/${maintenanceWindowId}/extend`,
+    payload,
+  )),
+
   getStaff: async cinemaPublicId => unwrap(await apiClient.get('/api/users/manager/staff', {
     params: { cinemaPublicId },
   })) || [],

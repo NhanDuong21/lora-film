@@ -28,6 +28,16 @@ export default function AuditoriumMaintenanceTab({
           if (!response?.success) throw new Error(response?.message || 'Không thể hủy lịch bảo trì.');
           return response.data;
         }}
+        resolveWindow={async (item, payload) => {
+          const response = await adminRoomService.resolveMaintenanceWindow(item.id, payload);
+          if (!response?.success) throw new Error(response?.message || 'Không thể đưa phòng hoạt động trở lại.');
+          return response.data;
+        }}
+        extendWindow={async (item, payload) => {
+          const response = await adminRoomService.extendMaintenanceWindow(item.id, payload);
+          if (!response?.success) throw new Error(response?.message || 'Không thể gia hạn thời gian xử lý.');
+          return response.data;
+        }}
         previewImpact={async (_selectedRoomId, payload) => {
           const response = await adminRoomService.previewMaintenanceImpact(roomId, payload);
           if (!response?.success || !response.data) {

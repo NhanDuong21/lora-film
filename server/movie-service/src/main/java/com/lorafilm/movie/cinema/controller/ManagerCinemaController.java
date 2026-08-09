@@ -1,7 +1,9 @@
 package com.lorafilm.movie.cinema.controller;
 
 import com.lorafilm.movie.auditorium.dto.CreateMaintenanceWindowRequest;
+import com.lorafilm.movie.auditorium.dto.ExtendMaintenanceWindowRequest;
 import com.lorafilm.movie.auditorium.dto.MaintenanceWindowResponse;
+import com.lorafilm.movie.auditorium.dto.ResolveMaintenanceWindowRequest;
 import com.lorafilm.movie.auditorium.service.AuditoriumMaintenanceService;
 import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
 import com.lorafilm.movie.cinema.dto.OperatingHourResponse;
@@ -156,16 +158,29 @@ public class ManagerCinemaController {
     public ResponseEntity<ApiResponse<MaintenanceWindowResponse>> cancelMaintenanceWindow(
             @PathVariable String cinemaPublicId,
             @PathVariable Long maintenanceWindowId) {
-        CinemaDetailDto cinema = requireAssignedCinema(cinemaPublicId);
-        boolean belongsToCinema = cinema.getActiveAuditoriums().stream()
-                .flatMap(auditorium -> maintenanceService
-                        .getMaintenanceWindows(auditorium.getPublicId()).stream())
-                .anyMatch(window -> maintenanceWindowId.equals(window.id()));
-        if (!belongsToCinema) {
-            throw denied("Không thể thao tác lịch bảo trì không thuộc rạp được phân công.");
-        }
+        requireAssignedMaintenanceWindow(cinemaPublicId, maintenanceWindowId);
         return ResponseEntity.ok(ApiResponse.ok(
                 maintenanceService.cancelWindow(maintenanceWindowId)));
+    }
+
+    @PutMapping("/cinemas/{cinemaPublicId}/maintenance-windows/{maintenanceWindowId}/resolve")
+    public ResponseEntity<ApiResponse<MaintenanceWindowResponse>> resolveMaintenanceWindow(
+            @PathVariable String cinemaPublicId,
+            @PathVariable Long maintenanceWindowId,
+            @Valid @RequestBody ResolveMaintenanceWindowRequest request) {
+        requireAssignedMaintenanceWindow(cinemaPublicId, maintenanceWindowId);
+        return ResponseEntity.ok(ApiResponse.ok(
+                maintenanceService.resolveWindow(maintenanceWindowId, request)));
+    }
+
+    @PutMapping("/cinemas/{cinemaPublicId}/maintenance-windows/{maintenanceWindowId}/extend")
+    public ResponseEntity<ApiResponse<MaintenanceWindowResponse>> extendMaintenanceWindow(
+            @PathVariable String cinemaPublicId,
+            @PathVariable Long maintenanceWindowId,
+            @Valid @RequestBody ExtendMaintenanceWindowRequest request) {
+        requireAssignedMaintenanceWindow(cinemaPublicId, maintenanceWindowId);
+        return ResponseEntity.ok(ApiResponse.ok(
+                maintenanceService.extendWindow(maintenanceWindowId, request)));
     }
 
     private AdminShowtimeResponse requireAssignedShowtime(String showtimePublicId) {
@@ -188,6 +203,17 @@ public class ManagerCinemaController {
                 .anyMatch(auditorium -> auditoriumPublicId.equalsIgnoreCase(auditorium.getPublicId()));
         if (!belongsToCinema) {
             throw denied("Phòng chiếu không thuộc rạp được phân công.");
+        }
+    }
+
+    private void requireAssignedMaintenanceWindow(String cinemaPublicId, Long maintenanceWindowId) {
+        CinemaDetailDto cinema = requireAssignedCinema(cinemaPublicId);
+        boolean belongsToCinema = cinema.getActiveAuditoriums().stream()
+                .flatMap(auditorium -> maintenanceService
+                        .getMaintenanceWindows(auditorium.getPublicId()).stream())
+                .anyMatch(window -> maintenanceWindowId.equals(window.id()));
+        if (!belongsToCinema) {
+            throw denied("Không thể thao tác lịch bảo trì không thuộc rạp được phân công.");
         }
     }
 

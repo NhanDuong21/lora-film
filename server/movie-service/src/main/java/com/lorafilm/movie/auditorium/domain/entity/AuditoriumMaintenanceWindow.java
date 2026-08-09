@@ -1,5 +1,6 @@
 package com.lorafilm.movie.auditorium.domain.entity;
 
+import com.lorafilm.movie.auditorium.domain.enums.MaintenanceType;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -26,6 +27,10 @@ public class AuditoriumMaintenanceWindow {
     private String reason;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "maintenance_type", nullable = false, length = 30)
+    private MaintenanceType maintenanceType = MaintenanceType.PLANNED;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private ActionStatus status = ActionStatus.ACTIVE;
 
@@ -40,6 +45,18 @@ public class AuditoriumMaintenanceWindow {
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    @Column(name = "actual_end_time")
+    private Instant actualEndTime;
+
+    @Column(name = "resolved_by")
+    private Long resolvedBy;
+
+    @Column(name = "resolution_note", length = 500)
+    private String resolutionNote;
+
+    @Column(name = "extension_note", length = 500)
+    private String extensionNote;
 
     public AuditoriumMaintenanceWindow() {}
 
@@ -83,6 +100,14 @@ public class AuditoriumMaintenanceWindow {
         this.reason = reason;
     }
 
+    public MaintenanceType getMaintenanceType() {
+        return maintenanceType;
+    }
+
+    public void setMaintenanceType(MaintenanceType maintenanceType) {
+        this.maintenanceType = maintenanceType;
+    }
+
     public ActionStatus getStatus() {
         return status;
     }
@@ -121,6 +146,38 @@ public class AuditoriumMaintenanceWindow {
 
     public void setUpdatedBy(Long updatedBy) {
         this.updatedBy = updatedBy;
+    }
+
+    public Instant getActualEndTime() {
+        return actualEndTime;
+    }
+
+    public void setActualEndTime(Instant actualEndTime) {
+        this.actualEndTime = actualEndTime;
+    }
+
+    public Long getResolvedBy() {
+        return resolvedBy;
+    }
+
+    public void setResolvedBy(Long resolvedBy) {
+        this.resolvedBy = resolvedBy;
+    }
+
+    public String getResolutionNote() {
+        return resolutionNote;
+    }
+
+    public void setResolutionNote(String resolutionNote) {
+        this.resolutionNote = resolutionNote;
+    }
+
+    public String getExtensionNote() {
+        return extensionNote;
+    }
+
+    public void setExtensionNote(String extensionNote) {
+        this.extensionNote = extensionNote;
     }
 
     @PrePersist

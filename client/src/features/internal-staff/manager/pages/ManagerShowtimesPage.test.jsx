@@ -99,4 +99,23 @@ describe('ManagerShowtimesPage shared scheduling workspace', () => {
     ));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Phim thử nghiệm' })).not.toBeInTheDocument());
   });
+
+  it('lets an operator reopen a future showtime after the room is ready again', async () => {
+    const closedShowtime = { ...draftShowtime, status: 'CLOSED' };
+    managerCinemaService.getShowtimes.mockResolvedValue({ ...response, data: [closedShowtime] });
+    managerCinemaService.transitionShowtimeStatus.mockResolvedValue({
+      ...closedShowtime,
+      status: 'OPEN_FOR_BOOKING',
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Phim thử nghiệm.*Mở chi tiết/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mở bán lại' }));
+
+    await waitFor(() => expect(managerCinemaService.transitionShowtimeStatus).toHaveBeenCalledWith(
+      'showtime-1',
+      'OPEN_FOR_BOOKING',
+      null,
+    ));
+  });
 });

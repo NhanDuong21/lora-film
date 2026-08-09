@@ -57,6 +57,22 @@ const adminRoomService = {
     return response.data;
   },
 
+  resolveMaintenanceWindow: async (maintenanceWindowId, payload) => {
+    const response = await apiClient.put(
+      `/api/admin/maintenance-windows/${maintenanceWindowId}/resolve`,
+      payload,
+    );
+    return response.data;
+  },
+
+  extendMaintenanceWindow: async (maintenanceWindowId, payload) => {
+    const response = await apiClient.put(
+      `/api/admin/maintenance-windows/${maintenanceWindowId}/extend`,
+      payload,
+    );
+    return response.data;
+  },
+
   // Get all maintenance windows for an auditorium
   getMaintenanceWindows: async (auditoriumPublicId) => {
     const response = await apiClient.get(`/api/admin/auditoriums/${auditoriumPublicId}/maintenance-windows`);

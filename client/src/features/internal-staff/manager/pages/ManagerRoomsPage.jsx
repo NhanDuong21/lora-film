@@ -46,6 +46,16 @@ export default function ManagerRoomsPage() {
           selectedCinemaId,
           item.id,
         )}
+        resolveWindow={(item, payload) => managerCinemaService.resolveMaintenanceWindow(
+          selectedCinemaId,
+          item.id,
+          payload,
+        )}
+        extendWindow={(item, payload) => managerCinemaService.extendMaintenanceWindow(
+          selectedCinemaId,
+          item.id,
+          payload,
+        )}
         previewImpact={(roomId, payload) => managerCinemaService.previewMaintenanceImpact(
           selectedCinemaId,
           roomId,

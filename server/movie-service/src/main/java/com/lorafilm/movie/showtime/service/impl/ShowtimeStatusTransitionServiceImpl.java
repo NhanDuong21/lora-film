@@ -124,7 +124,9 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
                 valid = (target == ShowtimeStatus.CLOSED || target == ShowtimeStatus.CANCELLED);
                 break;
             case CLOSED:
-                valid = (target == ShowtimeStatus.FINISHED || target == ShowtimeStatus.CANCELLED);
+                valid = (target == ShowtimeStatus.OPEN_FOR_BOOKING
+                        || target == ShowtimeStatus.FINISHED
+                        || target == ShowtimeStatus.CANCELLED);
                 break;
             case CANCELLED:
             case FINISHED:
@@ -152,7 +154,8 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
     }
 
     private void validateTimingRules(Showtime showtime, ShowtimeStatus current, ShowtimeStatus target, Instant now) {
-        if (current == ShowtimeStatus.DRAFT && target == ShowtimeStatus.OPEN_FOR_BOOKING) {
+        if ((current == ShowtimeStatus.DRAFT || current == ShowtimeStatus.CLOSED)
+                && target == ShowtimeStatus.OPEN_FOR_BOOKING) {
             openingPolicy.validateCanOpen(showtime, now);
         }
         
@@ -168,6 +171,8 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
             if (showtime.getBookingOpenTime() == null) {
                 showtime.setBookingOpenTime(now);
             }
+        } else if (current == ShowtimeStatus.CLOSED && target == ShowtimeStatus.OPEN_FOR_BOOKING) {
+            showtime.setBookingCloseTime(null);
         } else if (current == ShowtimeStatus.OPEN_FOR_BOOKING && (target == ShowtimeStatus.CLOSED || target == ShowtimeStatus.CANCELLED)) {
             if (showtime.getBookingCloseTime() == null) {
                 showtime.setBookingCloseTime(now);
@@ -280,6 +285,17 @@ public class ShowtimeStatusTransitionServiceImpl implements ShowtimeStatusTransi
                     && (showtime.getStatus() != ShowtimeStatus.DRAFT
                     || showtime.getSource() != ShowtimeSource.AUTO)) {
                 ErrorCode errorCode = ErrorCode.SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT;
+                String code = errorCode.name();
+                String safeReason = errorCode.getMessage();
+                reasons.computeIfAbsent(code, ignored -> new ReasonAccumulator(safeReason))
+                        .add(showtime.getPublicId());
+                blockedShowtimes.add(new BatchStatusBlockedShowtime(
+                        showtime.getPublicId(), code, safeReason));
+                continue;
+            }
+            if (targetStatus == ShowtimeStatus.OPEN_FOR_BOOKING
+                    && showtime.getStatus() == ShowtimeStatus.CLOSED) {
+                ErrorCode errorCode = ErrorCode.INVALID_SHOWTIME_STATUS_TRANSITION;
                 String code = errorCode.name();
                 String safeReason = errorCode.getMessage();
                 reasons.computeIfAbsent(code, ignored -> new ReasonAccumulator(safeReason))
