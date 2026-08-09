@@ -172,5 +172,32 @@
     color: #000;
     box-shadow: none;
   }
+
+  body.printing-employee-order *,
+  body.printing-cash-handover * {
+    visibility: hidden !important;
+  }
+
+  body.printing-employee-order #employee-order-receipt,
+  body.printing-employee-order #employee-order-receipt *,
+  body.printing-cash-handover #cash-handover-receipt,
+  body.printing-cash-handover #cash-handover-receipt * {
+    visibility: visible !important;
+  }
+
+  body.printing-employee-order #employee-order-receipt,
+  body.printing-cash-handover #cash-handover-receipt {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    color: #000;
+    box-shadow: none;
+  }
 }
 

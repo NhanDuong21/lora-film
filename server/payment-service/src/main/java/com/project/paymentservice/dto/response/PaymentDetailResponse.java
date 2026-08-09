@@ -37,6 +37,12 @@ public class PaymentDetailResponse {
     private BigDecimal refundableAmount;
     @JsonSerialize(using = MoneyJsonSerializer.class)
     private BigDecimal concessionRefundableAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal receivedAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal changeAmount;
+    private Long collectedByAccountId;
+    private Instant collectedAt;
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -89,6 +95,14 @@ public class PaymentDetailResponse {
     public void setRefundableAmount(BigDecimal value) { this.refundableAmount = value; }
     public BigDecimal getConcessionRefundableAmount() { return concessionRefundableAmount; }
     public void setConcessionRefundableAmount(BigDecimal value) { this.concessionRefundableAmount = value; }
+    public BigDecimal getReceivedAmount() { return receivedAmount; }
+    public void setReceivedAmount(BigDecimal value) { this.receivedAmount = value; }
+    public BigDecimal getChangeAmount() { return changeAmount; }
+    public void setChangeAmount(BigDecimal value) { this.changeAmount = value; }
+    public Long getCollectedByAccountId() { return collectedByAccountId; }
+    public void setCollectedByAccountId(Long value) { this.collectedByAccountId = value; }
+    public Instant getCollectedAt() { return collectedAt; }
+    public void setCollectedAt(Instant value) { this.collectedAt = value; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getCreatedAt() { return createdAt; }

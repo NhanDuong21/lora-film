@@ -67,6 +67,11 @@ export const getPaymentStatus = async paymentPublicId =>
 export const getPayment = async paymentPublicId =>
   unwrap(await apiClient.get(`/api/payments/${paymentPublicId}`));
 
+export const getPaymentsForBooking = async bookingPublicId =>
+  unwrap(await apiClient.get(`/api/payments/booking/${bookingPublicId}`, {
+    params: { page: 0, size: 20 },
+  }));
+
 export const completeMockPayment = async (paymentPublicId, simulatedStatus) =>
   unwrap(await apiClient.post(
     `/api/payments/mock/${paymentPublicId}/complete`,

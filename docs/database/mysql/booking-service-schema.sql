@@ -28,6 +28,18 @@ CREATE TABLE bookings (
     user_id BIGINT NOT NULL
         COMMENT 'ID người dùng (Liên kết tới User Service)',
 
+    counter_customer_account_id BIGINT NULL
+        COMMENT 'ID tài khoản thành viên đang được phục vụ tại quầy; không thay thế chủ sở hữu đơn là nhân viên',
+
+    counter_customer_name VARCHAR(150) NULL
+        COMMENT 'Tên khách được nhân viên ghi nhận tại quầy',
+
+    counter_customer_phone VARCHAR(30) NULL
+        COMMENT 'Số điện thoại liên hệ của khách tại quầy',
+
+    counter_customer_email VARCHAR(254) NULL
+        COMMENT 'Email liên hệ của khách tại quầy; không tự động dùng email nhân viên',
+
     showtime_id BIGINT NOT NULL
         COMMENT 'ID suất chiếu (Liên kết tới Movie/Showtime Service)',
 

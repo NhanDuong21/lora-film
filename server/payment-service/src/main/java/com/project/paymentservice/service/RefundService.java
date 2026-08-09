@@ -385,6 +385,7 @@ public class RefundService {
         Instant now = Instant.now();
         refund.setProviderRefundId(reference);
         refund.setProviderResponseCode("MANUAL_CASH_SETTLED");
+        refund.setCompletedByAccountId(actorAccountId);
         refund.setProviderSummarySanitized(
                 "{\"settledByAccountId\":" + actorAccountId + "}");
         refund.setReasonDetailSanitized(sanitize(

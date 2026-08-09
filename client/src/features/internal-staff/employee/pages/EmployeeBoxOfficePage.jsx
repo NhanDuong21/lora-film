@@ -16,9 +16,11 @@ import {
   Printer,
   RefreshCw,
   RotateCcw,
+  Search,
   ShieldCheck,
   Sparkles,
   Ticket,
+  UserRound,
   XCircle,
 } from 'lucide-react';
 import { getCinemas, getSeatLayout, getShowtimes } from '@/features/catalog/customer/services/movieService';
@@ -47,6 +49,7 @@ import {
 } from '@/features/payment/services/paymentService';
 import PaymentNoticeModal from '@/features/payment/components/PaymentNoticeModal';
 import { getMyEmployeeWorkContext } from '../services/employeeBoxOfficeService';
+import { searchCounterCustomers } from '../services/employeeOperationsService';
 
 const money = (value, currency = 'VND') => new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -89,9 +92,22 @@ const CONCESSION_NAMES = {
   LEMON_TEA: 'Trà chanh',
   COMBO_COUPLE: 'Combo đôi',
   COMBO_SINGLE: 'Combo cá nhân',
+  COMBO_CLASSIC: 'Combo xem phim cổ điển',
+  COMBO_DATE: 'Combo cặp đôi',
+  COMBO_FAMILY: 'Combo gia đình',
+  COMBO_KIDS: 'Combo trẻ em',
+  HOT_DOG: 'Xúc xích phô mai',
 };
 
 const concessionName = item => CONCESSION_NAMES[item?.code] || item?.name || 'Sản phẩm tại quầy';
+
+const emptyCounterCustomer = () => ({
+  accountId: null,
+  customerCode: '',
+  fullName: '',
+  phoneNumber: '',
+  email: '',
+});
 
 const seatTone = unit => {
   if (!unit.sellable || !unit.pairValid) return 'cursor-not-allowed border-zinc-800 bg-zinc-900 text-zinc-700';
@@ -134,6 +150,12 @@ export default function EmployeeBoxOfficePage() {
   const [notice, setNotice] = useState(null);
   const [confirmCollect, setConfirmCollect] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [customerMode, setCustomerMode] = useState('GUEST');
+  const [counterCustomer, setCounterCustomer] = useState(emptyCounterCustomer);
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerResults, setCustomerResults] = useState([]);
+  const [customerSearching, setCustomerSearching] = useState(false);
+  const [customerSearchMessage, setCustomerSearchMessage] = useState('');
 
   const availableDates = useMemo(
     () => dates.filter(item => (schedule[item.key] || []).length > 0),
@@ -331,8 +353,47 @@ export default function EmployeeBoxOfficePage() {
     setSelectedSeats(current => [...current, ...unit.seats]);
   };
 
+  const findCustomer = async event => {
+    event.preventDefault();
+    const keyword = customerQuery.trim();
+    if (keyword.length < 3) {
+      setCustomerSearchMessage('Nhập ít nhất 3 ký tự của tên, số điện thoại, email hoặc mã thành viên.');
+      return;
+    }
+    setCustomerSearching(true);
+    setCustomerSearchMessage('');
+    try {
+      const result = await searchCounterCustomers(keyword);
+      const items = result?.content || [];
+      setCustomerResults(items);
+      if (!items.length) setCustomerSearchMessage('Không tìm thấy thành viên phù hợp. Có thể tiếp tục dưới dạng khách lẻ.');
+    } catch (error) {
+      setCustomerResults([]);
+      setCustomerSearchMessage(error?.response?.data?.message || 'Chưa thể tra cứu thành viên. Vui lòng thử lại.');
+    } finally {
+      setCustomerSearching(false);
+    }
+  };
+
+  const changeCustomerMode = mode => {
+    if (booking) return;
+    setCustomerMode(mode);
+    setCounterCustomer(emptyCounterCustomer());
+    setCustomerResults([]);
+    setCustomerQuery('');
+    setCustomerSearchMessage('');
+  };
+
   const createCounterBooking = async () => {
     if (!selectedSeats.length || !layout || submitting) return;
+    if (customerMode === 'MEMBER' && !counterCustomer.accountId) {
+      setNotice({
+        tone: 'info',
+        title: 'Chưa chọn thành viên',
+        message: 'Hãy tìm và chọn đúng thành viên, hoặc chuyển sang “Khách lẻ” để tiếp tục.',
+      });
+      return;
+    }
     if (hasSingleSeatGap(layout.seats, selectedIds)) {
       setNotice({
         tone: 'info',
@@ -346,6 +407,10 @@ export default function EmployeeBoxOfficePage() {
       const created = await createBooking({
         showtimePublicId: layout.showtimePublicId,
         seatPublicIds: selectedSeats.map(seat => seat.publicId),
+        counterCustomerAccountId: counterCustomer.accountId,
+        counterCustomerName: counterCustomer.fullName,
+        counterCustomerPhone: counterCustomer.phoneNumber,
+        counterCustomerEmail: counterCustomer.email,
         idempotencyKey: operationKey('counter-booking'),
       });
       setBooking(created);
@@ -468,6 +533,11 @@ export default function EmployeeBoxOfficePage() {
     setPromotionPreview(null);
     setReceivedAmount('');
     setSelectedSeats([]);
+    setCustomerMode('GUEST');
+    setCounterCustomer(emptyCounterCustomer());
+    setCustomerQuery('');
+    setCustomerResults([]);
+    setCustomerSearchMessage('');
     if (selectedShowtime) loadSeats(selectedShowtime);
   };
 
@@ -499,6 +569,11 @@ export default function EmployeeBoxOfficePage() {
       setPromotionPreview(null);
       setReceivedAmount('');
       setSelectedSeats([]);
+      setCustomerMode('GUEST');
+      setCounterCustomer(emptyCounterCustomer());
+      setCustomerQuery('');
+      setCustomerResults([]);
+      setCustomerSearchMessage('');
       if (selectedShowtime) await loadSeats(selectedShowtime);
       setNotice({
         tone: 'success',
@@ -588,14 +663,37 @@ export default function EmployeeBoxOfficePage() {
         <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className="min-w-0 space-y-8 rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5 md:p-7">
             <div>
-              <div className="flex items-center justify-between"><div><h2 className="flex items-center gap-2 font-black"><Armchair size={19} className="text-amber-500" /> 2. Chọn ghế</h2><p className="mt-1 text-xs text-zinc-500">Ghế mờ là ghế đã giữ, đã bán hoặc đang khóa vận hành.</p></div><span className="rounded-full bg-zinc-800 px-3 py-1 text-xs font-black text-zinc-300">Tối đa {layout?.maxSeatsPerBooking || 8} ghế</span></div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><h2 className="flex items-center gap-2 font-black"><UserRound size={19} className="text-amber-500" /> 2. Khách đang phục vụ</h2><p className="mt-1 text-xs text-zinc-500">Ghi nhận thông tin để tra cứu đơn và hỗ trợ khách sau bán.</p></div>
+                <div className="flex rounded-xl bg-zinc-950 p-1 text-xs font-black">
+                  <button type="button" disabled={Boolean(booking)} onClick={() => changeCustomerMode('GUEST')} className={`rounded-lg px-4 py-2 ${customerMode === 'GUEST' ? 'bg-amber-500 text-black' : 'text-zinc-400'}`}>Khách lẻ</button>
+                  <button type="button" disabled={Boolean(booking)} onClick={() => changeCustomerMode('MEMBER')} className={`rounded-lg px-4 py-2 ${customerMode === 'MEMBER' ? 'bg-amber-500 text-black' : 'text-zinc-400'}`}>Thành viên</button>
+                </div>
+              </div>
+
+              {customerMode === 'GUEST' ? <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <label className="text-xs font-black text-zinc-400">Tên khách (không bắt buộc)<input disabled={Boolean(booking)} value={counterCustomer.fullName} onChange={event => setCounterCustomer(value => ({ ...value, fullName: event.target.value }))} placeholder="Ví dụ: Anh Minh" maxLength={150} className="mt-2 h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-sm font-normal text-white outline-none focus:border-amber-500" /></label>
+                <label className="text-xs font-black text-zinc-400">Số điện thoại (không bắt buộc)<input disabled={Boolean(booking)} value={counterCustomer.phoneNumber} onChange={event => setCounterCustomer(value => ({ ...value, phoneNumber: event.target.value }))} placeholder="Ví dụ: 0901 234 567" maxLength={30} className="mt-2 h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-sm font-normal text-white outline-none focus:border-amber-500" /></label>
+                <label className="text-xs font-black text-zinc-400">Email nhận hỗ trợ (không bắt buộc)<input disabled={Boolean(booking)} type="email" value={counterCustomer.email} onChange={event => setCounterCustomer(value => ({ ...value, email: event.target.value }))} placeholder="khachhang@email.com" maxLength={254} className="mt-2 h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-sm font-normal text-white outline-none focus:border-amber-500" /></label>
+                <p className="text-xs leading-5 text-zinc-600 md:col-span-3">Vé vẫn được in tại quầy. Hệ thống không tự gửi vé vào email nhân viên.</p>
+              </div> : <div className="mt-5 space-y-3">
+                {counterCustomer.accountId ? <div className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.07] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black text-emerald-200">{counterCustomer.fullName}</p><p className="mt-1 text-xs text-emerald-100/60">{counterCustomer.customerCode} · {counterCustomer.phoneNumber || counterCustomer.email}</p></div><button type="button" disabled={Boolean(booking)} onClick={() => setCounterCustomer(emptyCounterCustomer())} className="rounded-xl border border-emerald-500/30 px-3 py-2 text-xs font-black text-emerald-200">Chọn thành viên khác</button></div> : <>
+                  <form onSubmit={findCustomer} className="flex flex-col gap-2 sm:flex-row"><label className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={17} /><input value={customerQuery} onChange={event => setCustomerQuery(event.target.value)} placeholder="Tên, số điện thoại, email hoặc mã thành viên" className="h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 pl-11 pr-4 text-sm outline-none focus:border-amber-500" /></label><button disabled={customerSearching || Boolean(booking)} className="rounded-xl border border-amber-500/40 px-5 py-2 text-xs font-black text-amber-300">{customerSearching ? 'Đang tìm…' : 'Tìm thành viên'}</button></form>
+                  {customerSearchMessage ? <p className="text-xs text-amber-300">{customerSearchMessage}</p> : null}
+                  {customerResults.length ? <div className="grid gap-2 md:grid-cols-2">{customerResults.map(item => <button key={item.accountId} type="button" onClick={() => setCounterCustomer(item)} className="rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-left hover:border-amber-500"><p className="text-sm font-black text-zinc-100">{item.fullName}</p><p className="mt-1 text-xs text-zinc-500">{item.customerCode} · {item.phoneNumber || item.email}</p></button>)}</div> : null}
+                </>}
+              </div>}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between"><div><h2 className="flex items-center gap-2 font-black"><Armchair size={19} className="text-amber-500" /> 3. Chọn ghế</h2><p className="mt-1 text-xs text-zinc-500">Ghế mờ là ghế đã giữ, đã bán hoặc đang khóa vận hành.</p></div><span className="rounded-full bg-zinc-800 px-3 py-1 text-xs font-black text-zinc-300">Tối đa {layout?.maxSeatsPerBooking || 8} ghế</span></div>
               {seatLoading ? <div className="grid min-h-72 place-items-center"><LoaderCircle className="animate-spin text-amber-500" /></div> : layout ? <><div className="mx-auto mt-8 min-w-0 max-w-4xl"><div className="mx-auto mb-9 h-2 w-3/4 rounded-full bg-gradient-to-r from-transparent via-zinc-300 to-transparent shadow-[0_12px_30px_rgba(255,255,255,0.18)]" /><p className="-mt-5 mb-8 text-center text-[10px] font-black uppercase tracking-[0.28em] text-zinc-600">Màn hình</p><div className="max-w-full space-y-2 overflow-x-auto pb-3">{rows.map(([label, units]) => <div key={label} className="flex min-w-max items-center justify-center gap-2"><span className="w-7 text-center text-xs font-black text-zinc-500">{label}</span>{units.map(unit => { const selected = unit.seats.every(seat => selectedIds.has(seat.publicId)); return <button key={unit.key} type="button" disabled={!unit.sellable || !unit.pairValid || Boolean(booking)} onClick={() => toggleSeat(unit)} title={`${unit.seatCode} · ${money(unit.price)}`} className={`h-9 rounded-lg border px-2 text-[10px] font-black transition ${unit.isCouple ? 'min-w-20' : 'w-10'} ${selected ? 'border-amber-300 bg-amber-500 text-black' : seatTone(unit)}`}>{unit.seatCode}</button>; })}</div>)}</div></div><div className="mt-7 flex flex-wrap justify-center gap-4 text-xs text-zinc-400"><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-zinc-800" /> Ghế thường</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-amber-500/50" /> VIP</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-pink-500/50" /> Ghế đôi</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-amber-500" /> Đang chọn</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-zinc-900" /> Không khả dụng</span></div></> : null}
             </div>
 
             {booking && !payment ? (
               <div className="border-t border-zinc-800 pt-7">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div><h2 className="flex items-center gap-2 font-black"><Popcorn size={19} className="text-amber-500" /> 3. Chọn bắp nước</h2><p className="mt-1 text-xs text-zinc-500">Có thể bỏ qua nếu khách chỉ mua vé. Giá và ưu đãi cập nhật ngay sau mỗi thay đổi.</p></div>
+                  <div><h2 className="flex items-center gap-2 font-black"><Popcorn size={19} className="text-amber-500" /> 4. Chọn bắp nước</h2><p className="mt-1 text-xs text-zinc-500">Có thể bỏ qua nếu khách chỉ mua vé. Giá và ưu đãi cập nhật ngay sau mỗi thay đổi.</p></div>
                   <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs font-black text-zinc-300">{foodItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)} sản phẩm</span>
                 </div>
                 {concessionsLoading ? <div className="grid min-h-48 place-items-center"><LoaderCircle className="animate-spin text-amber-500" /></div> : concessions.length ? (
@@ -619,6 +717,7 @@ export default function EmployeeBoxOfficePage() {
 
           <aside className="space-y-4 rounded-3xl border border-amber-500/25 bg-zinc-900 p-6 xl:sticky xl:top-6">
             <div className="border-b border-zinc-800 pb-5"><p className="text-xs font-black uppercase tracking-widest text-zinc-500">Đơn tại quầy</p><h2 className="mt-2 text-lg font-black">{selectedShowtime.movie?.title}</h2><p className="mt-2 flex items-center gap-2 text-xs text-zinc-400"><MapPin size={14} /> {cinema?.name}</p><p className="mt-2 flex items-center gap-2 text-xs text-zinc-400"><Clock3 size={14} /> {clock(selectedShowtime.startTime)} · {auditoriumLabel(selectedShowtime.auditorium?.name)}</p></div>
+            <div className="rounded-xl bg-zinc-950/70 p-3"><p className="text-[10px] font-black uppercase text-zinc-600">Khách đang phục vụ</p><p className="mt-1 text-sm font-black text-zinc-200">{counterCustomer.fullName || (customerMode === 'MEMBER' ? 'Chưa chọn thành viên' : 'Khách lẻ')}</p>{counterCustomer.customerCode || counterCustomer.phoneNumber ? <p className="mt-1 text-xs text-zinc-500">{counterCustomer.customerCode || counterCustomer.phoneNumber}</p> : null}</div>
             <div><p className="text-xs font-bold text-zinc-500">Ghế đã chọn ({selectedSeats.length})</p><div className="mt-2 flex min-h-10 flex-wrap gap-2">{selectedSeats.length ? selectedSeats.map(seat => <span key={seat.publicId} className="rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs font-black">{seat.seatCode}</span>) : <span className="text-sm text-zinc-600">Chưa chọn ghế</span>}</div></div>
 
             {booking ? (
@@ -650,7 +749,7 @@ export default function EmployeeBoxOfficePage() {
             ) : !paid ? (
               <div className="space-y-4">
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 text-xs text-emerald-300"><p className="font-black">Đã chốt số tiền · {booking.bookingCode}</p><p className="mt-1 text-emerald-200/60">Chỉ giao vé sau khi hệ thống ghi nhận đủ tiền.</p></div>
-                <label className="block text-xs font-black text-zinc-300">4. Tiền khách đưa<input aria-label="Tiền khách đưa tại quầy" type="number" min={amountDue} step="1000" value={receivedAmount} onChange={event => setReceivedAmount(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-lg font-black outline-none focus:border-amber-500" /></label>
+                <label className="block text-xs font-black text-zinc-300">5. Tiền khách đưa<input aria-label="Tiền khách đưa tại quầy" type="number" min={amountDue} step="1000" value={receivedAmount} onChange={event => setReceivedAmount(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-lg font-black outline-none focus:border-amber-500" /></label>
                 <div className="flex items-center justify-between rounded-xl bg-zinc-950 p-4"><span className="text-sm text-zinc-400">Tiền thừa</span><strong className="text-lg text-emerald-400">{money(change)}</strong></div>
                 <button type="button" onClick={() => setConfirmCollect(true)} disabled={submitting || Number(receivedAmount) < amountDue} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 font-black text-black disabled:opacity-40"><Banknote size={19} /> Xác nhận đã nhận đủ tiền</button>
                 <button type="button" onClick={() => setConfirmCancel(true)} disabled={submitting} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-rose-500/40 font-black text-rose-300 disabled:opacity-40"><XCircle size={18} /> Hủy đơn chưa thu</button>
@@ -678,7 +777,7 @@ export default function EmployeeBoxOfficePage() {
                   <div className="space-y-2 border-y border-zinc-800 py-3 print:border-black">
                     <div className="flex justify-between text-zinc-400 print:text-black"><span>Tổng tiền đơn</span><strong className="text-zinc-100 print:text-black">{money(collectedAmount)}</strong></div>
                     <div className="flex justify-between text-zinc-400 print:text-black"><span>Tiền khách đưa</span><strong className="text-zinc-100 print:text-black">{money(collectedReceivedAmount)}</strong></div>
-                    <div className="flex justify-between text-emerald-400 print:text-black"><span>Tiền đã trả khách</span><strong>{money(collectedChangeAmount)}</strong></div>
+                    <div className="flex justify-between text-emerald-400 print:text-black"><span>Tiền thối đã trả khách</span><strong>{money(collectedChangeAmount)}</strong></div>
                   </div>
                   <div className="space-y-1 text-xs text-zinc-500 print:text-black">
                     <p>Thu lúc: <strong className="text-zinc-300 print:text-black">{dateTime(payment?.collectedAt)}</strong></p>

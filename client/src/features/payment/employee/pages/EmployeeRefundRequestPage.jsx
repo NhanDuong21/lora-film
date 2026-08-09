@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Banknote,
@@ -76,7 +76,12 @@ const partialLimitFor = (payment, component) => {
 };
 
 export default function EmployeeRefundRequestPage() {
-  const [reference, setReference] = useState('');
+  const initialReference = useMemo(
+    () => new URLSearchParams(window.location.search).get('reference') || '',
+    [],
+  );
+  const autoLookupDone = useRef(false);
+  const [reference, setReference] = useState(initialReference);
   const [payment, setPayment] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
@@ -133,19 +138,31 @@ export default function EmployeeRefundRequestPage() {
     }
   };
 
-  const lookup = event => {
-    event.preventDefault();
-    if (!reference.trim()) {
+  const lookupReference = candidateReference => {
+    if (!candidateReference.trim()) {
       setNotice({ tone: 'info', title: 'Thiếu thông tin tra cứu', message: 'Vui lòng nhập mã giao dịch hoặc mã đơn đặt vé.' });
       return;
     }
     run(async () => {
-      const candidate = await lookupRefundCandidate(reference.trim());
+      const candidate = await lookupRefundCandidate(candidateReference.trim());
       setPayment(candidate);
       setResult(null);
       setForm(initialForm);
     });
   };
+
+  const lookup = event => {
+    event.preventDefault();
+    lookupReference(reference);
+  };
+
+  useEffect(() => {
+    if (!initialReference || autoLookupDone.current) return;
+    autoLookupDone.current = true;
+    lookupReference(initialReference);
+    // Chỉ tự tra cứu một lần khi đi từ chi tiết đơn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialReference]);
 
   const changeType = refundType => setForm(value => {
     const preferredPartialComponent = Number(payment?.concessionRefundableAmount || 0) > 0

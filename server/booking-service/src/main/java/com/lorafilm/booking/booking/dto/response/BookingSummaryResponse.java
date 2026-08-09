@@ -11,6 +11,10 @@ public record BookingSummaryResponse(
         @Schema(description = "Public UUID used by APIs", example = "550e8400-e29b-41d4-a716-446655440000")
         String publicId,
         String bookingCode,
+        Long counterCustomerAccountId,
+        String counterCustomerName,
+        String counterCustomerPhone,
+        String counterCustomerEmail,
         Long showtimeId,
         String showtimePublicId,
         BookingStatus status,

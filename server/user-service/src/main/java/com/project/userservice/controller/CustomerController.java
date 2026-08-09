@@ -2,6 +2,7 @@ package com.project.userservice.controller;
 
 import com.project.userservice.dto.response.ApiResponse;
 import com.project.userservice.dto.response.CustomerResponse;
+import com.project.userservice.dto.response.CustomerCounterLookupResponse;
 import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.dto.request.CustomerAccessActionRequest;
 import com.project.userservice.service.CustomerService;
@@ -31,6 +32,16 @@ public class CustomerController {
             @RequestParam(required = false) UserStatus status,
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Customers retrieved", service.search(keyword, status, pageable)));
+    }
+
+    @GetMapping("/counter-search")
+    @PreAuthorize("hasAuthority('BOOKING_MANAGE') or hasAnyRole('ADMIN','MANAGER')")
+    @Operation(summary = "Search active customers for counter service")
+    public ResponseEntity<ApiResponse<Page<CustomerCounterLookupResponse>>> counterSearch(
+            @RequestParam String keyword,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Counter customers retrieved", service.searchForCounter(keyword, pageable)));
     }
 
     @GetMapping("/{id}")

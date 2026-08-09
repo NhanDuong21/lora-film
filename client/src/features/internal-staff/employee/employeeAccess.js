@@ -33,8 +33,8 @@ export const hasEmployeeAccess = (
 };
 
 const EMPLOYEE_LANDING_ROUTES = [
-  [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, '/employee/box-office'],
   [EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW, '/employee/dashboard'],
+  [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, '/employee/box-office'],
   [EMPLOYEE_PERMISSIONS.SCHEDULE_VIEW, '/employee/schedules'],
   [EMPLOYEE_PERMISSIONS.ATTENDANCE_VIEW, '/employee/checkin'],
   [EMPLOYEE_PERMISSIONS.PAYROLL_VIEW, '/employee/payroll'],

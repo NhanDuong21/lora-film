@@ -5,10 +5,13 @@ import com.project.paymentservice.client.user.EmployeeCinemaScopeClient;
 import com.project.paymentservice.dto.request.CashCancelRequest;
 import com.project.paymentservice.dto.request.CashCollectRequest;
 import com.project.paymentservice.dto.request.CompleteCashRefundRequest;
+import com.project.paymentservice.dto.request.CloseCounterCashSessionRequest;
 import com.project.paymentservice.dto.request.CreateCashPaymentRequest;
 import com.project.paymentservice.dto.request.CreateRefundRequest;
+import com.project.paymentservice.dto.request.OpenCounterCashSessionRequest;
 import com.project.paymentservice.dto.response.CashCancelResponse;
 import com.project.paymentservice.dto.response.CashCollectResponse;
+import com.project.paymentservice.dto.response.CounterCashSessionResponse;
 import com.project.paymentservice.dto.response.CreatePaymentResponse;
 import com.project.paymentservice.dto.response.EmployeeBookingPaymentResponse;
 import com.project.paymentservice.dto.response.PaymentDetailResponse;
@@ -17,6 +20,7 @@ import com.project.paymentservice.enumtype.RefundStatus;
 import com.project.paymentservice.exception.BusinessException;
 import com.project.paymentservice.security.CurrentUserProvider;
 import com.project.paymentservice.service.AdminPaymentService;
+import com.project.paymentservice.service.CounterCashSessionService;
 import com.project.paymentservice.service.PaymentService;
 import com.project.paymentservice.service.RefundService;
 import jakarta.validation.Valid;
@@ -35,6 +39,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/employee/payments")
 public class EmployeePaymentController {
@@ -43,18 +49,59 @@ public class EmployeePaymentController {
     private final AdminPaymentService adminPaymentService;
     private final RefundService refundService;
     private final EmployeeCinemaScopeClient employeeCinemaScopeClient;
+    private final CounterCashSessionService counterCashSessionService;
 
     public EmployeePaymentController(
             PaymentService paymentService,
             CurrentUserProvider currentUserProvider,
             AdminPaymentService adminPaymentService,
             RefundService refundService,
-            EmployeeCinemaScopeClient employeeCinemaScopeClient) {
+            EmployeeCinemaScopeClient employeeCinemaScopeClient,
+            CounterCashSessionService counterCashSessionService) {
         this.paymentService = paymentService;
         this.currentUserProvider = currentUserProvider;
         this.adminPaymentService = adminPaymentService;
         this.refundService = refundService;
         this.employeeCinemaScopeClient = employeeCinemaScopeClient;
+        this.counterCashSessionService = counterCashSessionService;
+    }
+
+    @GetMapping("/counter-sessions/current")
+    public ResponseEntity<ApiResponse<CounterCashSessionResponse>> currentCounterSession() {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(
+                counterCashSessionService.current(employeeId, cinemaPublicId)));
+    }
+
+    @GetMapping("/counter-sessions/history")
+    public ResponseEntity<ApiResponse<List<CounterCashSessionResponse>>> counterSessionHistory() {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(
+                counterCashSessionService.history(employeeId, cinemaPublicId)));
+    }
+
+    @PostMapping("/counter-sessions")
+    public ResponseEntity<ApiResponse<CounterCashSessionResponse>> openCounterSession(
+            @Valid @RequestBody OpenCounterCashSessionRequest request) {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
+                "Đã mở ca thu ngân",
+                counterCashSessionService.open(employeeId, cinemaPublicId, request)));
+    }
+
+    @PostMapping("/counter-sessions/{sessionPublicId:[a-fA-F0-9-]{36}}/close")
+    public ResponseEntity<ApiResponse<CounterCashSessionResponse>> closeCounterSession(
+            @PathVariable String sessionPublicId,
+            @Valid @RequestBody CloseCounterCashSessionRequest request) {
+        Long employeeId = currentUserProvider.getCurrentUserId();
+        String cinemaPublicId = employeeCinemaScopeClient.requireActiveCinema(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã chốt ca và ghi nhận bàn giao",
+                counterCashSessionService.close(
+                        employeeId, cinemaPublicId, sessionPublicId, request)));
     }
 
     @GetMapping("/refund-candidate")

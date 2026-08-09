@@ -1,42 +1,66 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Banknote, CalendarDays, Clock3, Home, LayoutDashboard, LogOut, RotateCcw, Ticket, User, WalletCards } from 'lucide-react';
+import {
+  Banknote, CalendarDays, ClipboardList, Clock3, Home, LayoutDashboard,
+  LogOut, RotateCcw, Ticket, User, WalletCards,
+} from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   EMPLOYEE_PERMISSIONS,
   hasEmployeeAccess,
 } from '@/features/internal-staff/employee/employeeAccess';
 
-const EMPLOYEE_MENUS = [
+const EMPLOYEE_MENU_GROUPS = [
   {
-    id: 'dashboard', path: '/employee/dashboard', label: 'Tổng quan', icon: LayoutDashboard,
-    permissions: [EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW],
+    id: 'operations',
+    label: 'Vận hành tại quầy',
+    items: [
+      {
+        id: 'dashboard', path: '/employee/dashboard', label: 'Tổng quan ca', icon: LayoutDashboard,
+        permissions: [EMPLOYEE_PERMISSIONS.DASHBOARD_VIEW],
+      },
+      {
+        id: 'box-office', path: '/employee/box-office', label: 'Bán vé tại quầy', icon: Ticket,
+        permissions: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+        requireAll: true,
+      },
+      {
+        id: 'orders', path: '/employee/orders', label: 'Đơn tại quầy', icon: ClipboardList,
+        permissions: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE],
+      },
+      {
+        id: 'cash-payment', path: '/employee/payments/cash', label: 'Thu tiền tại quầy', icon: Banknote,
+        permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+        hiddenWhenGranted: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE],
+      },
+      {
+        id: 'refund-request', path: '/employee/payments/refunds', label: 'Hỗ trợ & hoàn tiền', icon: RotateCcw,
+        permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+      },
+      {
+        id: 'cash-session', path: '/employee/cash-session', label: 'Chốt ca & bàn giao', icon: Banknote,
+        permissions: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+        requireAll: true,
+      },
+    ],
   },
   {
-    id: 'schedules', path: '/employee/schedules', label: 'Lịch làm & nghỉ phép', icon: CalendarDays,
-    permissions: [EMPLOYEE_PERMISSIONS.SCHEDULE_VIEW],
-  },
-  {
-    id: 'checkin', path: '/employee/checkin', label: 'Chấm công', icon: Clock3,
-    permissions: [EMPLOYEE_PERMISSIONS.ATTENDANCE_VIEW, EMPLOYEE_PERMISSIONS.ATTENDANCE_UPDATE],
-    requireAll: true,
-  },
-  {
-    id: 'payroll', path: '/employee/payroll', label: 'Phiếu lương', icon: WalletCards,
-    permissions: [EMPLOYEE_PERMISSIONS.PAYROLL_VIEW],
-  },
-  {
-    id: 'box-office', path: '/employee/box-office', label: 'Bán vé tại quầy', icon: Ticket,
-    permissions: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
-    requireAll: true,
-  },
-  {
-    id: 'cash-payment', path: '/employee/payments/cash', label: 'Thu tiền tại quầy', icon: Banknote,
-    permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
-    hiddenWhenGranted: [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE],
-  },
-  {
-    id: 'refund-request', path: '/employee/payments/refunds', label: 'Yêu cầu hoàn tiền', icon: RotateCcw,
-    permissions: [EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+    id: 'personal',
+    label: 'Cá nhân',
+    items: [
+      {
+        id: 'schedules', path: '/employee/schedules', label: 'Lịch làm & nghỉ phép', icon: CalendarDays,
+        permissions: [EMPLOYEE_PERMISSIONS.SCHEDULE_VIEW],
+      },
+      {
+        id: 'checkin', path: '/employee/checkin', label: 'Chấm công', icon: Clock3,
+        permissions: [EMPLOYEE_PERMISSIONS.ATTENDANCE_VIEW, EMPLOYEE_PERMISSIONS.ATTENDANCE_UPDATE],
+        requireAll: true,
+      },
+      {
+        id: 'payroll', path: '/employee/payroll', label: 'Phiếu lương', icon: WalletCards,
+        permissions: [EMPLOYEE_PERMISSIONS.PAYROLL_VIEW],
+      },
+    ],
   },
 ];
 
@@ -45,15 +69,19 @@ export default function EmployeeLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const permissions = user?.permissions || [];
-  const visibleMenus = EMPLOYEE_MENUS.filter(menu => (
-    !menu.hiddenWhenGranted?.some(permission => permissions.includes(permission))
-    && hasEmployeeAccess(
-      user?.role,
-      permissions,
-      menu.permissions,
-      menu.requireAll,
-    )
-  ));
+  const visibleGroups = EMPLOYEE_MENU_GROUPS.map(group => ({
+    ...group,
+    items: group.items.filter(menu => (
+      !menu.hiddenWhenGranted?.some(permission => permissions.includes(permission))
+      && hasEmployeeAccess(
+        user?.role,
+        permissions,
+        menu.permissions,
+        menu.requireAll,
+      )
+    )),
+  })).filter(group => group.items.length);
+  const visibleMenus = visibleGroups.flatMap(group => group.items);
   const activeTab = visibleMenus.find(menu => location.pathname.startsWith(menu.path))?.id;
 
   const handleLogout = async () => {
@@ -70,15 +98,18 @@ export default function EmployeeLayout() {
             <span className="block text-lg font-black text-amber-500 md:hidden">LF</span>
             <p className="mt-1 hidden text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 md:block">Cổng nhân viên</p>
           </div>
-          <nav className="space-y-1 p-3">
-            {visibleMenus.map(menu => {
-              const Icon = menu.icon;
-              const active = activeTab === menu.id;
-              return <button key={menu.id} type="button" onClick={() => navigate(menu.path)} className={`flex w-full items-center justify-center rounded-xl py-3 text-sm transition md:justify-start md:px-5 ${active ? 'bg-amber-500/10 font-bold text-amber-400' : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-white'}`}>
-                <Icon className="h-4 w-4 shrink-0 md:mr-3" />
-                <span className="hidden md:inline">{menu.label}</span>
-              </button>;
-            })}
+          <nav className="space-y-5 p-3">
+            {visibleGroups.map(group => <section key={group.id}>
+              <p className="mb-2 hidden px-5 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600 md:block">{group.label}</p>
+              <div className="space-y-1">{group.items.map(menu => {
+                const Icon = menu.icon;
+                const active = activeTab === menu.id;
+                return <button key={menu.id} type="button" onClick={() => navigate(menu.path)} className={`flex w-full items-center justify-center rounded-xl py-3 text-sm transition md:justify-start md:px-5 ${active ? 'bg-amber-500/10 font-bold text-amber-400' : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-white'}`}>
+                  <Icon className="h-4 w-4 shrink-0 md:mr-3" />
+                  <span className="hidden md:inline">{menu.label}</span>
+                </button>;
+              })}</div>
+            </section>)}
             {!visibleMenus.length && (
               <p className="px-3 py-4 text-center text-xs text-zinc-500 md:text-left">
                 Chưa có chức năng được cấp quyền.

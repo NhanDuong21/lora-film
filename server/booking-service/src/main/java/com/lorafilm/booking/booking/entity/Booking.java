@@ -31,6 +31,18 @@ public class Booking extends FullAuditableEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "counter_customer_account_id")
+    private Long counterCustomerAccountId;
+
+    @Column(name = "counter_customer_name", length = 150)
+    private String counterCustomerName;
+
+    @Column(name = "counter_customer_phone", length = 30)
+    private String counterCustomerPhone;
+
+    @Column(name = "counter_customer_email", length = 254)
+    private String counterCustomerEmail;
+
     @Column(name = "showtime_id", nullable = false)
     private Long showtimeId;
 
@@ -310,6 +322,46 @@ public class Booking extends FullAuditableEntity {
 
     public void setUserId(Long userId) {
         this.userId = userId;
+    }
+
+    public Long getCounterCustomerAccountId() {
+        return counterCustomerAccountId;
+    }
+
+    public void setCounterCustomerAccountId(Long counterCustomerAccountId) {
+        this.counterCustomerAccountId = counterCustomerAccountId;
+    }
+
+    public String getCounterCustomerName() {
+        return counterCustomerName;
+    }
+
+    public void setCounterCustomerName(String counterCustomerName) {
+        this.counterCustomerName = normalizeOptionalText(counterCustomerName);
+    }
+
+    public String getCounterCustomerPhone() {
+        return counterCustomerPhone;
+    }
+
+    public void setCounterCustomerPhone(String counterCustomerPhone) {
+        this.counterCustomerPhone = normalizeOptionalText(counterCustomerPhone);
+    }
+
+    public String getCounterCustomerEmail() {
+        return counterCustomerEmail;
+    }
+
+    public void setCounterCustomerEmail(String counterCustomerEmail) {
+        String normalized = normalizeOptionalText(counterCustomerEmail);
+        this.counterCustomerEmail = normalized == null ? null : normalized.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String normalizeOptionalText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     public Long getShowtimeId() {

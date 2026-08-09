@@ -92,12 +92,16 @@ const pageTitle = pathname => {
   if (path === '/manager/reports') return 'Báo cáo vận hành rạp';
   if (path === '/manager/cinema') return 'Thông tin và giờ mở cửa';
 
-  if (path === '/employee' || path === '/employee/dashboard') return 'Bảng điều khiển nhân viên';
+  if (path === '/employee' || path === '/employee/dashboard') return 'Tổng quan ca';
+  if (path === '/employee/box-office') return 'Bán vé tại quầy';
+  if (path === '/employee/orders') return 'Đơn tại quầy';
+  if (path.startsWith('/employee/orders/')) return 'Chi tiết đơn tại quầy';
+  if (path === '/employee/cash-session') return 'Chốt ca và bàn giao';
   if (path === '/employee/checkin') return 'Chấm công nhân viên';
   if (path === '/employee/schedules') return 'Lịch làm việc';
   if (path === '/employee/payroll') return 'Bảng lương nhân viên';
   if (path === '/employee/payments/cash') return 'Thu tiền mặt tại quầy';
-  if (path === '/employee/payments/refunds') return 'Tạo yêu cầu hoàn tiền';
+  if (path === '/employee/payments/refunds') return 'Hỗ trợ và hoàn tiền';
 
   return 'Trang LoraFilm';
 };

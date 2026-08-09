@@ -62,6 +62,10 @@ export const createBooking = async ({
   showtimePublicId,
   seatPublicIds,
   reservationPublicIds,
+  counterCustomerAccountId,
+  counterCustomerName,
+  counterCustomerPhone,
+  counterCustomerEmail,
   idempotencyKey = uuidv4(),
 }) => {
   const payload = { showtimePublicId };
@@ -69,6 +73,10 @@ export const createBooking = async ({
     payload.seatPublicIds = seatPublicIds;
   if (Array.isArray(reservationPublicIds) && reservationPublicIds.length > 0)
     payload.reservationPublicIds = reservationPublicIds;
+  if (counterCustomerAccountId) payload.counterCustomerAccountId = counterCustomerAccountId;
+  if (counterCustomerName?.trim()) payload.counterCustomerName = counterCustomerName.trim();
+  if (counterCustomerPhone?.trim()) payload.counterCustomerPhone = counterCustomerPhone.trim();
+  if (counterCustomerEmail?.trim()) payload.counterCustomerEmail = counterCustomerEmail.trim();
   const response = await apiClient.post(
     "/api/bookings",
     {

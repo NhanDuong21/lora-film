@@ -68,6 +68,8 @@ public class PaymentRefund {
     private Instant reviewedAt;
     @Column(name = "review_note_sanitized", columnDefinition = "text")
     private String reviewNoteSanitized;
+    @Column(name = "completed_by_account_id")
+    private Long completedByAccountId;
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private RefundStatus status = RefundStatus.REQUESTED;
@@ -150,6 +152,8 @@ public class PaymentRefund {
     public void setReviewedAt(Instant value) { this.reviewedAt = value; }
     public String getReviewNoteSanitized() { return reviewNoteSanitized; }
     public void setReviewNoteSanitized(String value) { this.reviewNoteSanitized = value; }
+    public Long getCompletedByAccountId() { return completedByAccountId; }
+    public void setCompletedByAccountId(Long value) { this.completedByAccountId = value; }
     public RefundStatus getStatus() { return status; }
     public void setStatus(RefundStatus value) { this.status = value; }
     public String getProviderOrderId() { return providerOrderId; }

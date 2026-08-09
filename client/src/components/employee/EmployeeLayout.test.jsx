@@ -39,8 +39,10 @@ describe('EmployeeLayout permission menu', () => {
 
     renderLayout();
 
-    expect(screen.getByText('Tổng quan')).toBeInTheDocument();
+    expect(screen.getByText('Tổng quan ca')).toBeInTheDocument();
     expect(screen.getByText('Phiếu lương')).toBeInTheDocument();
+    expect(screen.getByText('Vận hành tại quầy')).toBeInTheDocument();
+    expect(screen.getByText('Cá nhân')).toBeInTheDocument();
     expect(screen.queryByText('Chấm công')).not.toBeInTheDocument();
     expect(screen.queryByText('Thu tiền tại quầy')).not.toBeInTheDocument();
     expect(screen.queryByText('Bán vé tại quầy')).not.toBeInTheDocument();
@@ -61,6 +63,9 @@ describe('EmployeeLayout permission menu', () => {
     renderLayout();
 
     expect(screen.getByText('Bán vé tại quầy')).toBeInTheDocument();
+    expect(screen.getByText('Đơn tại quầy')).toBeInTheDocument();
+    expect(screen.getByText('Hỗ trợ & hoàn tiền')).toBeInTheDocument();
+    expect(screen.getByText('Chốt ca & bàn giao')).toBeInTheDocument();
     expect(screen.queryByText('Thu tiền tại quầy')).not.toBeInTheDocument();
   });
 

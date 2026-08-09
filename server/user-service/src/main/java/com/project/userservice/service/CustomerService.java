@@ -1,6 +1,7 @@
 package com.project.userservice.service;
 
 import com.project.userservice.dto.response.CustomerResponse;
+import com.project.userservice.dto.response.CustomerCounterLookupResponse;
 import com.project.userservice.dto.request.CustomerAccessActionRequest;
 import com.project.userservice.entity.CustomerProfile;
 import com.project.userservice.entity.User;
@@ -53,6 +54,42 @@ public class CustomerService {
                 .stream().collect(Collectors.toMap(User::getAccountId, Function.identity()));
         return page.map(profile -> customerMapper.toResponse(
                 profile, users.get(profile.getAccountId())));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CustomerCounterLookupResponse> searchForCounter(String keyword, Pageable pageable) {
+        String normalizedKeyword = keyword == null ? "" : keyword.trim();
+        if (normalizedKeyword.length() < 3) {
+            throw new BusinessException(
+                    "Enter at least 3 characters to search for a customer",
+                    "USER_COUNTER_SEARCH_TOO_SHORT");
+        }
+        Page<CustomerProfile> page = customerRepository.search(
+                normalizedKeyword,
+                UserStatus.ACTIVE,
+                com.project.userservice.util.PageableUtils.sanitize(
+                        pageable,
+                        java.util.Set.of("id", "customerCode", "joinedAt", "createdAt"),
+                        "createdAt",
+                        org.springframework.data.domain.Sort.Direction.DESC));
+        Map<Long, User> users = userRepository.findAllById(
+                        page.getContent().stream().map(CustomerProfile::getAccountId).toList())
+                .stream()
+                .filter(user -> user.getAccountType() != AccountType.WORKFORCE)
+                .collect(Collectors.toMap(User::getAccountId, Function.identity()));
+        return page.map(profile -> {
+            User user = users.get(profile.getAccountId());
+            if (user == null) {
+                throw new BusinessException("Customer account is unavailable", "USER_CUSTOMER_PERSONA_INACTIVE");
+            }
+            return new CustomerCounterLookupResponse(
+                    user.getAccountId(),
+                    profile.getCustomerCode(),
+                    user.getFullName(),
+                    user.getEmail(),
+                    user.getPhoneNumber(),
+                    user.getStatus());
+        });
     }
 
     @Transactional(readOnly = true)

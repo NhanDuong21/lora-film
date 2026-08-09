@@ -9,6 +9,9 @@ const EmployeeScheduleView = lazy(() => import('./pages/EmployeeSchedulePage'));
 const EmployeePayrollPage = lazy(() => import('./pages/EmployeePayrollPage'));
 const EmployeeDashboardPage = lazy(() => import('./pages/EmployeeDashboardPage'));
 const EmployeeBoxOfficePage = lazy(() => import('./pages/EmployeeBoxOfficePage'));
+const EmployeeOrdersPage = lazy(() => import('./pages/EmployeeOrdersPage'));
+const EmployeeOrderDetailPage = lazy(() => import('./pages/EmployeeOrderDetailPage'));
+const EmployeeCashSessionPage = lazy(() => import('./pages/EmployeeCashSessionPage'));
 
 const lazyPage = (element) => (
     <Suspense fallback={<PageLoader />}>
@@ -28,6 +31,28 @@ export const employeeStaffRoutes = [
         path: 'box-office',
         element: requirePermission(
             lazyPage(<EmployeeBoxOfficePage />),
+            [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
+            true
+        )
+    },
+    {
+        path: 'orders',
+        element: requirePermission(
+            lazyPage(<EmployeeOrdersPage />),
+            [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE]
+        )
+    },
+    {
+        path: 'orders/:bookingPublicId',
+        element: requirePermission(
+            lazyPage(<EmployeeOrderDetailPage />),
+            [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE]
+        )
+    },
+    {
+        path: 'cash-session',
+        element: requirePermission(
+            lazyPage(<EmployeeCashSessionPage />),
             [EMPLOYEE_PERMISSIONS.BOOKING_MANAGE, EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT],
             true
         )

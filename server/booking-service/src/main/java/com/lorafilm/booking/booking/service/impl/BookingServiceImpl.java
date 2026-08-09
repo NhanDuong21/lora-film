@@ -245,7 +245,7 @@ public class BookingServiceImpl implements BookingService {
         ValidatedCreateRequest validatedRequest = validateCreateRequest(request);
 
         if (validatedRequest.seatPublicIds() != null) {
-            return createAtomicBookingFromSeats(currentUserId, validatedRequest);
+            return createAtomicBookingFromSeats(currentUserId, validatedRequest, request);
         }
 
         List<SeatReservation> reservations = reservationRepository
@@ -281,6 +281,7 @@ public class BookingServiceImpl implements BookingService {
                 bookingDeadline,
                 null);
         booking.setShowtimePublicId(context.showtimePublicId());
+        applyCounterCustomer(booking, request);
 
         Booking savedBooking = saveNewPendingBooking(booking);
         persistAuthoritativePriceSnapshot(savedBooking, context);
@@ -331,7 +332,10 @@ public class BookingServiceImpl implements BookingService {
         return bookingMapper.toResponse(savedBooking);
     }
 
-    private BookingResponse createAtomicBookingFromSeats(Long userId, ValidatedCreateRequest request) {
+    private BookingResponse createAtomicBookingFromSeats(
+            Long userId,
+            ValidatedCreateRequest request,
+            CreateBookingRequest createRequest) {
         ShowtimeBookingContext context = showtimeClient.getBookingContextByPublicId(
                 request.showtimePublicId(), request.seatPublicIds());
         if (context == null || context.startsAt() == null || !context.startsAt().isAfter(Instant.now())) {
@@ -376,6 +380,7 @@ public class BookingServiceImpl implements BookingService {
                     context.discountAmount(), BigDecimal.ZERO, context.currency(), deadline, null);
             booking.setShowtimePublicId(context.showtimePublicId());
             booking.setCinemaPublicId(context.cinemaPublicId());
+            applyCounterCustomer(booking, createRequest);
             Booking saved = saveNewPendingBooking(booking);
             persistAuthoritativePriceSnapshot(saved, context);
 
@@ -1168,6 +1173,17 @@ public class BookingServiceImpl implements BookingService {
             return "BOX_OFFICE";
         }
         return "WEB";
+    }
+
+    private void applyCounterCustomer(Booking booking, CreateBookingRequest request) {
+        if (!(securityContextService.hasRole("EMPLOYEE")
+                || securityContextService.hasRole("OPERATIONS_MANAGER"))) {
+            return;
+        }
+        booking.setCounterCustomerAccountId(request.getCounterCustomerAccountId());
+        booking.setCounterCustomerName(request.getCounterCustomerName());
+        booking.setCounterCustomerPhone(request.getCounterCustomerPhone());
+        booking.setCounterCustomerEmail(request.getCounterCustomerEmail());
     }
 
     private void requireAssignedCinemaForCounterSale(Long accountId, String cinemaPublicId) {
