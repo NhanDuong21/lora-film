@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import EmployeeBoxOfficePage from './EmployeeBoxOfficePage';
 import { getMyEmployeeWorkContext } from '../services/employeeBoxOfficeService';
@@ -122,7 +122,14 @@ describe('EmployeeBoxOfficePage', () => {
     createCashPayment.mockResolvedValue({ paymentPublicId: 'payment-1', status: 'PENDING' });
     cancelCashPayment.mockResolvedValue({ status: 'CANCELLED' });
     cancelBooking.mockResolvedValue({ status: 'CANCELLED' });
-    collectCashPayment.mockResolvedValue({ status: 'SUCCESS', changeAmount: 19000 });
+    collectCashPayment.mockResolvedValue({
+      status: 'SUCCESS',
+      paymentMethod: 'CASH',
+      amount: 81000,
+      receivedAmount: 100000,
+      changeAmount: 19000,
+      collectedAt: '2026-08-10T03:15:30Z',
+    });
     getBookingTickets.mockResolvedValue([{ publicId: 'ticket-1', ticketCode: 'TICKET-A1', seatLabel: 'A1' }]);
     addFoodItem.mockResolvedValue({
       items: [{ id: 11, productId: 1, quantity: 1, finalAmount: 45000 }],
@@ -186,8 +193,15 @@ describe('EmployeeBoxOfficePage', () => {
       100000,
       expect.any(String),
     ));
-    expect(await screen.findByText('TICKET-A1')).toBeInTheDocument();
+    expect((await screen.findAllByText('TICKET-A1')).length).toBeGreaterThan(0);
+    const receipt = document.getElementById('counter-cash-receipt');
+    expect(within(receipt).getByText('81.000 ₫')).toBeInTheDocument();
+    expect(within(receipt).getByText('100.000 ₫')).toBeInTheDocument();
+    expect(within(receipt).getByText('19.000 ₫')).toBeInTheDocument();
+    expect(within(receipt).getByText(/tiền thối không tính vào doanh thu/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /In vé/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /In vé/ }));
+    expect(window.print).toHaveBeenCalledOnce();
   });
 
   it('hủy đơn đang giữ ghế trước khi mở giao dịch tiền mặt', async () => {

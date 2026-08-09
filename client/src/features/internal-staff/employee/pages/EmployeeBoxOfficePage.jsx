@@ -65,6 +65,12 @@ const operationKey = prefix => `${prefix}-${crypto.randomUUID()}`;
 const clock = value => value
   ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
   : '--:--';
+const dateTime = value => value
+  ? new Date(value).toLocaleString('vi-VN', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour12: false,
+  })
+  : 'Vừa ghi nhận';
 const duration = showtime => Math.max(0, Math.round(
   (new Date(showtime.endTime) - new Date(showtime.startTime)) / 60000,
 ));
@@ -274,6 +280,12 @@ export default function EmployeeBoxOfficePage() {
   const change = Math.max(0, Number(receivedAmount || 0) - amountDue);
   const paid = payment?.status === 'SUCCESS';
   const checkoutLocked = Boolean(booking?.amountLockedAt || payment);
+  const collectedAmount = Number(payment?.amount ?? amountDue);
+  const collectedReceivedAmount = Number(payment?.receivedAmount ?? receivedAmount ?? collectedAmount);
+  const collectedChangeAmount = Number(
+    payment?.changeAmount
+    ?? Math.max(0, collectedReceivedAmount - collectedAmount),
+  );
 
   const refreshPromotion = useCallback(async bookingId => {
     if (!bookingId) return null;
@@ -459,6 +471,15 @@ export default function EmployeeBoxOfficePage() {
     if (selectedShowtime) loadSeats(selectedShowtime);
   };
 
+  const printCounterReceipt = () => {
+    const printingClass = 'printing-counter-receipt';
+    const cleanup = () => document.body.classList.remove(printingClass);
+    document.body.classList.add(printingClass);
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.print();
+    window.setTimeout(cleanup, 1000);
+  };
+
   const cancelCurrentSale = async () => {
     setConfirmCancel(false);
     if (!booking?.publicId || paid || submitting) return;
@@ -637,9 +658,38 @@ export default function EmployeeBoxOfficePage() {
             ) : (
               <div className="space-y-4">
                 <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-center"><CheckCircle2 className="mx-auto text-emerald-400" /><p className="mt-3 font-black text-emerald-200">Đã thanh toán và phát hành vé</p><p className="mt-1 text-xs text-emerald-200/60">Mã đơn {booking.bookingCode}</p></div>
+                <section id="counter-cash-receipt" aria-label="Đối chiếu tiền mặt" className="space-y-4 rounded-2xl border border-zinc-700 bg-zinc-950/70 p-4 text-sm print:bg-white print:text-black">
+                  <div className="hidden text-center print:block">
+                    <p className="text-lg font-black tracking-widest">LORAFILM</p>
+                    <p className="mt-1 text-xs font-black uppercase">Biên nhận bán vé tại quầy</p>
+                    <p className="mt-1 text-[10px]">Mã đơn: {booking.bookingCode}</p>
+                  </div>
+                  <div className="hidden space-y-1 border-y border-black py-3 text-xs print:block">
+                    <p><strong>Rạp:</strong> {cinema?.name}</p>
+                    <p><strong>Phim:</strong> {selectedShowtime.movie?.title}</p>
+                    <p><strong>Suất chiếu:</strong> {clock(selectedShowtime.startTime)} · {auditoriumLabel(selectedShowtime.auditorium?.name)}</p>
+                    <p><strong>Ghế:</strong> {selectedSeats.map(seat => seat.seatCode).join(', ')}</p>
+                    {foodItems.length ? <p><strong>Bắp nước:</strong> {foodItems.map(item => `${item.productName || item.name || 'Sản phẩm'} ×${item.quantity}`).join(', ')}</p> : null}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="font-black text-zinc-100 print:text-black">Đối chiếu tiền mặt</p><p className="mt-1 text-xs text-zinc-500 print:text-black">Kiểm tra trước khi giao biên nhận cho khách.</p></div>
+                    <Banknote size={20} className="text-emerald-400 print:text-black" />
+                  </div>
+                  <div className="space-y-2 border-y border-zinc-800 py-3 print:border-black">
+                    <div className="flex justify-between text-zinc-400 print:text-black"><span>Tổng tiền đơn</span><strong className="text-zinc-100 print:text-black">{money(collectedAmount)}</strong></div>
+                    <div className="flex justify-between text-zinc-400 print:text-black"><span>Tiền khách đưa</span><strong className="text-zinc-100 print:text-black">{money(collectedReceivedAmount)}</strong></div>
+                    <div className="flex justify-between text-emerald-400 print:text-black"><span>Tiền đã trả khách</span><strong>{money(collectedChangeAmount)}</strong></div>
+                  </div>
+                  <div className="space-y-1 text-xs text-zinc-500 print:text-black">
+                    <p>Thu lúc: <strong className="text-zinc-300 print:text-black">{dateTime(payment?.collectedAt)}</strong></p>
+                    <p>Phương thức: <strong className="text-zinc-300 print:text-black">{payment?.paymentMethod === 'FULL_DISCOUNT' ? 'Ưu đãi thanh toán toàn bộ' : 'Tiền mặt tại quầy'}</strong></p>
+                    <p className="pt-1">Doanh thu ghi nhận là tổng tiền đơn; tiền thối không tính vào doanh thu.</p>
+                  </div>
+                  {tickets.length ? <div className="hidden space-y-1 border-t border-black pt-3 text-xs print:block">{tickets.map(item => <p key={`receipt-${item.publicId || item.ticketCode}`}><strong>Vé ghế {item.seatLabel}:</strong> {item.ticketCode}</p>)}</div> : null}
+                </section>
                 <div className="space-y-2">{tickets.length ? tickets.map(item => <div key={item.publicId || item.ticketCode} className="flex items-center justify-between rounded-xl bg-zinc-950 p-3"><span className="font-black">Ghế {item.seatLabel}</span><span className="font-mono text-xs text-zinc-400">{item.ticketCode}</span></div>) : <p className="rounded-xl bg-zinc-950 p-3 text-center text-xs text-zinc-500">Vé đang đồng bộ; có thể tra cứu lại bằng mã đơn.</p>}</div>
                 <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] p-3 text-xs text-sky-200"><p className="flex items-center gap-2 font-black"><MailX size={15} /> Không gửi email nhân viên</p><p className="mt-1 text-sky-200/60">Giao vé in trực tiếp cho khách tại quầy.</p></div>
-                <button type="button" onClick={() => window.print()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-600 font-black"><Printer size={18} /> In vé / biên nhận</button>
+                <button type="button" onClick={printCounterReceipt} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-600 font-black"><Printer size={18} /> In vé / biên nhận</button>
                 <button type="button" onClick={resetSale} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white font-black text-black"><RotateCcw size={18} /> Bán đơn tiếp theo</button>
               </div>
             )}
