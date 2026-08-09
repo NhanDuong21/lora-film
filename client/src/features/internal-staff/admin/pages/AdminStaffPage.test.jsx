@@ -18,6 +18,7 @@ const access = vi.hoisted(() => () => true);
 const triggerToast = vi.hoisted(() => vi.fn());
 
 vi.mock('../hooks/useAdminAccess', () => ({ default: () => access }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ accountId: 99 }) }));
 vi.mock('react-router-dom', async importOriginal => {
   const actual = await importOriginal();
   return { ...actual, useOutletContext: () => ({ triggerToast }) };
@@ -45,6 +46,7 @@ const employee = {
   accountId: 3,
   employeeCode: 'EMP-0003',
   fullName: 'Nguyễn Hoàng Nhân',
+  avatarUrl: 'https://cdn.example.com/nhan.jpg',
   email: 'nhan@example.com',
   departmentId: 1,
   departmentName: 'Vận hành rạp',
@@ -83,6 +85,10 @@ describe('AdminStaffPage phân công rạp', () => {
     renderPage();
 
     expect((await screen.findAllByText('LoraFilm Landmark 81')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('img', { name: 'Ảnh đại diện của Nguyễn Hoàng Nhân' })).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/nhan.jpg'
+    );
     const cinemaFilter = screen.getByRole('combobox', { name: 'Lọc rạp làm việc' });
     expect(cinemaFilter).toHaveTextContent('Chưa phân công rạp');
 
@@ -90,6 +96,7 @@ describe('AdminStaffPage phân công rạp', () => {
 
     await waitFor(() => expect(getEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
       cinemaPublicId: crescentId,
+      excludeCurrentAccount: true,
     })));
   });
 

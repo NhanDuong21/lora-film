@@ -1,6 +1,11 @@
 import { Check, ChevronRight, CircleHelp, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
+import { getRoleFallbackAvatar } from './avatarUtils';
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+const resolveMediaUrl = value => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
 
 const STEP_TONES = {
   done: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
@@ -50,9 +55,38 @@ export function WorkflowSteps({ steps = [] }) {
   );
 }
 
-export function PersonAvatar({ name = '', size = 'md' }) {
+export function PersonAvatar({ name = '', avatarUrl = '', role = '', size = 'md' }) {
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState('');
+  const [failedFallbackUrl, setFailedFallbackUrl] = useState('');
   const initials = name.trim().split(/\s+/).slice(-2).map(part => part[0]).join('').toUpperCase() || 'NV';
   const dimensions = size === 'lg' ? 'h-12 w-12 text-sm' : 'h-9 w-9 text-xs';
+  const imageDimensions = size === 'lg' ? 96 : 72;
+  const resolvedAvatarUrl = getOptimizedImageUrl(resolveMediaUrl(avatarUrl), {
+    width: imageDimensions,
+    height: imageDimensions,
+    quality: 90,
+    gravity: 'face'
+  });
+  const fallbackAvatarUrl = getRoleFallbackAvatar(role);
+
+  if (resolvedAvatarUrl && failedAvatarUrl !== resolvedAvatarUrl) {
+    return <img
+      src={resolvedAvatarUrl}
+      alt={`Ảnh đại diện của ${name}`}
+      className={'shrink-0 rounded-xl border border-orange-500/20 object-cover ' + dimensions}
+      onError={() => setFailedAvatarUrl(resolvedAvatarUrl)}
+    />;
+  }
+
+  if (fallbackAvatarUrl && failedFallbackUrl !== fallbackAvatarUrl) {
+    return <img
+      src={fallbackAvatarUrl}
+      alt={`Ảnh mặc định theo vai trò của ${name}`}
+      className={'shrink-0 rounded-xl border border-orange-500/20 bg-orange-500/10 object-cover ' + dimensions}
+      onError={() => setFailedFallbackUrl(fallbackAvatarUrl)}
+    />;
+  }
+
   return (
     <span className={'grid shrink-0 place-items-center rounded-xl border border-orange-500/20 bg-orange-500/10 font-black text-orange-300 ' + dimensions}>
       {initials}

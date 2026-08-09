@@ -31,15 +31,25 @@ public class DashboardService {
     @Cacheable(value = "userDashboard", key = "'summary'")
     @Transactional(readOnly = true)
     public DashboardSummaryResponse summary() {
+        return summary(null);
+    }
+
+    @Cacheable(value = "userDashboard", key = "'summary:' + (#excludeAccountId == null ? 'all' : #excludeAccountId)")
+    @Transactional(readOnly = true)
+    public DashboardSummaryResponse summary(Long excludeAccountId) {
         Map<String, Long> employeeStatuses = new java.util.LinkedHashMap<>();
         for (EmployeeStatus status : EmployeeStatus.values()) {
-            employeeStatuses.put(status.name(), employeeRepository.countByStatusAndIsDeletedFalse(status));
+            employeeStatuses.put(status.name(), excludeAccountId == null
+                    ? employeeRepository.countByStatusAndIsDeletedFalse(status)
+                    : employeeRepository.countByStatusAndIsDeletedFalseAndAccountIdNot(status, excludeAccountId));
         }
         return new DashboardSummaryResponse(
                 customerRepository.countActiveProfiles(),
                 customerRepository.countByUserStatus(UserStatus.ACTIVE),
                 customerRepository.countByUserStatus(UserStatus.BLOCKED),
-                employeeRepository.countByIsDeletedFalse(),
+                excludeAccountId == null
+                        ? employeeRepository.countByIsDeletedFalse()
+                        : employeeRepository.countByIsDeletedFalseAndAccountIdNot(excludeAccountId),
                 employeeStatuses,
                 payrollRepository.countByStatus(PayrollStatus.PENDING_APPROVAL),
                 payrollRepository.countByStatus(PayrollStatus.APPROVED),

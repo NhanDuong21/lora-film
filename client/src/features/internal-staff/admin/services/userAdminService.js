@@ -2,7 +2,7 @@ import apiClient from '@/services/apiClient';
 
 const data = (response) => response.data.data;
 
-export const getDashboard = async () => data(await apiClient.get('/api/users/dashboard'));
+export const getDashboard = async (params = {}) => data(await apiClient.get('/api/users/dashboard', { params }));
 export const getUserAudits = async (params = {}) =>
   data(await apiClient.get('/api/admin/user-audits', { params }));
 export const getCustomer = async (id) => data(await apiClient.get(`/api/users/customers/${id}`));

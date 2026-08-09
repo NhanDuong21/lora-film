@@ -15,7 +15,7 @@ public class EmployeeMapper {
             throw new BusinessException("User not found", "USER_001");
         }
         return new EmployeeResponse(employee.getAccountId(), employee.getEmployeeCode(),
-                user.getFullName(), user.getEmail(), PiiAccess.maskPhone(user.getPhoneNumber()),
+                user.getFullName(), user.getAvatarUrl(), user.getEmail(), PiiAccess.maskPhone(user.getPhoneNumber()),
                 employee.getDepartment().getId(), employee.getDepartment().getCode(),
                 employee.getDepartment().getName(), employee.getPosition().getId(),
                 employee.getPosition().getCode(), employee.getPosition().getTitle(),

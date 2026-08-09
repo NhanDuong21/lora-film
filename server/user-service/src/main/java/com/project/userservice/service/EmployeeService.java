@@ -64,8 +64,11 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public Page<EmployeeResponse> search(String keyword, EmployeeStatus status, Long departmentId,
-                                         Long positionId, String cinemaPublicId, Pageable pageable) {
+                                         Long positionId, String cinemaPublicId, boolean excludeCurrentAccount,
+                                         Pageable pageable) {
+        Long excludedAccountId = excludeCurrentAccount ? CurrentActor.accountId() : null;
         Page<Employee> page = employeeRepository.search(keyword, status, departmentId, positionId, cinemaPublicId,
+                excludedAccountId,
                 com.project.userservice.util.PageableUtils.sanitize(pageable,
                         java.util.Set.of("accountId", "employeeCode", "hireDate", "baseSalary", "status",
                                 "createdAt", "updatedAt"),

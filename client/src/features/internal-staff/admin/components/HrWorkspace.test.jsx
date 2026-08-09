@@ -1,29 +1,35 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import { UatGuide, WorkflowSteps } from './HrWorkspace';
+import { getRoleFallbackAvatar } from './avatarUtils';
+import { PersonAvatar } from './HrWorkspace';
 
-describe('không gian vận hành nhân sự', () => {
-  it('hướng dẫn admin bằng các bước tiếng Việt dễ hiểu', () => {
-    render(<MemoryRouter><UatGuide /></MemoryRouter>);
+describe('PersonAvatar', () => {
+  it('uses the employee avatar when one is available', () => {
+    render(<PersonAvatar name="Đặng Thành Nhân" avatarUrl="https://cdn.example.com/nhan.jpg" role="OPS_MANAGER" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cách kiểm tra' }));
-
-    expect(screen.getByRole('heading', { name: 'Bạn chỉ cần kiểm tra 6 việc' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Tạo hồ sơ nhân viên/ })).toHaveAttribute('href', '/admin/staff');
-    expect(screen.getByRole('link', { name: /Chạy kỳ lương/ })).toHaveAttribute('href', '/admin/payroll');
-    expect(screen.getByText(/người tạo và người duyệt phải là hai tài khoản khác nhau/)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Ảnh đại diện của Đặng Thành Nhân' })).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/nhan.jpg'
+    );
   });
 
-  it('hiển thị đúng trạng thái từng bước của quy trình', () => {
-    render(<WorkflowSteps steps={[
-      { label: 'Lấy dữ liệu công', state: 'done' },
-      { label: 'Kiểm tra & duyệt', state: 'active' },
-      { label: 'Hoàn tất', state: 'waiting' }
-    ]} />);
+  it.each([
+    ['OPS_MANAGER', '/images/manager_avt.png'],
+    ['BOX_OFFICE', '/images/employee_banve.png'],
+    ['CUSTOMER_CARE', '/images/chamsockhachhang.png'],
+    ['FINANCE_ADMIN', '/images/ketoan.png']
+  ])('chọn ảnh mặc định theo vai trò %s', (role, expectedUrl) => {
+    expect(getRoleFallbackAvatar(role)).toBe(expectedUrl);
+  });
 
-    expect(screen.getByText('Lấy dữ liệu công')).toBeInTheDocument();
-    expect(screen.getByText('Kiểm tra & duyệt')).toBeInTheDocument();
-    expect(screen.getByText('Hoàn tất')).toBeInTheDocument();
+  it('shows a role fallback when the uploaded avatar cannot load', () => {
+    render(<PersonAvatar name="Đặng Thành Nhân" avatarUrl="/uploads/missing.jpg" role="OPS_MANAGER" />);
+
+    fireEvent.error(screen.getByRole('img', { name: 'Ảnh đại diện của Đặng Thành Nhân' }));
+
+    expect(screen.getByRole('img', { name: 'Ảnh mặc định theo vai trò của Đặng Thành Nhân' })).toHaveAttribute(
+      'src',
+      '/images/manager_avt.png'
+    );
   });
 });

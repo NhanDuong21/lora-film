@@ -9,6 +9,7 @@ public record EmployeeResponse(
         Long accountId,
         String employeeCode,
         String fullName,
+        String avatarUrl,
         String email,
         String phoneNumber,
         Long departmentId,

@@ -55,6 +55,7 @@ class EmployeeServiceIntegrationTest {
         user.setAccountId(9101L);
         user.setFullName("Workforce Test User");
         user.setEmail("workforce@example.com");
+        user.setAvatarUrl("/uploads/workforce-test-avatar.jpg");
         user.setAccountType(AccountType.WORKFORCE);
         userRepository.save(user);
 
@@ -117,6 +118,7 @@ class EmployeeServiceIntegrationTest {
         EmployeeResponse created = employeeService.create(request(operations.getId(), boxOffice.getId()));
 
         assertThat(created.cinemaPublicId()).isEqualTo(CINEMA_ID);
+        assertThat(created.avatarUrl()).isEqualTo("/uploads/workforce-test-avatar.jpg");
 
         String nextCinema = "b1576780-9081-11f1-bf65-0ebab02bf6f5";
         EmployeeResponse reassigned = employeeService.assignCinema(created.accountId(), nextCinema.toUpperCase());
@@ -124,6 +126,17 @@ class EmployeeServiceIntegrationTest {
         assertThat(reassigned.cinemaPublicId()).isEqualTo(nextCinema);
         org.mockito.Mockito.verify(cinemaDirectoryClient).requireExisting(CINEMA_ID);
         org.mockito.Mockito.verify(cinemaDirectoryClient).requireExisting(nextCinema);
+    }
+
+    @Test
+    void canExcludeTheCurrentlyAuthenticatedAccountFromTheAdminDirectory() {
+        EmployeeResponse created = employeeService.create(request(operations.getId(), boxOffice.getId()));
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(created.accountId(), null, List.of()));
+
+        var visible = employeeService.search(null, null, null, null, null, true, PageRequest.of(0, 10));
+
+        assertThat(visible.getContent()).noneMatch(item -> item.accountId().equals(created.accountId()));
     }
 
     private Department department(String code, String name) {

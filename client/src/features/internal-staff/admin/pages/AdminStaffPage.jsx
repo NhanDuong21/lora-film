@@ -26,6 +26,8 @@ import {
 } from '../components/OperationsConsole';
 import { Building2, CalendarDays, FileText, KeyRound, Mail, Phone, Search, UserPlus, UserRoundCheck } from 'lucide-react';
 import { HrHero, PersonAvatar, UatGuide } from '../components/HrWorkspace';
+import { getEmployeeAvatarRole } from '../components/avatarUtils';
+import { useAuth } from '@/contexts/AuthContext';
 
 const EMPTY_PAGE = { content: [], totalPages: 0, totalElements: 0 };
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -42,6 +44,7 @@ const initialActionForm = () => ({ type: 'TRANSFER', departmentId: '', positionI
 
 export default function AdminStaffPage() {
   const can = useAdminAccess();
+  const { accountId: currentAccountId } = useAuth();
   const canCreate = can('EMPLOYEE_CREATE');
   const canUpdate = can('EMPLOYEE_UPDATE');
   const outlet = useOutletContext();
@@ -73,8 +76,9 @@ export default function AdminStaffPage() {
     status: filters.status || undefined,
     departmentId: filters.departmentId || undefined,
     positionId: filters.positionId || undefined,
-    cinemaPublicId: filters.cinemaPublicId || undefined
-  }), [deferredKeyword, filters.cinemaPublicId, filters.departmentId, filters.page, filters.positionId, filters.size, filters.status]);
+    cinemaPublicId: filters.cinemaPublicId || undefined,
+    excludeCurrentAccount: currentAccountId ? true : undefined
+  }), [currentAccountId, deferredKeyword, filters.cinemaPublicId, filters.departmentId, filters.page, filters.positionId, filters.size, filters.status]);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
@@ -84,7 +88,9 @@ export default function AdminStaffPage() {
         getDepartments(),
         getPositions(),
         canCreate ? getEligibleEmployeeAccounts({ page: 0, size: 100 }) : Promise.resolve(EMPTY_PAGE),
-        can('DASHBOARD_VIEW') ? getDashboard() : Promise.resolve(null),
+        can('DASHBOARD_VIEW')
+          ? getDashboard({ excludeCurrentAccount: Boolean(currentAccountId) })
+          : Promise.resolve(null),
         adminCinemaService.getCinemas({ page: 0, size: 100, showDeleted: false, sort: 'name,asc' })
           .catch(() => null)
       ]);
@@ -100,7 +106,7 @@ export default function AdminStaffPage() {
     } catch (error) {
       setState({ loading: false, error: error?.message || 'Không thể tải danh sách nhân sự.' });
     }
-  }, [can, canCreate, query]);
+  }, [can, canCreate, currentAccountId, query]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -331,7 +337,7 @@ export default function AdminStaffPage() {
             {result.content.map(employee => (
               <button key={employee.accountId} type="button" onClick={() => openEmployee(employee)} className="group rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:-translate-y-0.5 hover:border-orange-500/30 hover:bg-orange-500/[0.03]">
                 <div className="flex items-start gap-3">
-                  <PersonAvatar name={employee.fullName} size="lg" />
+                  <PersonAvatar name={employee.fullName} avatarUrl={employee.avatarUrl} role={getEmployeeAvatarRole(employee)} size="lg" />
                   <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate font-black text-zinc-100">{employee.fullName}</p><p className="mt-1 font-mono text-[10px] text-zinc-600">{employee.employeeCode}</p></div><StatusBadge status={employee.status} label={STATUS_LABELS[employee.status]} /></div></div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-4 text-xs">
@@ -378,7 +384,7 @@ export default function AdminStaffPage() {
         {detailLoading ? <p className="text-sm text-zinc-500">Đang tải hồ sơ…</p> : selected ? (
           <div className="space-y-7">
             <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 to-transparent p-5">
-              <div className="flex items-center gap-4"><PersonAvatar name={selected.fullName} size="lg" /><div><p className="text-lg font-black">{selected.fullName}</p><p className="mt-1 text-xs text-zinc-500">{selected.employeeCode} · {STATUS_LABELS[selected.status]}</p></div></div>
+              <div className="flex items-center gap-4"><PersonAvatar name={selected.fullName} avatarUrl={selected.avatarUrl} role={getEmployeeAvatarRole(selected)} size="lg" /><div><p className="text-lg font-black">{selected.fullName}</p><p className="mt-1 text-xs text-zinc-500">{selected.employeeCode} · {STATUS_LABELS[selected.status]}</p></div></div>
               <div className="mt-5 grid gap-2 text-sm">
                 <div className="flex items-center gap-3 rounded-xl bg-black/20 p-3 text-zinc-300"><Mail size={16} className="text-zinc-600" /> {selected.email || 'Chưa có email'}</div>
                 <div className="flex items-center gap-3 rounded-xl bg-black/20 p-3 text-zinc-300"><Phone size={16} className="text-zinc-600" /> {selected.phoneNumber || 'Thông tin được ẩn theo quyền'}</div>

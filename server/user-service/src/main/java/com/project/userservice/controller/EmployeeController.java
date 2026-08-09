@@ -34,9 +34,10 @@ public class EmployeeController {
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Long positionId,
             @RequestParam(required = false) String cinemaPublicId,
+            @RequestParam(defaultValue = "false") boolean excludeCurrentAccount,
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Employees retrieved",
-                service.search(keyword, status, departmentId, positionId, cinemaPublicId, pageable)));
+                service.search(keyword, status, departmentId, positionId, cinemaPublicId, excludeCurrentAccount, pageable)));
     }
 
     @GetMapping("/{accountId}")
