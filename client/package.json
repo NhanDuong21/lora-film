@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mobile": "vite --config vite.mobile.config.js",
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run",
@@ -12,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.1",
     "axios": "^1.16.1",
     "jwt-decode": "^4.0.0",
     "leaflet": "^1.9.4",
@@ -28,6 +30,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.19",
     "eslint": "^10.3.0",

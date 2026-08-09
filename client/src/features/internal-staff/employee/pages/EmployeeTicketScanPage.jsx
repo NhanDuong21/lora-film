@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BrowserQRCodeReader } from '@zxing/browser';
 import {
   Camera, CameraOff, CheckCircle2, CircleAlert, Keyboard,
-  LoaderCircle, MapPin, QrCode, RotateCcw, ShieldCheck, Ticket, XCircle,
+  LoaderCircle, MapPin, QrCode, RotateCcw, ShieldCheck, Ticket, Upload, XCircle,
 } from 'lucide-react';
 import { getMyEmployeeCinemaContext } from '../services/employeeBoxOfficeService';
 import { getTicketScanHistory, scanTicket } from '../services/employeeTicketCheckerService';
@@ -20,18 +21,35 @@ const resultIcon = result => result === 'ADMITTED'
     ? <CircleAlert size={52} />
     : <XCircle size={52} />;
 
+const cameraErrorMessage = error => {
+  if (!window.isSecureContext) {
+    return 'Camera trực tiếp cần kết nối HTTPS. Trên điện thoại, hãy mở địa chỉ HTTPS của hệ thống hoặc dùng nút “Chụp / chọn ảnh QR”.';
+  }
+  if (error?.name === 'NotAllowedError') {
+    return 'Bạn chưa cấp quyền camera. Hãy chọn Cho phép trong cài đặt trình duyệt rồi mở camera lại.';
+  }
+  if (error?.name === 'NotFoundError') {
+    return 'Không tìm thấy camera trên thiết bị này. Bạn có thể chụp hoặc chọn ảnh QR để kiểm tra vé.';
+  }
+  if (error?.name === 'NotReadableError') {
+    return 'Camera đang được ứng dụng khác sử dụng. Hãy đóng ứng dụng đó rồi thử lại.';
+  }
+  return 'Không mở được camera. Hãy kiểm tra quyền camera hoặc dùng nút “Chụp / chọn ảnh QR”.';
+};
+
 export default function EmployeeTicketScanPage() {
   const [context, setContext] = useState(null);
   const [code, setCode] = useState('');
   const [gateLabel, setGateLabel] = useState('Cửa phòng 01');
   const [result, setResult] = useState(null);
   const [recent, setRecent] = useState([]);
-  const [state, setState] = useState({ submitting: false, camera: false, error: '', cameraError: '' });
+  const [state, setState] = useState({ submitting: false, camera: false, cameraStarting: false, imageDecoding: false, error: '', cameraError: '' });
   const inputRef = useRef(null);
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const frameRef = useRef(null);
-  const detectorRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const scannerControlsRef = useRef(null);
+  const scanLockRef = useRef(false);
+  const cameraRequestRef = useRef(0);
 
   const loadRecent = useCallback(async () => {
     try {
@@ -49,18 +67,18 @@ export default function EmployeeTicketScanPage() {
   }, [loadRecent]);
 
   const stopCamera = useCallback(() => {
-    if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    frameRef.current = null;
-    streamRef.current?.getTracks?.().forEach(track => track.stop());
-    streamRef.current = null;
-    detectorRef.current = null;
+    cameraRequestRef.current += 1;
+    scannerControlsRef.current?.stop?.();
+    scannerControlsRef.current = null;
+    scanLockRef.current = false;
+    videoRef.current?.srcObject?.getTracks?.().forEach(track => track.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
-    setState(value => ({ ...value, camera: false }));
+    setState(value => ({ ...value, camera: false, cameraStarting: false }));
   }, []);
 
   useEffect(() => () => {
-    if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    streamRef.current?.getTracks?.().forEach(track => track.stop());
+    scannerControlsRef.current?.stop?.();
+    videoRef.current?.srcObject?.getTracks?.().forEach(track => track.stop());
   }, []);
 
   const submitTicket = useCallback(async rawCode => {
@@ -89,42 +107,80 @@ export default function EmployeeTicketScanPage() {
   }, [gateLabel, loadRecent]);
 
   const startCamera = async () => {
-    setState(value => ({ ...value, cameraError: '' }));
-    if (!navigator.mediaDevices?.getUserMedia || !window.BarcodeDetector) {
+    const requestId = cameraRequestRef.current + 1;
+    cameraRequestRef.current = requestId;
+    setState(value => ({ ...value, cameraStarting: true, cameraError: '' }));
+    if (!navigator.mediaDevices?.getUserMedia) {
       setState(value => ({
         ...value,
-        cameraError: 'Thiết bị này chưa hỗ trợ quét QR trực tiếp. Bạn vẫn có thể dùng máy quét cầm tay hoặc nhập mã vé.',
+        cameraStarting: false,
+        cameraError: window.isSecureContext
+          ? 'Trình duyệt này không cho trang web dùng camera. Hãy mở bằng Chrome hoặc Safari, hoặc dùng nút “Chụp / chọn ảnh QR”.'
+          : 'Camera trực tiếp cần kết nối HTTPS. Trên điện thoại, hãy mở địa chỉ HTTPS của hệ thống hoặc dùng nút “Chụp / chọn ảnh QR”.',
       }));
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-      streamRef.current = stream;
-      detectorRef.current = new window.BarcodeDetector({ formats: ['qr_code'] });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setState(value => ({ ...value, camera: true }));
-      const detect = async () => {
-        if (!detectorRef.current || !videoRef.current) return;
-        try {
-          const codes = await detectorRef.current.detect(videoRef.current);
-          if (codes[0]?.rawValue) {
-            const scannedCode = codes[0].rawValue;
-            stopCamera();
-            await submitTicket(scannedCode);
+      scanLockRef.current = false;
+      const reader = new BrowserQRCodeReader(undefined, {
+        delayBetweenScanAttempts: 150,
+        delayBetweenScanSuccess: 800,
+      });
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        },
+        videoRef.current,
+        (...scanArgs) => {
+          const [decoded, , activeControls] = scanArgs;
+          if (cameraRequestRef.current !== requestId) {
+            activeControls?.stop?.();
             return;
           }
-        } catch {
-          // Camera frames can be temporarily unavailable while the stream starts.
-        }
-        frameRef.current = requestAnimationFrame(detect);
-      };
-      frameRef.current = requestAnimationFrame(detect);
-    } catch {
+          if (!decoded || scanLockRef.current) return;
+          scanLockRef.current = true;
+          activeControls?.stop?.();
+          scannerControlsRef.current = null;
+          setState(value => ({ ...value, camera: false, cameraStarting: false, cameraError: '' }));
+          void submitTicket(decoded.getText());
+        },
+      );
+      if (cameraRequestRef.current !== requestId) {
+        controls.stop();
+        return;
+      }
+      scannerControlsRef.current = controls;
+      setState(value => ({ ...value, camera: true, cameraStarting: false }));
+    } catch (error) {
       stopCamera();
-      setState(value => ({ ...value, cameraError: 'Không mở được camera. Hãy cấp quyền camera hoặc dùng ô nhập mã bên dưới.' }));
+      setState(value => ({ ...value, cameraError: cameraErrorMessage(error) }));
+    }
+  };
+
+  const scanQrImage = async event => {
+    const [file] = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!file) return;
+
+    stopCamera();
+    setState(value => ({ ...value, imageDecoding: true, cameraError: '' }));
+    const imageUrl = URL.createObjectURL(file);
+    try {
+      const decoded = await new BrowserQRCodeReader().decodeFromImageUrl(imageUrl);
+      await submitTicket(decoded.getText());
+    } catch {
+      setState(value => ({
+        ...value,
+        cameraError: 'Không đọc được mã QR trong ảnh. Hãy chụp gần hơn, đủ sáng và giữ trọn mã QR trong khung hình.',
+      }));
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+      setState(value => ({ ...value, imageDecoding: false }));
     }
   };
 
@@ -142,10 +198,17 @@ export default function EmployeeTicketScanPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
         <div className="space-y-6">
           <article className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="flex items-center gap-2 font-black"><QrCode className="text-amber-400" /> Quét QR bằng camera</h2><p className="mt-1 text-sm text-zinc-500">Đưa mã QR vào giữa khung hình và giữ thiết bị ổn định.</p></div><button type="button" onClick={state.camera ? stopCamera : startCamera} className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black ${state.camera ? 'border border-red-500/30 text-red-300' : 'bg-amber-500 text-black'}`}>{state.camera ? <CameraOff size={18} /> : <Camera size={18} />}{state.camera ? 'Tắt camera' : 'Mở camera'}</button></div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div><h2 className="flex items-center gap-2 font-black"><QrCode className="text-amber-400" /> Quét QR bằng camera</h2><p className="mt-1 text-sm text-zinc-500">Đưa mã QR vào giữa khung hình hoặc chụp một ảnh QR rõ nét.</p></div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="button" disabled={state.cameraStarting} onClick={state.camera ? stopCamera : startCamera} className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black disabled:opacity-60 ${state.camera ? 'border border-red-500/30 text-red-300' : 'bg-amber-500 text-black'}`}>{state.cameraStarting ? <LoaderCircle className="animate-spin" size={18} /> : state.camera ? <CameraOff size={18} /> : <Camera size={18} />}{state.cameraStarting ? 'Đang xin quyền camera…' : state.camera ? 'Tắt camera' : 'Mở camera trực tiếp'}</button>
+                <button type="button" disabled={state.imageDecoding} onClick={() => imageInputRef.current?.click()} className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-black text-zinc-200 disabled:opacity-50">{state.imageDecoding ? <LoaderCircle className="animate-spin" size={18} /> : <Upload size={18} />}{state.imageDecoding ? 'Đang đọc QR…' : 'Chụp / chọn ảnh QR'}</button>
+                <input ref={imageInputRef} type="file" accept="image/*" capture="environment" onChange={scanQrImage} className="hidden" aria-label="Chụp hoặc chọn ảnh QR" />
+              </div>
+            </div>
             <div className={`relative mt-5 aspect-video overflow-hidden rounded-2xl border ${state.camera ? 'border-amber-500/40 bg-black' : 'border-dashed border-zinc-700 bg-zinc-950/70'}`}>
               <video ref={videoRef} muted playsInline className={`h-full w-full object-cover ${state.camera ? 'block' : 'hidden'}`} />
-              {state.camera ? <div className="pointer-events-none absolute inset-[16%] rounded-3xl border-2 border-amber-400 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]" /> : <div className="absolute inset-0 grid place-items-center text-center"><div><Camera className="mx-auto text-zinc-700" size={44} /><p className="mt-3 font-black text-zinc-400">Camera đang tắt</p><p className="mt-1 text-xs text-zinc-600">Có thể dùng máy quét cầm tay ở ô nhập mã.</p></div></div>}
+              {state.camera ? <div className="pointer-events-none absolute inset-[16%] rounded-3xl border-2 border-amber-400 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]"><span className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/80 px-3 py-1 text-xs font-bold text-white">Đang tìm mã QR…</span></div> : <div className="absolute inset-0 grid place-items-center text-center"><div><Camera className="mx-auto text-zinc-700" size={44} /><p className="mt-3 font-black text-zinc-400">Camera đang tắt</p><p className="mt-1 text-xs text-zinc-600">Trên điện thoại, có thể mở camera trực tiếp hoặc chụp ảnh QR.</p></div></div>}
             </div>
             {state.cameraError ? <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-200">{state.cameraError}</p> : null}
           </article>
