@@ -1,5 +1,6 @@
 package com.project.userservice.service;
 
+import com.project.userservice.client.CinemaDirectoryClient;
 import com.project.userservice.dto.request.*;
 import com.project.userservice.dto.response.WorkShiftResponse;
 import com.project.userservice.entity.Department;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
@@ -39,6 +41,7 @@ class WorkforceTimeServiceIntegrationTest {
     @Autowired DepartmentRepository departmentRepository;
     @Autowired PositionRepository positionRepository;
     @Autowired WorkShiftRepository workShiftRepository;
+    @MockBean CinemaDirectoryClient cinemaDirectoryClient;
 
     private static final Long EMPLOYEE_ID = 9201L;
 
@@ -64,7 +67,8 @@ class WorkforceTimeServiceIntegrationTest {
         position = positionRepository.save(position);
 
         employeeService.create(new EmployeeRequest(EMPLOYEE_ID, department.getId(), position.getId(),
-                LocalDate.of(2026, 1, 1), new BigDecimal("12000000")));
+                LocalDate.of(2026, 1, 1), new BigDecimal("12000000"),
+                "b1575c2d-9081-11f1-bf65-0ebab02bf6f5"));
         authenticate(8001L);
     }
 

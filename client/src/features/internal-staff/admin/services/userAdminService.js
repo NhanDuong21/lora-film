@@ -19,6 +19,8 @@ export const getEmploymentActions = async (accountId, params = {}) =>
 export const applyEmploymentAction = async (accountId, payload) =>
   data(await apiClient.post(`/api/users/employees/${accountId}/actions`, payload));
 export const createEmployee = async (payload) => data(await apiClient.post('/api/users/employees', payload));
+export const assignEmployeeCinema = async (accountId, cinemaPublicId) =>
+  data(await apiClient.put(`/api/users/employees/${accountId}/cinema-assignment`, { cinemaPublicId }));
 export const getEmployeeDocuments = async (accountId, includeHistory = false) =>
   data(await apiClient.get(
     `/api/users/employees/${accountId}/documents${includeHistory ? '/history' : ''}`

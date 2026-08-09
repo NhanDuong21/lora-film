@@ -22,6 +22,7 @@ import com.project.userservice.repository.EmploymentActionRepository;
 import com.project.userservice.repository.PositionRepository;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.security.CurrentActor;
+import com.project.userservice.client.CinemaDirectoryClient;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -42,12 +43,14 @@ public class EmployeeService {
     private final UserAuditService auditService;
     private final UserDomainEventService eventService;
     private final EmployeeMapper employeeMapper;
+    private final CinemaDirectoryClient cinemaDirectoryClient;
 
     public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository,
                            DepartmentRepository departmentRepository, PositionRepository positionRepository,
                            EmploymentActionRepository employmentActionRepository,
                            UserAuditService auditService, UserDomainEventService eventService,
-                           EmployeeMapper employeeMapper) {
+                           EmployeeMapper employeeMapper,
+                           CinemaDirectoryClient cinemaDirectoryClient) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
         this.departmentRepository = departmentRepository;
@@ -56,12 +59,13 @@ public class EmployeeService {
         this.auditService = auditService;
         this.eventService = eventService;
         this.employeeMapper = employeeMapper;
+        this.cinemaDirectoryClient = cinemaDirectoryClient;
     }
 
     @Transactional(readOnly = true)
     public Page<EmployeeResponse> search(String keyword, EmployeeStatus status, Long departmentId,
-                                         Long positionId, Pageable pageable) {
-        Page<Employee> page = employeeRepository.search(keyword, status, departmentId, positionId,
+                                         Long positionId, String cinemaPublicId, Pageable pageable) {
+        Page<Employee> page = employeeRepository.search(keyword, status, departmentId, positionId, cinemaPublicId,
                 com.project.userservice.util.PageableUtils.sanitize(pageable,
                         java.util.Set.of("accountId", "employeeCode", "hireDate", "baseSalary", "status",
                                 "createdAt", "updatedAt"),
@@ -85,8 +89,10 @@ public class EmployeeService {
     @CacheEvict(value = "userDashboard", allEntries = true)
     public EmployeeResponse assignCinema(Long accountId, String cinemaPublicId) {
         Employee employee = find(accountId);
-        String normalized = cinemaPublicId == null || cinemaPublicId.isBlank()
-                ? null : cinemaPublicId.trim().toLowerCase(java.util.Locale.ROOT);
+        String normalized = normalizeCinemaPublicId(cinemaPublicId);
+        if (normalized != null) {
+            cinemaDirectoryClient.requireExisting(normalized);
+        }
         employee.setCinemaPublicId(normalized);
         employeeRepository.save(employee);
         auditService.log("EMPLOYEE_CINEMA_ASSIGNED", "EMPLOYEE", accountId,
@@ -232,6 +238,14 @@ public class EmployeeService {
         employee.setPosition(position);
         employee.setHireDate(request.hireDate());
         employee.setBaseSalary(request.baseSalary());
+        String cinemaPublicId = normalizeCinemaPublicId(request.cinemaPublicId());
+        cinemaDirectoryClient.requireExisting(cinemaPublicId);
+        employee.setCinemaPublicId(cinemaPublicId);
+    }
+
+    private String normalizeCinemaPublicId(String cinemaPublicId) {
+        return cinemaPublicId == null || cinemaPublicId.isBlank()
+                ? null : cinemaPublicId.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     private Department findDepartment(Long id) {

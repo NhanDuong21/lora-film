@@ -31,7 +31,8 @@ public class GlobalExceptionHandler {
             status = HttpStatus.CONFLICT;
         } else if ("USER_FILE_TOO_LARGE".equals(code)) {
             status = HttpStatus.PAYLOAD_TOO_LARGE;
-        } else if ("USER_STORAGE_UNAVAILABLE".equals(code)) {
+        } else if ("USER_STORAGE_UNAVAILABLE".equals(code)
+                || "USER_CINEMA_VALIDATION_UNAVAILABLE".equals(code)) {
             status = HttpStatus.SERVICE_UNAVAILABLE;
         } else if ("USER_NOT_FOUND".equals(code) || "USER_001".equals(code)
                 || "USER_002".equals(code) || "USER_003".equals(code)

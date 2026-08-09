@@ -16,6 +16,7 @@ import com.lorafilm.movie.cinema.domain.entity.Cinema;
 @Repository
 public interface CinemaRepository extends JpaRepository<Cinema, Long>, JpaSpecificationExecutor<Cinema> {
     Optional<Cinema> findByPublicIdAndDeletedAtIsNull(String publicId);
+    boolean existsByPublicIdAndDeletedAtIsNull(String publicId);
 
     @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.QueryHints(

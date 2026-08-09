@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'rea
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   applyEmploymentAction,
+  assignEmployeeCinema,
   createEmployee,
   getDashboard,
   getDepartments,
@@ -12,6 +13,7 @@ import {
   getPositions
 } from '../services/userAdminService';
 import { createEmployeeAccount } from '../services/authAdminService';
+import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import useAdminAccess from '../hooks/useAdminAccess';
@@ -22,7 +24,7 @@ import {
   DetailDrawer,
   DetailGrid,
 } from '../components/OperationsConsole';
-import { CalendarDays, FileText, KeyRound, Mail, Phone, Search, UserPlus, UserRoundCheck } from 'lucide-react';
+import { Building2, CalendarDays, FileText, KeyRound, Mail, Phone, Search, UserPlus, UserRoundCheck } from 'lucide-react';
 import { HrHero, PersonAvatar, UatGuide } from '../components/HrWorkspace';
 
 const EMPTY_PAGE = { content: [], totalPages: 0, totalElements: 0 };
@@ -34,7 +36,7 @@ const ACTION_LABELS = {
   COMPENSATION_CHANGE: 'Điều chỉnh lương'
 };
 
-const initialHireForm = () => ({ accountId: '', departmentId: '', positionId: '', hireDate: TODAY, baseSalary: '' });
+const initialHireForm = () => ({ accountId: '', departmentId: '', positionId: '', cinemaPublicId: '', hireDate: TODAY, baseSalary: '' });
 const initialAccountForm = () => ({ fullName: '', email: '', password: '' });
 const initialActionForm = () => ({ type: 'TRANSFER', departmentId: '', positionId: '', baseSalary: '', effectiveDate: TODAY, reason: '' });
 
@@ -44,11 +46,11 @@ export default function AdminStaffPage() {
   const canUpdate = can('EMPLOYEE_UPDATE');
   const outlet = useOutletContext();
   const notify = outlet?.triggerToast || (() => undefined);
-  const [filters, setFilters] = useState({ keyword: '', status: '', departmentId: '', positionId: '', page: 0, size: 15 });
+  const [filters, setFilters] = useState({ keyword: '', status: '', departmentId: '', positionId: '', cinemaPublicId: '', page: 0, size: 15 });
   const deferredKeyword = useDeferredValue(filters.keyword);
   const [result, setResult] = useState(EMPTY_PAGE);
   const [dashboard, setDashboard] = useState(null);
-  const [options, setOptions] = useState({ departments: [], positions: [], accounts: [] });
+  const [options, setOptions] = useState({ departments: [], positions: [], accounts: [], cinemas: [] });
   const [state, setState] = useState({ loading: true, error: '' });
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState([]);
@@ -60,6 +62,8 @@ export default function AdminStaffPage() {
   const [accountForm, setAccountForm] = useState(initialAccountForm);
   const [actionOpen, setActionOpen] = useState(false);
   const [actionForm, setActionForm] = useState(initialActionForm);
+  const [cinemaAssignmentOpen, setCinemaAssignmentOpen] = useState(false);
+  const [cinemaAssignmentId, setCinemaAssignmentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const query = useMemo(() => ({
@@ -68,21 +72,29 @@ export default function AdminStaffPage() {
     keyword: deferredKeyword.trim() || undefined,
     status: filters.status || undefined,
     departmentId: filters.departmentId || undefined,
-    positionId: filters.positionId || undefined
-  }), [deferredKeyword, filters.departmentId, filters.page, filters.positionId, filters.size, filters.status]);
+    positionId: filters.positionId || undefined,
+    cinemaPublicId: filters.cinemaPublicId || undefined
+  }), [deferredKeyword, filters.cinemaPublicId, filters.departmentId, filters.page, filters.positionId, filters.size, filters.status]);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
     try {
-      const [employees, departments, positions, accounts, summary] = await Promise.all([
+      const [employees, departments, positions, accounts, summary, cinemaEnvelope] = await Promise.all([
         getEmployees(query),
         getDepartments(),
         getPositions(),
         canCreate ? getEligibleEmployeeAccounts({ page: 0, size: 100 }) : Promise.resolve(EMPTY_PAGE),
-        can('DASHBOARD_VIEW') ? getDashboard() : Promise.resolve(null)
+        can('DASHBOARD_VIEW') ? getDashboard() : Promise.resolve(null),
+        adminCinemaService.getCinemas({ page: 0, size: 100, showDeleted: false, sort: 'name,asc' })
+          .catch(() => null)
       ]);
       setResult(employees || EMPTY_PAGE);
-      setOptions({ departments: departments || [], positions: positions || [], accounts: accounts?.content || [] });
+      setOptions({
+        departments: departments || [],
+        positions: positions || [],
+        accounts: accounts?.content || [],
+        cinemas: cinemaEnvelope?.data?.data || []
+      });
       setDashboard(summary);
       setState({ loading: false, error: '' });
     } catch (error) {
@@ -177,8 +189,8 @@ export default function AdminStaffPage() {
         setHireStep(2);
         return;
       }
-      if (!hireForm.departmentId || !hireForm.positionId || !hireForm.baseSalary) {
-        notify('Vui lòng nhập đủ phòng ban, vị trí và lương cơ bản.', 'error');
+      if (!hireForm.departmentId || !hireForm.positionId || !hireForm.cinemaPublicId || !hireForm.baseSalary) {
+        notify('Vui lòng chọn đủ rạp làm việc, phòng ban, vị trí và nhập lương cơ bản.', 'error');
         return;
       }
       await createEmployee({
@@ -186,14 +198,39 @@ export default function AdminStaffPage() {
         departmentId: Number(hireForm.departmentId),
         positionId: Number(hireForm.positionId),
         hireDate: hireForm.hireDate,
-        baseSalary: Number(hireForm.baseSalary)
+        baseSalary: Number(hireForm.baseSalary),
+        cinemaPublicId: hireForm.cinemaPublicId
       });
       closeHire();
       setHireForm(initialHireForm());
       await load();
-      notify('Đã tạo nhân viên. Người này đã có thể được phân ca và tính lương.');
+      notify('Đã tạo nhân viên và phân công rạp làm việc.');
     } catch (error) {
       notify(error?.message || (hireStep === 1 ? 'Không thể tạo tài khoản đăng nhập.' : 'Không thể tạo hồ sơ nhân viên.'), 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openCinemaAssignment = () => {
+    setCinemaAssignmentId(selected?.cinemaPublicId || '');
+    setCinemaAssignmentOpen(true);
+  };
+
+  const submitCinemaAssignment = async event => {
+    event.preventDefault();
+    if (!selected) return;
+    setSubmitting(true);
+    try {
+      const updated = await assignEmployeeCinema(selected.accountId, cinemaAssignmentId || null);
+      setSelected(updated);
+      setCinemaAssignmentOpen(false);
+      await load();
+      notify(cinemaAssignmentId
+        ? 'Đã cập nhật rạp làm việc cho nhân viên.'
+        : 'Đã gỡ phân công rạp. Nhân viên sẽ chưa xuất hiện trong danh sách của quản lý rạp.');
+    } catch (error) {
+      notify(error?.message || 'Không thể cập nhật rạp làm việc.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -250,6 +287,15 @@ export default function AdminStaffPage() {
       label: item.name,
       subtitle: item.description || 'Vị trí công việc'
     }));
+  const cinemaOptions = options.cinemas.map(cinema => ({
+    value: cinema.publicId,
+    label: cinema.name,
+    subtitle: [cinema.district, cinema.city].filter(Boolean).join(', ') || 'Rạp trong hệ thống',
+    badge: cinema.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm ngưng'
+  }));
+  const cinemaByPublicId = new Map(options.cinemas.map(cinema => [String(cinema.publicId), cinema]));
+  const cinemaName = cinemaPublicId => cinemaByPublicId.get(String(cinemaPublicId || ''))?.name
+    || (cinemaPublicId ? 'Rạp không còn trong danh mục' : 'Chưa phân công rạp');
   return (
     <section className="min-h-full space-y-5 text-white">
       <HrHero
@@ -269,11 +315,12 @@ export default function AdminStaffPage() {
       </div>
 
       <ConsolePanel className="overflow-hidden rounded-[24px]">
-        <div className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_220px_220px_220px]">
+        <div className="grid gap-3 border-b border-white/10 p-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_210px_190px_190px_190px]">
           <label className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
             <input value={filters.keyword} onChange={event => setFilters(value => ({ ...value, keyword: event.target.value, page: 0 }))} aria-label="Tìm nhân viên" placeholder="Tên, email, mã hoặc số điện thoại" className="h-11 w-full rounded-xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm outline-none focus:border-brand-orange" />
           </label>
+          <select value={filters.cinemaPublicId} onChange={event => setFilters(value => ({ ...value, cinemaPublicId: event.target.value, page: 0 }))} aria-label="Lọc rạp làm việc" className="h-11 rounded-xl border border-white/10 bg-black/30 px-4 text-sm outline-none focus:border-brand-orange"><option value="">Tất cả rạp</option><option value="__unassigned__">Chưa phân công rạp</option>{options.cinemas.map(item => <option key={item.publicId} value={item.publicId}>{item.name}</option>)}</select>
           <select value={filters.departmentId} onChange={event => setFilters(value => ({ ...value, departmentId: event.target.value, page: 0 }))} aria-label="Lọc phòng ban" className="h-11 rounded-xl border border-white/10 bg-black/30 px-4 text-sm outline-none focus:border-brand-orange"><option value="">Tất cả phòng ban</option>{options.departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           <select value={filters.positionId} onChange={event => setFilters(value => ({ ...value, positionId: event.target.value, page: 0 }))} aria-label="Lọc vị trí" className="h-11 rounded-xl border border-white/10 bg-black/30 px-4 text-sm outline-none focus:border-brand-orange"><option value="">Tất cả vị trí</option>{options.positions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           <select value={filters.status} onChange={event => setFilters(value => ({ ...value, status: event.target.value, page: 0 }))} aria-label="Lọc trạng thái nhân viên" className="h-11 rounded-xl border border-white/10 bg-black/30 px-4 text-sm outline-none focus:border-brand-orange"><option value="">Tất cả trạng thái</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
@@ -291,6 +338,7 @@ export default function AdminStaffPage() {
                   <div><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Phòng ban</p><p className="mt-1 truncate font-bold text-zinc-300">{employee.departmentName || 'Chưa phân bổ'}</p></div>
                   <div><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Vị trí</p><p className="mt-1 truncate font-bold text-zinc-300">{employee.positionName || 'Chưa phân bổ'}</p></div>
                 </div>
+                <div className={'mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ' + (employee.cinemaPublicId ? 'border-sky-500/15 bg-sky-500/[0.05] text-sky-200' : 'border-amber-500/20 bg-amber-500/[0.06] text-amber-300')}><Building2 size={15} /> <span className="truncate">{cinemaName(employee.cinemaPublicId)}</span></div>
                 <div className="mt-3 flex items-center justify-between text-xs text-zinc-500"><span className="flex items-center gap-1.5"><CalendarDays size={14} /> Vào làm {employee.hireDate}</span><span className="font-black text-orange-300 opacity-0 transition group-hover:opacity-100">Mở hồ sơ →</span></div>
               </button>
             ))}
@@ -339,9 +387,17 @@ export default function AdminStaffPage() {
             <DetailGrid items={[
               { label: 'Email', value: selected.email }, { label: 'Số điện thoại', value: selected.phoneNumber },
               { label: 'Phòng ban', value: selected.departmentName }, { label: 'Vị trí', value: selected.positionName },
+              { label: 'Rạp làm việc', value: cinemaName(selected.cinemaPublicId) },
               { label: 'Ngày vào làm', value: selected.hireDate },
               { label: 'Lương cơ bản', value: new Intl.NumberFormat('vi-VN').format(selected.baseSalary || 0) + ' ₫' }
             ]} />
+            <div className={'rounded-2xl border p-4 ' + (selected.cinemaPublicId ? 'border-sky-500/20 bg-sky-500/[0.05]' : 'border-amber-500/25 bg-amber-500/[0.06]')}>
+              <div className="flex items-start gap-3">
+                <span className={'grid h-10 w-10 shrink-0 place-items-center rounded-xl ' + (selected.cinemaPublicId ? 'bg-sky-500/10 text-sky-300' : 'bg-amber-500/10 text-amber-300')}><Building2 size={19} /></span>
+                <div className="min-w-0 flex-1"><p className="text-xs font-black uppercase tracking-wider text-zinc-500">Phân công rạp</p><p className="mt-1 truncate text-sm font-black text-zinc-100">{cinemaName(selected.cinemaPublicId)}</p><p className="mt-1 text-xs leading-5 text-zinc-500">{selected.cinemaPublicId ? 'Quản lý rạp này có thể xem và xếp ca cho nhân viên.' : 'Hãy chọn rạp để nhân viên xuất hiện đúng trong màn hình của quản lý.'}</p></div>
+              </div>
+              {canUpdate ? <button type="button" onClick={openCinemaAssignment} className="mt-4 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-black text-zinc-200 hover:border-sky-500/30 hover:bg-sky-500/[0.06]">{selected.cinemaPublicId ? 'Đổi hoặc gỡ phân công rạp' : 'Phân công rạp ngay'}</button> : null}
+            </div>
             <div>
               <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-black text-white">Lịch sử nhân sự</h3><span className="text-xs text-zinc-600">{history.length} hành động gần nhất</span></div>
               <div className="relative space-y-3 before:absolute before:bottom-3 before:left-[7px] before:top-3 before:w-px before:bg-white/10">
@@ -423,14 +479,20 @@ export default function AdminStaffPage() {
               <button type="button" onClick={() => setHireStep(1)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-400 hover:bg-white/5 hover:text-white">Đổi</button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2"><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Rạp làm việc *</label><SearchableSelect value={hireForm.cinemaPublicId} onChange={cinemaPublicId => setHireForm(value => ({ ...value, cinemaPublicId }))} options={cinemaOptions} placeholder="Chọn rạp nhân viên sẽ làm việc" ariaLabel="Chọn rạp làm việc" /></div>
               <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Phòng ban *</label><SearchableSelect value={hireForm.departmentId} onChange={departmentId => setHireForm(value => ({ ...value, departmentId, positionId: '' }))} options={departmentOptions} placeholder="Chọn phòng ban" ariaLabel="Chọn phòng ban" /></div>
               <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Vị trí *</label><SearchableSelect value={hireForm.positionId} onChange={positionId => setHireForm(value => ({ ...value, positionId }))} options={positionOptions} placeholder={hireForm.departmentId ? 'Chọn vị trí' : 'Chọn phòng ban trước'} ariaLabel="Chọn vị trí" disabled={!hireForm.departmentId} /></div>
               <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Ngày vào làm *</label><input type="date" max={TODAY} value={hireForm.hireDate} onChange={event => setHireForm(value => ({ ...value, hireDate: event.target.value }))} required className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
               <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lương cơ bản *</label><input type="number" min="1" value={hireForm.baseSalary} onChange={event => setHireForm(value => ({ ...value, baseSalary: event.target.value }))} required placeholder="Ví dụ: 12000000" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
             </div>
-            <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs leading-5 text-zinc-500">Sau khi hoàn tất, nhân viên sẽ xuất hiện trong danh sách hồ sơ và có thể được phân ca, chấm công, xin nghỉ và tính lương.</p>
+            <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs leading-5 text-zinc-500">Sau khi hoàn tất, nhân viên sẽ xuất hiện trong danh sách của đúng quản lý rạp và có thể được phân ca, chấm công, xin nghỉ và tính lương.</p>
           </>
         )}
+      </ActionModal>
+
+      <ActionModal open={cinemaAssignmentOpen} onClose={() => setCinemaAssignmentOpen(false)} title="Phân công rạp làm việc" description={selected ? `Chọn rạp phụ trách cho ${selected.fullName}. Thay đổi có hiệu lực ngay trên màn hình của quản lý rạp.` : ''} onSubmit={submitCinemaAssignment} submitLabel="Lưu phân công" submitting={submitting}>
+        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Rạp làm việc</label><SearchableSelect value={cinemaAssignmentId} onChange={setCinemaAssignmentId} options={cinemaOptions} placeholder="Chọn một rạp trong hệ thống" ariaLabel="Rạp làm việc mới" /></div>
+        <button type="button" onClick={() => setCinemaAssignmentId('')} className={'w-full rounded-xl border p-3 text-left text-sm transition ' + (!cinemaAssignmentId ? 'border-amber-500/30 bg-amber-500/[0.08] text-amber-200' : 'border-white/10 bg-white/[0.025] text-zinc-400 hover:bg-white/5')}><span className="font-black">Chưa phân công rạp</span><span className="mt-1 block text-xs leading-5 text-zinc-500">Dùng khi nhân viên đang chờ điều chuyển. Người này sẽ không xuất hiện trong danh sách của quản lý rạp.</span></button>
       </ActionModal>
 
       <ActionModal open={actionOpen} onClose={() => setActionOpen(false)} title="Ghi nhận hành động nhân sự" description="Mọi hành động yêu cầu ngày hiệu lực và lý do. Hệ thống lưu snapshot trước/sau để audit." onSubmit={submitAction} submitLabel="Ghi nhận hành động" submitting={submitting} tone={['SUSPEND', 'RESIGN'].includes(actionForm.type) ? 'danger' : 'orange'}>

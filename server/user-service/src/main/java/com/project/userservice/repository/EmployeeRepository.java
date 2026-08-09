@@ -39,6 +39,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
               and (:status is null or e.status = :status)
               and (:departmentId is null or e.department.id = :departmentId)
               and (:positionId is null or e.position.id = :positionId)
+              and (:cinemaPublicId is null
+                   or (:cinemaPublicId = '__unassigned__' and e.cinemaPublicId is null)
+                   or e.cinemaPublicId = :cinemaPublicId)
               and (:keyword is null or :keyword = ''
                    or lower(e.employeeCode) like lower(concat('%', :keyword, '%'))
                    or lower(u.fullName) like lower(concat('%', :keyword, '%'))
@@ -50,10 +53,14 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
                                 @Param("status") EmployeeStatus status,
                                 @Param("departmentId") Long departmentId,
                                 @Param("positionId") Long positionId,
+                                @Param("cinemaPublicId") String cinemaPublicId,
                                 Pageable pageable);
 
     default Page<Employee> search(String keyword, EmployeeStatus status, Long departmentId,
-                                  Long positionId, Pageable pageable) {
-        return searchSecure(keyword, PiiCrypto.searchHash(keyword), status, departmentId, positionId, pageable);
+                                  Long positionId, String cinemaPublicId, Pageable pageable) {
+        String normalizedCinema = cinemaPublicId == null || cinemaPublicId.isBlank()
+                ? null : cinemaPublicId.trim().toLowerCase(java.util.Locale.ROOT);
+        return searchSecure(keyword, PiiCrypto.searchHash(keyword), status, departmentId, positionId,
+                normalizedCinema, pageable);
     }
 }

@@ -1,5 +1,6 @@
 package com.project.userservice.service;
 
+import com.project.userservice.client.CinemaDirectoryClient;
 import com.project.userservice.dto.request.EmployeeRequest;
 import com.project.userservice.dto.request.EmploymentActionRequest;
 import com.project.userservice.dto.response.EmployeeResponse;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -35,10 +37,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 @Transactional
 class EmployeeServiceIntegrationTest {
+    private static final String CINEMA_ID = "b1575c2d-9081-11f1-bf65-0ebab02bf6f5";
+
     @Autowired EmployeeService employeeService;
     @Autowired UserRepository userRepository;
     @Autowired DepartmentRepository departmentRepository;
     @Autowired PositionRepository positionRepository;
+    @MockBean CinemaDirectoryClient cinemaDirectoryClient;
 
     private Department operations;
     private Department finance;
@@ -83,7 +88,7 @@ class EmployeeServiceIntegrationTest {
         userRepository.save(customer);
 
         EmployeeRequest request = new EmployeeRequest(9102L, operations.getId(), boxOffice.getId(),
-                LocalDate.of(2026, 1, 1), new BigDecimal("12000000"));
+                LocalDate.of(2026, 1, 1), new BigDecimal("12000000"), CINEMA_ID);
 
         assertThatThrownBy(() -> employeeService.create(request))
                 .isInstanceOf(BusinessException.class)
@@ -107,6 +112,20 @@ class EmployeeServiceIntegrationTest {
         assertThat(history.getContent().getFirst().performedBy()).isEqualTo(88L);
     }
 
+    @Test
+    void createsAndReassignsEmployeeWithValidatedCinemaScope() {
+        EmployeeResponse created = employeeService.create(request(operations.getId(), boxOffice.getId()));
+
+        assertThat(created.cinemaPublicId()).isEqualTo(CINEMA_ID);
+
+        String nextCinema = "b1576780-9081-11f1-bf65-0ebab02bf6f5";
+        EmployeeResponse reassigned = employeeService.assignCinema(created.accountId(), nextCinema.toUpperCase());
+
+        assertThat(reassigned.cinemaPublicId()).isEqualTo(nextCinema);
+        org.mockito.Mockito.verify(cinemaDirectoryClient).requireExisting(CINEMA_ID);
+        org.mockito.Mockito.verify(cinemaDirectoryClient).requireExisting(nextCinema);
+    }
+
     private Department department(String code, String name) {
         Department value = new Department();
         value.setCode(code);
@@ -116,6 +135,6 @@ class EmployeeServiceIntegrationTest {
 
     private EmployeeRequest request(Long departmentId, Long positionId) {
         return new EmployeeRequest(9101L, departmentId, positionId,
-                LocalDate.of(2026, 1, 1), new BigDecimal("12000000"));
+                LocalDate.of(2026, 1, 1), new BigDecimal("12000000"), CINEMA_ID);
     }
 }

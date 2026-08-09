@@ -5,6 +5,7 @@ import {
   downloadEmployeeDocument,
   applyCustomerAccessAction,
   applyEmploymentAction,
+  assignEmployeeCinema,
   applyPayrollAction,
   getEligibleEmployeeAccounts,
   getPayrollSummary,
@@ -31,6 +32,7 @@ describe('userAdminService employee document contracts', () => {
     vi.clearAllMocks();
     apiClient.get.mockResolvedValue({ data: { data: [] } });
     apiClient.post.mockResolvedValue({ data: { data: { id: 7 } } });
+    apiClient.put.mockResolvedValue({ data: { data: { id: 7 } } });
     apiClient.delete.mockResolvedValue({ data: { data: null } });
   });
 
@@ -87,6 +89,16 @@ describe('userAdminService employee document contracts', () => {
       { type: 'SUSPEND', reason: 'Policy review' });
     expect(apiClient.post).toHaveBeenNthCalledWith(3, '/api/users/payrolls/9/actions',
       { type: 'APPROVE', reason: 'Reviewed' });
+  });
+
+  it('updates or clears the employee cinema assignment', async () => {
+    await assignEmployeeCinema(42, 'cinema-public-id');
+    await assignEmployeeCinema(42, null);
+
+    expect(apiClient.put).toHaveBeenNthCalledWith(1, '/api/users/employees/42/cinema-assignment',
+      { cinemaPublicId: 'cinema-public-id' });
+    expect(apiClient.put).toHaveBeenNthCalledWith(2, '/api/users/employees/42/cinema-assignment',
+      { cinemaPublicId: null });
   });
 
   it('loads eligible workforce accounts and exact payroll summary period', async () => {
