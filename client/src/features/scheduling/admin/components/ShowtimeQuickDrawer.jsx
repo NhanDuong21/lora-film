@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, X } from 'lucide-react';
+import { ArrowUpRight, Armchair, X } from 'lucide-react';
 import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
+import ShowtimeSeatControlDrawer from './ShowtimeSeatControlDrawer';
 import {
   formatCinemaDateTime,
   formatCinemaTime,
@@ -45,22 +46,24 @@ export default function ShowtimeQuickDrawer({
   onViewDetail,
   showPricing = true,
   renderActions,
+  seatControlApi,
 }) {
   const closeRef = useRef(null);
   const [pricingState, setPricingState] = useState({ data: null, isLoading: false, hasError: false });
+  const [seatControlOpen, setSeatControlOpen] = useState(false);
 
   useEffect(() => {
     if (!showtime) return undefined;
     const frame = requestAnimationFrame(() => closeRef.current?.focus());
     const onKeyDown = event => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && !seatControlOpen) onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [onClose, showtime]);
+  }, [onClose, seatControlOpen, showtime]);
 
   useEffect(() => {
     if (!showtime || !showPricing) return undefined;
@@ -144,13 +147,21 @@ export default function ShowtimeQuickDrawer({
             </div>}
           </dl>
         </div>
-        {(typeof renderActions === 'function' || typeof onViewDetail === 'function') && <footer className="space-y-3 border-t border-zinc-800 p-5">
+        {(typeof renderActions === 'function' || typeof onViewDetail === 'function' || seatControlApi) && <footer className="space-y-3 border-t border-zinc-800 p-5">
           {typeof renderActions === 'function' && renderActions(showtime, { close: onClose })}
+          {seatControlApi && <button type="button" onClick={() => setSeatControlOpen(true)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 text-sm font-black text-amber-100 hover:bg-amber-500/20">
+            <Armchair className="h-4 w-4" aria-hidden="true" /> Quản lý ghế của suất này
+          </button>}
           {typeof onViewDetail === 'function' && <button type="button" onClick={() => onViewDetail(showtime.showtimePublicId)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950">
             Mở trang chỉnh sửa đầy đủ <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
           </button>}
         </footer>}
       </aside>
+      {seatControlOpen && <ShowtimeSeatControlDrawer
+        showtimePublicId={showtime.showtimePublicId}
+        seatControlApi={seatControlApi}
+        onClose={() => setSeatControlOpen(false)}
+      />}
     </div>
   );
 }

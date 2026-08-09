@@ -24,12 +24,31 @@ const managerCinemaService = {
     { status, reason: reason || null },
   )),
 
+  getSeatControl: async showtimePublicId => unwrap(await apiClient.get(
+    `/api/manager/showtimes/${showtimePublicId}/seat-control`,
+  )),
+
+  blockSeats: async (showtimePublicId, seatPublicIds, reason) => unwrap(await apiClient.post(
+    `/api/manager/showtimes/${showtimePublicId}/blocked-seats`,
+    { seatPublicIds, reason },
+  )),
+
+  releaseBlockedSeats: async (showtimePublicId, seatPublicIds, reason) => unwrap(await apiClient.put(
+    `/api/manager/showtimes/${showtimePublicId}/blocked-seats/release`,
+    { seatPublicIds, reason },
+  )),
+
   getMaintenanceWindows: async cinemaPublicId => unwrap(await apiClient.get(
     `/api/manager/cinemas/${cinemaPublicId}/maintenance-windows`,
   )) || [],
 
   createMaintenanceWindow: async (cinemaPublicId, auditoriumPublicId, payload) => unwrap(await apiClient.post(
     `/api/manager/cinemas/${cinemaPublicId}/auditoriums/${auditoriumPublicId}/maintenance-windows`,
+    payload,
+  )),
+
+  previewMaintenanceImpact: async (cinemaPublicId, auditoriumPublicId, payload) => unwrap(await apiClient.post(
+    `/api/manager/cinemas/${cinemaPublicId}/auditoriums/${auditoriumPublicId}/maintenance-windows/impact-preview`,
     payload,
   )),
 

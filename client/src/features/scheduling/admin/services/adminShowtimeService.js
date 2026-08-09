@@ -63,7 +63,28 @@ const adminShowtimeService = {
       params: { targetStatus },
     });
     return response.data;
-  }
+  },
+
+  getSeatControl: async (showtimePublicId) => {
+    const response = await apiClient.get(`/api/admin/showtimes/${showtimePublicId}/seat-control`);
+    return response.data?.data;
+  },
+
+  blockSeats: async (showtimePublicId, seatPublicIds, reason) => {
+    const response = await apiClient.post(`/api/admin/showtimes/${showtimePublicId}/blocked-seats`, {
+      seatPublicIds,
+      reason,
+    });
+    return response.data?.data;
+  },
+
+  releaseBlockedSeats: async (showtimePublicId, seatPublicIds, reason) => {
+    const response = await apiClient.put(`/api/admin/showtimes/${showtimePublicId}/blocked-seats/release`, {
+      seatPublicIds,
+      reason,
+    });
+    return response.data?.data;
+  },
 };
 
 export default adminShowtimeService;

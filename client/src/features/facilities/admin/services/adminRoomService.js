@@ -61,6 +61,14 @@ const adminRoomService = {
   getMaintenanceWindows: async (auditoriumPublicId) => {
     const response = await apiClient.get(`/api/admin/auditoriums/${auditoriumPublicId}/maintenance-windows`);
     return response.data;
+  },
+
+  previewMaintenanceImpact: async (auditoriumPublicId, windowData) => {
+    const response = await apiClient.post(
+      `/api/admin/auditoriums/${auditoriumPublicId}/maintenance-windows/impact-preview`,
+      windowData,
+    );
+    return response.data;
   }
 };
 

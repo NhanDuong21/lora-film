@@ -209,6 +209,7 @@ export default function ManagerShowtimesPage() {
         cinemaFilterLocked
         quickDrawerProps={{
           showPricing: false,
+          seatControlApi: managerCinemaService,
           renderActions: (showtime, { close }) => (
             <ManagerShowtimeActions
               showtime={showtime}

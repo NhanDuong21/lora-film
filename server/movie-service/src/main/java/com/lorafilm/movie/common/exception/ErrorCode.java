@@ -117,6 +117,9 @@ public enum ErrorCode {
     SHOWTIME_CANCELLATION_REASON_REQUIRED("Cancellation reason is required", 400),
     SHOWTIME_CANNOT_OPEN_AFTER_START("Cannot open showtime for booking after it has started", 400),
     SHOWTIME_CANNOT_FINISH_BEFORE_END("Cannot finish showtime before it ends", 400),
+    SHOWTIME_SEAT_CONTROL_NOT_EDITABLE("Seats cannot be changed for this showtime", 409),
+    SHOWTIME_SEAT_ALREADY_OCCUPIED("One or more seats are already held or sold", 409),
+    SHOWTIME_SEAT_AVAILABILITY_UNAVAILABLE("Seat availability cannot be verified", 503),
     SHOWTIME_BATCH_CANCELLATION_SAFETY_UNAVAILABLE("Batch cancellation safety cannot be verified", 409),
     SHOWTIME_BATCH_REPLACEMENT_REQUIRES_AUTO_DRAFT("Only an all-draft automatic schedule can be replaced", 409),
     
