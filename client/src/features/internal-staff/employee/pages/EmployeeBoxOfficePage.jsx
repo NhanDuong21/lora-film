@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Armchair,
   Banknote,
@@ -21,6 +21,7 @@ import {
   Sparkles,
   Ticket,
   UserRound,
+  X,
   XCircle,
 } from 'lucide-react';
 import TicketQrCode from '@/features/booking/customer/components/TicketQrCode';
@@ -81,6 +82,11 @@ const duration = showtime => Math.max(0, Math.round(
 const auditoriumLabel = value => (value || 'Phòng chiếu')
   .replace(/\bScreen\b/gi, 'Phòng')
   .replace(/\bStandard\b/gi, 'Tiêu chuẩn');
+const moviePoster = movie => movie?.primaryPoster || movie?.posterUrl || movie?.image || '';
+const movieKey = showtime => showtime.movie?.publicId
+  || showtime.movie?.slug
+  || showtime.movie?.title
+  || showtime.showtimePublicId;
 
 const CONCESSION_NAMES = {
   POP_S: 'Bắp rang cỡ nhỏ',
@@ -157,11 +163,32 @@ export default function EmployeeBoxOfficePage() {
   const [customerResults, setCustomerResults] = useState([]);
   const [customerSearching, setCustomerSearching] = useState(false);
   const [customerSearchMessage, setCustomerSearchMessage] = useState('');
+  const saleDialogRef = useRef(null);
+  const showtimeTriggerRef = useRef(null);
 
   const availableDates = useMemo(
     () => dates.filter(item => (schedule[item.key] || []).length > 0),
     [dates, schedule],
   );
+  const currentShowtimes = useMemo(
+    () => schedule[selectedDate] || [],
+    [schedule, selectedDate],
+  );
+  const movieShowtimeGroups = useMemo(() => {
+    const groups = new Map();
+    currentShowtimes.forEach(showtime => {
+      const key = movieKey(showtime);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(showtime);
+    });
+    return Array.from(groups.entries())
+      .map(([key, showtimes]) => ({
+        key,
+        movie: showtimes[0]?.movie || {},
+        showtimes: [...showtimes].sort((left, right) => new Date(left.startTime) - new Date(right.startTime)),
+      }))
+      .sort((left, right) => new Date(left.showtimes[0]?.startTime) - new Date(right.showtimes[0]?.startTime));
+  }, [currentShowtimes]);
 
   const loadSchedule = useCallback(async targetCinema => {
     if (!targetCinema?.slug) return;
@@ -231,7 +258,8 @@ export default function EmployeeBoxOfficePage() {
     return () => { active = false; };
   }, []);
 
-  const loadSeats = useCallback(async showtime => {
+  const loadSeats = useCallback(async (showtime, triggerElement = null) => {
+    if (triggerElement) showtimeTriggerRef.current = triggerElement;
     setSelectedShowtime(showtime);
     setSeatLoading(true);
     setLayout(null);
@@ -260,6 +288,37 @@ export default function EmployeeBoxOfficePage() {
       setSeatLoading(false);
     }
   }, []);
+
+  const closeShowtimeModal = useCallback(() => {
+    if (booking || submitting) return;
+    const trigger = showtimeTriggerRef.current;
+    setSelectedShowtime(null);
+    setLayout(null);
+    setSelectedSeats([]);
+    window.setTimeout(() => trigger?.focus(), 0);
+  }, [booking, submitting]);
+
+  useEffect(() => {
+    if (!selectedShowtime) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => saleDialogRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedShowtime]);
+
+  useEffect(() => {
+    if (!selectedShowtime) return undefined;
+    const handleKeyDown = event => {
+      if (event.key === 'Escape' && !booking && !submitting) closeShowtimeModal();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [booking, closeShowtimeModal, selectedShowtime, submitting]);
 
   const rows = useMemo(() => {
     const grouped = new Map();
@@ -596,7 +655,6 @@ export default function EmployeeBoxOfficePage() {
     return <div className="grid min-h-[60vh] place-items-center text-zinc-400"><LoaderCircle className="h-9 w-9 animate-spin text-amber-500" /></div>;
   }
 
-  const currentShowtimes = schedule[selectedDate] || [];
   const appliedPromotions = promotionPreview?.appliedPromotions || [];
 
   return (
@@ -643,16 +701,48 @@ export default function EmployeeBoxOfficePage() {
                 </button>
               ))}
             </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {currentShowtimes.map(showtime => (
-                <button key={showtime.showtimePublicId} type="button" onClick={() => loadSeats(showtime)} disabled={Boolean(booking)} className={`rounded-2xl border p-4 text-left disabled:opacity-50 ${selectedShowtime?.showtimePublicId === showtime.showtimePublicId ? 'border-amber-500 bg-amber-500/10' : 'border-zinc-700 bg-zinc-950/60 hover:border-zinc-500'}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div><p className="font-black text-zinc-100">{showtime.movie?.title || 'Phim chưa có tên'}</p><p className="mt-1 text-xs text-zinc-500">{showtime.movieVersion?.versionName || showtime.movieVersion?.format || 'Định dạng tiêu chuẩn'}</p></div>
-                    <span className="rounded-lg bg-amber-500 px-2.5 py-1 text-sm font-black text-black">{clock(showtime.startTime)}</span>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-zinc-400"><span className="flex items-center gap-1.5"><Clock3 size={14} /> {duration(showtime)} phút</span><span className="flex items-center gap-1.5"><Film size={14} /> {auditoriumLabel(showtime.auditorium?.name)}</span></div>
-                </button>
-              ))}
+            <div className="mt-5 grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+              {movieShowtimeGroups.map(group => {
+                const title = group.movie?.title || 'Phim chưa có tên';
+                const poster = moviePoster(group.movie);
+                const groupSelected = group.showtimes.some(item => item.showtimePublicId === selectedShowtime?.showtimePublicId);
+                return (
+                  <article key={group.key} className={`flex min-h-72 overflow-hidden rounded-2xl border bg-zinc-950/70 transition-colors ${groupSelected ? 'border-amber-500' : 'border-zinc-800 hover:border-zinc-600'}`}>
+                    <div className="relative w-40 shrink-0 overflow-hidden bg-gradient-to-br from-zinc-800 to-zinc-950 sm:w-44">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-zinc-600"><Film size={28} /><span className="text-[10px] font-black uppercase">Chưa có poster</span></div>
+                      {poster ? <img src={poster} alt={`Poster ${title}`} loading="lazy" decoding="async" onError={event => { event.currentTarget.style.display = 'none'; }} className="relative h-full w-full object-cover" /> : null}
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent" aria-hidden="true" />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="line-clamp-2 text-sm font-black leading-5 text-zinc-100">{title}</h3>
+                        <span className="shrink-0 rounded-full border border-zinc-700 px-2 py-1 text-[10px] font-black text-zinc-400">{group.showtimes.length} suất</span>
+                      </div>
+                      <p className="mt-2 text-[10px] font-black uppercase tracking-wide text-zinc-600">Chọn giờ chiếu</p>
+                      <div className="mt-3 space-y-2">
+                        {group.showtimes.map(showtime => {
+                          const selected = selectedShowtime?.showtimePublicId === showtime.showtimePublicId;
+                          const version = showtime.movieVersion?.versionName || showtime.movieVersion?.format || 'Tiêu chuẩn';
+                          const room = auditoriumLabel(showtime.auditorium?.name);
+                          return (
+                            <button
+                              key={showtime.showtimePublicId}
+                              type="button"
+                              aria-label={`${title}, ${clock(showtime.startTime)}, ${room}, ${version}`}
+                              onClick={event => loadSeats(showtime, event.currentTarget)}
+                              disabled={Boolean(booking)}
+                              className={`w-full rounded-xl border px-3 py-2.5 text-left disabled:opacity-50 ${selected ? 'border-amber-400 bg-amber-500 text-black' : 'border-zinc-800 bg-zinc-900 text-zinc-200 hover:border-amber-500/60'}`}
+                            >
+                              <span className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3"><strong className="text-base">{clock(showtime.startTime)}</strong><span className={`text-right text-xs font-bold leading-4 ${selected ? 'text-black/70' : 'text-zinc-400'}`}>{room}</span></span>
+                              <span className={`mt-1 block text-[11px] leading-4 ${selected ? 'text-black/65' : 'text-zinc-500'}`}>{version} · {duration(showtime)} phút</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </>
         ) : (
@@ -660,17 +750,30 @@ export default function EmployeeBoxOfficePage() {
         )}
       </section>
 
-      {selectedShowtime ? (
-        <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      {selectedShowtime && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4" onMouseDown={event => { if (event.target === event.currentTarget) closeShowtimeModal(); }}>
+          <div ref={saleDialogRef} role="dialog" aria-modal="true" aria-labelledby="counter-sale-dialog-title" tabIndex={-1} className="flex h-[calc(100vh-1rem)] w-full max-w-[1540px] flex-col overflow-hidden rounded-3xl border border-zinc-700 bg-zinc-950 text-white shadow-2xl outline-none sm:h-[calc(100vh-2rem)]">
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900 px-4 py-3 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-500">Bán vé tại quầy</p>
+                <h2 id="counter-sale-dialog-title" className="mt-1 truncate text-lg font-black">{selectedShowtime.movie?.title}</h2>
+                <p className="mt-1 text-xs text-zinc-400">{clock(selectedShowtime.startTime)} · {auditoriumLabel(selectedShowtime.auditorium?.name)} · {selectedShowtime.movieVersion?.versionName || selectedShowtime.movieVersion?.format || 'Tiêu chuẩn'}</p>
+              </div>
+              <button type="button" aria-label="Đóng cửa sổ bán vé" title={booking ? 'Hãy hoàn tất hoặc hủy đơn trước khi đóng' : 'Đóng'} onClick={closeShowtimeModal} disabled={Boolean(booking) || submitting} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"><X size={19} /></button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+              <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className="min-w-0 space-y-8 rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5 md:p-7">
-            <div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div><h2 className="flex items-center gap-2 font-black"><UserRound size={19} className="text-amber-500" /> 2. Khách đang phục vụ</h2><p className="mt-1 text-xs text-zinc-500">Ghi nhận thông tin để tra cứu đơn và hỗ trợ khách sau bán.</p></div>
-                <div className="flex rounded-xl bg-zinc-950 p-1 text-xs font-black">
+            <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+                <div><h2 className="flex items-center gap-2 font-black"><UserRound size={19} className="text-amber-500" /> Thông tin khách <span className="text-xs font-bold text-zinc-500">(tùy chọn)</span></h2><p className="mt-1 text-xs text-zinc-500">{counterCustomer.fullName || (customerMode === 'MEMBER' ? 'Chưa chọn thành viên' : 'Khách lẻ')} · Mở khi cần tra cứu thành viên hoặc lưu thông tin hỗ trợ.</p></div>
+                <span className="shrink-0 rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-black text-zinc-400 group-open:text-amber-300">Chi tiết</span>
+              </summary>
+              <div className="mt-4 border-t border-zinc-800 pt-4">
+                <div className="ml-auto flex w-fit rounded-xl bg-zinc-950 p-1 text-xs font-black">
                   <button type="button" disabled={Boolean(booking)} onClick={() => changeCustomerMode('GUEST')} className={`rounded-lg px-4 py-2 ${customerMode === 'GUEST' ? 'bg-amber-500 text-black' : 'text-zinc-400'}`}>Khách lẻ</button>
                   <button type="button" disabled={Boolean(booking)} onClick={() => changeCustomerMode('MEMBER')} className={`rounded-lg px-4 py-2 ${customerMode === 'MEMBER' ? 'bg-amber-500 text-black' : 'text-zinc-400'}`}>Thành viên</button>
                 </div>
-              </div>
 
               {customerMode === 'GUEST' ? <div className="mt-5 grid gap-3 md:grid-cols-3">
                 <label className="text-xs font-black text-zinc-400">Tên khách (không bắt buộc)<input disabled={Boolean(booking)} value={counterCustomer.fullName} onChange={event => setCounterCustomer(value => ({ ...value, fullName: event.target.value }))} placeholder="Ví dụ: Anh Minh" maxLength={150} className="mt-2 h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-sm font-normal text-white outline-none focus:border-amber-500" /></label>
@@ -684,17 +787,24 @@ export default function EmployeeBoxOfficePage() {
                   {customerResults.length ? <div className="grid gap-2 md:grid-cols-2">{customerResults.map(item => <button key={item.accountId} type="button" onClick={() => setCounterCustomer(item)} className="rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-left hover:border-amber-500"><p className="text-sm font-black text-zinc-100">{item.fullName}</p><p className="mt-1 text-xs text-zinc-500">{item.customerCode} · {item.phoneNumber || item.email}</p></button>)}</div> : null}
                 </>}
               </div>}
-            </div>
+              </div>
+            </details>
 
             <div>
-              <div className="flex items-center justify-between"><div><h2 className="flex items-center gap-2 font-black"><Armchair size={19} className="text-amber-500" /> 3. Chọn ghế</h2><p className="mt-1 text-xs text-zinc-500">Ghế mờ là ghế đã giữ, đã bán hoặc đang khóa vận hành.</p></div><span className="rounded-full bg-zinc-800 px-3 py-1 text-xs font-black text-zinc-300">Tối đa {layout?.maxSeatsPerBooking || 8} ghế</span></div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><h2 className="flex items-center gap-2 font-black"><Armchair size={19} className="text-amber-500" /> 2. Chọn ghế</h2><p className="mt-1 text-xs text-zinc-500">Ghế mờ là ghế đã giữ, đã bán hoặc đang khóa vận hành.</p></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={closeShowtimeModal} disabled={Boolean(booking) || submitting} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-black text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-40">Chọn suất khác</button>
+                  <span className="rounded-full bg-zinc-800 px-3 py-1.5 text-xs font-black text-zinc-300">Tối đa {layout?.maxSeatsPerBooking || 8} ghế</span>
+                </div>
+              </div>
               {seatLoading ? <div className="grid min-h-72 place-items-center"><LoaderCircle className="animate-spin text-amber-500" /></div> : layout ? <><div className="mx-auto mt-8 min-w-0 max-w-4xl"><div className="mx-auto mb-9 h-2 w-3/4 rounded-full bg-gradient-to-r from-transparent via-zinc-300 to-transparent shadow-[0_12px_30px_rgba(255,255,255,0.18)]" /><p className="-mt-5 mb-8 text-center text-[10px] font-black uppercase tracking-[0.28em] text-zinc-600">Màn hình</p><div className="max-w-full space-y-2 overflow-x-auto pb-3">{rows.map(([label, units]) => <div key={label} className="flex min-w-max items-center justify-center gap-2"><span className="w-7 text-center text-xs font-black text-zinc-500">{label}</span>{units.map(unit => { const selected = unit.seats.every(seat => selectedIds.has(seat.publicId)); return <button key={unit.key} type="button" disabled={!unit.sellable || !unit.pairValid || Boolean(booking)} onClick={() => toggleSeat(unit)} title={`${unit.seatCode} · ${money(unit.price)}`} className={`h-9 rounded-lg border px-2 text-[10px] font-black transition ${unit.isCouple ? 'min-w-20' : 'w-10'} ${selected ? 'border-amber-300 bg-amber-500 text-black' : seatTone(unit)}`}>{unit.seatCode}</button>; })}</div>)}</div></div><div className="mt-7 flex flex-wrap justify-center gap-4 text-xs text-zinc-400"><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-zinc-800" /> Ghế thường</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-amber-500/50" /> VIP</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-pink-500/50" /> Ghế đôi</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-amber-500" /> Đang chọn</span><span className="flex items-center gap-2"><i className="h-3 w-3 rounded bg-zinc-900" /> Không khả dụng</span></div></> : null}
             </div>
 
             {booking && !payment ? (
               <div className="border-t border-zinc-800 pt-7">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div><h2 className="flex items-center gap-2 font-black"><Popcorn size={19} className="text-amber-500" /> 4. Chọn bắp nước</h2><p className="mt-1 text-xs text-zinc-500">Có thể bỏ qua nếu khách chỉ mua vé. Giá và ưu đãi cập nhật ngay sau mỗi thay đổi.</p></div>
+                  <div><h2 className="flex items-center gap-2 font-black"><Popcorn size={19} className="text-amber-500" /> 3. Chọn bắp nước</h2><p className="mt-1 text-xs text-zinc-500">Có thể bỏ qua nếu khách chỉ mua vé. Giá và ưu đãi cập nhật ngay sau mỗi thay đổi.</p></div>
                   <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs font-black text-zinc-300">{foodItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)} sản phẩm</span>
                 </div>
                 {concessionsLoading ? <div className="grid min-h-48 place-items-center"><LoaderCircle className="animate-spin text-amber-500" /></div> : concessions.length ? (
@@ -750,7 +860,7 @@ export default function EmployeeBoxOfficePage() {
             ) : !paid ? (
               <div className="space-y-4">
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 text-xs text-emerald-300"><p className="font-black">Đã chốt số tiền · {booking.bookingCode}</p><p className="mt-1 text-emerald-200/60">Chỉ giao vé sau khi hệ thống ghi nhận đủ tiền.</p></div>
-                <label className="block text-xs font-black text-zinc-300">5. Tiền khách đưa<input aria-label="Tiền khách đưa tại quầy" type="number" min={amountDue} step="1000" value={receivedAmount} onChange={event => setReceivedAmount(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-lg font-black outline-none focus:border-amber-500" /></label>
+                <label className="block text-xs font-black text-zinc-300">4. Tiền khách đưa<input aria-label="Tiền khách đưa tại quầy" type="number" min={amountDue} step="1000" value={receivedAmount} onChange={event => setReceivedAmount(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 text-lg font-black outline-none focus:border-amber-500" /></label>
                 <div className="flex items-center justify-between rounded-xl bg-zinc-950 p-4"><span className="text-sm text-zinc-400">Tiền thừa</span><strong className="text-lg text-emerald-400">{money(change)}</strong></div>
                 <button type="button" onClick={() => setConfirmCollect(true)} disabled={submitting || Number(receivedAmount) < amountDue} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 font-black text-black disabled:opacity-40"><Banknote size={19} /> Xác nhận đã nhận đủ tiền</button>
                 <button type="button" onClick={() => setConfirmCancel(true)} disabled={submitting} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-rose-500/40 font-black text-rose-300 disabled:opacity-40"><XCircle size={18} /> Hủy đơn chưa thu</button>
@@ -794,9 +904,10 @@ export default function EmployeeBoxOfficePage() {
               </div>
             )}
           </aside>
+              </div>
+            </div>
+          </div>
         </div>
-      ) : (
-        <section className="grid min-h-64 place-items-center rounded-3xl border border-dashed border-zinc-800 text-center text-zinc-500"><div><Ticket className="mx-auto mb-4 h-12 w-12" /><p className="font-black text-zinc-300">Chọn một suất chiếu để bắt đầu bán vé</p><p className="mt-2 text-sm">Sơ đồ ghế và giá bán thực tế sẽ hiển thị ở đây.</p></div></section>
       )}
 
       <PaymentNoticeModal open={Boolean(notice)} {...notice} onClose={() => setNotice(null)} />

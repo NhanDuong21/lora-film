@@ -59,7 +59,7 @@ const cinema = {
 };
 const showtime = {
   showtimePublicId: 'showtime-1',
-  movie: { title: 'Người Nhện: Khởi Đầu Mới' },
+  movie: { publicId: 'movie-1', title: 'Người Nhện: Khởi Đầu Mới', posterUrl: '/posters/nguoi-nhen.jpg' },
   movieVersion: { versionName: '2D - Phụ đề' },
   auditorium: { name: 'Phòng 01' },
   startTime: '2099-08-10T02:00:00Z',
@@ -157,8 +157,32 @@ describe('EmployeeBoxOfficePage', () => {
 
     render(<EmployeeBoxOfficePage />);
 
-    expect(await screen.findByText('1 suất')).toBeInTheDocument();
+    expect((await screen.findAllByText('1 suất')).length).toBeGreaterThan(0);
     expect(screen.queryByText('0 suất')).not.toBeInTheDocument();
+  });
+
+  it('gom giờ chiếu theo poster lớn và mở sơ đồ ghế trong cửa sổ bán vé', async () => {
+    const laterShowtime = {
+      ...showtime,
+      showtimePublicId: 'showtime-2',
+      startTime: '2099-08-10T05:00:00Z',
+      endTime: '2099-08-10T07:30:00Z',
+      auditorium: { name: 'Phòng 02' },
+    };
+    getShowtimes.mockResolvedValue({ data: [showtime, laterShowtime] });
+
+    render(<EmployeeBoxOfficePage />);
+
+    expect(await screen.findByRole('img', { name: 'Poster Người Nhện: Khởi Đầu Mới' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Người Nhện: Khởi Đầu Mới/ })).toHaveLength(2);
+    expect(screen.getByText('Phòng 02')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Người Nhện: Khởi Đầu Mới/ })[0]);
+    expect(await screen.findByRole('dialog', { name: 'Người Nhện: Khởi Đầu Mới' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'A1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '2. Chọn ghế' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn suất khác' }));
+    expect(screen.queryByRole('dialog', { name: 'Người Nhện: Khởi Đầu Mới' })).not.toBeInTheDocument();
   });
 
   it('giữ ghế, tự áp dụng ưu đãi, chọn bắp nước rồi thu tiền và phát hành vé', async () => {
