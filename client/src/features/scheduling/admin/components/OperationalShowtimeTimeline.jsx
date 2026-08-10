@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   ListFilter,
@@ -17,10 +16,7 @@ import {
   getServiceDateKey,
   UNKNOWN_SERVICE_DATE_KEY,
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
-import {
-  getMoviePalette,
-  TIMELINE_ZOOM_MODES,
-} from '@/features/scheduling/admin/utils/autoSchedulePreviewViewModel';
+import { TIMELINE_ZOOM_MODES } from '@/features/scheduling/admin/utils/autoSchedulePreviewViewModel';
 import { getOperationalShowtimeStatus } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
 const FILTERS = [
@@ -30,6 +26,22 @@ const FILTERS = [
   { value: 'EXPIRED_DRAFT', label: 'Đã quá giờ' },
   { value: 'CLOSED', label: 'Đã đóng bán' },
 ];
+
+const OPERATIONAL_PALETTES = Object.freeze({
+  OPEN_FOR_BOOKING: { solid: '#153b38', border: '#34d399', text: '#ecfdf5', cleaning: '#1f524d', index: 'open' },
+  DRAFT: { solid: '#172554', border: '#60a5fa', text: '#eff6ff', cleaning: '#1e3a6d', index: 'draft' },
+  EXPIRED_DRAFT: { solid: '#3f1d24', border: '#fb7185', text: '#fff1f2', cleaning: '#592832', index: 'expired' },
+  CLOSED: { solid: '#292524', border: '#a8a29e', text: '#fafaf9', cleaning: '#44403c', index: 'closed' },
+  CANCELLED: { solid: '#3f1d24', border: '#fb7185', text: '#fff1f2', cleaning: '#592832', index: 'cancelled' },
+  FINISHED: { solid: '#27272a', border: '#71717a', text: '#e4e4e7', cleaning: '#3f3f46', index: 'finished' },
+});
+
+const getOperationalPalette = status => OPERATIONAL_PALETTES[status] || OPERATIONAL_PALETTES.CLOSED;
+
+const getDateChoicePresentation = dateKey => {
+  const [weekday = '', fullDate = dateKey] = formatServiceDateKey(dateKey, { weekday: true }).split(', ');
+  return { weekday, date: fullDate.slice(0, 5) };
+};
 
 const addMinutes = (instant, minutes) => {
   const date = new Date(instant);
@@ -48,7 +60,6 @@ const buildViewModel = showtime => {
     endTime: showtime.endTime,
     occupancyEndTime,
   }, serviceDate, timezone);
-  const movieKey = showtime.movie?.publicId || showtime.movie?.slug || showtime.movie?.title || id;
   const cinemaKey = showtime.cinema?.publicId || showtime.cinema?.slug || showtime.cinema?.name || 'unknown-cinema';
   const roomKey = showtime.auditorium?.publicId || showtime.auditorium?.name || 'unknown-room';
 
@@ -71,13 +82,21 @@ const buildViewModel = showtime => {
     operationalStatus: getOperationalShowtimeStatus(showtime),
     selected: true,
     timelineEligible: serviceDate !== UNKNOWN_SERVICE_DATE_KEY && offsets.valid,
-    palette: getMoviePalette(movieKey),
+    palette: getOperationalPalette(getOperationalShowtimeStatus(showtime)),
     cleaningMinutes,
     occupancyEndTime,
   };
 };
 
-export default function OperationalShowtimeTimeline({ showtimes = [], requestedDate, onViewDetail, readOnly = false, quickDrawerProps = {} }) {
+export default function OperationalShowtimeTimeline({
+  showtimes = [],
+  requestedDate,
+  dateOptions = [],
+  onRequestedDateChange,
+  onViewDetail,
+  readOnly = false,
+  quickDrawerProps = {},
+}) {
   const [dateChoice, setDateChoice] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [zoomMode, setZoomMode] = useState(TIMELINE_ZOOM_MODES.FIT);
@@ -87,6 +106,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
     .map(item => item.serviceDate)
     .filter(value => value !== UNKNOWN_SERVICE_DATE_KEY)))
     .sort(compareServiceDateKeys), [models]);
+  const selectableDates = dateOptions.length > 0 ? dateOptions : serviceDates;
   const activeDate = serviceDates.includes(dateChoice)
     ? dateChoice
     : serviceDates.includes(requestedDate) ? requestedDate : serviceDates[0];
@@ -116,7 +136,7 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Lịch vận hành</p>
           <h2 id="operations-timeline-title" className="mt-1 text-xl font-black text-white">Phòng chiếu × thời gian</h2>
-          <p className="mt-1 text-sm text-zinc-500">Quan sát độ phủ phòng, thời lượng phim và khoảng dọn phòng trong một lượt xem.</p>
+          <p className="mt-1 text-sm text-zinc-500">Màu thể hiện trạng thái; mỗi khối ghi đủ giờ chiếu và phần sọc là thời gian dọn phòng.</p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-bold">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />{openCount} mở bán</span>
@@ -127,11 +147,25 @@ export default function OperationalShowtimeTimeline({ showtimes = [], requestedD
 
       <div className="flex flex-col gap-3 border-y border-zinc-800 py-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Chọn ngày trên lịch vận hành">
-          {serviceDates.map(value => (
-            <button key={value} type="button" aria-pressed={activeDate === value} onClick={() => setDateChoice(value)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${activeDate === value ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 text-zinc-400 hover:border-zinc-700'}`}>
-              <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{formatServiceDateKey(value)}
-            </button>
-          ))}
+          {selectableDates.map(value => {
+            const presentation = getDateChoicePresentation(value);
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-label={`Xem lịch ngày ${formatServiceDateKey(value)}`}
+                aria-pressed={activeDate === value}
+                onClick={() => {
+                  setDateChoice(value);
+                  if (value !== requestedDate) onRequestedDateChange?.(value);
+                }}
+                className={`min-w-[72px] rounded-xl border px-3 py-2 text-left transition-colors ${activeDate === value ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 bg-zinc-950/30 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'}`}
+              >
+                <span className="block text-[10px] font-bold">{presentation.weekday}</span>
+                <span className="mt-0.5 block text-xs font-black">{presentation.date}</span>
+              </button>
+            );
+          })}
         </div>
         <div className="flex flex-wrap gap-1 rounded-xl border border-zinc-800 bg-zinc-950/60 p-1" role="group" aria-label="Lọc trạng thái trên lịch">
           <ListFilter className="mx-2 h-4 w-4 self-center text-zinc-500" aria-hidden="true" />

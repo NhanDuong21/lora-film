@@ -16,15 +16,15 @@ const showtime = (timezone = 'Asia/Ho_Chi_Minh') => ({
 
 const defaultProps = {
   showtimes: [showtime()],
-  cinemas: [],
+  cinemas: [{ publicId: 'cinema-1', slug: 'lora-cinema', name: 'Lora Cinema' }],
   movies: [],
   isLoading: false,
   isOptionsLoading: false,
-  cinemaSlug: '',
+  cinemaSlug: 'lora-cinema',
   setCinemaSlug: vi.fn(),
   movieSlug: '',
   setMovieSlug: vi.fn(),
-  date: '',
+  date: '2026-07-25',
   setDate: vi.fn(),
   status: '',
   setStatus: vi.fn(),
@@ -106,7 +106,7 @@ describe('ShowtimeTable cinema timezone', () => {
     const onClearFilters = vi.fn();
     const { rerender } = render(<ShowtimeTable {...defaultProps} onClearFilters={onClearFilters} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại bộ lọc' }));
     expect(onClearFilters).toHaveBeenLastCalledWith({ preserveBatch: false });
 
     rerender(
@@ -137,11 +137,38 @@ describe('ShowtimeTable cinema timezone', () => {
     expect(screen.getByRole('region', { name: 'Danh sách suất chiếu' })).toHaveTextContent('không thể mở bán');
   });
 
-  it('warns when the room diagram only represents the current data page', () => {
+  it('blocks the room diagram when the selected operational day is still paginated', () => {
     render(<ShowtimeTable {...defaultProps} totalElements={196} totalPages={2} />);
 
-    expect(screen.getByRole('note')).toHaveTextContent('Sơ đồ đang hiển thị 1/196 suất');
-    expect(screen.getByRole('navigation', { name: 'Phân trang sơ đồ lịch chiếu' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Sơ đồ vận hành chưa sẵn sàng' })).toHaveTextContent('chỉ có 1/196 suất');
+    expect(screen.queryByRole('region', { name: 'Phòng chiếu × thời gian' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Chuyển sang danh sách' }));
+    expect(screen.getByRole('region', { name: 'Danh sách suất chiếu' })).toBeInTheDocument();
+  });
+
+  it('requires one cinema and one date before opening the operational diagram', () => {
+    render(<ShowtimeTable {...defaultProps} cinemaSlug="" date="" />);
+
+    expect(screen.getByRole('region', { name: 'Phạm vi vận hành' })).toHaveTextContent('Chưa chọn rạp');
+    expect(screen.getByRole('status', { name: 'Sơ đồ vận hành chưa sẵn sàng' })).toHaveTextContent('Cần chọn rạp và ngày vận hành');
+    expect(screen.queryByRole('region', { name: 'Phòng chiếu × thời gian' })).not.toBeInTheDocument();
+  });
+
+  it('updates the server-backed date filter from the quick picker inside the diagram', () => {
+    const setDate = vi.fn();
+    const setCurrentPage = vi.fn();
+    render(
+      <ShowtimeTable
+        {...defaultProps}
+        defaultDate="2026-07-25"
+        setDate={setDate}
+        setCurrentPage={setCurrentPage}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem lịch ngày 26/07/2026' }));
+    expect(setDate).toHaveBeenCalledWith('2026-07-26');
+    expect(setCurrentPage).toHaveBeenCalledWith(0);
   });
 
   it('localizes statuses and routes replacement through the safe original-schedule flow', () => {

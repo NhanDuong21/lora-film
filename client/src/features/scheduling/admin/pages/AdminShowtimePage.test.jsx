@@ -101,12 +101,12 @@ describe('AdminShowtimePage URL-backed batch context', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/admin/showtimes'));
-    expect(screen.getByTestId('location').textContent).not.toContain('?');
+    expect(screen.getByTestId('location').textContent).toMatch(/^\/admin\/showtimes\?date=\d{4}-\d{2}-\d{2}$/);
     expect(value.setBatchId).toHaveBeenLastCalledWith('');
     expect(value.setSource).toHaveBeenLastCalledWith('');
     expect(value.setStatus).toHaveBeenLastCalledWith('');
     expect(value.setCinemaSlug).toHaveBeenLastCalledWith('');
-    expect(value.setDate).toHaveBeenLastCalledWith('');
+    expect(value.setDate).toHaveBeenLastCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
   });
 
   it('uses server preflight and result counts without window.confirm or batch deletion', async () => {

@@ -1,4 +1,5 @@
 export const FALLBACK_PREVIEW_TIMEZONE = 'UTC';
+export const DEFAULT_OPERATIONAL_TIMEZONE = 'Asia/Ho_Chi_Minh';
 export const INVALID_PREVIEW_DATE_KEY = '__INVALID_PREVIEW_DATE__';
 export const UNKNOWN_SERVICE_DATE_KEY = '__UNKNOWN_SERVICE_DATE__';
 export const UNKNOWN_SERVICE_DATE_LABEL = 'Không xác định ngày vận hành';
@@ -61,6 +62,24 @@ export const compareServiceDateKeys = (first, second) => {
   if (first === UNKNOWN_SERVICE_DATE_KEY) return second === UNKNOWN_SERVICE_DATE_KEY ? 0 : 1;
   if (second === UNKNOWN_SERVICE_DATE_KEY) return -1;
   return first.localeCompare(second);
+};
+
+export const addServiceDateDays = (dateKey, amount) => {
+  const parts = parseCalendarDateKey(dateKey);
+  const dayAmount = Number(amount);
+  if (!parts || !Number.isInteger(dayAmount)) return null;
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + dayAmount, 12));
+  return [
+    shifted.getUTCFullYear(),
+    String(shifted.getUTCMonth() + 1).padStart(2, '0'),
+    String(shifted.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+};
+
+export const buildOperationalDateRange = (startDateKey, count = 7) => {
+  const safeCount = Math.max(0, Math.min(Number(count) || 0, 14));
+  if (!parseCalendarDateKey(startDateKey) || safeCount === 0) return [];
+  return Array.from({ length: safeCount }, (_, index) => addServiceDateDays(startDateKey, index));
 };
 
 export const formatServiceDateKey = (dateKey, { weekday = false } = {}) => {
@@ -153,6 +172,14 @@ const getCinemaParts = (instant, timezone, includeTime) => {
 
 export const getCinemaDateKey = (instant, timezone) => (
   getCinemaParts(instant, timezone, false)?.dateKey || null
+);
+
+export const getOperationalTodayDateKey = (
+  timezone = DEFAULT_OPERATIONAL_TIMEZONE,
+  now = new Date(),
+) => (
+  getCinemaDateKey(now, timezone)
+  || getCinemaDateKey(now, DEFAULT_OPERATIONAL_TIMEZONE)
 );
 
 export const getCinemaTimeParts = (instant, timezone) => (

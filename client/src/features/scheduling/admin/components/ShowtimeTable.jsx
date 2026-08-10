@@ -1,4 +1,4 @@
-import { AlertTriangle, Calendar, CalendarDays, CheckCircle2, ChevronRight, ClipboardCheck, Film, Filter, LayoutList, Loader2, PanelsTopLeft, Play, Plus, RefreshCw, RotateCcw, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, CheckCircle2, ChevronRight, ClipboardCheck, Film, Filter, LayoutList, Loader2, MapPin, PanelsTopLeft, Play, Plus, RefreshCw, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SkeletonTable from '@/components/common/SkeletonTable';
@@ -19,6 +19,11 @@ import {
   getShowtimeStatusPresentation,
   isExpiredDraftShowtime,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import {
+  addServiceDateDays,
+  buildOperationalDateRange,
+  formatServiceDateKey,
+} from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const statusStyles = {
   DRAFT: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
@@ -110,6 +115,7 @@ export default function ShowtimeTable({
   headerDescription = 'Xem lịch, biết ngay việc nào cần xử lý và mở bán suất chiếu khi mọi thông tin đã sẵn sàng.',
   showCreateActions = true,
   cinemaFilterLocked = false,
+  defaultDate = '',
   quickDrawerProps = {},
 }) {
   const [viewMode, setViewMode] = useState(batchId ? 'DAY' : 'TIMELINE');
@@ -128,6 +134,24 @@ export default function ShowtimeTable({
 
   const statusOptions = ['DRAFT', 'OPEN_FOR_BOOKING', 'CLOSED', 'CANCELLED', 'FINISHED']
     .map(value => ({ value, label: getShowtimeStatusPresentation(value).label }));
+
+  const selectedCinemaLabel = cinemaOptions.find(option => option.value === cinemaSlug)?.label
+    || (cinemaFilterLocked ? 'Rạp được phân công' : 'Chưa chọn rạp');
+  const selectedDateLabel = date ? formatServiceDateKey(date) : 'Chưa chọn ngày';
+  const selectedStatusLabel = status
+    ? getShowtimeStatusPresentation(status).label
+    : 'Tất cả tình trạng';
+  const timelineScopeReady = Boolean(batchId) || (Boolean(cinemaSlug) && Boolean(date));
+  const timelineDataComplete = Boolean(batchId) || Number(totalElements) <= showtimes.length;
+  const timelineReady = timelineScopeReady && timelineDataComplete;
+  const defaultRangeEnd = defaultDate ? addServiceDateDays(defaultDate, 6) : null;
+  const selectedDateInsideDefaultRange = Boolean(
+    date && defaultDate && defaultRangeEnd && date >= defaultDate && date <= defaultRangeEnd,
+  );
+  const operationalDateRangeStart = selectedDateInsideDefaultRange ? defaultDate : (date || defaultDate);
+  const operationalDateOptions = batchId
+    ? []
+    : buildOperationalDateRange(operationalDateRangeStart, 7);
 
   const activeCount = showtimes.filter(item => item.status === 'OPEN_FOR_BOOKING').length;
   const expiredDraftCount = showtimes.filter(item => isExpiredDraftShowtime(item)).length;
@@ -190,7 +214,7 @@ export default function ShowtimeTable({
   const clearFilters = () => {
     if (!cinemaFilterLocked) setCinemaSlug('');
     setMovieSlug('');
-    setDate('');
+    setDate(defaultDate);
     setStatus('');
     setCurrentPage(0);
     onClearFilters?.({ preserveBatch: Boolean(batchId) });
@@ -242,6 +266,28 @@ export default function ShowtimeTable({
           <button type="button" aria-pressed={viewMode === 'TIMELINE'} onClick={() => setViewMode('TIMELINE')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'TIMELINE' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><PanelsTopLeft className="h-4 w-4" />Sơ đồ</button>
         </div>
       </section>}
+
+      {!batchId && (
+        <section className={`flex flex-col gap-3 rounded-2xl border px-4 py-3 lg:flex-row lg:items-center lg:justify-between ${timelineReady ? 'border-zinc-800 bg-zinc-900/45' : timelineScopeReady ? 'border-red-500/25 bg-red-500/[0.06]' : 'border-amber-500/25 bg-amber-500/[0.07]'}`} aria-label="Phạm vi vận hành">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Đang xem lịch vận hành</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-bold text-zinc-200">
+              <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-brand-orange" />{selectedCinemaLabel}</span>
+              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-brand-orange" />{selectedDateLabel}</span>
+              <span>{selectedStatusLabel}</span>
+            </div>
+          </div>
+          <div className="text-sm lg:max-w-md lg:text-right">
+            {timelineReady ? (
+              <><p className="font-black text-zinc-200">{formatCount(totalElements)} suất theo bộ lọc</p><p className="mt-1 text-xs text-zinc-500">Có thể đổi ngày nhanh ngay trong sơ đồ bên dưới.</p></>
+            ) : timelineScopeReady ? (
+              <><p className="font-black text-red-300">Sơ đồ tạm khóa vì dữ liệu chưa đủ trang</p><p className="mt-1 text-xs text-red-100/65">Chuyển sang danh sách hoặc thu hẹp bộ lọc; hệ thống sẽ không dựng sơ đồ bị thiếu suất.</p></>
+            ) : (
+              <><p className="font-black text-amber-300">Chọn đủ rạp và ngày để mở sơ đồ</p><p className="mt-1 text-xs text-amber-100/65">Danh sách vẫn dùng được khi cần tra cứu trên phạm vi rộng.</p></>
+            )}
+          </div>
+        </section>
+      )}
 
       {batchId && (
         <section className="space-y-5 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 md:p-5" aria-labelledby="batch-readiness-title">
@@ -351,11 +397,11 @@ export default function ShowtimeTable({
               <Filter className="h-4 w-4 text-brand-orange" aria-hidden="true" />
               Tìm lịch chiếu
             </h2>
-            <p className="mt-1 text-xs text-zinc-500">Lọc theo rạp, phim, ngày hoặc tình trạng mở bán.</p>
+            <p className="mt-1 text-xs text-zinc-500">Sơ đồ vận hành cần đúng một rạp và một ngày; danh sách có thể tra cứu trên phạm vi rộng hơn.</p>
           </div>
           <button type="button" onClick={clearFilters} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-300 hover:bg-zinc-800">
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            Xóa bộ lọc
+            {batchId ? 'Xóa bộ lọc' : 'Đặt lại bộ lọc'}
           </button>
         </div>
         <div className="grid gap-3 lg:grid-cols-4">
@@ -373,10 +419,13 @@ export default function ShowtimeTable({
             Phim
             <SearchableSelect options={movieOptions} value={movieSlug} onChange={value => { setMovieSlug(value); setCurrentPage(0); }} placeholder="Tất cả phim" disabled={isOptionsLoading} />
           </label>
-          <label className="space-y-1.5 text-xs font-bold text-zinc-400">
-            Ngày chiếu
-            <input type="date" value={date} onChange={event => { setDate(event.target.value); setCurrentPage(0); }} className="min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-brand-orange" />
-          </label>
+          <div className="space-y-1.5 text-xs font-bold text-zinc-400">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="showtime-operational-date">Ngày vận hành</label>
+              {defaultDate && date !== defaultDate && <button type="button" onClick={() => { setDate(defaultDate); setCurrentPage(0); }} className="text-[11px] font-black text-brand-orange hover:text-amber-300">Hôm nay</button>}
+            </div>
+            <input id="showtime-operational-date" type="date" value={date} onChange={event => { setDate(event.target.value); setCurrentPage(0); }} className="min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-brand-orange" />
+          </div>
           <label className="space-y-1.5 text-xs font-bold text-zinc-400">
             Tình trạng
             <SearchableSelect options={statusOptions} value={status} onChange={value => { setStatus(value); setCurrentPage(0); }} placeholder="Tất cả tình trạng" />
@@ -399,9 +448,22 @@ export default function ShowtimeTable({
         </>
       )}
 
-      {!isLoading && operationalShowtimes.length > 0 && viewMode === 'TIMELINE' && (
+      {!isLoading && viewMode === 'TIMELINE' && !timelineReady && (
+        <section className={`rounded-2xl border p-8 text-center ${timelineScopeReady ? 'border-red-500/25 bg-red-500/[0.06]' : 'border-amber-500/25 bg-amber-500/[0.06]'}`} role="status" aria-label="Sơ đồ vận hành chưa sẵn sàng">
+          <AlertTriangle className={`mx-auto h-9 w-9 ${timelineScopeReady ? 'text-red-300' : 'text-amber-300'}`} aria-hidden="true" />
+          <h2 className="mt-3 font-black text-zinc-100">{timelineScopeReady ? 'Không hiển thị sơ đồ chưa đầy đủ' : 'Cần chọn rạp và ngày vận hành'}</h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-zinc-400">
+            {timelineScopeReady
+              ? `Trang hiện tại chỉ có ${formatCount(showtimes.length)}/${formatCount(totalElements)} suất. Hãy thu hẹp bộ lọc hoặc dùng danh sách để tiếp tục tra cứu.`
+              : 'Hãy chọn một rạp và một ngày trong bộ lọc phía trên. Điều này giúp số suất, phòng và khung giờ trên sơ đồ luôn khớp dữ liệu vận hành.'}
+          </p>
+          {timelineScopeReady && <button type="button" onClick={() => setViewMode('LIST')} className="mt-4 rounded-xl border border-red-400/30 px-4 py-2 text-xs font-black text-red-100">Chuyển sang danh sách</button>}
+        </section>
+      )}
+
+      {!isLoading && operationalShowtimes.length > 0 && viewMode === 'TIMELINE' && timelineReady && (
         <>
-          {Number(totalElements) > showtimes.length && (
+          {batchId && Number(totalElements) > showtimes.length && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-100" role="note">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <p>
@@ -410,7 +472,14 @@ export default function ShowtimeTable({
               </p>
             </div>
           )}
-          <OperationalShowtimeTimeline showtimes={operationalShowtimes} requestedDate={date} onViewDetail={onViewDetail} quickDrawerProps={quickDrawerProps} />
+          <OperationalShowtimeTimeline
+            showtimes={operationalShowtimes}
+            requestedDate={date}
+            dateOptions={operationalDateOptions}
+            onRequestedDateChange={batchId ? undefined : value => { setDate(value); setCurrentPage(0); }}
+            onViewDetail={onViewDetail}
+            quickDrawerProps={quickDrawerProps}
+          />
           <PaginationBar currentPage={currentPage} pageSize={pageSize} setCurrentPage={setCurrentPage} setPageSize={setPageSize} totalElements={totalElements} totalPages={totalPages} label="Phân trang sơ đồ lịch chiếu" />
         </>
       )}

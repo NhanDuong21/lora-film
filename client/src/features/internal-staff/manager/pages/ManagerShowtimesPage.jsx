@@ -6,13 +6,8 @@ import {
   getShowtimeTransitionActionPresentation,
   isExpiredDraftShowtime,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import { getOperationalTodayDateKey } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 import managerCinemaService from '../services/managerCinemaService';
-
-const todayInputValue = () => {
-  const now = new Date();
-  const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
-  return local.toISOString().slice(0, 10);
-};
 
 const EMPTY_RESPONSE = {
   data: [],
@@ -86,8 +81,9 @@ const ManagerShowtimeActions = ({ showtime, now, actionId, onTransition, onCompl
 
 export default function ManagerShowtimesPage() {
   const { selectedCinema, selectedCinemaId, cinemaState } = useOutletContext();
+  const defaultOperationalDate = getOperationalTodayDateKey(selectedCinema?.timezone);
   const [movieSlug, setMovieSlug] = useState('');
-  const [date, setDate] = useState(todayInputValue());
+  const [date, setDate] = useState(defaultOperationalDate);
   const [status, setStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
@@ -214,6 +210,7 @@ export default function ManagerShowtimesPage() {
         headerDescription={`Theo dõi và điều phối lịch chiếu tại ${selectedCinema.name}. Dữ liệu được giới hạn theo rạp do quản trị viên phân công.`}
         showCreateActions={false}
         cinemaFilterLocked
+        defaultDate={defaultOperationalDate}
         quickDrawerProps={{
           showPricing: false,
           seatControlApi: managerCinemaService,

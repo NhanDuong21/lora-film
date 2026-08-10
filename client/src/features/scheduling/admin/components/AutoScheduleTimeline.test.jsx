@@ -139,6 +139,7 @@ describe('AutoScheduleTimeline Milestone C', () => {
     render(<TimelineHarness candidates={candidates} onOpenDetails={onOpenDetails} />);
 
     const block = screen.getByRole('button', { name: /Open me.*Mở chi tiết/i });
+    expect(block).toHaveTextContent('10:00–11:00');
     block.focus();
     fireEvent.click(block);
     expect(onOpenDetails).toHaveBeenCalledWith(candidates[0], block);

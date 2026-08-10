@@ -150,19 +150,19 @@ const AutoScheduleTimeline = ({
         aria-label="Chú giải sơ đồ phòng chiếu"
       >
         <li className="flex items-center gap-2">
-          <span className="h-4 w-8 rounded border border-orange-300 bg-orange-500" aria-hidden="true" />
-          Thời lượng phim
+          <span className={`h-4 w-8 rounded border ${isOperations ? 'border-emerald-400 bg-emerald-950' : 'border-orange-300 bg-orange-500'}`} aria-hidden="true" />
+          {isOperations ? 'Thời gian chiếu' : 'Thời lượng phim'}
         </li>
         <li className="flex items-center gap-2">
           <span
-            className="h-4 w-8 rounded border border-orange-300 bg-orange-500/40"
+            className={`h-4 w-8 rounded border ${isOperations ? 'border-zinc-500 bg-zinc-800' : 'border-orange-300 bg-orange-500/40'}`}
             style={{ backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.7) 0 2px, transparent 2px 6px)' }}
             aria-hidden="true"
           />
-          Thời gian dọn phòng
+          {isOperations ? 'Dọn phòng' : 'Thời gian dọn phòng'}
         </li>
         <li className="flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-emerald-300 text-emerald-300" aria-hidden="true"><Star className="h-3 w-3" /></span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-emerald-300 text-emerald-300" aria-hidden="true">{isOperations ? <CheckCircle2 className="h-3 w-3" /> : <Star className="h-3 w-3" />}</span>
           {isOperations ? 'Đang mở bán' : 'Suất đã chọn'}
         </li>
         <li className="flex items-center gap-2">
@@ -237,12 +237,12 @@ const AutoScheduleTimeline = ({
                             type={canOpenDetails ? 'button' : undefined}
                             role={canOpenDetails ? undefined : 'img'}
                             onClick={canOpenDetails ? event => onOpenDetails(candidate, event.currentTarget) : undefined}
-                            aria-label={`${candidate.diagnostic ? 'Suất đang kiểm tra. ' : ''}${candidate.movieTitle}, ${candidate.startTimeDisplay}, ${state.marker}${canOpenDetails ? '. Mở chi tiết' : ''}`}
+                            aria-label={`${candidate.diagnostic ? 'Suất đang kiểm tra. ' : ''}${candidate.movieTitle}, ${candidate.startTimeDisplay} đến ${candidate.endTimeDisplay}, ${state.marker}${canOpenDetails ? '. Mở chi tiết' : ''}`}
                             data-testid={`timeline-candidate-${candidate.id}`}
                             data-palette-index={candidate.palette.index}
                             data-state-marker={state.marker}
                             data-diagnostic={candidate.diagnostic ? 'true' : 'false'}
-                            className={`absolute top-1 h-[52px] min-w-11 overflow-hidden rounded-lg border-2 text-left shadow-lg ${canOpenDetails ? 'transition-transform hover:z-20 hover:scale-[1.02] focus-visible:z-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white' : ''} ${state.className}`}
+                            className={`absolute top-1 h-[52px] min-w-11 overflow-hidden rounded-lg border text-left shadow-md ${canOpenDetails ? 'transition-transform hover:z-20 hover:scale-[1.02] focus-visible:z-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white' : ''} ${state.className}`}
                             style={{ left: `${left}%`, width: `${width}%`, borderColor: candidate.diagnostic ? '#ffffff' : candidate.palette.border }}
                           >
                             <span className="absolute inset-y-0 left-0" data-testid={`runtime-segment-${candidate.id}`} style={{ width: `${runtimeWidth}%`, backgroundColor: candidate.palette.solid }} />
@@ -263,7 +263,7 @@ const AutoScheduleTimeline = ({
                                 <StateIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
                                 <span className="truncate">{candidate.movieTitle}</span>
                               </span>
-                              <span className="truncate text-[9px] font-bold opacity-80">{candidate.startTimeDisplay} · {state.marker}</span>
+                              <span className="truncate text-[9px] font-bold opacity-85">{candidate.startTimeDisplay}–{candidate.endTimeDisplay} · {state.marker}</span>
                             </span>
                           </CandidateElement>
                         );

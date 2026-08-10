@@ -4,6 +4,8 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  addServiceDateDays,
+  buildOperationalDateRange,
   buildDynamicTimelineWindow,
   compareServiceDateKeys,
   FALLBACK_PREVIEW_TIMEZONE,
@@ -16,6 +18,7 @@ import {
   getCinemaDateKey,
   getCinemaMinuteOffset,
   getCinemaTimeParts,
+  getOperationalTodayDateKey,
   getServiceDateKey,
   resolveCinemaTimezone,
   UNKNOWN_SERVICE_DATE_KEY,
@@ -28,6 +31,23 @@ describe('auto schedule preview cinema time', () => {
     expect(formatCinemaTime(instant, 'Asia/Ho_Chi_Minh')).toBe('01:30');
     expect(getCinemaDateKey(instant, 'UTC')).toBe('2026-07-24');
     expect(formatCinemaTime(instant, 'America/New_York')).toBe('14:30');
+  });
+
+  it('derives the operational today from the cinema timezone instead of the browser timezone', () => {
+    const nearMidnight = new Date('2026-08-10T18:00:00Z');
+    expect(getOperationalTodayDateKey('Asia/Ho_Chi_Minh', nearMidnight)).toBe('2026-08-11');
+    expect(getOperationalTodayDateKey('UTC', nearMidnight)).toBe('2026-08-10');
+  });
+
+  it('builds plain-calendar quick date ranges across month boundaries', () => {
+    expect(addServiceDateDays('2026-08-31', 1)).toBe('2026-09-01');
+    expect(buildOperationalDateRange('2026-08-30', 4)).toEqual([
+      '2026-08-30',
+      '2026-08-31',
+      '2026-09-01',
+      '2026-09-02',
+    ]);
+    expect(buildOperationalDateRange('invalid', 7)).toEqual([]);
   });
 
   it('handles the New York DST spring-forward transition', () => {

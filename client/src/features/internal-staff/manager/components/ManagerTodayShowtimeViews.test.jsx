@@ -46,7 +46,7 @@ describe('ManagerTodayShowtimeViews', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Sơ đồ' }));
     expect(screen.getByRole('region', { name: 'Phòng chiếu × thời gian' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /Venganza, 13:00, Đang mở bán/ })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Venganza, 13:00 đến 14:30, Đang mở bán/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Mở chi tiết/ })).not.toBeInTheDocument();
   });
 

@@ -10,6 +10,7 @@ import {
   readBatchReadinessCache,
   writeBatchReadinessCache,
 } from '@/features/scheduling/admin/utils/batchReadinessCache';
+import { getOperationalTodayDateKey } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 
 const canConfirmBatchTransition = summary => Boolean(
   summary?.actionAllowed
@@ -22,6 +23,8 @@ const AdminShowtimePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const defaultOperationalDate = getOperationalTodayDateKey();
+  const initialBatchId = searchParams.get('batchId') || '';
 
   const {
     showtimes,
@@ -52,8 +55,8 @@ const AdminShowtimePage = () => {
     triggerToast,
     initialFilters: {
       cinemaSlug: searchParams.get('cinemaSlug') || '',
-      date: searchParams.get('date') || '',
-      batchId: searchParams.get('batchId') || '',
+      date: searchParams.get('date') || (initialBatchId ? '' : defaultOperationalDate),
+      batchId: initialBatchId,
       source: searchParams.get('source') || '',
       status: searchParams.get('status') || '',
     },
@@ -70,12 +73,13 @@ const AdminShowtimePage = () => {
   const batchReadinessGenerationRef = useRef(0);
 
   useEffect(() => {
+    const urlBatchId = searchParams.get('batchId') || '';
     setCinemaSlug(searchParams.get('cinemaSlug') || '');
-    setDate(searchParams.get('date') || '');
-    setBatchId(searchParams.get('batchId') || '');
+    setDate(searchParams.get('date') || (urlBatchId ? '' : defaultOperationalDate));
+    setBatchId(urlBatchId);
     setSource(searchParams.get('source') || '');
     setStatus(searchParams.get('status') || '');
-  }, [searchParams, setBatchId, setCinemaSlug, setDate, setSource, setStatus]);
+  }, [defaultOperationalDate, searchParams, setBatchId, setCinemaSlug, setDate, setSource, setStatus]);
 
   useEffect(() => {
     if (!locationStateProcessed.current && location.state) {
@@ -113,9 +117,11 @@ const AdminShowtimePage = () => {
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('batchId');
     nextSearchParams.delete('source');
+    nextSearchParams.set('date', defaultOperationalDate);
     setSearchParams(nextSearchParams, { replace: true });
     setBatchId('');
     setSource('');
+    setDate(defaultOperationalDate);
     setBatchReadiness(null);
     setBatchReadinessError('');
     setBatchActionDialog(null);
@@ -130,7 +136,8 @@ const AdminShowtimePage = () => {
     }
     nextSearchParams.delete('status');
     nextSearchParams.delete('cinemaSlug');
-    nextSearchParams.delete('date');
+    if (preserveBatch) nextSearchParams.delete('date');
+    else nextSearchParams.set('date', defaultOperationalDate);
     setSearchParams(nextSearchParams, { replace: true });
     if (!preserveBatch) {
       setBatchId('');
@@ -141,7 +148,7 @@ const AdminShowtimePage = () => {
     }
     setStatus('');
     setCinemaSlug('');
-    setDate('');
+    setDate(preserveBatch ? '' : defaultOperationalDate);
   };
 
   const checkBatchReadiness = useCallback(async ({ showDialog = false, quiet = false, preserveCached = false } = {}) => {
@@ -251,6 +258,7 @@ const AdminShowtimePage = () => {
       onOpenBatch={handleOpenBatchDialog}
       isBatchActionLoading={isBatchActionLoading}
       quickDrawerProps={{ seatControlApi: adminShowtimeService }}
+      defaultDate={batchId ? '' : defaultOperationalDate}
     />
     {batchActionDialog && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
