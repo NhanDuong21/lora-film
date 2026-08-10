@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import managerCinemaService from '../services/managerCinemaService';
+import { clearShowtimeQueryCache } from '@/features/scheduling/admin/utils/showtimeQueryCache';
 import ManagerShowtimesPage from './ManagerShowtimesPage';
 
 vi.mock('../services/managerCinemaService', () => ({
@@ -56,6 +57,7 @@ const renderPage = () => render(
 describe('ManagerShowtimesPage shared scheduling workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearShowtimeQueryCache();
     managerCinemaService.getShowtimes.mockResolvedValue(response);
   });
 
@@ -76,6 +78,16 @@ describe('ManagerShowtimesPage shared scheduling workspace', () => {
       page: 0,
       size: 100,
     }));
+  });
+
+  it('reuses the recent cinema-date response when the manager returns to the screen', async () => {
+    const firstView = renderPage();
+    expect(await screen.findByRole('region', { name: 'Phòng chiếu × thời gian' })).toBeInTheDocument();
+    firstView.unmount();
+
+    renderPage();
+    expect(await screen.findByRole('region', { name: 'Phòng chiếu × thời gian' })).toBeInTheDocument();
+    expect(managerCinemaService.getShowtimes).toHaveBeenCalledTimes(1);
   });
 
   it('keeps manager transitions in the shared quick drawer without exposing admin pricing/detail actions', async () => {

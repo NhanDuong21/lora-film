@@ -28,7 +28,7 @@ const FILTERS = [
 ];
 
 const OPERATIONAL_PALETTES = Object.freeze({
-  OPEN_FOR_BOOKING: { solid: '#153b38', border: '#34d399', text: '#ecfdf5', cleaning: '#1f524d', index: 'open' },
+  OPEN_FOR_BOOKING: { solid: '#3f3f46', border: '#a1a1aa', text: '#fafafa', cleaning: '#52525b', index: 'open' },
   DRAFT: { solid: '#172554', border: '#60a5fa', text: '#eff6ff', cleaning: '#1e3a6d', index: 'draft' },
   EXPIRED_DRAFT: { solid: '#3f1d24', border: '#fb7185', text: '#fff1f2', cleaning: '#592832', index: 'expired' },
   CLOSED: { solid: '#292524', border: '#a8a29e', text: '#fafaf9', cleaning: '#44403c', index: 'closed' },
@@ -139,7 +139,7 @@ export default function OperationalShowtimeTimeline({
           <p className="mt-1 text-sm text-zinc-500">Màu thể hiện trạng thái; mỗi khối ghi đủ giờ chiếu và phần sọc là thời gian dọn phòng.</p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-bold">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />{openCount} mở bán</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-600 bg-zinc-800/70 px-3 py-1.5 text-zinc-200"><CheckCircle2 className="h-3.5 w-3.5" />{openCount} mở bán</span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-blue-300"><Clock3 className="h-3.5 w-3.5" />{draftCount} đang soạn</span>
           {expiredDraftCount > 0 && <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-red-300"><AlertTriangle className="h-3.5 w-3.5" />{expiredDraftCount} đã quá giờ</span>}
         </div>

@@ -84,6 +84,6 @@ describe('OperationalShowtimeTimeline pricing status', () => {
       },
     ]} />);
 
-    expect(screen.getByTestId('operational-palettes')).toHaveTextContent('#153b38|#153b38');
+    expect(screen.getByTestId('operational-palettes')).toHaveTextContent('#3f3f46|#3f3f46');
   });
 });

@@ -7,6 +7,14 @@ import {
   isExpiredDraftShowtime,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
 import { getOperationalTodayDateKey } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
+import {
+  buildShowtimeQueryCacheKey,
+  invalidateShowtimeQueryCache,
+  readShowtimeQueryCache,
+  runShowtimeQueryOnce,
+  writeShowtimeQueryCache,
+} from '@/features/scheduling/admin/utils/showtimeQueryCache';
+import { getUserAccountId } from '@/utils/authStorage';
 import managerCinemaService from '../services/managerCinemaService';
 
 const EMPTY_RESPONSE = {
@@ -90,7 +98,7 @@ export default function ManagerShowtimesPage() {
   const [movies, setMovies] = useState([]);
   const [actionId, setActionId] = useState('');
   const [now, setNow] = useState(() => Date.now());
-  const [state, setState] = useState({ loading: true, error: '', response: EMPTY_RESPONSE });
+  const [state, setState] = useState({ loading: true, refreshing: false, error: '', response: EMPTY_RESPONSE });
   const requestGenerationRef = useRef(0);
 
   useEffect(() => {
@@ -98,27 +106,47 @@ export default function ManagerShowtimesPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const fetchShowtimes = useCallback(async () => {
+  const fetchShowtimes = useCallback(async ({ force = false } = {}) => {
     if (!selectedCinemaId) return;
     const requestGeneration = ++requestGenerationRef.current;
-    setState(current => ({ ...current, loading: true, error: '' }));
+    const params = {
+      cinemaPublicId: selectedCinemaId,
+      movieSlug: movieSlug || undefined,
+      date: date || undefined,
+      status: status || undefined,
+      page: currentPage,
+      size: pageSize,
+    };
+    const accountScope = getUserAccountId() || 'current-session';
+    const cacheScope = `manager-showtimes:${accountScope}:`;
+    const cacheKey = buildShowtimeQueryCacheKey(cacheScope, params);
+    const cached = readShowtimeQueryCache(cacheKey);
+
+    if (cached && !force && cached.isFresh) {
+      setState({ loading: false, refreshing: false, error: '', response: cached.response });
+      if (!movieSlug) setMovies(collectMovies(cached.response?.data || []));
+      return cached.response;
+    }
+
+    setState(current => cached
+      ? { loading: false, refreshing: true, error: '', response: cached.response }
+      : { ...current, loading: true, refreshing: false, error: '' });
     try {
-      const response = await managerCinemaService.getShowtimes({
-        cinemaPublicId: selectedCinemaId,
-        movieSlug: movieSlug || undefined,
-        date: date || undefined,
-        status: status || undefined,
-        page: currentPage,
-        size: pageSize,
-      });
+      const response = await runShowtimeQueryOnce(
+        cacheKey,
+        () => managerCinemaService.getShowtimes(params),
+      );
+      writeShowtimeQueryCache(cacheKey, response || EMPTY_RESPONSE);
       if (requestGeneration !== requestGenerationRef.current) return;
-      setState({ loading: false, error: '', response: response || EMPTY_RESPONSE });
+      setState({ loading: false, refreshing: false, error: '', response: response || EMPTY_RESPONSE });
       if (!movieSlug) setMovies(collectMovies(response?.data || []));
+      return response;
     } catch (error) {
       if (requestGeneration !== requestGenerationRef.current) return;
       setState(current => ({
         ...current,
         loading: false,
+        refreshing: false,
         error: error?.message || 'Không thể tải lịch chiếu.',
       }));
     }
@@ -142,6 +170,7 @@ export default function ManagerShowtimesPage() {
         targetStatus,
         reason,
       );
+      invalidateShowtimeQueryCache(`manager-showtimes:${getUserAccountId() || 'current-session'}:`);
       setState(current => {
         const remainsInFilter = !status || updated.status === status;
         const currentData = current.response.data || [];
@@ -189,6 +218,7 @@ export default function ManagerShowtimesPage() {
         cinemas={cinemas}
         movies={movies}
         isLoading={state.loading}
+        isRefreshing={state.refreshing}
         isOptionsLoading={state.loading}
         cinemaSlug={cinemaSlug}
         setCinemaSlug={() => {}}

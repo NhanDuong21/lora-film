@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
 import adminShowtimeService from '../services/adminShowtimeService';
+import { clearShowtimeQueryCache } from '../utils/showtimeQueryCache';
 import useAdminShowtimes from './useAdminShowtimes';
 
 vi.mock('@/features/facilities/admin/services/adminCinemaService');
@@ -12,6 +13,7 @@ vi.mock('../services/adminShowtimeService');
 describe('useAdminShowtimes source and batch filters', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearShowtimeQueryCache();
     adminCinemaService.getCinemas.mockResolvedValue({ success: true, data: { data: [] } });
     adminMovieService.getMovies.mockResolvedValue({ success: true, data: { data: [] } });
     adminShowtimeService.getShowtimes.mockResolvedValue({
@@ -111,5 +113,32 @@ describe('useAdminShowtimes source and batch filters', () => {
       await firstRequest;
     });
     expect(result.current.showtimes).toEqual([{ publicId: 'filtered-showtime' }]);
+  });
+
+  it('reuses a recent response instead of requesting the same date again', async () => {
+    adminShowtimeService.getShowtimes
+      .mockResolvedValueOnce({
+        success: true,
+        data: { data: [{ publicId: 'day-a' }], totalPages: 1, totalElements: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { data: [{ publicId: 'day-b' }], totalPages: 1, totalElements: 1 },
+      });
+    const { result } = renderHook(() => useAdminShowtimes({
+      initialFilters: { cinemaSlug: 'cinema-1', date: '2026-08-11' },
+    }));
+
+    await act(async () => result.current.fetchShowtimes());
+    act(() => result.current.setDate('2026-08-12'));
+    await waitFor(() => expect(result.current.date).toBe('2026-08-12'));
+    await act(async () => result.current.fetchShowtimes());
+    act(() => result.current.setDate('2026-08-11'));
+    await waitFor(() => expect(result.current.date).toBe('2026-08-11'));
+    await act(async () => result.current.fetchShowtimes());
+
+    expect(adminShowtimeService.getShowtimes).toHaveBeenCalledTimes(2);
+    expect(result.current.showtimes).toEqual([{ publicId: 'day-a' }]);
+    expect(result.current.isRefreshing).toBe(false);
   });
 });

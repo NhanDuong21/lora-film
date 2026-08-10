@@ -28,7 +28,7 @@ import {
 const statusStyles = {
   DRAFT: 'border-zinc-700 bg-zinc-800/70 text-zinc-300',
   EXPIRED_DRAFT: 'border-red-500/30 bg-red-500/10 text-red-300',
-  OPEN_FOR_BOOKING: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+  OPEN_FOR_BOOKING: 'border-zinc-600 bg-zinc-800/70 text-zinc-200',
   CLOSED: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
   CANCELLED: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
   FINISHED: 'border-zinc-700 bg-zinc-800/70 text-zinc-500',
@@ -84,6 +84,7 @@ export default function ShowtimeTable({
   cinemas = [],
   movies = [],
   isLoading,
+  isRefreshing = false,
   isOptionsLoading,
   cinemaSlug,
   setCinemaSlug,
@@ -254,10 +255,11 @@ export default function ShowtimeTable({
 
       {!batchId && <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3" aria-label="Tóm tắt lịch chiếu">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm">
-          <span><strong className="text-emerald-300">{formatCount(activeCount)}</strong> <span className="text-zinc-500">mở bán</span></span>
+          <span><strong className="text-zinc-200">{formatCount(activeCount)}</strong> <span className="text-zinc-500">mở bán</span></span>
           <span><strong className="text-blue-300">{formatCount(draftCount)}</strong> <span className="text-zinc-500">đang soạn</span></span>
           {expiredDraftCount > 0 && <span><strong className="text-red-300">{formatCount(expiredDraftCount)}</strong> <span className="text-zinc-500">đã quá giờ</span></span>}
           <span className="text-xs text-zinc-600">{formatCount(totalElements)} suất theo bộ lọc</span>
+          {isRefreshing && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400" role="status"><RefreshCw className="h-3.5 w-3.5 animate-spin" />Đang đồng bộ dữ liệu mới</span>}
         </div>
         <div className="flex max-w-full flex-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="group" aria-label="Chế độ xem lịch chiếu">
           <button type="button" aria-pressed={viewMode === 'DAY'} onClick={() => setViewMode('DAY')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'DAY' ? 'bg-zinc-700 text-white' : 'text-zinc-500'}`}><CalendarDays className="h-4 w-4" />Theo ngày</button>

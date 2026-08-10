@@ -2,12 +2,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import adminShowtimeService from '@/features/scheduling/admin/services/adminShowtimeService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminMovieService from '@/features/catalog/admin/services/adminMovieService';
+import { getUserAccountId } from '@/utils/authStorage';
+import {
+  buildShowtimeQueryCacheKey,
+  readShowtimeQueryCache,
+  runShowtimeQueryOnce,
+  writeShowtimeQueryCache,
+} from '@/features/scheduling/admin/utils/showtimeQueryCache';
 
 export default function useAdminShowtimes({ triggerToast, initialFilters } = {}) {
   const [showtimes, setShowtimes] = useState([]);
   const [cinemas, setCinemas] = useState([]);
   const [movies, setMovies] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOptionsLoading, setIsOptionsLoading] = useState(false);
   
   // Filters
@@ -48,30 +56,57 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
     fetchOptions();
   }, []);
 
-  const fetchShowtimes = useCallback(async () => {
+  const fetchShowtimes = useCallback(async ({ force = false } = {}) => {
     const requestGeneration = ++requestGenerationRef.current;
-    setIsLoading(true);
-    try {
-      const params = {
-        page: currentPage,
-        size: pageSize
-      };
-      if (cinemaSlug?.trim()) params.cinemaSlug = cinemaSlug.trim();
-      if (movieSlug?.trim()) params.movieSlug = movieSlug.trim();
-      if (date?.trim()) params.date = date.trim();
-      if (status?.trim() && status !== 'ALL') params.status = status.trim();
-      if (format?.trim()) params.format = format.trim();
-      if (audioLanguage?.trim()) params.audioLanguage = audioLanguage.trim();
-      if (subtitleLanguage?.trim()) params.subtitleLanguage = subtitleLanguage.trim();
-      if (batchId?.trim()) params.batchId = batchId.trim();
-      if (source?.trim() && source !== 'ALL') params.source = source.trim();
+    const params = {
+      page: currentPage,
+      size: pageSize
+    };
+    if (cinemaSlug?.trim()) params.cinemaSlug = cinemaSlug.trim();
+    if (movieSlug?.trim()) params.movieSlug = movieSlug.trim();
+    if (date?.trim()) params.date = date.trim();
+    if (status?.trim() && status !== 'ALL') params.status = status.trim();
+    if (format?.trim()) params.format = format.trim();
+    if (audioLanguage?.trim()) params.audioLanguage = audioLanguage.trim();
+    if (subtitleLanguage?.trim()) params.subtitleLanguage = subtitleLanguage.trim();
+    if (batchId?.trim()) params.batchId = batchId.trim();
+    if (source?.trim() && source !== 'ALL') params.source = source.trim();
 
-      const res = await adminShowtimeService.getShowtimes(params);
+    const accountScope = getUserAccountId() || 'current-session';
+    const cacheKey = buildShowtimeQueryCacheKey(`admin-showtimes:${accountScope}`, params);
+    const cached = readShowtimeQueryCache(cacheKey);
+    const applyResponse = response => {
+      setShowtimes(response?.data || []);
+      setTotalPages(response?.totalPages || 0);
+      setTotalElements(response?.totalElements || 0);
+    };
+
+    if (cached && !force && cached.isFresh) {
+      applyResponse(cached.response);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return cached.response;
+    }
+
+    if (cached) {
+      applyResponse(cached.response);
+      setIsLoading(false);
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+      setIsRefreshing(false);
+    }
+
+    try {
+      const res = await runShowtimeQueryOnce(
+        cacheKey,
+        () => adminShowtimeService.getShowtimes(params),
+      );
+      if (res?.success && res?.data) writeShowtimeQueryCache(cacheKey, res.data);
       if (requestGeneration === requestGenerationRef.current && res?.success && res?.data) {
-        setShowtimes(res.data.data || []);
-        setTotalPages(res.data.totalPages || 0);
-        setTotalElements(res.data.totalElements || 0);
+        applyResponse(res.data);
       }
+      return res?.data || null;
     // eslint-disable-next-line no-unused-vars
     } catch (err) {
       if (requestGeneration === requestGenerationRef.current) {
@@ -80,6 +115,7 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
     } finally {
       if (requestGeneration === requestGenerationRef.current) {
         setIsLoading(false);
+        setIsRefreshing(false);
       }
     }
   }, [
@@ -95,6 +131,7 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
     cinemas,
     movies,
     isLoading,
+    isRefreshing,
     isOptionsLoading,
     cinemaSlug, setCinemaSlug,
     movieSlug, setMovieSlug,

@@ -150,7 +150,7 @@ const AutoScheduleTimeline = ({
         aria-label="Chú giải sơ đồ phòng chiếu"
       >
         <li className="flex items-center gap-2">
-          <span className={`h-4 w-8 rounded border ${isOperations ? 'border-emerald-400 bg-emerald-950' : 'border-orange-300 bg-orange-500'}`} aria-hidden="true" />
+          <span className={`h-4 w-8 rounded border ${isOperations ? 'border-zinc-400 bg-zinc-700' : 'border-orange-300 bg-orange-500'}`} aria-hidden="true" />
           {isOperations ? 'Thời gian chiếu' : 'Thời lượng phim'}
         </li>
         <li className="flex items-center gap-2">
@@ -162,7 +162,7 @@ const AutoScheduleTimeline = ({
           {isOperations ? 'Dọn phòng' : 'Thời gian dọn phòng'}
         </li>
         <li className="flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-emerald-300 text-emerald-300" aria-hidden="true">{isOperations ? <CheckCircle2 className="h-3 w-3" /> : <Star className="h-3 w-3" />}</span>
+          <span className={`inline-flex h-5 w-5 items-center justify-center rounded border ${isOperations ? 'border-zinc-400 text-zinc-300' : 'border-emerald-300 text-emerald-300'}`} aria-hidden="true">{isOperations ? <CheckCircle2 className="h-3 w-3" /> : <Star className="h-3 w-3" />}</span>
           {isOperations ? 'Đang mở bán' : 'Suất đã chọn'}
         </li>
         <li className="flex items-center gap-2">

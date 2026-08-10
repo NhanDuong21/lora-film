@@ -31,6 +31,7 @@ const AdminShowtimePage = () => {
     cinemas,
     movies,
     isLoading,
+    isRefreshing,
     isOptionsLoading,
     cinemaSlug,
     setCinemaSlug,
@@ -210,7 +211,7 @@ const AdminShowtimePage = () => {
         setBatchActionDialog({ phase: 'result', summary: res.data });
         if (res.data.actionAllowed) {
           triggerToast?.(`Đã mở bán ${res.data.affectedCount} suất chiếu`, 'success');
-          await fetchShowtimes();
+          await fetchShowtimes({ force: true });
           await checkBatchReadiness({ quiet: true });
         }
       }
@@ -228,6 +229,7 @@ const AdminShowtimePage = () => {
       cinemas={cinemas}
       movies={movies}
       isLoading={isLoading}
+      isRefreshing={isRefreshing}
       isOptionsLoading={isOptionsLoading}
       cinemaSlug={cinemaSlug}
       setCinemaSlug={setCinemaSlug}
