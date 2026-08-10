@@ -1,0 +1,731 @@
+package com.lorafilm.booking.reservation.service.impl;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lorafilm.booking.audit.entity.BookingAuditLog;
+import com.lorafilm.booking.audit.entity.BookingOperationLog;
+import com.lorafilm.booking.audit.repository.BookingAuditLogRepository;
+import com.lorafilm.booking.audit.repository.BookingOperationLogRepository;
+import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.common.exception.SeatReservationException;
+import com.lorafilm.booking.config.ReservationProperties;
+import com.lorafilm.booking.config.BookingPolicyProperties;
+import com.lorafilm.booking.infrastructure.client.MovieServiceClient;
+import com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse;
+import com.lorafilm.booking.infrastructure.entity.BookingOutboxEvent;
+import com.lorafilm.booking.infrastructure.enums.OutboxStatus;
+import com.lorafilm.booking.infrastructure.repository.BookingOutboxEventRepository;
+import com.lorafilm.booking.reservation.dto.ConvertReservationRequest;
+import com.lorafilm.booking.reservation.dto.HoldSeatRequest;
+import com.lorafilm.booking.reservation.dto.HoldSeatResponse;
+import com.lorafilm.booking.reservation.dto.ReleaseSeatRequest;
+import com.lorafilm.booking.reservation.dto.SeatAvailabilityResponse;
+import com.lorafilm.booking.reservation.dto.PublicSeatAvailabilityResponse;
+import com.lorafilm.booking.config.BookingPolicyProperties;
+import com.lorafilm.booking.reservation.dto.SeatReservationResponse;
+import com.lorafilm.booking.reservation.entity.SeatReservation;
+import com.lorafilm.booking.reservation.enums.ReservationSource;
+import com.lorafilm.booking.reservation.enums.SeatReservationStatus;
+import com.lorafilm.booking.reservation.mapper.SeatReservationMapper;
+import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
+import com.lorafilm.booking.reservation.service.RedisLockService;
+import com.lorafilm.booking.reservation.service.SeatReservationService;
+import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+public class SeatReservationServiceImpl implements SeatReservationService {
+
+    private static final Logger log = LoggerFactory.getLogger(SeatReservationServiceImpl.class);
+
+    private final SeatReservationRepository seatReservationRepository;
+    private final BookingAuditLogRepository auditLogRepository;
+    private final BookingOperationLogRepository operationLogRepository;
+    private final BookingOutboxEventRepository outboxEventRepository;
+    private final BookingRepository bookingRepository;
+    private final RedisLockService redisLockService;
+    private final ReservationProperties reservationProperties;
+    private final BookingPolicyProperties bookingPolicyProperties;
+    private final SeatReservationMapper seatReservationMapper;
+    private final ObjectMapper objectMapper;
+    private final com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient;
+    private final com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
+    private SeatAvailabilityEventService seatAvailabilityEventService;
+
+    @Autowired
+    public SeatReservationServiceImpl(
+            SeatReservationRepository seatReservationRepository,
+            BookingAuditLogRepository auditLogRepository,
+            BookingOperationLogRepository operationLogRepository,
+            BookingOutboxEventRepository outboxEventRepository,
+            BookingRepository bookingRepository,
+            RedisLockService redisLockService,
+            ReservationProperties reservationProperties,
+            BookingPolicyProperties bookingPolicyProperties,
+            SeatReservationMapper seatReservationMapper,
+            ObjectMapper objectMapper,
+            com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient,
+            com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager) {
+        this.seatReservationRepository = seatReservationRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.operationLogRepository = operationLogRepository;
+        this.outboxEventRepository = outboxEventRepository;
+        this.bookingRepository = bookingRepository;
+        this.redisLockService = redisLockService;
+        this.reservationProperties = reservationProperties;
+        this.bookingPolicyProperties = bookingPolicyProperties;
+        this.seatReservationMapper = seatReservationMapper;
+        this.objectMapper = objectMapper;
+        this.movieServiceClient = movieServiceClient;
+        this.bookingMetricsManager = bookingMetricsManager;
+    }
+
+    @Autowired(required = false)
+    public void setSeatAvailabilityEventService(SeatAvailabilityEventService service) {
+        this.seatAvailabilityEventService = service;
+    }
+
+    /** Backwards-compatible constructor for legacy reservation tests/callers. */
+    public SeatReservationServiceImpl(
+            SeatReservationRepository seatReservationRepository,
+            BookingAuditLogRepository auditLogRepository,
+            BookingOperationLogRepository operationLogRepository,
+            BookingOutboxEventRepository outboxEventRepository,
+            BookingRepository bookingRepository,
+            RedisLockService redisLockService,
+            ReservationProperties reservationProperties,
+            SeatReservationMapper seatReservationMapper,
+            ObjectMapper objectMapper,
+            com.lorafilm.booking.infrastructure.client.MovieServiceClient movieServiceClient,
+            com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager) {
+        this(seatReservationRepository, auditLogRepository, operationLogRepository, outboxEventRepository,
+                bookingRepository, redisLockService, reservationProperties, new BookingPolicyProperties(),
+                seatReservationMapper, objectMapper, movieServiceClient, bookingMetricsManager);
+    }
+
+    @Override
+    @Transactional
+    public HoldSeatResponse holdSeats(Long userId, HoldSeatRequest request) {
+        long startTime = System.currentTimeMillis();
+
+        if (userId == null) {
+            throw new SeatReservationException("SEAT_008", "User must be authenticated", HttpStatus.UNAUTHORIZED);
+        }
+        if (request == null || request.getShowtimeId() == null || request.getShowtimeId() <= 0) {
+            throw new SeatReservationException("SEAT_002", "Invalid showtime ID", HttpStatus.BAD_REQUEST);
+        }
+        List<Long> seatIds = request.getSeatIds();
+        if (seatIds == null || seatIds.isEmpty()) {
+            throw new SeatReservationException("SEAT_001", "Seat list cannot be empty", HttpStatus.BAD_REQUEST);
+        }
+        if (seatIds.size() > bookingPolicyProperties.getMaxSeatsPerBooking()) {
+            throw new SeatReservationException("SEAT_001",
+                    "Cannot hold more than " + bookingPolicyProperties.getMaxSeatsPerBooking() + " seats per request",
+                    HttpStatus.BAD_REQUEST);
+        }
+        Set<Long> uniqueSeats = new HashSet<>(seatIds);
+        if (uniqueSeats.size() < seatIds.size()) {
+            throw new SeatReservationException("SEAT_001", "Duplicate seat IDs are not allowed in the request", HttpStatus.BAD_REQUEST);
+        }
+
+        Long showtimeId = request.getShowtimeId();
+
+        // Bug Fix 4: Validate Max Held Seats Per User limit (e.g. max 10 active held seats per user for a showtime)
+        long existingHeldCount = seatReservationRepository.countActiveHeldSeatsByUserAndShowtime(userId, showtimeId, Instant.now());
+        if (existingHeldCount + seatIds.size() > bookingPolicyProperties.getMaxSeatsPerBooking()) {
+            throw new SeatReservationException("SEAT_001",
+                    "Cannot hold more than " + bookingPolicyProperties.getMaxSeatsPerBooking()
+                            + " seats per user for this showtime", HttpStatus.BAD_REQUEST);
+        }
+
+        String lockToken = UUID.randomUUID().toString();
+        long holdDurationSeconds = bookingPolicyProperties.getHoldDurationSeconds();
+        // Bug Fix 1: Pass showtimeId to acquireHoldLocks to scope locks per showtime
+        boolean acquired = redisLockService.acquireHoldLocks(
+                showtimeId, seatIds, lockToken, bookingPolicyProperties.getCreationLockTtlSeconds());
+        if (!acquired) {
+            throw new SeatReservationException("SEAT_009", "Failed to acquire Redis lock for one or more seats", HttpStatus.CONFLICT);
+        }
+
+        boolean transactionCallbackRegistered = TransactionSynchronizationManager.isSynchronizationActive();
+        if (transactionCallbackRegistered) {
+            releaseAfterTransaction(showtimeId, seatIds, lockToken);
+        }
+        try {
+            HoldSeatResponse response = executeHoldSeatsTransaction(
+                    userId, showtimeId, seatIds, lockToken, holdDurationSeconds, startTime);
+            if (!transactionCallbackRegistered) {
+                releaseAfterTransaction(showtimeId, seatIds, lockToken);
+            }
+            return response;
+        } catch (Exception ex) {
+            if (!transactionCallbackRegistered) {
+                redisLockService.releaseLocks(showtimeId, seatIds, lockToken);
+            }
+            throw ex;
+        }
+    }
+
+    private void releaseAfterTransaction(Long showtimeId, List<Long> seatIds, String lockToken) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    redisLockService.releaseLocks(showtimeId, seatIds, lockToken);
+                }
+            });
+        } else {
+            redisLockService.releaseLocks(showtimeId, seatIds, lockToken);
+        }
+    }
+
+    @Transactional
+    public HoldSeatResponse executeHoldSeatsTransaction(
+            Long userId, Long showtimeId, List<Long> seatIds, String lockToken, long ttlSeconds, long startTime) {
+
+        Instant now = Instant.now();
+
+        // Bug Fix 2, 3 & 7: Validate Showtime & Seat Layout from MovieServiceClient if available
+        com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse layout = movieServiceClient.getShowtimeSeatLayout(showtimeId);
+        if (layout == null) {
+            throw new SeatReservationException(
+                    "SHOWTIME_VALIDATION_UNAVAILABLE",
+                    "Movie Service authoritative showtime validation is unavailable",
+                    HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        Map<Long, com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto> seatMap = new java.util.HashMap<>();
+
+        if (!"OPEN_FOR_BOOKING".equalsIgnoreCase(layout.getStatus())) {
+            throw new SeatReservationException(
+                    "SHOWTIME_NOT_OPEN_FOR_BOOKING",
+                    "Suất chiếu hiện không mở bán nên không thể giữ ghế mới",
+                    HttpStatus.CONFLICT);
+        }
+        if (layout.getStartTime() != null && layout.getStartTime().isBefore(now)) {
+            throw new SeatReservationException("SHOWTIME_002", "Cannot hold seats for a past showtime", HttpStatus.BAD_REQUEST);
+        }
+        if (layout.getSeats() != null) {
+            for (com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto seatDto : layout.getSeats()) {
+                seatMap.put(seatDto.getSeatId(), seatDto);
+            }
+        }
+
+        // Validate requested seats against Movie's exact layout. A
+        // compatibility hold cannot create an orphan reservation for an
+        // unknown or unpriced seat.
+        for (Long seatId : seatIds) {
+            com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto detail = seatMap.get(seatId);
+            if (detail == null) {
+                throw new SeatReservationException("SEAT_005",
+                        "Seat " + seatId + " does not belong to this showtime",
+                        HttpStatus.CONFLICT);
+            }
+            if (detail.isBlocked()) {
+                throw new SeatReservationException("SEAT_004", "Seat " + (detail.getSeatCode() != null ? detail.getSeatCode() : seatId) + " is blocked or out of order", HttpStatus.CONFLICT);
+            }
+            // Bug Fix 5: Couple Seat Pairing Rule
+            if ("COUPLE".equalsIgnoreCase(detail.getSeatType()) || detail.getPairedSeatId() != null) {
+                Long pairId = detail.getPairedSeatId();
+                if (pairId != null && !seatIds.contains(pairId)) {
+                    throw new SeatReservationException("SEAT_COUPLE_PAIR_REQUIRED", "Couple seat " + (detail.getSeatCode() != null ? detail.getSeatCode() : seatId) + " must be reserved together with its pair seat", HttpStatus.BAD_REQUEST);
+                }
+            }
+        }
+
+        List<SeatReservation> lockedReservations =
+                seatReservationRepository.findReservationsForBookingUpdate(showtimeId, seatIds);
+        for (SeatReservation reservation : lockedReservations) {
+            if (reservation.getStatus() == SeatReservationStatus.BOOKED
+                    || (reservation.getExpiresAt() != null && reservation.getExpiresAt().isAfter(now))) {
+                throw new SeatReservationException("SEAT_003",
+                        "One or more seats are already held by another user", HttpStatus.CONFLICT);
+            }
+            if (reservation.getStatus() == SeatReservationStatus.HELD) {
+                reservation.setStatus(SeatReservationStatus.EXPIRED);
+                reservation.setExpiredReason("Expired before a new reservation was created");
+                seatReservationRepository.save(reservation);
+            }
+        }
+        seatReservationRepository.flush();
+
+        List<Long> soldSeatIds = seatReservationRepository.findSoldSeatIdsFromBookings(showtimeId, seatIds);
+        if (!soldSeatIds.isEmpty()) {
+            throw new SeatReservationException("SEAT_004", "One or more seats are already sold", HttpStatus.CONFLICT);
+        }
+
+        Instant expiresAt = now.plusSeconds(ttlSeconds);
+        List<SeatReservation> reservationsToSave = new ArrayList<>();
+        List<Long> reservationIds = new ArrayList<>();
+        List<String> publicIds = new ArrayList<>();
+
+        for (Long seatId : seatIds) {
+            String pubId = UUID.randomUUID().toString();
+            SeatReservation reservation = new SeatReservation();
+            reservation.setPublicId(pubId);
+            reservation.setReservationCode("RES-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+            reservation.setShowtimeId(showtimeId);
+            reservation.setShowtimePublicId(layout.getShowtimePublicId());
+            reservation.setSeatId(seatId);
+
+            // Bug Fix 7: Use actual seatCode and seatType from movie-service layout if available
+            com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse.SeatDetailDto seatDetail = seatMap.get(seatId);
+            String label = (seatDetail != null && seatDetail.getSeatCode() != null) ? seatDetail.getSeatCode() : ("SEAT-" + seatId);
+            String sType = (seatDetail != null && seatDetail.getSeatType() != null) ? seatDetail.getSeatType() : "STANDARD";
+            reservation.setSeatLabel(label);
+            reservation.setSeatType(sType);
+            if (seatDetail != null) {
+                reservation.setSeatPublicId(seatDetail.getSeatPublicId());
+            }
+
+            reservation.setUserId(userId);
+            reservation.setReservationSource(ReservationSource.WEB);
+            reservation.setStatus(SeatReservationStatus.HELD);
+            reservation.setExpiresAt(expiresAt);
+            reservation.setReservedAt(now);
+
+            reservationsToSave.add(reservation);
+            publicIds.add(pubId);
+        }
+
+        List<SeatReservation> savedReservations = seatReservationRepository.saveAll(reservationsToSave);
+        publishSeatAvailability(savedReservations);
+        for (SeatReservation saved : savedReservations) {
+            reservationIds.add(saved.getId());
+
+            recordAuditLog(userId.toString(), "HOLD_SEAT", "status", null, saved.getStatus().name());
+            recordOutboxEvent("SeatReservation", saved.getId(), "SEAT_RESERVED", saved);
+        }
+        bookingMetricsManager.incrementSeatReserved(reservationsToSave.size());
+
+        recordOperationLog(null, "HOLD_SEATS", true, (int) (System.currentTimeMillis() - startTime), null, null);
+
+        return new HoldSeatResponse(reservationIds, publicIds, expiresAt);
+    }
+
+    @Override
+    @Transactional
+    public void releaseSeats(Long userId, ReleaseSeatRequest request) {
+        long startTime = System.currentTimeMillis();
+
+        if (userId == null) {
+            throw new SeatReservationException("SEAT_008", "User must be authenticated", HttpStatus.UNAUTHORIZED);
+        }
+        if (request == null || request.getReservationIds() == null || request.getReservationIds().isEmpty()) {
+            throw new SeatReservationException("SEAT_005", "Reservation IDs cannot be empty", HttpStatus.BAD_REQUEST);
+        }
+
+        List<SeatReservation> reservations = seatReservationRepository.findAllByIdIn(request.getReservationIds());
+        if (reservations.size() < request.getReservationIds().size()) {
+            throw new SeatReservationException("SEAT_005", "One or more reservations do not exist", HttpStatus.NOT_FOUND);
+        }
+
+        String reason = request.getReason() != null ? request.getReason() : "Customer released reservation";
+
+        for (SeatReservation reservation : reservations) {
+            if (!reservation.getUserId().equals(userId)) {
+                throw new SeatReservationException("SEAT_008", "Reservation does not belong to user", HttpStatus.FORBIDDEN);
+            }
+            if (reservation.getBookingId() != null) {
+                throw new SeatReservationException("SEAT_007",
+                        "Linked reservations are released only by the Booking lifecycle",
+                        HttpStatus.CONFLICT);
+            }
+            if (reservation.getStatus() == SeatReservationStatus.BOOKED) {
+                throw new SeatReservationException("SEAT_007", "Reservation is already converted to booking", HttpStatus.BAD_REQUEST);
+            }
+            if (reservation.getStatus() == SeatReservationStatus.EXPIRED) {
+                throw new SeatReservationException("SEAT_006", "Reservation is already expired", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        Map<Long, List<Long>> seatsByShowtime = new java.util.HashMap<>();
+        int releasedCount = 0;
+
+        for (SeatReservation reservation : reservations) {
+            if (reservation.getStatus() == SeatReservationStatus.HELD) {
+                reservation.setStatus(SeatReservationStatus.RELEASED);
+                reservation.setExpiredReason(reason);
+                seatReservationRepository.save(reservation);
+
+                seatsByShowtime.computeIfAbsent(reservation.getShowtimeId(), k -> new ArrayList<>()).add(reservation.getSeatId());
+
+                recordAuditLog(userId.toString(), "RELEASE_SEAT", "status", "HELD", "RELEASED");
+                recordOutboxEvent("SeatReservation", reservation.getId(), "SEAT_RELEASED", reservation);
+                releasedCount++;
+            }
+        }
+        if (releasedCount > 0) {
+            bookingMetricsManager.incrementSeatRelease(releasedCount);
+            publishSeatAvailability(reservations);
+        }
+
+        for (Map.Entry<Long, List<Long>> entry : seatsByShowtime.entrySet()) {
+            // Database status is the sole long-lived authority.  Do not
+            // wildcard-delete another request's short-lived Redis lock.
+        }
+
+        recordOperationLog(null, "RELEASE_SEATS", true, (int) (System.currentTimeMillis() - startTime), null, null);
+    }
+
+    @Override
+    @Transactional
+    public void releaseSeatsInternal(List<Long> reservationIds, String reason) {
+        long startTime = System.currentTimeMillis();
+
+        if (reservationIds == null || reservationIds.isEmpty()) {
+            return;
+        }
+
+        List<SeatReservation> reservations = seatReservationRepository.findAllByIdIn(reservationIds);
+        Map<Long, List<Long>> seatsByShowtime = new java.util.HashMap<>();
+        String releaseReason = reason != null ? reason : "Internal release request";
+        int releasedCount = 0;
+
+        for (SeatReservation reservation : reservations) {
+            if (reservation.getStatus() == SeatReservationStatus.HELD) {
+                reservation.setStatus(SeatReservationStatus.RELEASED);
+                reservation.setExpiredReason(releaseReason);
+                seatReservationRepository.save(reservation);
+
+                seatsByShowtime.computeIfAbsent(reservation.getShowtimeId(), k -> new ArrayList<>()).add(reservation.getSeatId());
+
+                recordAuditLog("SYSTEM", "RELEASE_SEAT", "status", "HELD", "RELEASED");
+                recordOutboxEvent("SeatReservation", reservation.getId(), "SEAT_RELEASED", reservation);
+                releasedCount++;
+            }
+        }
+        if (releasedCount > 0) {
+            bookingMetricsManager.incrementSeatRelease(releasedCount);
+            publishSeatAvailability(reservations);
+        }
+
+        recordOperationLog(null, "RELEASE_SEATS_INTERNAL", true, (int) (System.currentTimeMillis() - startTime), null, null);
+    }
+
+    @Override
+    @Transactional
+    public void convertReservations(ConvertReservationRequest request) {
+        throw new SeatReservationException("ATOMIC_BOOKING_CREATION_REQUIRED",
+                "Reservation conversion is no longer a lifecycle operation; Payment SUCCESS confirms the Booking",
+                HttpStatus.GONE);
+    }
+
+    @Override
+    @Transactional
+    public void expireReservations(List<Long> reservationIds) {
+        long startTime = System.currentTimeMillis();
+
+        if (reservationIds == null || reservationIds.isEmpty()) {
+            return;
+        }
+
+        List<SeatReservation> reservations = seatReservationRepository.findAllByIdIn(reservationIds);
+        Map<Long, List<Long>> seatsByShowtime = new java.util.HashMap<>();
+        int expiredCount = 0;
+
+        for (SeatReservation reservation : reservations) {
+            if (reservation.getStatus() == SeatReservationStatus.HELD) {
+                reservation.setStatus(SeatReservationStatus.EXPIRED);
+                reservation.setExpiredReason("Scheduler expiration");
+                seatReservationRepository.save(reservation);
+
+                seatsByShowtime.computeIfAbsent(reservation.getShowtimeId(), k -> new ArrayList<>()).add(reservation.getSeatId());
+
+                recordAuditLog("SCHEDULER", "EXPIRE_RESERVATION", "status", "HELD", "EXPIRED");
+                recordOutboxEvent("SeatReservation", reservation.getId(), "SEAT_RESERVATION_EXPIRED", reservation);
+                expiredCount++;
+            }
+        }
+        if (expiredCount > 0) {
+            bookingMetricsManager.incrementSeatExpired(expiredCount);
+            publishSeatAvailability(reservations);
+        }
+
+        recordOperationLog(null, "EXPIRE_RESERVATIONS", true, (int) (System.currentTimeMillis() - startTime), null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SeatReservationResponse findReservationByPublicId(String publicId, Long currentUserId, boolean isAdmin) {
+        SeatReservation reservation = seatReservationRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new SeatReservationException("SEAT_005", "Reservation not found", HttpStatus.NOT_FOUND));
+
+        if (!isAdmin && !reservation.getUserId().equals(currentUserId)) {
+            throw new SeatReservationException("SEAT_008", "Access denied to reservation", HttpStatus.FORBIDDEN);
+        }
+
+        return seatReservationMapper.toResponse(reservation);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SeatReservationResponse> findReservationsByUser(
+            Long userId, SeatReservationStatus status, Long showtimeId, Pageable pageable) {
+
+        Page<SeatReservation> page;
+        if (status != null && showtimeId != null) {
+            page = seatReservationRepository.findAllByUserIdAndShowtimeIdAndStatus(userId, showtimeId, status, pageable);
+        } else if (status != null) {
+            page = seatReservationRepository.findAllByUserIdAndStatus(userId, status, pageable);
+        } else if (showtimeId != null) {
+            page = seatReservationRepository.findAllByUserIdAndShowtimeId(userId, showtimeId, pageable);
+        } else {
+            page = seatReservationRepository.findAllByUserId(userId, pageable);
+        }
+
+        return page.map(seatReservationMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SeatAvailabilityResponse checkAvailability(Long showtimeId, List<Long> seatIds) {
+        if (showtimeId == null || seatIds == null || seatIds.isEmpty()) {
+            return new SeatAvailabilityResponse(true, List.of());
+        }
+
+        Instant now = Instant.now();
+        List<SeatReservation> activeReservations = seatReservationRepository.findActiveReservations(showtimeId, seatIds, now);
+        List<Long> soldSeatIds = seatReservationRepository.findSoldSeatIdsFromBookings(showtimeId, seatIds);
+
+        Set<Long> unavailableSet = new HashSet<>();
+        for (SeatReservation res : activeReservations) {
+            unavailableSet.add(res.getSeatId());
+        }
+        unavailableSet.addAll(soldSeatIds);
+
+        List<Long> unavailableList = new ArrayList<>(unavailableSet);
+        return new SeatAvailabilityResponse(unavailableList.isEmpty(), unavailableList);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PublicSeatAvailabilityResponse checkPublicAvailability(String showtimePublicId) {
+        Instant now = Instant.now();
+        List<SeatReservation> active = seatReservationRepository
+                .findAllActiveReservationsByShowtimePublicId(showtimePublicId, now);
+        return new PublicSeatAvailabilityResponse(
+                showtimePublicId,
+                bookingPolicyProperties.getMaxSeatsPerBooking(),
+                active.stream().map(reservation -> new PublicSeatAvailabilityResponse.OccupiedSeat(
+                        reservation.getSeatPublicId(), reservation.getStatus().name(), reservation.getExpiresAt())).toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse getOccupiedSeatsByShowtime(String showtimeIdentifier) {
+        if (showtimeIdentifier == null || showtimeIdentifier.isBlank()) {
+            throw new SeatReservationException("SEAT_002", "Invalid showtime identifier", HttpStatus.BAD_REQUEST);
+        }
+
+        Long showtimeId = null;
+        try {
+            showtimeId = Long.parseLong(showtimeIdentifier);
+        } catch (NumberFormatException e) {
+            ShowtimeSeatLayoutResponse layout = movieServiceClient.getShowtimeSeatLayoutByPublicId(showtimeIdentifier);
+            if (layout != null && layout.getShowtimeId() != null) {
+                showtimeId = layout.getShowtimeId();
+            }
+        }
+
+        if (showtimeId == null) {
+            throw new SeatReservationException("SEAT_002", "Showtime not found for identifier: " + showtimeIdentifier, HttpStatus.NOT_FOUND);
+        }
+
+        Instant now = Instant.now();
+        List<SeatReservation> activeReservations = seatReservationRepository.findAllActiveReservationsByShowtimeId(showtimeId, now);
+        List<Long> soldSeatIds = seatReservationRepository.findSoldSeatIdsFromBookingsByShowtimeId(showtimeId);
+
+        Map<Long, com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse.OccupiedSeatDto> occupiedMap = new java.util.HashMap<>();
+
+        // 1. Add active reservations (HELD or BOOKED)
+        for (SeatReservation res : activeReservations) {
+            String statusStr = res.getStatus() != null ? res.getStatus().name() : "HELD";
+            occupiedMap.put(res.getSeatId(), new com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse.OccupiedSeatDto(
+                    res.getSeatId(),
+                    res.getSeatLabel(),
+                    statusStr,
+                    res.getExpiresAt()
+            ));
+        }
+
+        // 2. Add sold seats from bookings (status BOOKED)
+        for (Long soldSeatId : soldSeatIds) {
+            if (!occupiedMap.containsKey(soldSeatId)) {
+                occupiedMap.put(soldSeatId, new com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse.OccupiedSeatDto(
+                        soldSeatId,
+                        "SEAT-" + soldSeatId,
+                        "BOOKED",
+                        null
+                ));
+            }
+        }
+
+        List<com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse.OccupiedSeatDto> occupiedList = new ArrayList<>(occupiedMap.values());
+        return new com.lorafilm.booking.reservation.dto.OccupiedSeatsResponse(showtimeIdentifier, occupiedList);
+    }
+
+    @Override
+    @Transactional
+    public com.lorafilm.booking.reservation.dto.ExtendReservationResponse extendReservation(String publicId, Long userId) {
+        long startTime = System.currentTimeMillis();
+
+        if (userId == null) {
+            throw new SeatReservationException("SEAT_008", "User must be authenticated", HttpStatus.UNAUTHORIZED);
+        }
+        if (publicId == null || publicId.isBlank()) {
+            throw new SeatReservationException("SEAT_005", "Reservation public ID is required", HttpStatus.BAD_REQUEST);
+        }
+
+        SeatReservation reservation = seatReservationRepository.findByPublicId(publicId)
+                .orElseThrow(() -> new SeatReservationException("SEAT_005", "Reservation not found", HttpStatus.NOT_FOUND));
+
+        if (!reservation.getUserId().equals(userId)) {
+            throw new SeatReservationException("SEAT_008", "Reservation does not belong to user", HttpStatus.FORBIDDEN);
+        }
+        if (reservation.getStatus() != SeatReservationStatus.HELD) {
+            throw new SeatReservationException("SEAT_006", "Only active HELD reservations can be extended", HttpStatus.BAD_REQUEST);
+        }
+
+        Instant now = Instant.now();
+        if (reservation.getExpiresAt().isBefore(now)) {
+            throw new SeatReservationException("SEAT_006", "Reservation is already expired", HttpStatus.BAD_REQUEST);
+        }
+
+        throw new SeatReservationException("RESERVATION_DEADLINE_IMMUTABLE",
+                "Reservation deadlines are owned by Booking and cannot be extended",
+                HttpStatus.CONFLICT);
+    }
+
+    @Override
+    @Transactional
+    public void handleBookingStatusChange(Long bookingId, com.lorafilm.booking.booking.enums.BookingStatus targetStatus, String reason) {
+        long startTime = System.currentTimeMillis();
+
+        if (bookingId == null || targetStatus == null) {
+            return;
+        }
+
+        List<SeatReservation> reservations = seatReservationRepository.findAllByBookingId(bookingId);
+        if (reservations.isEmpty()) {
+            return;
+        }
+
+        SeatReservationStatus targetReservationStatus;
+        String auditAction;
+        if (targetStatus == com.lorafilm.booking.booking.enums.BookingStatus.CANCELLED) {
+            targetReservationStatus = SeatReservationStatus.RELEASED;
+            auditAction = "RELEASE_SEAT_BOOKING_CHANGE";
+        } else if (targetStatus == com.lorafilm.booking.booking.enums.BookingStatus.EXPIRED) {
+            targetReservationStatus = SeatReservationStatus.EXPIRED;
+            auditAction = "EXPIRE_SEAT_BOOKING_CHANGE";
+        } else {
+            return;
+        }
+
+        String expiredReason = reason != null ? reason : ("Booking status changed to " + targetStatus);
+
+        int releasedCount = 0;
+        int expiredCount = 0;
+
+        for (SeatReservation reservation : reservations) {
+            if (reservation.getStatus() == SeatReservationStatus.HELD) {
+                SeatReservationStatus oldStatus = reservation.getStatus();
+                reservation.setStatus(targetReservationStatus);
+                reservation.setExpiredReason(expiredReason);
+                seatReservationRepository.save(reservation);
+
+                recordAuditLog("SYSTEM", auditAction, "status", oldStatus.name(), targetReservationStatus.name());
+                recordOutboxEvent("SeatReservation", reservation.getId(),
+                        targetReservationStatus == SeatReservationStatus.RELEASED ? "SEAT_RELEASED" : "SEAT_RESERVATION_EXPIRED",
+                        reservation);
+
+                if (targetReservationStatus == SeatReservationStatus.RELEASED) {
+                    releasedCount++;
+                } else if (targetReservationStatus == SeatReservationStatus.EXPIRED) {
+                    expiredCount++;
+                }
+            }
+        }
+        if (releasedCount > 0) {
+            bookingMetricsManager.incrementSeatRelease(releasedCount);
+        }
+        if (expiredCount > 0) {
+            bookingMetricsManager.incrementSeatExpired(expiredCount);
+        }
+
+        recordOperationLog(bookingId, "HANDLE_BOOKING_STATUS_CHANGE", true, (int) (System.currentTimeMillis() - startTime), null, null);
+        publishSeatAvailability(reservations);
+    }
+
+    private void publishSeatAvailability(List<SeatReservation> reservations) {
+        if (seatAvailabilityEventService != null) {
+            seatAvailabilityEventService.publish(reservations);
+        }
+    }
+
+    private void recordAuditLog(String actor, String action, String fieldName, String oldValue, String newValue) {
+        try {
+            BookingAuditLog audit = new BookingAuditLog();
+            audit.setPublicId(UUID.randomUUID().toString());
+            audit.setActor(actor);
+            audit.setAction(action);
+            audit.setFieldName(fieldName);
+            audit.setOldValue(oldValue);
+            audit.setNewValue(newValue);
+            auditLogRepository.save(audit);
+        } catch (Exception ex) {
+            log.error("Failed to write audit log for action {}: ", action, ex);
+        }
+    }
+
+    private void recordOperationLog(Long bookingId, String operationType, boolean success, int executionTimeMs, String errorCode, String errorMessage) {
+        try {
+            BookingOperationLog opLog = new BookingOperationLog();
+            opLog.setPublicId(UUID.randomUUID().toString());
+            opLog.setBookingId(bookingId);
+            opLog.setOperationType(operationType);
+            opLog.setActor("USER");
+            opLog.setSuccess(success);
+            opLog.setExecutionTimeMs((long) executionTimeMs);
+            opLog.setErrorCode(errorCode);
+            opLog.setErrorMessage(errorMessage);
+            operationLogRepository.save(opLog);
+        } catch (Exception ex) {
+            log.error("Failed to write operation log for {}: ", operationType, ex);
+        }
+    }
+
+    private void recordOutboxEvent(String aggregateType, Long aggregateId, String eventType, Object payload) {
+        try {
+            BookingOutboxEvent event = new BookingOutboxEvent();
+            event.setEventId(UUID.randomUUID().toString());
+            event.setAggregateType(aggregateType);
+            event.setAggregateId(aggregateId);
+            event.setEventType(eventType);
+            event.setEventVersion(1);
+            event.setPayload(objectMapper.writeValueAsString(payload));
+            event.setStatus(OutboxStatus.PENDING);
+            outboxEventRepository.save(event);
+            bookingMetricsManager.incrementOutboxCreated();
+        } catch (Exception ex) {
+            log.error("Failed to insert outbox event {}: ", eventType, ex);
+            throw new SeatReservationException("INTERNAL_SERVER_ERROR", "Failed to record outbox event", HttpStatus.INTERNAL_SERVER_ERROR, ex);
+        }
+    }
+}

@@ -1,0 +1,278 @@
+package com.lorafilm.movie.autoschedule.model;
+
+import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
+import com.lorafilm.movie.movie.domain.entity.Movie;
+import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
+import com.lorafilm.movie.movie.domain.enums.MovieFormat;
+
+public class ShowtimeCandidate {
+    private AutoScheduleGenerationContext.CinemaSnapshot cinemaSnapshot;
+    private AutoScheduleGenerationContext.AuditoriumSnapshot auditoriumSnapshot;
+    private AutoScheduleGenerationContext.MovieVersionSnapshot movieVersionSnapshot;
+    private OperatingWindow operatingWindow;
+
+    // Persistence-only references. Generation rules and scoring must use snapshots above.
+    private Movie movie;
+    private MovieVersion movieVersion;
+    private Cinema cinema;
+    private Auditorium auditorium;
+
+    private Instant startTime;
+    private Instant endTime;
+    private Instant occupancyEndTime;
+
+    private PreviewItemValidationStatus validationStatus;
+    private String rejectionCode;
+    private String rejectionReason;
+
+    private BigDecimal score = BigDecimal.ZERO;
+    private Map<String, BigDecimal> scoreBreakdown = new HashMap<>();
+
+    private Integer rankingPosition;
+    private boolean selected;
+    private CandidatePricingSnapshot pricingSnapshot;
+    private BigDecimal expectedAttendance = BigDecimal.ZERO;
+    private BigDecimal expectedOccupancy = BigDecimal.ZERO;
+    private BigDecimal expectedRevenue = BigDecimal.ZERO;
+    private BigDecimal expectedContribution = BigDecimal.ZERO;
+    private BigDecimal demandConfidence = BigDecimal.ZERO;
+    private String demandExplanation;
+    private String demandModelVersion;
+    private boolean primeTime;
+    private List<String> riskFlags = List.of();
+
+    public AutoScheduleGenerationContext.CinemaSnapshot getCinemaSnapshot() {
+        return cinemaSnapshot;
+    }
+
+    public void setCinemaSnapshot(AutoScheduleGenerationContext.CinemaSnapshot cinemaSnapshot) {
+        this.cinemaSnapshot = cinemaSnapshot;
+    }
+
+    public AutoScheduleGenerationContext.AuditoriumSnapshot getAuditoriumSnapshot() {
+        return auditoriumSnapshot;
+    }
+
+    public void setAuditoriumSnapshot(AutoScheduleGenerationContext.AuditoriumSnapshot auditoriumSnapshot) {
+        this.auditoriumSnapshot = auditoriumSnapshot;
+    }
+
+    public AutoScheduleGenerationContext.MovieVersionSnapshot getMovieVersionSnapshot() {
+        return movieVersionSnapshot;
+    }
+
+    public void setMovieVersionSnapshot(AutoScheduleGenerationContext.MovieVersionSnapshot movieVersionSnapshot) {
+        this.movieVersionSnapshot = movieVersionSnapshot;
+    }
+
+    public OperatingWindow getOperatingWindow() {
+        return operatingWindow;
+    }
+
+    public void setOperatingWindow(OperatingWindow operatingWindow) {
+        this.operatingWindow = operatingWindow;
+    }
+
+    public Long getAuditoriumId() {
+        return auditoriumSnapshot != null ? auditoriumSnapshot.id()
+                : auditorium != null ? auditorium.getId() : null;
+    }
+
+    public String getAuditoriumPublicId() {
+        return auditoriumSnapshot != null ? auditoriumSnapshot.publicId()
+                : auditorium != null ? auditorium.getPublicId() : null;
+    }
+
+    public Integer getAuditoriumCapacity() {
+        return auditoriumSnapshot != null ? auditoriumSnapshot.capacity()
+                : auditorium != null ? auditorium.getCapacity() : null;
+    }
+
+    public String getMovieVersionPublicId() {
+        return movieVersionSnapshot != null ? movieVersionSnapshot.publicId()
+                : movieVersion != null ? movieVersion.getPublicId() : null;
+    }
+
+    public Movie getMovie() {
+        return movie;
+    }
+
+    public void setMovie(Movie movie) {
+        this.movie = movie;
+    }
+
+    public MovieVersion getMovieVersion() {
+        return movieVersion;
+    }
+
+    public void setMovieVersion(MovieVersion movieVersion) {
+        this.movieVersion = movieVersion;
+    }
+
+    public Cinema getCinema() {
+        return cinema;
+    }
+
+    public void setCinema(Cinema cinema) {
+        this.cinema = cinema;
+    }
+
+    public Auditorium getAuditorium() {
+        return auditorium;
+    }
+
+    public void setAuditorium(Auditorium auditorium) {
+        this.auditorium = auditorium;
+    }
+
+    public Instant getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(Instant startTime) {
+        this.startTime = startTime;
+    }
+
+    public Instant getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(Instant endTime) {
+        this.endTime = endTime;
+    }
+
+    public Instant getOccupancyEndTime() {
+        return occupancyEndTime;
+    }
+
+    public void setOccupancyEndTime(Instant occupancyEndTime) {
+        this.occupancyEndTime = occupancyEndTime;
+    }
+
+    public PreviewItemValidationStatus getValidationStatus() {
+        return validationStatus;
+    }
+
+    public void setValidationStatus(PreviewItemValidationStatus validationStatus) {
+        this.validationStatus = validationStatus;
+    }
+
+    public String getRejectionCode() {
+        return rejectionCode;
+    }
+
+    public void setRejectionCode(String rejectionCode) {
+        this.rejectionCode = rejectionCode;
+    }
+
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+
+    public void setRejectionReason(String rejectionReason) {
+        this.rejectionReason = rejectionReason;
+    }
+
+    public BigDecimal getScore() {
+        return score;
+    }
+
+    public void setScore(BigDecimal score) {
+        this.score = score;
+    }
+
+    public Map<String, BigDecimal> getScoreBreakdown() {
+        return scoreBreakdown;
+    }
+
+    public void setScoreBreakdown(Map<String, BigDecimal> scoreBreakdown) {
+        this.scoreBreakdown = scoreBreakdown;
+    }
+
+    public Integer getRankingPosition() {
+        return rankingPosition;
+    }
+
+    public void setRankingPosition(Integer rankingPosition) {
+        this.rankingPosition = rankingPosition;
+    }
+
+    public boolean isSelected() {
+        return selected;
+    }
+
+    public void setSelected(boolean selected) {
+        this.selected = selected;
+    }
+
+    public java.time.LocalDate getServiceDate() {
+        return operatingWindow == null ? null : operatingWindow.getServiceDate();
+    }
+
+    public MovieFormat getFormat() {
+        return movieVersionSnapshot != null ? movieVersionSnapshot.format()
+                : movieVersion != null ? movieVersion.getFormat() : null;
+    }
+
+    public CandidatePricingSnapshot getPricingSnapshot() { return pricingSnapshot; }
+    public void setPricingSnapshot(CandidatePricingSnapshot pricingSnapshot) { this.pricingSnapshot = pricingSnapshot; }
+    public BigDecimal getExpectedAttendance() { return expectedAttendance; }
+    public void setExpectedAttendance(BigDecimal value) { this.expectedAttendance = value; }
+    public BigDecimal getExpectedOccupancy() { return expectedOccupancy; }
+    public void setExpectedOccupancy(BigDecimal value) { this.expectedOccupancy = value; }
+    public BigDecimal getExpectedRevenue() { return expectedRevenue; }
+    public void setExpectedRevenue(BigDecimal value) { this.expectedRevenue = value; }
+    public BigDecimal getExpectedContribution() { return expectedContribution; }
+    public void setExpectedContribution(BigDecimal value) { this.expectedContribution = value; }
+    public BigDecimal getDemandConfidence() { return demandConfidence; }
+    public void setDemandConfidence(BigDecimal value) { this.demandConfidence = value; }
+    public String getDemandExplanation() { return demandExplanation; }
+    public void setDemandExplanation(String value) { this.demandExplanation = value; }
+    public String getDemandModelVersion() { return demandModelVersion; }
+    public void setDemandModelVersion(String value) { this.demandModelVersion = value; }
+    public boolean isPrimeTime() { return primeTime; }
+    public void setPrimeTime(boolean value) { this.primeTime = value; }
+    public List<String> getRiskFlags() { return riskFlags; }
+    public void setRiskFlags(List<String> value) { this.riskFlags = value == null ? List.of() : List.copyOf(value); }
+
+    public ShowtimeCandidate copyForReadOnlyComparison() {
+        ShowtimeCandidate copy = new ShowtimeCandidate();
+        copy.cinemaSnapshot = cinemaSnapshot;
+        copy.auditoriumSnapshot = auditoriumSnapshot;
+        copy.movieVersionSnapshot = movieVersionSnapshot;
+        copy.operatingWindow = operatingWindow;
+        copy.movie = movie;
+        copy.movieVersion = movieVersion;
+        copy.cinema = cinema;
+        copy.auditorium = auditorium;
+        copy.startTime = startTime;
+        copy.endTime = endTime;
+        copy.occupancyEndTime = occupancyEndTime;
+        copy.validationStatus = validationStatus;
+        copy.rejectionCode = rejectionCode;
+        copy.rejectionReason = rejectionReason;
+        copy.score = score;
+        copy.scoreBreakdown = Map.copyOf(scoreBreakdown);
+        copy.rankingPosition = rankingPosition;
+        copy.selected = selected;
+        copy.pricingSnapshot = pricingSnapshot;
+        copy.expectedAttendance = expectedAttendance;
+        copy.expectedOccupancy = expectedOccupancy;
+        copy.expectedRevenue = expectedRevenue;
+        copy.expectedContribution = expectedContribution;
+        copy.demandConfidence = demandConfidence;
+        copy.demandExplanation = demandExplanation;
+        copy.demandModelVersion = demandModelVersion;
+        copy.primeTime = primeTime;
+        copy.riskFlags = List.copyOf(riskFlags);
+        return copy;
+    }
+}

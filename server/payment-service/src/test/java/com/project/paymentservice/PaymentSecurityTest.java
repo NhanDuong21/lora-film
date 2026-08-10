@@ -1,0 +1,227 @@
+package com.project.paymentservice;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project.paymentservice.dto.request.CreatePaymentRequest;
+import com.project.paymentservice.entity.Payment;
+import com.project.paymentservice.enumtype.PaymentMethod;
+import com.project.paymentservice.enumtype.PaymentStatus;
+import com.project.paymentservice.repository.PaymentRepository;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+import javax.crypto.SecretKey;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.List;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+public class PaymentSecurityTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private PaymentRepository paymentRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Value("${jwt.secret}")
+    private String jwtSecret;
+
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
+
+    @BeforeEach
+    void setUp() {
+        databaseCleaner.clean();
+    }
+
+    private String generateJwt(Long userId, String email, String role) {
+        return generateJwt(userId, email, role, List.of());
+    }
+
+    private String generateJwt(Long userId, String email, String role, Collection<String> permissions) {
+        byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
+        SecretKey key = Keys.hmacShaKeyFor(keyBytes);
+        
+        var builder = Jwts.builder()
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 86400000))
+                .signWith(key);
+                
+        if (userId != null) {
+            builder.claim("userId", userId);
+        }
+        if (email != null) {
+            builder.subject(email);
+        }
+        if (role != null) {
+            builder.claim("role", role);
+        }
+        if (permissions != null && !permissions.isEmpty()) {
+            builder.claim("permissions", permissions);
+        }
+                
+        return builder.compact();
+    }
+    
+    private String generateInvalidJwt() {
+        return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.signature";
+    }
+
+    @Test
+    void missingJwtShouldReturnUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/payments/1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void invalidJwtShouldReturnUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/payments/1")
+                .header("Authorization", "Bearer " + generateInvalidJwt()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void jwtWithoutRequiredAccountIdClaimShouldReturnUnauthorized() throws Exception {
+        String token = generateJwt(null, "user@test.com", "CUSTOMER"); // Missing userId claim
+
+        mockMvc.perform(get("/api/payments/1")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void validJwtWithCorrectAccountIdShouldReadOwnPayment() throws Exception {
+        Payment p = new Payment();
+        p.setAccountId(15L);
+        p.setBookingId(1001L);
+        p.setPaymentTransactionCode("SEC-123");
+        p.setAmount(new BigDecimal("100"));
+        p.setPaymentMethod(PaymentMethod.MOCK);
+        p.setAttemptNumber(1);
+        p.setStatus(PaymentStatus.PENDING);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = paymentRepository.save(TestFixtures.complete(p));
+
+        String token = generateJwt(15L, "user@test.com", "CUSTOMER");
+
+        mockMvc.perform(get("/api/payments/" + p.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentId").value(p.getId()));
+    }
+
+    @Test
+    void jwtFromAnotherAccountShouldReturnForbidden() throws Exception {
+        Payment p = new Payment();
+        p.setAccountId(15L);
+        p.setBookingId(1001L);
+        p.setPaymentTransactionCode("SEC-456");
+        p.setAmount(new BigDecimal("100"));
+        p.setPaymentMethod(PaymentMethod.MOCK);
+        p.setAttemptNumber(1);
+        p.setStatus(PaymentStatus.PENDING);
+        p.setExpiresAt(Instant.now().plusSeconds(900));
+        p = paymentRepository.save(TestFixtures.complete(p));
+
+        String wrongToken = generateJwt(99L, "other@test.com", "CUSTOMER");
+
+        mockMvc.perform(get("/api/payments/" + p.getId())
+                .header("Authorization", "Bearer " + wrongToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("PAYMENT_ACCESS_DENIED"));
+    }
+
+    @Test
+    void accountantCanReadAndExportButCannotReplayOperations() throws Exception {
+        String token = generateJwt(31L, "accountant@test.com", "ACCOUNTANT");
+
+        mockMvc.perform(get("/api/admin/payments")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/admin/payments/export")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/admin/payments/outbox/missing-event/replay")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    }
+
+    @Test
+    void adminCanAccessPaymentOperations() throws Exception {
+        String token = generateJwt(1L, "admin@test.com", "ADMIN");
+
+        mockMvc.perform(get("/api/admin/payments/outbox")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void employeeNeedsCashCollectionPermissionToReachCashEndpoints() throws Exception {
+        String paymentPublicId = "11111111-1111-4111-8111-111111111111";
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(20L, "employee@test.com", "EMPLOYEE")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(21L, "cashier@test.com", "EMPLOYEE",
+                                List.of("PAYMENT_CASH_COLLECT"))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void retiredStaffRoleCannotUseCashEndpointsEvenWithThePermissionClaim() throws Exception {
+        String paymentPublicId = "11111111-1111-4111-8111-111111111111";
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(20L, "legacy.staff@test.com", "STAFF",
+                                List.of("PAYMENT_CASH_COLLECT"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void customerAndAccountantCannotUseCashMutationTree() throws Exception {
+        String paymentPublicId = "11111111-1111-4111-8111-111111111111";
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(15L, "customer@test.com", "CUSTOMER")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(31L, "accountant@test.com", "ACCOUNTANT")))
+                .andExpect(status().isForbidden());
+    }
+}

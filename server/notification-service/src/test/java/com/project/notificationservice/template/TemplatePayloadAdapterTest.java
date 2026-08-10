@@ -1,0 +1,95 @@
+package com.project.notificationservice.template;
+
+import com.project.notificationservice.domain.NotificationTypes.Category;
+import com.project.notificationservice.domain.NotificationTypes.Channel;
+import com.project.notificationservice.domain.NotificationTypes.TemplateStatus;
+import com.project.notificationservice.template.TemplateRegistry.TemplateDocument;
+import com.project.notificationservice.template.TemplateRegistry.VariableDefinition;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class TemplatePayloadAdapterTest {
+
+    private final TemplatePayloadAdapter adapter = new TemplatePayloadAdapter();
+
+    @Test
+    void adaptsBookingPayloadToLegacyMailVariablesAndDropsUnknownValues() {
+        TemplateDocument template = document(Map.of(
+                "user_name", optional(),
+                "booking_code", optional(),
+                "poster_url", optional(),
+                "room_name", optional(),
+                "seats", optional(),
+                "combos", optional(),
+                "qr_code_url", optional(),
+                "retry_link", optional(),
+                "failure_reason", optional()));
+
+        Map<String, Object> adapted = adapter.adapt(Map.of(
+                "customerName", "An",
+                "bookingCode", "BK-01",
+                "moviePosterUrl", "https://cdn/poster.jpg",
+                "auditoriumName", "Hall 2",
+                "seatNames", List.of("A1", "A2"),
+                "foodItems", List.of(Map.of("name", "Popcorn", "quantity", 2)),
+                "ticketAccessUrl", "https://tickets/one",
+                "deepLink", "/payments/retry",
+                "failureMessage", "Provider rejected payment",
+                "internalOnly", "must-not-render"), template);
+
+        assertThat(adapted).containsEntry("user_name", "An")
+                .containsEntry("booking_code", "BK-01")
+                .containsEntry("poster_url", "https://cdn/poster.jpg")
+                .containsEntry("room_name", "Hall 2")
+                .containsEntry("seats", "A1, A2")
+                .containsEntry("combos", "Popcorn x2")
+                .containsEntry("qr_code_url", "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https%3A%2F%2Ftickets%2Fone")
+                .containsEntry("retry_link", "/payments/retry")
+                .containsEntry("failure_reason", "Provider rejected payment")
+                .doesNotContainKey("internalOnly");
+    }
+
+    @Test
+    void adaptsEveryPublishedVoucherGrantedVariable() {
+        TemplateDocument template = document(Map.of(
+                "user_name", optional(),
+                "voucher_name", optional(),
+                "voucher_code", optional(),
+                "discount_value", optional(),
+                "min_order_amount", optional(),
+                "expiry_date", optional(),
+                "use_now_link", optional()));
+
+        Map<String, Object> adapted = adapter.adapt(Map.of(
+                "userName", "Nguyen Van A",
+                "voucherName", "Ưu đãi thành viên",
+                "voucherCode", "CPN-1234",
+                "discountValue", "50.000 ₫",
+                "minOrderAmount", "150.000 ₫",
+                "expiryDate", "31/12/2099 23:59",
+                "useNowLink", "http://localhost:5173/booking"), template);
+
+        assertThat(adapted).containsEntry("user_name", "Nguyen Van A")
+                .containsEntry("voucher_name", "Ưu đãi thành viên")
+                .containsEntry("voucher_code", "CPN-1234")
+                .containsEntry("discount_value", "50.000 ₫")
+                .containsEntry("min_order_amount", "150.000 ₫")
+                .containsEntry("expiry_date", "31/12/2099 23:59")
+                .containsEntry("use_now_link", "http://localhost:5173/booking");
+    }
+
+    private TemplateDocument document(Map<String, TemplateRegistry.VariableDefinition> schema) {
+        return new TemplateDocument(
+                "TICKET_PURCHASED", "Ticket", "", Category.TRANSACTIONAL,
+                Channel.EMAIL, "vi-VN", TemplateStatus.PUBLISHED, schema, Map.of(),
+                "Ticket", "<p>Ticket</p>", "Ticket", "a".repeat(40), null, null);
+    }
+
+    private VariableDefinition optional() {
+        return new VariableDefinition("string", false);
+    }
+}

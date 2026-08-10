@@ -1,0 +1,162 @@
+import axios from "axios";
+import { getAuthToken, getRefreshToken, setAuthData, clearAuthData } from "@/utils/authStorage";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+
+const apiClient = axios.create({
+    baseURL: API_BASE_URL,
+    headers: {
+        "Content-Type": "application/json"
+    }
+});
+
+// Request Interceptor
+apiClient.interceptors.request.use(
+    (config) => {
+        // Axios inherits the JSON default header from the client instance. That
+        // header is invalid for multipart requests because it prevents the
+        // browser from adding the required multipart boundary. Let the browser
+        // set Content-Type whenever the payload is FormData.
+        if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+            if (config.headers?.delete) {
+                config.headers.delete("Content-Type");
+            } else if (config.headers) {
+                delete config.headers["Content-Type"];
+                delete config.headers["content-type"];
+            }
+        }
+
+        const isPublicAuthEndpoint = config.url && (
+            config.url.includes("/api/auth/login") ||
+            config.url.includes("/api/auth/register") ||
+            config.url.includes("/api/auth/verify") ||
+            config.url.includes("/api/auth/send-otp") ||
+            config.url.includes("/api/auth/refresh-token") ||
+            config.url.includes("/api/auth/forgot-password") ||
+            config.url.includes("/api/auth/reset-password")
+        );
+
+        // Do not attach Authorization if it's CCCD, external URLs, or public auth endpoints
+        if (config.url && !config.url.includes("/api/cccd") && !isPublicAuthEndpoint) {
+            const token = getAuthToken();
+            if (token) {
+                config.headers["Authorization"] = `Bearer ${token}`;
+            }
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+// Response Interceptor for handling token refresh
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else {
+
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+apiClient.interceptors.response.use(
+    (response) => {
+        return response;
+    },
+    async (error) => {
+        const originalRequest = error.config || {};
+
+        // Skip token refresh for auth endpoints
+        const isAuthEndpoint = originalRequest.url && (
+            originalRequest.url.includes("/api/auth/login") ||
+            originalRequest.url.includes("/api/auth/register") ||
+            originalRequest.url.includes("/api/auth/verify") ||
+            originalRequest.url.includes("/api/auth/send-otp") ||
+            originalRequest.url.includes("/api/auth/refresh-token")
+        );
+
+        if (error.response && error.response.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                .then((token) => {
+                    originalRequest.headers["Authorization"] = `Bearer ${token}`;
+                    return apiClient(originalRequest);
+                })
+                .catch((err) => {
+                    return Promise.reject(err);
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            const refreshVal = getRefreshToken();
+            if (!refreshVal) {
+                // A guest can legitimately receive a 401 from an endpoint that
+                // is expected to be public (for example while the catalog is
+                // being served by a stale/misconfigured backend). Never force
+                // that guest away from the homepage. Redirect only when this
+                // request belongs to an existing authenticated session.
+                const hadAccessToken = Boolean(getAuthToken());
+                if (hadAccessToken) {
+                    clearAuthData();
+                    window.location.href = "/login";
+                }
+                processQueue(error, null);
+                isRefreshing = false;
+                return Promise.reject(error);
+            }
+
+            try {
+                // Call refresh-token API using raw axios to avoid interceptor recursion
+                const response = await axios.post(`${API_BASE_URL}/api/auth/refresh-token`, {
+                    refreshToken: refreshVal
+                });
+
+                if (response.data && response.data.success && response.data.data) {
+                    const newTokens = response.data.data;
+                    setAuthData(newTokens);
+                    const newAccessToken = newTokens.accessToken;
+
+                    apiClient.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+                    originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+
+                    processQueue(null, newAccessToken);
+                    isRefreshing = false;
+                    return apiClient(originalRequest);
+                } else {
+                    throw new Error("Token refresh response did not return valid data");
+                }
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                isRefreshing = false;
+                clearAuthData();
+                window.location.href = "/login";
+                return Promise.reject(refreshError);
+            }
+        }
+
+        // Preserve original AxiosError structure but attach standard response data
+        if (error.response && error.response.data) {
+            const responseData = error.response.data;
+            error.status = error.response.status;
+            if (typeof responseData === "object") {
+                Object.assign(error, responseData);
+            } else {
+                error.message = String(responseData) || error.message;
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
+export default apiClient;

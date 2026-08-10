@@ -1,0 +1,22 @@
+package com.project.userservice.dto.request;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+public record EmployeeRequest(
+        @NotNull Long accountId,
+        @NotNull Long departmentId,
+        @NotNull Long positionId,
+        @NotNull @PastOrPresent LocalDate hireDate,
+        @NotNull @DecimalMin(value = "0.01") BigDecimal baseSalary,
+        @NotBlank(message = "Vui lòng chọn rạp làm việc")
+        @Pattern(regexp = "^[0-9a-fA-F-]{36}$", message = "Mã rạp không hợp lệ")
+        String cinemaPublicId
+) {
+}

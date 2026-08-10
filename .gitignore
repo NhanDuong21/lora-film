@@ -1,0 +1,50 @@
+# Build outputs
+api-gateway/target/
+server/auth-service/target/
+server/movie-service/target/
+server/booking-service/target/
+server/payment-service/target/
+server/notification-service/target/
+server/user-service/target/
+server/analytics-service/target/
+server/promotion-service/target/
+server/score-service/target/
+
+# Local application config per service (do not push)
+eureka-server/src/main/resources/application.properties
+api-gateway/src/main/resources/application.properties
+server/auth-service/src/main/resources/application.properties
+server/movie-service/src/main/resources/application.properties
+server/booking-service/src/main/resources/application.properties
+server/payment-service/src/main/resources/application.properties
+server/notification-service/src/main/resources/application.properties
+server/user-service/src/main/resources/application.properties
+server/analytics-service/src/main/resources/application.properties
+server/promotion-service/src/main/resources/application.properties
+server/score-service/src/main/resources/application.properties
+
+# Keep sample config files in repository
+!api-gateway/src/main/resources/application.example.properties
+!server/auth-service/src/main/resources/application.example.properties
+!server/movie-service/src/main/resources/application.example.properties
+!server/booking-service/src/main/resources/application.example.properties
+!server/payment-service/src/main/resources/application.example.properties
+!server/notification-service/src/main/resources/application.example.properties
+!server/user-service/src/main/resources/application.example.properties
+!server/analytics-service/src/main/resources/application.example.properties
+!server/promotion-service/src/main/resources/application.example.properties
+!server/score-service/src/main/resources/application.example.properties
+
+# VS Code workspace settings (do not push)
+.vscode/
+
+# Local Docker Compose environment files and data
+.env
+mysql_data
+redis_data
+kafka_data
+logs
+artifacts/
+
+.ui-prototype/
+**/target/
