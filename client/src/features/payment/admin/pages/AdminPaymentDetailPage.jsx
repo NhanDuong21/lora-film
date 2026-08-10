@@ -217,23 +217,29 @@ export default function AdminPaymentDetailPage() {
       <ConclusionBanner
         conclusion={conclusion}
         onPrimaryAction={() => {
-          if (conclusion.action) navigate('/admin/payments');
+          if (conclusion.action || !isAdmin) navigate('/admin/payments');
           else navigate(`/admin/bookings/${payment.bookingPublicId}`);
         }}
       />
 
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => navigate(`/admin/bookings/${payment.bookingPublicId}`)}
-          className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-xs font-black uppercase text-white"
-        >
-          <ExternalLink className="h-4 w-4" /> Mở đơn đặt vé liên quan
-        </button>
+        {isAdmin ? (
+          <button
+            type="button"
+            onClick={() => navigate(`/admin/bookings/${payment.bookingPublicId}`)}
+            className="flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-xs font-black uppercase text-white"
+          >
+            <ExternalLink className="h-4 w-4" /> Mở đơn đặt vé liên quan
+          </button>
+        ) : (
+          <span className="rounded-xl border border-zinc-700 px-4 py-2.5 text-xs text-zinc-400">
+            Mã đơn: <strong className="font-mono text-zinc-200">{payment.bookingPublicId}</strong>
+          </span>
+        )}
         {openReconciliation && (
           <button
             type="button"
-            onClick={() => navigate('/admin/payments')}
+            onClick={() => navigate('/admin/payments?tab=reconciliations')}
             className="flex items-center gap-2 rounded-xl border border-amber-500/30 px-4 py-2.5 text-xs font-black uppercase text-amber-300"
           >
             <ShieldAlert className="h-4 w-4" /> Mở hồ sơ cần xử lý

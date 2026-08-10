@@ -20,7 +20,9 @@ describe('admin permission access', () => {
   it('selects a usable landing page for limited operational roles', () => {
     expect(getAdminLandingPath('CUSTOMER_MANAGER', ['CUSTOMER_VIEW'])).toBe('/admin/members');
     expect(getAdminLandingPath('HR_OPERATOR', ['EMPLOYEE_VIEW'])).toBe('/admin/hr');
-    expect(getAdminLandingPath('ACCOUNTANT', ['PERM_VIEW_FINANCE'])).toBe('/admin/analytics');
+    expect(getAdminLandingPath('ACCOUNTANT', ['PERM_VIEW_FINANCE'])).toBe('/admin/accounting');
+    expect(getAdminLandingPath('EMPLOYEE', ['PAYMENT_RECONCILE', 'PAYROLL_VIEW']))
+      .toBe('/admin/accounting');
     expect(getAdminLandingPath('ROLE_ADMIN', [])).toBe('/admin');
     expect(getAdminLandingPath('CUSTOM_ROLE', [])).toBe('/403');
   });

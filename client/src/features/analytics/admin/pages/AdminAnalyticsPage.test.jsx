@@ -9,6 +9,15 @@ import {
   updateAnalyticsRecommendation
 } from '../services/analyticsAdminService';
 
+const authContext = vi.hoisted(() => ({ role: 'MANAGER', permissions: [] }));
+
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    userRole: authContext.role,
+    user: { role: authContext.role, permissions: authContext.permissions },
+  }),
+}));
+
 vi.mock('../services/analyticsAdminService', () => ({
   acknowledgeAnalyticsAlert: vi.fn(),
   getAnalyticsDashboard: vi.fn(),
@@ -79,6 +88,8 @@ const dashboard = {
 describe('AdminAnalyticsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authContext.role = 'MANAGER';
+    authContext.permissions = [];
     getAnalyticsDashboard.mockResolvedValue(dashboard);
     getCinemaKpis.mockResolvedValue([
       { cinemaKey: 'cinema-1', cinemaName: 'LoraFilm Quận 1' }
@@ -240,5 +251,18 @@ describe('AdminAnalyticsPage', () => {
     await waitFor(() => {
       expect(updateAnalyticsRecommendation).toHaveBeenCalledWith(9, 'ACCEPTED');
     });
+  });
+
+  it('keeps accounting analytics read-only', async () => {
+    authContext.role = 'EMPLOYEE';
+    authContext.permissions = ['ANALYTICS_VIEW'];
+    render(<AdminAnalyticsPage />);
+    await screen.findByText('Trung tâm điều hành kinh doanh');
+
+    fireEvent.click(screen.getByRole('button', { name: /Nên làm gì/ }));
+
+    expect(screen.getByText(/Kế toán dùng phần này để đọc nguyên nhân/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ghi nhận cảnh báo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nhận xử lý' })).not.toBeInTheDocument();
   });
 });

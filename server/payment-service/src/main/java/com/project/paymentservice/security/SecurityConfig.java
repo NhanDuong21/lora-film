@@ -41,7 +41,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/payments/callback/**", "/api/payments/return/**").permitAll()
                 .requestMatchers("/internal/payments/refunds/**", "/internal/payments/emergency/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/admin/payments/**")
-                    .hasAnyRole("ADMIN", "ACCOUNTANT")
+                    .hasAnyAuthority("ROLE_ADMIN", "ROLE_ACCOUNTANT", "PERM_VIEW_FINANCE",
+                            "PAYMENT_VIEW", "PAYMENT_RECONCILE")
+                .requestMatchers("/api/admin/payments/reconciliations/*/assign",
+                        "/api/admin/payments/reconciliations/*/resolve")
+                    .hasAnyAuthority("ROLE_ADMIN", "PAYMENT_RECONCILE")
                 .requestMatchers("/api/admin/payments/**").hasRole("ADMIN")
                 .requestMatchers("/api/manager/payments/**").hasRole("MANAGER")
                 .requestMatchers("/api/employee/**")

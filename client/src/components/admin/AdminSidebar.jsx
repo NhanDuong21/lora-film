@@ -12,6 +12,7 @@ import {
   Coffee,
   Coins,
   CreditCard,
+  Calculator,
   DoorOpen,
   FileSearch,
   Film,
@@ -99,7 +100,13 @@ export default function AdminSidebar({
   const can = (...requiredPermissions) =>
     hasPermissionAccess(normalizedRole, permissions, ...requiredPermissions);
   const isFullAdmin = normalizedRole === 'ADMIN' || permissions.includes('PERM_ROOT_ACCESS');
-  const isAccountantOnly = can('PERM_VIEW_FINANCE') && !isFullAdmin;
+  const canViewPayments = can('PERM_VIEW_FINANCE', 'PAYMENT_VIEW', 'PAYMENT_RECONCILE');
+  const canReconcilePayments = can('PAYMENT_RECONCILE');
+  const canViewAnalytics = can('PERM_VIEW_FINANCE', 'ANALYTICS_VIEW');
+  const hasAccountingAccess = canViewPayments || canViewAnalytics;
+  const isAccountantOnly = hasAccountingAccess && !isFullAdmin
+    && ['PAYMENT_VIEW', 'PAYMENT_RECONCILE', 'ANALYTICS_VIEW', 'PERM_VIEW_FINANCE']
+      .some(permission => permissions.includes(permission));
   const canManageCustomers = can('CUSTOMER_VIEW');
   const canManageEmployees = can('EMPLOYEE_VIEW');
   const canManageDepartments = can('DEPARTMENT_VIEW');
@@ -114,7 +121,7 @@ export default function AdminSidebar({
   const hasSystemAccess = canManageRoles || canManagePermissions
     || canConfigureSystem || canViewUserAudits;
   const roleLabel = isAccountantOnly
-    ? 'Tài chính'
+    ? 'Kế toán'
     : (isFullAdmin ? 'Quản trị viên' : 'Nhân viên');
   const adminHomePath = getAdminLandingPath(normalizedRole, permissions);
   const avatarUrl = getAvatarUrl(user?.avatarUrl);
@@ -163,11 +170,20 @@ export default function AdminSidebar({
     {
       key: 'finance',
       label: 'Thanh toán & báo cáo',
-      visible: isFullAdmin || isAccountantOnly,
+      visible: isFullAdmin || hasAccountingAccess,
       items: [
-        { key: 'payments', label: 'Giao dịch & đối soát', path: '/admin/payments', icon: CreditCard },
-        { key: 'analytics', label: 'Báo cáo doanh thu', path: '/admin/analytics', icon: TrendingUp },
-        { key: 'concession-sales', label: 'Doanh thu bắp nước', path: '/admin/concession-sales', icon: Coins },
+        ...(hasAccountingAccess
+          ? [{ key: 'accounting', label: 'Bàn làm việc kế toán', path: '/admin/accounting', icon: Calculator }]
+          : []),
+        ...(canViewPayments
+          ? [{ key: 'payments', label: canReconcilePayments ? 'Giao dịch & đối soát' : 'Giao dịch thanh toán', path: '/admin/payments', icon: CreditCard }]
+          : []),
+        ...(canViewAnalytics
+          ? [{ key: 'analytics', label: 'Báo cáo doanh thu', path: '/admin/analytics', icon: TrendingUp }]
+          : []),
+        ...(isFullAdmin || permissions.includes('PERM_VIEW_FINANCE')
+          ? [{ key: 'concession-sales', label: 'Doanh thu bắp nước', path: '/admin/concession-sales', icon: Coins }]
+          : []),
       ],
     },
     {

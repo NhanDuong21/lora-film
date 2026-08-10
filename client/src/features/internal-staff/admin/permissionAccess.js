@@ -32,7 +32,10 @@ export const ADMIN_AREA_PERMISSIONS = [
   'PERMISSION_DELETE',
   'SYSTEM_CONFIGURATION',
   'USER_AUDIT_VIEW',
-  'PERM_VIEW_FINANCE'
+  'PERM_VIEW_FINANCE',
+  'PAYMENT_VIEW',
+  'PAYMENT_RECONCILE',
+  'ANALYTICS_VIEW'
 ];
 
 export const hasPermissionAccess = (role, permissions = [], ...requiredPermissions) => {
@@ -48,6 +51,10 @@ export const hasAdminAreaAccess = (role, permissions = []) =>
 
 const ADMIN_LANDING_ROUTES = [
   ['DASHBOARD_VIEW', '/admin'],
+  ['PAYMENT_RECONCILE', '/admin/accounting'],
+  ['PAYMENT_VIEW', '/admin/accounting'],
+  ['ANALYTICS_VIEW', '/admin/accounting'],
+  ['PERM_VIEW_FINANCE', '/admin/accounting'],
   ['CUSTOMER_VIEW', '/admin/members'],
   ['EMPLOYEE_VIEW', '/admin/hr'],
   ['DEPARTMENT_VIEW', '/admin/departments'],
@@ -56,8 +63,7 @@ const ADMIN_LANDING_ROUTES = [
   ['ROLE_VIEW', '/admin/accounts?tab=access'],
   ['PERMISSION_VIEW', '/admin/accounts?tab=access'],
   ['SYSTEM_CONFIGURATION', '/admin/accounts'],
-  ['USER_AUDIT_VIEW', '/admin/audits?tab=operations'],
-  ['PERM_VIEW_FINANCE', '/admin/analytics']
+  ['USER_AUDIT_VIEW', '/admin/audits?tab=operations']
 ];
 
 export const getAdminLandingPath = (role, permissions = []) => {

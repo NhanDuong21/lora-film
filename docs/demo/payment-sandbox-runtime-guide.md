@@ -64,7 +64,8 @@ Callback sandbox phải là URL HTTPS công khai trỏ đúng:
   đối soát và không có Analytics revenue.
 - Replay webhook chữ ký sai phải bị cấm.
 - Replay outbox giữ nguyên event ID.
-- ACCOUNTANT xem/lọc/export được nhưng không replay/assign/resolve.
+- ACCOUNTANT hoặc PAYMENT_VIEW xem/lọc/export được nhưng không replay; nhân viên có
+  PAYMENT_RECONCILE được assign/resolve hồ sơ đối soát và vẫn không được replay tác vụ kỹ thuật.
 - ADMIN assign và resolve reconciliation với mã xử lý + ghi chú bắt buộc.
 - Restart Payment giữa provider request/callback không được tạo attempt trùng.
 

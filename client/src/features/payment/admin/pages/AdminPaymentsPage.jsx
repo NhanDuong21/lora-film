@@ -84,11 +84,18 @@ const operationDescription = item => {
 export default function AdminPaymentsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { userRole, accountId } = useAuth();
+  const { userRole, accountId, user } = useAuth();
   const { triggerToast, triggerConfirm, triggerAlert } = useOutletContext() || {};
   const isAdmin = (userRole || '').replace(/^ROLE_/, '') === 'ADMIN';
-  const [activeTab, setActiveTab] = useState('transactions');
-  const [technicalOpen, setTechnicalOpen] = useState(false);
+  const canReconcile = isAdmin || (user?.permissions || []).includes('PAYMENT_RECONCILE');
+  const requestedTab = searchParams.get('tab');
+  const initialTab = [...BUSINESS_TABS, ...TECHNICAL_TABS].some(tab => tab.key === requestedTab)
+    ? requestedTab
+    : 'transactions';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [technicalOpen, setTechnicalOpen] = useState(
+    TECHNICAL_TABS.some(tab => tab.key === initialTab),
+  );
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ number: 0, totalPages: 0, totalElements: 0 });
@@ -214,7 +221,7 @@ export default function AdminPaymentsPage() {
 
   const submitReconciliation = async event => {
     event.preventDefault();
-    if (!reconciliationAction || !isAdmin) return;
+    if (!reconciliationAction || !canReconcile) return;
     setLoading(true);
     try {
       if (reconciliationAction.mode === 'assign') {
@@ -436,7 +443,9 @@ export default function AdminPaymentsPage() {
           </div>
           {!isAdmin && (
             <span className="text-xs text-zinc-500">
-              Kế toán có quyền xem và xuất danh sách, không có quyền xử lý lại.
+              {canReconcile
+                ? 'Kế toán được tiếp nhận và kết luận hồ sơ đối soát; không được hoàn tiền hoặc chạy lại tác vụ kỹ thuật.'
+                : 'Kế toán có quyền xem và xuất danh sách, không có quyền xử lý lại.'}
             </span>
           )}
         </div>
@@ -447,7 +456,7 @@ export default function AdminPaymentsPage() {
         ) : (
           <div className="overflow-x-auto">
             {activeTab === 'transactions'
-              ? <TransactionTable items={items} navigate={navigate} />
+              ? <TransactionTable items={items} navigate={navigate} isAdmin={isAdmin} />
               : activeTab === 'refunds'
                 ? (
                   <RefundTable
@@ -462,6 +471,7 @@ export default function AdminPaymentsPage() {
                   kind={activeTab}
                   items={items}
                   isAdmin={isAdmin}
+                  canReconcile={canReconcile}
                   onReplay={replay}
                   onReconciliationAction={(mode, item) => {
                     setResolutionForm({ resolutionCode: '', note: '' });
@@ -720,7 +730,7 @@ function RefundTable({ items, navigate, isAdmin, onRetry }) {
   );
 }
 
-function TransactionTable({ items, navigate }) {
+function TransactionTable({ items, navigate, isAdmin }) {
   return (
     <table className="w-full min-w-[1180px] text-left text-sm">
       <thead className="bg-zinc-950/60 text-[10px] uppercase tracking-wider text-zinc-500">
@@ -748,13 +758,19 @@ function TransactionTable({ items, navigate }) {
               <strong className="block max-w-[230px] truncate">
                 {item.movieTitle || 'Đơn đặt vé liên kết'}
               </strong>
-              <button
-                type="button"
-                onClick={() => navigate(`/admin/bookings/${item.bookingPublicId}`)}
-                className="mt-1 text-xs font-bold text-brand-orange hover:underline"
-              >
-                Mở đơn đặt vé
-              </button>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/bookings/${item.bookingPublicId}`)}
+                  className="mt-1 text-xs font-bold text-brand-orange hover:underline"
+                >
+                  Mở đơn đặt vé
+                </button>
+              ) : (
+                <span className="mt-1 block max-w-[220px] truncate text-[10px] text-zinc-500">
+                  Đơn: {item.bookingPublicId}
+                </span>
+              )}
               {item.ticketCount != null && (
                 <span className="ml-2 text-[10px] text-zinc-500">{item.ticketCount} vé</span>
               )}
@@ -801,6 +817,7 @@ function OperationTable({
   kind,
   items,
   isAdmin,
+  canReconcile,
   onReplay,
   onReconciliationAction,
 }) {
@@ -855,7 +872,7 @@ function OperationTable({
               <td className="p-3">
                 {kind === 'reconciliations' ? (
                   <div className="flex gap-2">
-                    {isAdmin && !['RESOLVED', 'IGNORED'].includes(status) && (
+                    {canReconcile && !['RESOLVED', 'IGNORED'].includes(status) && (
                       <>
                         {status !== 'IN_REVIEW' && (
                           <button
@@ -873,7 +890,7 @@ function OperationTable({
                         </button>
                       </>
                     )}
-                    {!isAdmin && (
+                    {!canReconcile && (
                       <span className="text-xs text-zinc-500">Chỉ xem</span>
                     )}
                   </div>

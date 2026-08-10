@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react';
 import { ErrorState, LoadingState } from '@/components/common/ui/uiKit';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   acknowledgeAnalyticsAlert,
   getAnalyticsDashboard,
@@ -455,6 +456,10 @@ function EmptyState({ children }) {
 }
 
 export default function AdminAnalyticsPage() {
+  const { user, userRole } = useAuth();
+  const normalizedRole = String(userRole || user?.role || '').replace(/^ROLE_/, '');
+  const canManageInsights = ['ADMIN', 'MANAGER'].includes(normalizedRole)
+    || (user?.permissions || []).includes('ANALYTICS_MANAGE');
   const [days, setDays] = useState(30);
   const [view, setView] = useState('happened');
   const [selectedCinemaKey, setSelectedCinemaKey] = useState('');
@@ -542,6 +547,7 @@ export default function AdminAnalyticsPage() {
   ]);
 
   const handleAlert = async id => {
+    if (!canManageInsights) return;
     setActing(`alert-${id}`);
     setNotice('');
     try {
@@ -556,6 +562,7 @@ export default function AdminAnalyticsPage() {
   };
 
   const handleRecommendation = async (id, status) => {
+    if (!canManageInsights) return;
     setActing(`recommendation-${id}`);
     setNotice('');
     try {
@@ -982,6 +989,12 @@ export default function AdminAnalyticsPage() {
             title="Danh sách việc cần xử lý"
             description="Mỗi đề xuất đều có mức ưu tiên và trạng thái để người quản lý dễ theo dõi."
           />
+          {!canManageInsights && (
+            <section className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.05] px-5 py-4 text-sm leading-6 text-sky-100/70">
+              Kế toán dùng phần này để đọc nguyên nhân và phục vụ đối soát. Việc nhận xử lý,
+              bỏ qua hoặc đóng khuyến nghị thuộc quản trị viên và quản lý vận hành.
+            </section>
+          )}
           <section className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
             <div className="space-y-4">
               <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-300">
@@ -1013,7 +1026,7 @@ export default function AdminAnalyticsPage() {
                     <span className="font-medium text-zinc-300">Tác động kỳ vọng:</span>{' '}
                     {localizeAnalyticsText(item.expectedImpact, cinemaNameByKey)}
                   </div>
-                  {item.status === 'PENDING' && (
+                  {canManageInsights && item.status === 'PENDING' && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -1033,7 +1046,7 @@ export default function AdminAnalyticsPage() {
                       </button>
                     </div>
                   )}
-                  {item.status === 'ACCEPTED' && (
+                  {canManageInsights && item.status === 'ACCEPTED' && (
                     <button
                       type="button"
                       onClick={() => handleRecommendation(item.id, 'COMPLETED')}
@@ -1073,7 +1086,7 @@ export default function AdminAnalyticsPage() {
                       <CheckCircle2 className="h-4 w-4" /> Đã ghi nhận
                       {item.acknowledgedBy ? ` bởi ${item.acknowledgedBy}` : ''}
                     </p>
-                  ) : (
+                  ) : canManageInsights ? (
                     <button
                       type="button"
                       onClick={() => handleAlert(item.id)}
@@ -1082,6 +1095,8 @@ export default function AdminAnalyticsPage() {
                     >
                       Ghi nhận cảnh báo
                     </button>
+                  ) : (
+                    <p className="mt-4 text-xs text-zinc-600">Đang chờ quản lý ghi nhận</p>
                   )}
                 </article>
               ))}

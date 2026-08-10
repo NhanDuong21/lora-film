@@ -44,6 +44,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/analytics/**", "/api/admin/reports/**")
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_MANAGER", "ROLE_ACCOUNTANT",
                                 "PERM_VIEW_FINANCE", "DASHBOARD_VIEW",
+                                "ANALYTICS_VIEW",
                                 "ANALYTICS_MANAGE", "ANALYTICS_REBUILD")
                 .anyRequest().authenticated()
             )

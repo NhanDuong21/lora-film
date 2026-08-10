@@ -125,8 +125,11 @@ Base path: `/api/admin/payments`.
 - `POST /api/admin/payments/refunds/{refundPublicId}/cash/complete`: xác nhận nhân
   viên đã hoàn tiền mặt với mã biên nhận và ghi chú bắt buộc.
 
-`ADMIN` được đọc/export/mutation. `ACCOUNTANT` chỉ được GET/export. Resolve bắt
-buộc có mã xử lý và ghi chú.
+`ADMIN` được đọc/export và thực hiện toàn bộ mutation. `ACCOUNTANT`,
+`PERM_VIEW_FINANCE`, `PAYMENT_VIEW` hoặc `PAYMENT_RECONCILE` được GET/export.
+Riêng `PAYMENT_RECONCILE` được tiếp nhận và đóng hồ sơ đối soát, nhưng không được hoàn tiền,
+replay webhook/outbox hoặc thực hiện mutation kỹ thuật khác. Resolve bắt buộc có mã xử lý và
+ghi chú.
 
 Request hoàn tiền do Admin tạo:
 

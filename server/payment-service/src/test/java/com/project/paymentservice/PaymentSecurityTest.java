@@ -175,6 +175,44 @@ public class PaymentSecurityTest {
     }
 
     @Test
+    void accountingEmployeeCanReadAndReconcileButCannotUseAdminTechnicalMutations() throws Exception {
+        String token = generateJwt(41L, "accounting.employee@test.com", "EMPLOYEE",
+                List.of("PAYMENT_VIEW", "PAYMENT_RECONCILE"));
+
+        mockMvc.perform(get("/api/admin/payments")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/admin/payments/reconciliations/missing-case/assign")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"assigneeAccountId\":41}"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(post("/api/admin/payments/outbox/missing-event/replay")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    }
+
+    @Test
+    void paymentViewPermissionDoesNotGrantReconciliationMutation() throws Exception {
+        String token = generateJwt(42L, "finance.viewer@test.com", "EMPLOYEE",
+                List.of("PAYMENT_VIEW"));
+
+        mockMvc.perform(get("/api/admin/payments")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/admin/payments/reconciliations/missing-case/assign")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"assigneeAccountId\":42}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    }
+
+    @Test
     void adminCanAccessPaymentOperations() throws Exception {
         String token = generateJwt(1L, "admin@test.com", "ADMIN");
 

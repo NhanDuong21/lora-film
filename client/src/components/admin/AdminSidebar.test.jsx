@@ -135,8 +135,29 @@ describe('AdminSidebar', () => {
     expect(screen.queryByRole('button', { name: 'Bán vé & dịch vụ' })).not.toBeInTheDocument();
     expect(screen.queryByText('Đơn đặt vé & giữ ghế')).not.toBeInTheDocument();
     expect(screen.queryByText('Danh mục bắp nước')).not.toBeInTheDocument();
-    expect(screen.getByText('Giao dịch & đối soát')).toBeInTheDocument();
+    expect(screen.getByText('Giao dịch thanh toán')).toBeInTheDocument();
+    expect(screen.getByText('Bàn làm việc kế toán')).toBeInTheDocument();
     expect(screen.getByText('Báo cáo doanh thu')).toBeInTheDocument();
     expect(screen.getByText('Doanh thu bắp nước')).toBeInTheDocument();
+  });
+
+  it('recognizes the granular ACCOUNTING access profile on an employee account', () => {
+    renderSidebar({
+      role: 'EMPLOYEE',
+      permissions: [
+        'PAYMENT_VIEW',
+        'PAYMENT_RECONCILE',
+        'ANALYTICS_VIEW',
+        'PAYROLL_VIEW',
+      ],
+    }, 'accounting');
+
+    expect(screen.getByText('Bàn làm việc kế toán')).toBeInTheDocument();
+    expect(screen.getByText('Giao dịch & đối soát')).toBeInTheDocument();
+    expect(screen.getByText('Báo cáo doanh thu')).toBeInTheDocument();
+    openSection('Nhân sự & tiền lương');
+    expect(screen.getByText('Quy trình bảng lương')).toBeInTheDocument();
+    expect(screen.queryByText('Doanh thu bắp nước')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bán vé & dịch vụ' })).not.toBeInTheDocument();
   });
 });

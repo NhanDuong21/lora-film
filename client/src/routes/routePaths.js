@@ -26,6 +26,7 @@ export const routePaths = {
     movies: '/admin/movies',
     genres: '/admin/genres',
     bookings: '/admin/bookings',
+    accounting: '/admin/accounting',
     bookingDetail: '/admin/bookings/:bookingId',
     payments: '/admin/payments',
     paymentDetail: '/admin/payments/:paymentPublicId',

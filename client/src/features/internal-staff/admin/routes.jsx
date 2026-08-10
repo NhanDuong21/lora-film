@@ -19,6 +19,7 @@ const AdminAuthAuditPage = lazy(() => import('./pages/AdminAuthAuditPage'));
 const AdminEmployeeDocumentPage = lazy(() => import('./pages/AdminEmployeeDocumentPage'));
 const AdminAccountPage = lazy(() => import('./pages/AdminAccountPage'));
 const AdminAnalyticsPage = lazy(() => import('@/features/analytics/admin/pages/AdminAnalyticsPage'));
+const AdminAccountingWorkspacePage = lazy(() => import('./pages/AdminAccountingWorkspacePage'));
 const AdminMyAccountPage = lazy(() => import('./pages/AdminMyAccountPage'));
 
 const lazyPage = (element) => (
@@ -48,8 +49,26 @@ function AdminLanding() {
 export const adminStaffRoutes = [
     { index: true, element: <AdminLanding /> },
     { path: 'me', element: lazyPage(<AdminMyAccountPage />) },
+    {
+        path: 'accounting',
+        element: requirePermission(
+            <AdminAccountingWorkspacePage />,
+            'PERM_VIEW_FINANCE',
+            'PAYMENT_VIEW',
+            'PAYMENT_RECONCILE',
+            'ANALYTICS_VIEW'
+        )
+    },
     { path: 'finance', element: <Navigate to="/admin/analytics" replace /> },
-    { path: 'analytics', element: requirePermission(<AdminAnalyticsPage />, 'PERM_VIEW_FINANCE', 'DASHBOARD_VIEW') },
+    {
+        path: 'analytics',
+        element: requirePermission(
+            <AdminAnalyticsPage />,
+            'PERM_VIEW_FINANCE',
+            'ANALYTICS_VIEW',
+            'DASHBOARD_VIEW'
+        )
+    },
     { path: 'members', element: requirePermission(<AdminMembersView />, 'CUSTOMER_VIEW') },
     { path: 'hr', element: requirePermission(<AdminHrCommandCenterPage />, 'EMPLOYEE_VIEW') },
     { path: 'approvals', element: requirePermission(<AdminApprovalInboxPage />, 'EMPLOYEE_VIEW', 'PAYROLL_VIEW') },

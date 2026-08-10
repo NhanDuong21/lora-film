@@ -20,7 +20,7 @@ import java.util.List;
 @RequestMapping("/api/analytics")
 @Tag(name = "Analytics", description = "Business intelligence and decision support APIs")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_MANAGER','ROLE_ACCOUNTANT','PERM_VIEW_FINANCE',"
-        + "'DASHBOARD_VIEW','ANALYTICS_MANAGE','ANALYTICS_REBUILD')")
+        + "'DASHBOARD_VIEW','ANALYTICS_VIEW','ANALYTICS_MANAGE','ANALYTICS_REBUILD')")
 public class AnalyticsController {
     private final AnalyticsQueryApplicationService queryService;
     private final AnalyticsLifecycleApplicationService lifecycleService;

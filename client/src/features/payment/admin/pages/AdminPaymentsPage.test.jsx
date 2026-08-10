@@ -2,15 +2,18 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminPaymentsPage from './AdminPaymentsPage';
 import {
+  assignReconciliation,
   getAdminRefunds,
   getPaymentOperations,
   replayPaymentOperation,
   retryAdminRefund,
+  resolveReconciliation,
   searchAdminPayments,
 } from '../../services/paymentService';
 
 const context = vi.hoisted(() => ({
   role: 'ACCOUNTANT',
+  permissions: [],
   navigate: vi.fn(),
   triggerToast: vi.fn(),
   triggerAlert: vi.fn(),
@@ -28,7 +31,11 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ userRole: context.role, accountId: 99 }),
+  useAuth: () => ({
+    userRole: context.role,
+    accountId: 99,
+    user: { role: context.role, permissions: context.permissions },
+  }),
 }));
 
 vi.mock('../../services/paymentService', () => ({
@@ -97,12 +104,15 @@ describe('AdminPaymentsPage role operations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     context.role = 'ACCOUNTANT';
+    context.permissions = [];
     context.triggerConfirm.mockResolvedValue(true);
     searchAdminPayments.mockResolvedValue(emptyPage);
     getAdminRefunds.mockResolvedValue(refundPage);
     getPaymentOperations.mockResolvedValue(webhookPage);
     replayPaymentOperation.mockResolvedValue({});
     retryAdminRefund.mockResolvedValue({});
+    assignReconciliation.mockResolvedValue({});
+    resolveReconciliation.mockResolvedValue({});
   });
 
   it('keeps ACCOUNTANT read-only while allowing transaction export', async () => {
@@ -155,6 +165,32 @@ describe('AdminPaymentsPage role operations', () => {
     await waitFor(() => expect(context.triggerConfirm).toHaveBeenCalled());
     await waitFor(() => expect(retryAdminRefund)
       .toHaveBeenCalledWith('refund-public-id'));
+  });
+
+  it('lets an accounting employee receive a reconciliation case without technical replay access', async () => {
+    context.role = 'EMPLOYEE';
+    context.permissions = ['PAYMENT_VIEW', 'PAYMENT_RECONCILE'];
+    getPaymentOperations.mockResolvedValue({
+      content: [{
+        publicId: 'reconciliation-public-id',
+        status: 'OPEN',
+        reasonCode: 'PAYMENT_AMOUNT_MISMATCH',
+        openedAt: '2026-08-11T02:00:00Z',
+      }],
+      number: 0,
+      totalPages: 1,
+      totalElements: 1,
+    });
+
+    render(<AdminPaymentsPage />);
+    await waitFor(() => expect(searchAdminPayments).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Cần xử lý' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+
+    await waitFor(() => expect(assignReconciliation)
+      .toHaveBeenCalledWith('reconciliation-public-id', 99));
+    expect(screen.queryByTitle('Xử lý lại tác vụ lỗi')).not.toBeInTheDocument();
   });
 
   it('clears rows from the previous tab when an operation request fails', async () => {

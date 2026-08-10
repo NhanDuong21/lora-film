@@ -42,8 +42,16 @@ const adminOnly = element => (
     <RoleRoute allowedRoles={["ADMIN"]}>{element}</RoleRoute>
 );
 
-const financeAccess = element => (
-    <PermissionRoute requiredPermissions={["PERM_VIEW_FINANCE"]}>{element}</PermissionRoute>
+const paymentAccess = element => (
+    <PermissionRoute requiredPermissions={["PERM_VIEW_FINANCE", "PAYMENT_VIEW", "PAYMENT_RECONCILE"]}>
+        {element}
+    </PermissionRoute>
+);
+
+const revenueAccess = element => (
+    <PermissionRoute requiredPermissions={["PERM_VIEW_FINANCE", "ANALYTICS_VIEW"]}>
+        {element}
+    </PermissionRoute>
 );
 
 function AppRoutes() {
@@ -139,7 +147,7 @@ function AppRoutes() {
                             key={`conc-adm-${index}`}
                             path={route.path}
                             element={route.path === 'concession-sales'
-                                ? financeAccess(route.element)
+                                ? revenueAccess(route.element)
                                 : adminOnly(route.element)}
                         />
                     ))}
@@ -153,7 +161,7 @@ function AppRoutes() {
                         <Route key={`score-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminPaymentRoutes.map((route, index) => (
-                        <Route key={`payment-adm-${index}`} path={route.path} element={financeAccess(route.element)} />
+                        <Route key={`payment-adm-${index}`} path={route.path} element={paymentAccess(route.element)} />
                     ))}
                     {adminNotificationRoutes.map((route, index) => (
                         <Route key={`notification-adm-${index}`} path={route.path} element={adminOnly(route.element)} />

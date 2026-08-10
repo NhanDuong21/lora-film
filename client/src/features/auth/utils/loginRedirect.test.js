@@ -20,6 +20,13 @@ describe('resolvePostLoginPath', () => {
     expect(resolvePostLoginPath({ role: 'ROLE_EMPLOYEE' })).toBe('/employee');
   });
 
+  it('opens the accounting workspace for an EMPLOYEE with accounting permissions', () => {
+    expect(resolvePostLoginPath({
+      role: 'ROLE_EMPLOYEE',
+      permissions: ['PAYMENT_VIEW', 'PAYMENT_RECONCILE', 'ANALYTICS_VIEW', 'PAYROLL_VIEW'],
+    })).toBe('/admin/accounting');
+  });
+
   it('keeps MANAGER inside the assigned-cinema workspace', () => {
     expect(resolvePostLoginPath({ role: 'ROLE_MANAGER' })).toBe('/manager');
   });

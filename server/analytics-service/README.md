@@ -97,8 +97,9 @@ analytics.zone-id=Asia/Ho_Chi_Minh
 
 ## APIs
 
-All APIs require Admin, Manager, Accountant, `PERM_VIEW_FINANCE`, or
-`DASHBOARD_VIEW`.
+Read APIs require Admin, Manager, Accountant, `PERM_VIEW_FINANCE`, `ANALYTICS_VIEW`,
+`DASHBOARD_VIEW`, or an analytics management permission. Alert/recommendation mutations remain
+limited to Admin, Manager, or `ANALYTICS_MANAGE`.
 
 | Method | Path |
 |---|---|

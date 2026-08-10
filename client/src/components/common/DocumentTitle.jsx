@@ -67,6 +67,7 @@ const pageTitle = pathname => {
     ['/admin/pricing', 'Quản lý bảng giá'],
     ['/admin/bookings', 'Quản lý đặt vé'],
     ['/admin/payments', 'Quản lý thanh toán'],
+    ['/admin/accounting', 'Bàn làm việc kế toán'],
     ['/admin/concessions', 'Quản lý đồ ăn và thức uống'],
     ['/admin/concession-sales', 'Bán hàng tại quầy'],
     ['/admin/promotions', 'Quản lý khuyến mãi'],
