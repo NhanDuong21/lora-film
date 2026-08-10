@@ -1,110 +1,77 @@
-# Movie Booking Microservices Backend
+# LoraFilm Backend Services
 
-This directory contains the standalone Spring Boot microservices backend for a movie booking system.
+Thư mục này chứa 9 Spring Boot microservice độc lập. Mỗi service có Maven build,
+cấu hình, schema và database riêng; không có Maven multi-module build ở cấp
+`server/`.
 
-## Repository Structure
+## Service map
 
-```text
-server/
-├── auth-service/
-├── movie-service/
-├── booking-service/
-├── payment-service/
-├── notification-service/
-├── user-service/
-├── promotion-service/
-├── score-service/
-├── analytics-service/
-└── README.md
-```
+| Service | Cổng | Database | Health |
+|---|---:|---|---|
+| `auth-service` | 8081 | `auth_db` | Kiểm tra qua Eureka/startup log |
+| `movie-service` | 8082 | `movie_db` | `/actuator/health` |
+| `booking-service` | 8083 | `booking_db` | `/actuator/health` |
+| `payment-service` | 8084 | `payment_db` | `/health` |
+| `notification-service` | 8085 | `notification_db` | `/actuator/health` |
+| `user-service` | 8086 | `user_db` | `/health` |
+| `promotion-service` | 8087 | `promotion_db` | `/actuator/health` |
+| `score-service` | 8088 | `score_db` | `/actuator/health` |
+| `analytics-service` | 8089 | `analytics_db` | `/actuator/health` |
 
-## Requirements
+API Gateway (`../api-gateway`) chạy tại 8080 và Eureka
+(`../eureka-server`) chạy tại 8761.
 
-- Java 21
-- Maven 3.9+
-- MySQL 8+
+## Chạy một service
 
-## Service Ports
+Yêu cầu Java 21, Maven 3.9+, MySQL 8 và các dependency hạ tầng phù hợp. Từ thư
+mục gốc repository, khởi động hạ tầng bằng `docker compose up -d`, sau đó:
 
-- `api-gateway` -> `8080` (Located at root)
-- `auth-service` -> `8081`
-- `movie-service` -> `8082`
-- `booking-service` -> `8083`
-- `payment-service` -> `8084`
-- `notification-service` -> `8085`
-- `user-service` -> `8086`
-- `promotion-service` -> `8087`
-- `score-service` -> `8088`
-- `analytics-service` -> `8089`
-
-## How To Run
-
-Run each module independently from its own folder:
-
-```bash
-cd server/auth-service
-mvn spring-boot:run
-```
-
-```bash
+```powershell
+Copy-Item server/movie-service/src/main/resources/application.example.properties `
+          server/movie-service/src/main/resources/application.properties
 cd server/movie-service
 mvn spring-boot:run
 ```
 
-```bash
-cd server/booking-service
-mvn spring-boot:run
+Thay `movie-service` bằng service cần chạy. File `application.properties` là cấu
+hình local đã được Git ignore. Mọi service dùng `ddl-auto=validate`, vì vậy phải
+chạy schema canonical tương ứng trong `../docs/database/mysql/` trước lần khởi
+động đầu tiên.
+
+Thứ tự chạy toàn hệ thống:
+
+1. MySQL, Redis, Kafka và Zookeeper.
+2. Eureka Server.
+3. Các service cần dùng.
+4. API Gateway.
+
+Không phải service nào cũng cần toàn bộ Redis/Kafka trong mọi luồng, nhưng chạy
+đủ hạ tầng giúp tránh health check hoặc consumer thất bại trong integration test.
+
+## Build và API discovery
+
+Mỗi service được kiểm tra độc lập:
+
+```powershell
+cd server/<service-name>
+mvn test
 ```
 
-```bash
-cd server/payment-service
-mvn spring-boot:run
-```
+Một số integration test sử dụng Testcontainers và cần Docker. OpenAPI JSON thông
+thường có tại `/v3/api-docs`; Swagger UI có tại `/swagger-ui.html` hoặc
+`/swagger-ui/index.html` tùy Springdoc redirect của service.
 
-```bash
-cd server/notification-service
-mvn spring-boot:run
-```
+Tài liệu API, event, schema và thiết kế được lập chỉ mục tại
+[`docs/README.md`](../docs/README.md). README riêng hiện có trong một số service
+chỉ bổ sung chi tiết đặc thù của service đó.
 
-```bash
-cd server/user-service
-mvn spring-boot:run
-```
+## Nguyên tắc service boundary
 
-```bash
-cd server/promotion-service
-mvn spring-boot:run
-```
-
-```bash
-cd server/score-service
-mvn spring-boot:run
-```
-
-```bash
-cd server/analytics-service
-mvn spring-boot:run
-```
-
-To start the gateway:
-```bash
-cd api-gateway
-mvn spring-boot:run
-```
-
-## Health Check
-
-Each service exposes `GET /health` and returns a response in the form:
-
-```json
-{
-  "service": "auth-service",
-  "status": "UP"
-}
-```
-
-## Notes
-
-- Start MySQL before launching the services.
-- Create the referenced databases if you want JPA to connect successfully (`auth_db`, `movie_db`, `booking_db`, `payment_db`, `notification_db`, `user_db`, `promotion_db`, `score_db`, `analytics_db`).
-- The API gateway routes requests to the backend services using the configured local ports.
+- Service chỉ sở hữu schema của chính nó; không tạo foreign key hoặc truy vấn
+  trực tiếp database của service khác.
+- Giao tiếp đồng bộ qua API công khai/nội bộ đã xác thực; giao tiếp bất đồng bộ
+  qua event contract đã được tài liệu hóa.
+- Thay đổi endpoint, event, schema hoặc biến môi trường phải cập nhật contract,
+  migration và file cấu hình mẫu trong cùng Merge Request.
+- Không commit `application.properties`, secret, output trong `target/` hay log
+  runtime.

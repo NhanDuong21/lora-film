@@ -2122,36 +2122,31 @@ OpenAPI Specification
 ## 49.1 Cấu trúc thư mục
 
 ```text
-user-service
-│
-├── src
-│   ├── main
-│   │
-│   ├── java
-│   │   └── com.cinema.user
-│   │       │
-│   │       ├── config
-│   │       ├── controller
-│   │       ├── service
-│   │       ├── repository
-│   │       ├── entity
-│   │       ├── dto
-│   │       ├── mapper
-│   │       ├── event
-│   │       ├── kafka
-│   │       ├── cache
-│   │       ├── validation
-│   │       ├── exception
-│   │       ├── util
-│   │       └── common
-│   │
-│   └── resources
-│       ├── application.yml
-│       ├── db
-│       └── migration
-│
+user-service/
+├── src/main/java/com/project/userservice/
+│   ├── client/
+│   ├── config/
+│   ├── controller/
+│   ├── dto/
+│   ├── entity/
+│   ├── enumtype/
+│   ├── exception/
+│   ├── kafka/
+│   ├── mapper/
+│   ├── repository/
+│   ├── scheduler/
+│   ├── security/
+│   ├── service/
+│   └── util/
+├── src/main/resources/
+│   ├── application.example.properties
+│   └── application.properties          # local, Git ignored
 └── pom.xml
 ```
+
+Schema được quản lý thủ công tại
+`docs/database/mysql/user-service-schema.sql`; service không dùng Flyway hay
+Liquibase và Hibernate chỉ chạy `ddl-auto=validate`.
 
 ---
 

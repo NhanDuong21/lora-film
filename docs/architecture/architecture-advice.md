@@ -9,7 +9,10 @@ Tài liệu này cung cấp cơ sở lập luận kỹ thuật (technical justif
 Mục đích của tài liệu này là đưa ra các lập luận phân tích chi tiết về mặt kỹ thuật đối với từng thành phần công nghệ được sử dụng trong hệ thống. Tài liệu này đóng vai trò như một báo cáo biện luận phòng thủ, phân tích rõ ràng các ưu điểm, nhược điểm và rủi ro đi kèm của từng công nghệ, đồng thời cung cấp các giải pháp giảm thiểu tương ứng.
 
 > [!NOTE]
-> **Phạm vi tài liệu:** Những đề xuất và biện luận kiến trúc trong tài liệu này đại diện cho khuyến nghị ban đầu phục vụ cho **Sprint 1 - Authentication & User Management (Xác thực & Quản lý người dùng)**. Tài liệu sẽ được cập nhật và điều chỉnh liên tục thông qua các sprint tiếp theo nhằm phù hợp với các yêu cầu nghiệp vụ phát sinh (như đặt vé thời gian thực và tích hợp cổng thanh toán).
+> **Phạm vi tài liệu:** Đây là phần biện luận lựa chọn công nghệ. Topology và
+> service ownership hiện hành được mô tả trong
+> [`system-design.md`](system-design.md); code/config hiện tại được ưu tiên khi
+> một đề xuất trong tài liệu này chưa được triển khai.
 
 ---
 
@@ -40,16 +43,17 @@ Dưới đây là các lý do thực tế và chuyên sâu lý giải tại sao 
 *   **Khóa trạng thái tạm thời (Locking Timeout / TTL):** Rất quan trọng trong nghiệp vụ đặt vé. Sử dụng cơ chế Time-To-Live (TTL) của Redis để giữ ghế tạm thời (seat lock) trong vòng 5-10 phút khi khách đang thực hiện thanh toán, tự động giải phóng ghế nếu khách hủy giao dịch mà không làm ảnh hưởng tới MySQL.
 
 ### 2.6. Hệ Thống Tin Nhắn: Apache Kafka
-*   **Giảm thiểu sự phụ thuộc trực tiếp (Decoupling):** Cho phép các microservices giao tiếp không đồng bộ. Ví dụ, khi đặt vé thành công, `booking-service` chỉ cần bắn sự kiện lên Kafka và kết thúc tiến trình. Việc gửi mail hóa đơn sẽ do `notification-service` tự lắng nghe và xử lý độc lập.
+*   **Giảm thiểu sự phụ thuộc trực tiếp (Decoupling):** Cho phép các microservices giao tiếp không đồng bộ. Booking, Payment, Promotion, Score, Notification và Analytics trao đổi các lifecycle event theo contract mà không cần dùng chung database.
 *   **Khả năng chịu tải và lưu trữ thông điệp lớn (High Throughput):** Đảm bảo không bỏ sót bất kỳ sự kiện thanh toán hoặc gửi vé nào ngay cả khi hệ thống notification gặp sự cố tạm thời, nhờ cơ chế lưu trữ hàng đợi tin nhắn bền vững của Kafka.
 
 ### 2.7. Xác Thực: JWT (JSON Web Tokens)
-*   **Xác thực không trạng thái (Stateless Authentication):** Server không cần lưu trữ session của người dùng trong bộ nhớ. Toàn bộ thông tin định danh và quyền hạn (roles) đã được mã hóa an toàn bên trong token.
+*   **Access token tự chứa (Self-contained):** JWT mang identity và authority cần thiết để Gateway/service kiểm tra nhanh. Auth Service vẫn quản lý refresh token, session và trạng thái thu hồi để hỗ trợ logout, đổi mật khẩu và vô hiệu hóa truy cập.
 *   **Phù hợp với Microservices:** API Gateway có thể tự giải mã và kiểm tra chữ ký token JWT một cách độc lập để quyết định cho phép request đi qua hay không, không cần phải thực hiện truy vấn database hoặc gọi API tới `auth-service` cho mỗi request.
 
-### 2.8. Đóng Gói Ứng Dụng: Docker
-*   **Đảm bảo tính nhất quán môi trường (Environment Consistency):** Loại bỏ lỗi kinh điển "chạy được trên máy tôi nhưng lỗi trên server". Đóng gói toàn bộ source code, runtime, công cụ hệ thống và các thư viện phụ thuộc vào trong một Container duy nhất.
-*   **Triển khai nhanh chóng (Rapid Deployment):** Giúp các thành viên OJT nhanh chóng khởi dựng toàn bộ hệ thống gồm 5 microservices, API Gateway, Redis, MySQL và Kafka tại máy cá nhân chỉ bằng một câu lệnh `docker-compose up`.
+### 2.8. Hạ tầng local bằng Docker Compose
+
+*   **Môi trường hạ tầng nhất quán:** Root Compose cố định MySQL, Redis, Kafka và Zookeeper cho máy phát triển.
+*   **Ranh giới hiện tại:** Compose không đóng gói 9 Java service, Gateway, Eureka hay frontend. Các application process chạy trực tiếp bằng Maven/npm như hướng dẫn trong root README.
 
 ---
 
