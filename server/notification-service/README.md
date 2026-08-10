@@ -13,9 +13,9 @@ This service is intentionally **not packaged into Docker**. The root `docker-com
 - A Base64-encoded 32-byte AES key for recipient encryption
 - A shared internal-service token and JWT secret
 
-Create the schema by reviewing and executing the single
-`deployment/database/notification-schema.sql` file. It replaces the old
-notification database and is destructive.
+Create the schema by reviewing and executing
+[`docs/database/mysql/notification-service-schema.sql`](../../docs/database/mysql/notification-service-schema.sql).
+It replaces the old notification database and is destructive.
 
 Copy the safe Spring configuration template, set its referenced environment
 variables, then run:

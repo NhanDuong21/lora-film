@@ -16,4 +16,10 @@ templates/{category}/{template-key}/{channel}/{locale}/
 
 Only published content may be used by delivery workers. If Git is unavailable, the health indicator is down and new renders fail safely. Redis invalidation is best effort and Git remains authoritative.
 
-Use [`initialize-registry.ps1`](../../server/notification-service/deployment/template-registry/initialize-registry.ps1) to create an empty private GitHub, GitLab, or Gitea repository through its provider API. The tool does not seed template bodies.
+Create the external repository with the Git provider's normal project setup,
+protect `main`, and grant the service account only the read/write permissions it
+needs. Configure the URI, branch, work directory and credentials through the
+`NOTIFICATION_TEMPLATE_GIT_*` variables documented in the service's
+[`application.example.properties`](../../server/notification-service/src/main/resources/application.example.properties).
+The application repository does not contain a registry bootstrap script and
+must not seed production template bodies.

@@ -2293,40 +2293,33 @@ Response
 The Auth Service follows a layered architecture based on Spring Boot best practices.
 
 ```text
-auth-service
-│
-├── src
-│   ├── main
-│   │   ├── java
-│   │   │
-│   │   └── com.cinema.auth
-│   │       │
-│   │       ├── config
-│   │       ├── controller
-│   │       ├── service
-│   │       ├── repository
-│   │       ├── entity
-│   │       ├── dto
-│   │       ├── mapper
-│   │       ├── security
-│   │       ├── oauth2
-│   │       ├── jwt
-│   │       ├── kafka
-│   │       ├── redis
-│   │       ├── event
-│   │       ├── exception
-│   │       ├── util
-│   │       └── common
-│   │
-│   └── resources
-│       ├── application.yml
-│       ├── application-dev.yml
-│       ├── application-prod.yml
-│       └── db
-│           └── migration
-│
+auth-service/
+├── src/main/java/com/project/authservice/
+│   ├── client/
+│   ├── common/
+│   ├── config/
+│   ├── controller/
+│   ├── dto/
+│   ├── entity/
+│   ├── enums/
+│   ├── event/
+│   ├── exception/
+│   ├── kafka/
+│   ├── mapper/
+│   ├── repository/
+│   ├── scheduler/
+│   ├── security/
+│   ├── service/
+│   └── util/
+├── src/main/resources/
+│   ├── application.example.properties
+│   └── application.properties          # local, Git ignored
 └── pom.xml
 ```
+
+Schema được quản lý thủ công tại
+`docs/database/mysql/auth-service-schema.sql`; service không dùng Flyway hay
+Liquibase và Hibernate chỉ chạy `ddl-auto=validate`.
 
 ---
 

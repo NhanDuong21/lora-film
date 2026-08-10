@@ -112,7 +112,9 @@ Profiles and payroll calculations are intentionally not cached.
 - CORS origin patterns are supplied through `ALLOWED_ORIGIN_PATTERNS`.
 - Passwords use BCrypt. Password policy validation requires upper/lowercase letters, a digit, a symbol, and at least eight characters.
 - Reset credentials, JWTs, refresh tokens, passwords, and raw OTPs are not written to application logs.
-- Actuator health, liveness/readiness groups, metrics, and Prometheus output are enabled.
+- User Service exposes a lightweight `/health` endpoint. Auth Service currently
+  has no dedicated health/Actuator endpoint; verify its startup and Eureka
+  registration until one is added.
 - Swagger UI is available at each service's `/swagger-ui/index.html`; OpenAPI JSON is at `/v3/api-docs`.
 - The frontend includes dedicated 401, 403, 404, and 500 states; role guards route forbidden access to 403 and a top-level error boundary handles unexpected render failures.
 
@@ -152,8 +154,8 @@ Endpoints:
 - Frontend: `http://localhost:5173`
 - Gateway: `http://localhost:8080`
 - Eureka: `http://localhost:8761`
-- Auth health: `http://localhost:8081/actuator/health`
-- User health: `http://localhost:8086/actuator/health`
+- Auth: verify `auth-service` is registered in Eureka and inspect its startup log
+- User health: `http://localhost:8086/health`
 
 ## Verification commands
 
@@ -161,11 +163,9 @@ Endpoints:
 cd server/auth-service && mvn test
 cd server/user-service && mvn test
 cd api-gateway && mvn test
-cd client && npm test -- --run
+cd client && npm test
 cd client && npm run build
 ```
 
-The auth/user frontend scope is lint-clean. The repository-wide lint command still reports pre-existing errors in booking, concessions, facilities, and an unrelated finance page; those files are outside this implementation slice.
-
-The final automated results were 16 passing auth tests, 12 passing user tests,
-and 173 passing frontend tests across 37 files.
+Test counts change as the repository evolves; use the commands above as current
+evidence instead of relying on a historical pass count.

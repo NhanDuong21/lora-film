@@ -1,114 +1,92 @@
-# Movie Booking System
+# LoraFilm Movie Booking System
 
-Welcome to the online movie booking system project by Group 3. This repository contains the complete source code of the project including the Frontend (Client), Backend (Microservices Server), and API Gateway.
+LoraFilm là hệ thống đặt vé xem phim gồm React client, API Gateway, Eureka và
+9 Spring Boot microservice. Các service dùng database riêng, giao tiếp qua HTTP
+và Kafka; hạ tầng local được cung cấp bằng Docker Compose.
 
-## Technology Stack
+## Thành phần chính
 
-**Frontend (Client):**
-- React 19 (with Vite)
-- React Router DOM
-- Axios
+| Thành phần | Công nghệ | Cổng mặc định |
+|---|---|---:|
+| Frontend | React 19, Vite 8, React Router 7 | 5173 |
+| API Gateway | Spring Cloud Gateway | 8080 |
+| Eureka Server | Spring Cloud Netflix Eureka | 8761 |
+| Auth Service | Spring Boot 3.3.5 | 8081 |
+| Movie Service | Spring Boot 3.3.5 | 8082 |
+| Booking Service | Spring Boot 3.3.5 | 8083 |
+| Payment Service | Spring Boot 3.3.5 | 8084 |
+| Notification Service | Spring Boot 3.3.5 | 8085 |
+| User Service | Spring Boot 3.3.5 | 8086 |
+| Promotion Service | Spring Boot 3.3.5 | 8087 |
+| Score Service | Spring Boot 3.3.5 | 8088 |
+| Analytics Service | Spring Boot 3.3.5 | 8089 |
 
-**Backend (Server & API Gateway):**
-- Java 21
-- Spring Boot (Microservices)
-- Spring Cloud Gateway
-- Maven 3.9+
-- Database: MySQL 8+
+Backend yêu cầu Java 21, Maven 3.9+ và MySQL 8. Frontend yêu cầu phiên bản
+Node.js tương thích với Vite 8 và npm.
 
-## Project Structure
+## Cấu trúc repository
 
 ```text
-hcm26_cpl_java_05_group3/
-├── client/                 # Frontend application (React/Vite)
-├── server/                 # Backend services (Java/Spring Boot)
-│   ├── auth-service/       # User authentication service (JWT/OAuth2)
-│   ├── movie-service/      # Service managing movies, cinemas, schedules
-│   ├── booking-service/    # Booking processing service
-│   ├── payment-service/    # Payment integration service
-│   ├── notification-service/# Email/SMS notification service
-│   ├── user-service/       # User profiles and management service
-│   ├── analytics-service/  # Data insights and reporting service
-│   ├── promotion-service/  # Coupons and discount service
-│   └── score-service/      # Loyalty points and movie rating service
-├── api-gateway/            # Intermediate API Gateway routing requests
-└── docs/                   # Project documentation (workflow, structure...)
-```
-*(For more details, see [Project Structure Documentation](docs/project-structure.md))*
-
-## Quy trình clone/pull và chạy local trên Windows
-
-### 1. Chuẩn bị máy
-
-Cài Java 21, Maven 3.9+, Node.js/npm, Docker Desktop và MySQL Workbench (hoặc
-MySQL client). Mọi lệnh dưới đây chạy trong PowerShell tại thư mục gốc project.
-
-### 2. Clone lần đầu
-
-```powershell
-git clone <repository_url>
-cd hcm26_cpl_java_05_group3
-git checkout develop
+.
+├── client/          # React/Vite frontend
+├── server/          # 9 Spring Boot microservice
+├── api-gateway/     # Gateway tại cổng 8080
+├── eureka-server/   # Service discovery tại cổng 8761
+├── docker/          # MySQL init cho môi trường local
+├── docs/            # API, kiến trúc, schema, runbook và test matrix
+└── retrospective/   # Báo cáo retrospective theo sprint
 ```
 
-### 3. Quy trình pull code hằng ngày
+Xem [mục lục tài liệu](docs/README.md) để tìm tài liệu theo chủ đề.
 
-Nếu đang sửa dở code, lưu thay đổi trước khi pull. Sau đó chạy đúng thứ tự:
+## Chạy local trên Windows
+
+### 1. Chuẩn bị cấu hình
+
+Chạy tại thư mục gốc bằng PowerShell:
 
 ```powershell
-git status
-git fetch origin
-git checkout develop
-git pull --ff-only origin develop
+Copy-Item .env.example .env
+
+$modules = @(
+  'eureka-server',
+  'api-gateway',
+  'server/auth-service',
+  'server/movie-service',
+  'server/booking-service',
+  'server/payment-service',
+  'server/notification-service',
+  'server/user-service',
+  'server/promotion-service',
+  'server/score-service',
+  'server/analytics-service'
+)
+
+foreach ($module in $modules) {
+  Copy-Item "$module/src/main/resources/application.example.properties" `
+            "$module/src/main/resources/application.properties"
+}
 ```
 
-Nếu `git status` còn file đang sửa và chưa muốn commit, có thể cất tạm rồi lấy
-lại sau khi pull:
+`application.properties` và `.env` là cấu hình local đã được Git ignore. Không
+commit secret. Các giá trị trong file mẫu có thể được ghi đè bằng biến môi
+trường; hãy thay toàn bộ credential mặc định trước khi dùng ngoài máy local.
+
+### 2. Khởi động hạ tầng
 
 ```powershell
-git stash push -u -m "wip-before-pull"
-git pull --ff-only origin develop
-git stash pop
-```
-
-Nếu pull báo conflict, xử lý từng file, chạy `git add`, rồi tiếp tục theo hướng
-dẫn Git; không dùng `reset --hard` nếu chưa chắc chắn vì có thể mất thay đổi.
-
-Các file `application.properties` và `.env` là file local bị ignore nên Git không
-tự cập nhật chúng. Sau mỗi lần pull có thay đổi cấu hình, copy lại 11 file mẫu:
-
-Tạo file môi trường cho Docker và khởi động MySQL, Redis, Kafka:
-
-```powershell
-Copy-Item .env.example .env -Force
 docker compose up -d
 docker compose ps
 ```
 
-Copy 11 file cấu hình mẫu trước khi chạy Java service:
+Compose khởi động MySQL (`localhost:3307`), Redis (`6379`), Zookeeper (`2181`)
+và Kafka (`9092`). Java service không chạy trong Compose.
 
-```powershell
-$applications = @(
-  'eureka-server', 'api-gateway',
-  'server/auth-service', 'server/movie-service', 'server/booking-service',
-  'server/payment-service', 'server/notification-service', 'server/user-service',
-  'server/promotion-service', 'server/score-service', 'server/analytics-service'
-)
-foreach ($application in $applications) {
-  Copy-Item "$application/src/main/resources/application.example.properties" `
-            "$application/src/main/resources/application.properties" -Force
-}
-```
+### 3. Khởi tạo database
 
-Spring Boot không tự đọc `.env` ở thư mục gốc; mỗi file được copy là cấu hình độc
-lập. Các key JWT, token nội bộ, Cloudinary, TMDB, mail, VNPay/MoMo đã có sẵn trong
-file example và vẫn cho phép ghi đè bằng biến môi trường. Nếu dùng tài khoản MySQL
-khác, chỉ sửa `spring.datasource.username` và `spring.datasource.password` trong
-9 file dưới `server/*-service`; không cần sửa Eureka hay API Gateway.
-
-Tất cả 9 service dùng `spring.jpa.hibernate.ddl-auto=validate`, nên phải Execute 9
-schema trong `docs/database/mysql/` trước lần chạy đầu tiên. Kết nối Workbench tới
-`127.0.0.1:3307` bằng tài khoản trong `.env`, rồi chạy các file:
+Các service dùng `spring.jpa.hibernate.ddl-auto=validate`; Hibernate không tự
+tạo bảng. Với database mới, chạy 9 file canonical trong
+`docs/database/mysql/` bằng MySQL Workbench hoặc MySQL client:
 
 ```text
 analytics-service-schema.sql    auth-service-schema.sql
@@ -118,147 +96,111 @@ promotion-service-schema.sql    score-service-schema.sql
 user-service-schema.sql
 ```
 
-Notification và Promotion có lệnh drop/recreate database; chỉ chạy trên database
-local mới hoặc sao lưu dữ liệu trước. Các schema còn lại cũng nên chạy trên database
-trống để tránh lỗi bảng đã tồn tại.
+Đọc file trước khi chạy: một số schema có câu lệnh tạo lại database. Với môi
+trường đã có dữ liệu, sao lưu trước và dùng các file phù hợp trong
+`docs/database/mysql/migrations/` thay vì chạy lại schema một cách máy móc. Xem
+[hướng dẫn database](docs/database/README.md).
 
-Khởi động theo thứ tự: `eureka-server` (8761), 9 service (8081–8089), rồi
-`api-gateway` (8080). Mỗi module chạy ở một terminal riêng bằng `mvn spring-boot:run`.
+### 4. Khởi động backend
 
-## Chạy frontend
+Khởi động theo thứ tự:
 
-Mở terminal mới:
+1. `eureka-server`
+2. 9 service trong `server/`
+3. `api-gateway`
 
-```bash
+Mỗi module chạy ở một terminal riêng:
+
+```powershell
+cd eureka-server
+mvn spring-boot:run
+```
+
+Ví dụ với một service:
+
+```powershell
+cd server/movie-service
+mvn spring-boot:run
+```
+
+Với Gateway:
+
+```powershell
+cd api-gateway
+mvn spring-boot:run
+```
+
+Eureka UI có tại `http://localhost:8761`. Gateway health có tại
+`http://localhost:8080/health`. Movie, Booking, Notification, Promotion, Score
+và Analytics dùng `/actuator/health`; Payment và User cung cấp `/health` riêng.
+Auth Service hiện được kiểm tra qua startup log và trạng thái đăng ký trên
+Eureka vì chưa có health endpoint riêng.
+
+### 5. Khởi động frontend
+
+```powershell
 cd client
 npm install
 npm run dev
 ```
 
-## Chạy backend và kiểm tra nhanh
+Mở `http://localhost:5173`. Vite proxy `/api`, OAuth callback và Socket.IO tới
+Gateway tại `http://localhost:8080`. Xem [hướng dẫn frontend](client/README.md).
 
-Docker Compose chỉ cung cấp MySQL, Redis, Zookeeper và Kafka; các service Java
-chạy ngoài Docker. Trong từng thư mục service, có thể biên dịch trước rồi chạy:
+## Kiểm tra thay đổi
 
-```bash
-mvn clean compile
-mvn spring-boot:run
-```
-
-Thứ tự cổng: Eureka `8761`; auth `8081`, movie `8082`, booking `8083`, payment
-`8084`, notification `8085`, user `8086`, promotion `8087`, score `8088`, analytics
-`8089`; Gateway `8080`. Kiểm tra Eureka tại `http://localhost:8761`, Gateway tại
-`http://localhost:8080`, frontend tại `http://localhost:5173`.
-
-## Docker Compose — hạ tầng dùng chung local
-
-File `docker-compose.yml` ở thư mục gốc cung cấp:
-
-- MySQL 8
-- Redis
-- Zookeeper
-- Kafka
-
-Các application service vẫn chạy bằng Java ở máy local. Compose chỉ chạy hạ tầng
-và tạo database; schema phải Execute thủ công như hướng dẫn ở trên.
-
-### Yêu cầu
-
-- Đã cài Docker Desktop hoặc Docker Engine
-- Đã bật Docker Compose
-- Lệnh `docker` và `docker compose` chạy được trong terminal
-
-### Thiết lập
-
-1. Copy file môi trường (PowerShell dùng `Copy-Item .env.example .env`):
+Frontend:
 
 ```powershell
-Copy-Item .env.example .env -Force
+cd client
+npm test
+npm run lint
+npm run build
 ```
 
-2. Chỉ sửa các biến sau nếu muốn đổi tài khoản MySQL Docker:
+Backend được build/test độc lập theo module:
 
-- `MYSQL_ROOT_PASSWORD`
-- `MYSQL_USER`
-- `MYSQL_PASSWORD`
-
-### Khởi động hạ tầng
-
-```bash
-docker compose up -d
+```powershell
+cd server/<service-name>
+mvn test
 ```
 
-### Dừng hạ tầng, giữ dữ liệu
+```powershell
+cd api-gateway
+mvn test
+```
 
-```bash
+Một số integration test cần Docker đang chạy. Swagger UI của từng service dùng
+`/swagger-ui.html` hoặc `/swagger-ui/index.html` tùy cấu hình Springdoc; OpenAPI
+JSON dùng `/v3/api-docs`.
+
+## Lệnh hạ tầng thường dùng
+
+```powershell
+docker compose logs -f
 docker compose down
 ```
 
-### Xem log
+Lệnh sau xóa cả volume và toàn bộ dữ liệu local của Compose:
 
-```bash
-docker compose logs -f
-```
-
-Hoặc xem riêng MySQL:
-
-```bash
-docker compose logs -f mysql
-```
-
-### Xóa container và volume (mất dữ liệu local)
-
-```bash
+```powershell
 docker compose down -v
 ```
 
-### Kiểm tra hạ tầng
+## Quy trình Git
 
-- MySQL: `localhost:3307`
-- Redis: `localhost:6379`
-- Zookeeper: `localhost:2181`
-- Kafka: `localhost:9092`
+- `main`: nhánh ổn định; không push trực tiếp.
+- `develop`: nhánh tích hợp; feature branch tách từ đây.
+- Prefix khuyến nghị: `feature/`, `fix/`, `docs/`, `test/`, `setup/`.
+- Mọi thay đổi vào `develop` đi qua Merge Request và phải build/test theo phạm vi
+  ảnh hưởng.
 
-Kiểm tra trạng thái trực tiếp:
+Chi tiết nằm trong [GitLab workflow](docs/gitlab-workflow.md).
 
-```bash
-docker compose ps
-```
-Sau khi Java service đã chạy, kiểm tra thêm `GET /health` (ví dụ
-`http://localhost:8081/health`, `http://localhost:8086/health`).
+## Thành viên
 
-Gateway tìm service qua Eureka và expose API tại `http://localhost:8080`.
-
-## Basic Branching Rules
-
-The project adopts a branch management process inspired by Git Flow:
-- **`main`**: Production branch, contains the most stable source code. No direct pushing allowed.
-- **`develop`**: Main integration branch. All feature branches must branch off from here.
-- **Development Branch Prefixes**:
-  - `feature/<issue-id>-<description>`: Develop a new feature.
-  - `fix/<issue-id>-<description>`: Fix a bug.
-  - `docs/<issue-id>-<description>`: Update documentation.
-  - `setup/<issue-id>-<description>`: Configuration setup, CI/CD.
-  - `test/<issue-id>-<description>`: Add/edit test cases.
-
-## Merge Request (MR) Process
-
-All code intended for `develop` must go through a Merge Request (MR).
-1. Complete the code on your local branch, ensuring it runs well and passes tests.
-2. Push the branch to GitLab.
-3. Create an MR with a clear title (following Conventional Commits standards), with `develop` as the target branch.
-4. Write a detailed description for the MR and link the corresponding Issue (e.g., `Closes #1`).
-5. Assign the Team Leader/Reviewer (Thành) to review the code.
-6. Once the MR is approved and passes the pipeline, it will be merged into `develop`.
-
-*(For more details, see [GitLab Workflow Guidelines](docs/gitlab-workflow.md))*
-
-## Team Members
-
-- **Phan Tuấn Thành** - Team Leader / Developer
-- **Dương Thiện Nhân** - Member / Developer
-- **Trần Hiển Vinh** - Member / Developer
-- **Trương Hoàng Khang** - Member / Developer
-- **Trần Lương Thiện Hoàn** - Member / Developer
----
-**Note:** See detailed rules regarding Git, commits, and workflows in [docs/gitlab-workflow.md](docs/gitlab-workflow.md).
+- Phan Tuấn Thành — Team Leader / Developer
+- Dương Thiện Nhân — Developer
+- Trần Hiển Vinh — Developer
+- Trương Hoàng Khang — Developer
+- Trần Lương Thiện Hoàn — Developer

@@ -1,463 +1,60 @@
-# Development Guidelines
+# Promotion Service
 
-> Mục tiêu của tài liệu này là thống nhất quy tắc phát triển Promotion Service nhằm:
->
-> - Giảm tối đa xung đột (Merge Conflict).
-> - Đảm bảo chất lượng mã nguồn.
-> - Đồng nhất Coding Style.
-> - Dễ Review, Test và Maintain.
-> - Tuân thủ kiến trúc Package by Feature (DDD Lite).
+Promotion Service quản lý campaign, promotion/voucher, claim của khách hàng,
+reservation trong luồng booking, lifecycle scheduler, outbox event và monitoring.
+Service chạy tại cổng `8087` và sở hữu database `promotion_db`.
 
----
+## Chạy local
 
-# 1. Development Principles
+Từ thư mục này:
 
-Promotion Service được phát triển theo các nguyên tắc:
+```powershell
+Copy-Item src/main/resources/application.example.properties `
+          src/main/resources/application.properties
+mvn test
+mvn spring-boot:run
+```
 
-- Package by Feature (DDD Lite)
-- Domain-driven Design
-- Clean Architecture
-- SOLID Principles
-- Production Ready
-- Code First
-- API First
-- Database schema được bootstrap thủ công từ `docs/database/mysql/promotion-service-schema.sql`
-- Không sử dụng Lombok
+Trước khi chạy, cần:
 
----
+- MySQL, Redis, Kafka và Eureka đang hoạt động.
+- Áp dụng `docs/database/mysql/promotion-service-schema.sql` từ thư mục gốc.
+- Giữ token nội bộ giữa Booking/Payment và Promotion đồng bộ qua biến môi
+  trường; không dùng giá trị local mặc định ở môi trường chia sẻ.
 
-# 2. Domain Ownership
+Hibernate dùng `ddl-auto=validate` và không tự cập nhật schema.
 
-Mỗi thành viên chỉ chịu trách nhiệm **một Domain**.
+## Phạm vi API
 
-Không chỉnh sửa Business Logic của Domain khác nếu chưa trao đổi với người phụ trách.
+| Nhóm | Prefix tiêu biểu |
+|---|---|
+| Customer promotion và wallet | `/api/promotions/**`, `/api/customers/me/promotions/**` |
+| Admin campaign/promotion | `/api/admin/promotion-campaigns/**`, `/api/admin/promotions/**` |
+| Admin reservation/config/event/monitoring | `/api/admin/reservations/**`, `/api/admin/configurations/**`, `/api/admin/events/**`, `/api/admin/promotion-monitoring/**` |
+| Booking/Payment integration | `/internal/runtime/**`, `/internal/reservations/**` |
+| Internal operations | `/internal/events/**`, `/internal/schedulers/**`, `/internal/configurations/**` |
 
-| Domain | Owner |
-|----------|-------|
-| promotion | Member A |
-| benefit | Member B |
-| reservation | Member C |
-| partner | Member D |
-| configuration | Member E |
-| integration | Member F |
-| common | Foundation Owner |
+- OpenAPI JSON: `http://localhost:8087/v3/api-docs`
+- Swagger UI: `http://localhost:8087/swagger-ui.html`
+- Health: `http://localhost:8087/actuator/health`
 
----
+Contract đầy đủ nằm tại
+[`docs/api/promotion-service-api.md`](../../docs/api/promotion-service-api.md).
+Các business rule và quyết định thiết kế nằm trong
+[`docs/design/promotion-service/`](../../docs/design/promotion-service/).
 
-# 3. Foundation Owner
-
-Foundation Owner chịu trách nhiệm toàn bộ phần hạ tầng của hệ thống.
-
-Bao gồm:
-
-- Project Initialization
-- Maven Configuration
-- Package Structure
-- Spring Security
-- JWT
-- Swagger/OpenAPI
-- Kafka Configuration
-- Redis Configuration
-- Feign Configuration
-- Database Configuration
-- Canonical database schema
-- Global Exception Handler
-- Base Entity
-- Base Repository
-- Common Utility
-- Validation Framework
-- Logging
-- Audit Framework
-- Idempotency Framework
-
-Các thành viên khác **không tự ý chỉnh sửa** các thành phần này.
-
----
-
-# 4. Domain Structure
-
-Mỗi Domain phải tuân thủ cùng một cấu trúc thư mục.
+## Cấu trúc code
 
 ```text
-domain
-├── controller
-├── service
-│   ├── impl
-│   └── validator
-├── repository
-├── entity
-├── dto
-│   ├── request
-│   └── response
-├── mapper
-├── specification
-├── exception
-└── enum
+com.project.promotionservice/
+├── promotion/      # Campaign, promotion và customer claim
+├── reservation/    # Preview, reserve, confirm, release, reverse
+├── integration/    # Kafka, outbox, scheduler và operational API
+├── configuration/  # Dynamic configuration
+└── common/         # Security, error, monitoring và shared infrastructure
 ```
 
-Không tạo thêm package mới nếu chưa thống nhất với cả nhóm.
-
----
-
-# 5. Domain Isolation Rule
-
-Mỗi Domain chỉ được phép:
-
-- Sửa Entity của Domain mình.
-- Sửa Repository của Domain mình.
-- Sửa Controller của Domain mình.
-- Sửa Service của Domain mình.
-- Sửa DTO của Domain mình.
-
-Không được sửa trực tiếp Domain khác.
-
-Ví dụ:
-
-Promotion Domain không được sửa:
-
-- benefit/*
-- reservation/*
-- partner/*
-
----
-
-# 6. File Ownership
-
-Một số file chỉ có Foundation Owner được chỉnh sửa.
-
-| File | Owner |
-|------|-------|
-| pom.xml | Foundation |
-| application.yml | Foundation |
-| application-dev.yml | Foundation |
-| application-prod.yml | Foundation |
-| Dockerfile | Foundation |
-| docker-compose.yml | Foundation |
-| SecurityConfig | Foundation |
-| SwaggerConfig | Foundation |
-| KafkaConfig | Foundation |
-| RedisConfig | Foundation |
-| WebMvcConfig | Foundation |
-| GlobalExceptionHandler | Foundation |
-| BaseEntity | Foundation |
-| BaseRepository | Foundation |
-
----
-
-# 7. Git Branch Strategy
-
-Mỗi Issue tương ứng với một Branch.
-
-Ví dụ:
-
-```text
-feature/foundation
-
-feature/promotion-domain
-
-feature/benefit-domain
-
-feature/reservation-domain
-
-feature/partner-domain
-
-feature/configuration-domain
-
-feature/integration-domain
-```
-
-Không commit trực tiếp lên:
-
-- main
-- master
-- develop
-
----
-
-# 8. Pull Request Rule
-
-Mỗi Pull Request chỉ giải quyết **một Issue**.
-
-Không gộp nhiều Issue vào cùng một Pull Request.
-
-Ví dụ:
-
-✅ Đúng
-
-```
-Promotion CRUD
-```
-
-❌ Sai
-
-```
-Promotion CRUD
-
-+
-
-Voucher CRUD
-
-+
-
-Kafka
-```
-
----
-
-# 9. Commit Convention
-
-Định dạng:
-
-```text
-type(scope): description
-```
-
-Ví dụ:
-
-```text
-feat(promotion): implement campaign creation
-
-feat(benefit): implement voucher redemption
-
-fix(reservation): resolve timeout release
-
-refactor(partner): optimize settlement query
-
-docs(readme): update development guideline
-
-test(promotion): add campaign service test
-```
-
----
-
-# 10. Coding Convention
-
-Toàn bộ source code sử dụng:
-
-- Java 21
-- Spring Boot 3
-- Spring Data JPA
-- Jakarta Validation
-
-Coding Style:
-
-- Class PascalCase
-- Method camelCase
-- Variable camelCase
-- Constant UPPER_SNAKE_CASE
-
-Ví dụ:
-
-```java
-PromotionCampaignService
-```
-
-```java
-createCampaign()
-```
-
-```java
-promotionRepository
-```
-
-```java
-MAX_RETRY_COUNT
-```
-
----
-
-# 11. Không sử dụng Lombok
-
-Promotion Service **không sử dụng Lombok**.
-
-Không được dùng:
-
-```java
-@Getter
-```
-
-```java
-@Setter
-```
-
-```java
-@Data
-```
-
-```java
-@Builder
-```
-
-```java
-@NoArgsConstructor
-```
-
-```java
-@AllArgsConstructor
-```
-
-```java
-@RequiredArgsConstructor
-```
-
-Tất cả Entity, DTO và Model phải viết thủ công.
-
-Ví dụ:
-
-```java
-private String campaignName;
-
-public String getCampaignName() {
-    return campaignName;
-}
-
-public void setCampaignName(String campaignName) {
-    this.campaignName = campaignName;
-}
-```
-
-Lý do:
-
-- Dễ Debug.
-- Dễ Review.
-- Rõ ràng khi Merge.
-- Không phụ thuộc Annotation Processor.
-- Đồng nhất với Coding Standard của dự án.
-
----
-
-# 12. Constructor Rule
-
-Không sử dụng Lombok Constructor.
-
-Ví dụ:
-
-```java
-public PromotionCampaign() {
-}
-
-public PromotionCampaign(String code, String name) {
-    this.code = code;
-    this.name = name;
-}
-```
-
----
-
-# 13. Entity Rule
-
-Entity chỉ chứa:
-
-- Mapping
-- Getter
-- Setter
-- Constructor
-- equals()
-- hashCode()
-- toString()
-
-Không đặt Business Logic trong Entity.
-
----
-
-# 14. Service Rule
-
-Business Logic chỉ được viết trong Service.
-
-Không viết Business Logic trong:
-
-- Controller
-- Entity
-- Repository
-
----
-
-# 15. Controller Rule
-
-Controller chỉ thực hiện:
-
-- Validate Request
-- Gọi Service
-- Trả Response
-
-Không viết Business Logic.
-
----
-
-# 16. Repository Rule
-
-Repository chỉ chứa truy vấn dữ liệu.
-
-Không viết:
-
-- Validation
-- Business Logic
-- Mapping
-
----
-
-# 17. DTO Rule
-
-Request DTO
-
-↓
-
-Validation
-
-↓
-
-Service
-
-↓
-
-Response DTO
-
-Không trả Entity trực tiếp ra API.
-
----
-
-# 18. Merge Conflict Prevention
-
-Để giảm tối đa Merge Conflict:
-
-- Mỗi thành viên chỉ làm một Domain.
-- Không sửa package của Domain khác.
-- Không sửa Entity của Domain khác.
-- Không sửa Repository của Domain khác.
-- Không sửa Controller của Domain khác.
-- Không sửa Service của Domain khác.
-- Foundation Owner là người duy nhất chỉnh sửa các file cấu hình.
-- Luôn Pull/Rebase nhánh `develop` mới nhất trước khi bắt đầu làm việc và trước khi tạo Pull Request.
-- Mỗi Pull Request chỉ tập trung vào một chức năng hoặc một Issue.
-
----
-
-# 19. Code Review Checklist
-
-Trước khi tạo Pull Request, cần kiểm tra:
-
-- Code build thành công.
-- Không có lỗi Compile.
-- Không có Warning nghiêm trọng.
-- Đã thêm Validation đầy đủ.
-- Không sử dụng Lombok.
-- Không sửa Domain khác.
-- Đúng Coding Convention.
-- Đúng Package Structure.
-- Đúng Naming Convention.
-- Đã cập nhật file schema canonical nếu thay đổi Database.
-
----
-
-# 20. Definition of Done
-
-Một Issue được xem là hoàn thành khi:
-
-- Hoàn thành toàn bộ yêu cầu nghiệp vụ.
-- Build thành công.
-- Không có lỗi Compile.
-- Đã Review.
-- Đã Merge vào develop.
-- Không gây ảnh hưởng Domain khác.
-- Tuân thủ toàn bộ Coding Guideline của dự án.
-```
+Business logic nằm trong domain/application service; controller chỉ xử lý HTTP,
+validation và authorization. Repository không được chứa policy nghiệp vụ. Mọi
+thay đổi schema phải cập nhật canonical schema và migration phù hợp trong cùng
+Merge Request.

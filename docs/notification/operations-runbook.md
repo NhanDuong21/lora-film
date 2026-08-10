@@ -1,7 +1,7 @@
 # Notification operations runbook
 
 Start infrastructure with `docker compose up -d`, apply
-`deployment/database/notification-schema.sql`, verify the external Git registry,
+`docs/database/mysql/notification-service-schema.sql`, verify the external Git registry,
 then run notification service locally with `mvn spring-boot:run`.
 
 Readiness checks:

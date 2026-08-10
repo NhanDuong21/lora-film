@@ -1,7 +1,7 @@
 # Notification database schema
 
-The only notification SQL file is
-[`notification-schema.sql`](../../server/notification-service/deployment/database/notification-schema.sql).
+The canonical notification SQL file is
+[`notification-service-schema.sql`](../database/mysql/notification-service-schema.sql).
 It drops and recreates `notification_db`, creates the least-privilege application
 user, all operational tables, indexes, foreign keys/checks, and development
 preferences. Review the credential placeholder before executing it. The reset is
