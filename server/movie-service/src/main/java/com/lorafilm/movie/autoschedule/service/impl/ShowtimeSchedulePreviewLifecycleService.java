@@ -1,0 +1,182 @@
+package com.lorafilm.movie.autoschedule.service.impl;
+
+import java.time.Clock;
+import com.lorafilm.movie.autoschedule.mapper.ShowtimeSchedulePreviewPersistenceMapper;
+import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
+import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
+import com.lorafilm.movie.autoschedule.domain.enums.AutoScheduleStrategy;
+import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemApplyStatus;
+import com.lorafilm.movie.autoschedule.domain.enums.PreviewItemValidationStatus;
+import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewApplyMode;
+import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
+import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
+import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleOptimizationResult;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleRequestScopeSnapshot;
+import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePreflightResponse;
+import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
+import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
+import com.lorafilm.movie.cinema.domain.entity.Cinema;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+@Service
+public class ShowtimeSchedulePreviewLifecycleService {
+
+    private static final int MAX_FAILURE_REASON_LENGTH = 500;
+    public static final String POLICY_VERSION = "AUTO_SCHEDULE_POLICY_V1";
+
+    private final ShowtimeSchedulePreviewRepository previewRepository;
+    private final ShowtimeSchedulePreviewItemRepository itemRepository;
+    private final ShowtimeSchedulePreviewPersistenceMapper persistenceMapper;
+    private final Clock clock;
+
+    public ShowtimeSchedulePreviewLifecycleService(ShowtimeSchedulePreviewRepository previewRepository,
+                                                   ShowtimeSchedulePreviewItemRepository itemRepository,
+                                                   ShowtimeSchedulePreviewPersistenceMapper persistenceMapper,
+                                                   Clock clock) {
+        this.previewRepository = previewRepository;
+        this.itemRepository = itemRepository;
+        this.persistenceMapper = persistenceMapper;
+        this.clock = clock;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ShowtimeSchedulePreview createGeneratingPreview(NormalizedGeneratePreviewRequest request,
+                                                           Cinema cinema,
+                                                           String fingerprint,
+                                                           Long adminUserId) {
+        return createGeneratingPreview(
+                request, cinema, AutoScheduleStrategyVersions.CURRENT, fingerprint, adminUserId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ShowtimeSchedulePreview createGeneratingPreview(NormalizedGeneratePreviewRequest request,
+                                                           Cinema cinema,
+                                                           String strategyVersion,
+                                                           String fingerprint,
+                                                           Long adminUserId) {
+        Instant now = Instant.now(clock);
+        
+        ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
+                cinema,
+                request.getScheduleFrom(),
+                request.getScheduleTo(),
+                request.getSlotGranularityMinutes(),
+                request.getPreviewTtlMinutes(),
+                strategyVersion,
+                request.getIdempotencyKey(),
+                fingerprint,
+                adminUserId,
+                now
+        );
+
+        return previewRepository.saveAndFlush(preview);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ShowtimeSchedulePreview createOptimizedPreview(
+            NormalizedGeneratePreviewRequest request,
+            Cinema cinema,
+            String strategyVersion,
+            String fingerprint,
+            Long adminUserId,
+            AutoSchedulePreflightResponse preflight,
+            AutoScheduleOptimizationResult optimization,
+            String demandModelVersion) {
+        ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
+                cinema, request.getScheduleFrom(), request.getScheduleTo(),
+                request.getSlotGranularityMinutes(), request.getPreviewTtlMinutes(),
+                strategyVersion, request.getIdempotencyKey(), fingerprint,
+                adminUserId, Instant.now(clock));
+        preview.setRequestScope(new AutoScheduleRequestScopeSnapshot(
+                request.getCinemaPublicId(), request.getScheduleFrom(), request.getScheduleTo(),
+                request.getSlotGranularityMinutes(), request.getMovieVersionPublicIds(),
+                request.getAuditoriumPublicIds()));
+        preview.setPolicyVersion(POLICY_VERSION);
+        preview.setDemandModelVersion(demandModelVersion);
+        preview.setSolverVersion(optimization.solverVersion());
+        preview.setSolverStatus(optimization.status().name());
+        preview.setEligibilityFingerprint(preflight.eligibilityFingerprint());
+        preview.setPricingFingerprint(preflight.pricingFingerprint());
+        preview.setConfigurationFingerprint(preflight.configurationFingerprint());
+        preview.setObjectiveValue(optimization.objectiveValue());
+        preview.setObjectiveBestBound(optimization.bestBound());
+        preview.setSolverDurationMillis(optimization.durationMillis());
+        preview.setSolverExplanation(optimization.explanation());
+        return previewRepository.saveAndFlush(preview);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPreviewFailed(Long previewId, String failureReason) {
+        previewRepository.findById(previewId).ifPresent(preview -> {
+            String sanitizedReason = failureReason != null && failureReason.length() > MAX_FAILURE_REASON_LENGTH ?
+                    failureReason.substring(0, MAX_FAILURE_REASON_LENGTH - 3) + "..." : failureReason;
+            preview.markFailed(sanitizedReason);
+            previewRepository.saveAndFlush(preview);
+        });
+    }
+
+    @Transactional
+    public void persistGeneratedItemsAndMarkPreviewed(ShowtimeSchedulePreview preview, List<ShowtimeCandidate> candidates) {
+        int total = candidates.size();
+        int valid = 0;
+        int rejected = 0;
+        int selected = 0;
+
+        List<ShowtimeSchedulePreviewItem> items = candidates.stream()
+                .map(c -> persistenceMapper.toEntity(c, preview))
+                .collect(Collectors.toList());
+
+        for (ShowtimeSchedulePreviewItem item : items) {
+            if (item.getValidationStatus() == PreviewItemValidationStatus.VALID) {
+                valid++;
+            } else {
+                rejected++;
+            }
+            if (item.getSelected()) {
+                selected++;
+            }
+        }
+
+        itemRepository.saveAll(items); // Batch save depends on Hibernate configuration
+
+        preview.setStatus(SchedulePreviewStatus.PREVIEWED);
+        preview.setTotalCandidateCount(total);
+        preview.setValidCandidateCount(valid);
+        preview.setRejectedCandidateCount(rejected);
+        preview.setSelectedCandidateCount(selected);
+
+        List<ShowtimeCandidate> selectedCandidates = candidates.stream()
+                .filter(ShowtimeCandidate::isSelected).toList();
+        BigDecimal attendance = selectedCandidates.stream()
+                .map(ShowtimeCandidate::getExpectedAttendance)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal capacity = selectedCandidates.stream()
+                .map(candidate -> BigDecimal.valueOf(candidate.getAuditoriumCapacity()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        preview.setExpectedAttendance(attendance);
+        preview.setExpectedOccupancy(capacity.signum() == 0 ? BigDecimal.ZERO
+                : attendance.divide(capacity, 6, RoundingMode.HALF_UP));
+        preview.setExpectedRevenue(selectedCandidates.stream()
+                .map(ShowtimeCandidate::getExpectedRevenue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        preview.setExpectedContribution(selectedCandidates.stream()
+                .map(ShowtimeCandidate::getExpectedContribution)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+
+        previewRepository.save(preview);
+    }
+}

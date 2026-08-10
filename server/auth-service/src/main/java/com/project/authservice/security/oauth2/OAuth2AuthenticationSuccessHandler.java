@@ -1,0 +1,55 @@
+package com.project.authservice.security.oauth2;
+
+import com.project.authservice.entity.Account;
+import com.project.authservice.service.AuthService;
+import com.project.authservice.dto.response.JwtResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import org.springframework.beans.factory.annotation.Value;
+@Component
+public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OAuth2AuthenticationSuccessHandler.class);
+
+    private final AuthService authService;
+
+    @Value("${app.frontend.oauth2-redirect-url}")
+    private String oauth2RedirectUrl;
+
+    @Override
+    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+        if (!(authentication.getPrincipal() instanceof AccountOAuth2Principal oauthPrincipal)) {
+            Object principal = authentication.getPrincipal();
+            log.error("OAuth2 authentication succeeded with an unsupported principal type: {}",
+                    principal == null ? "null" : principal.getClass().getName());
+            String targetUrl = oauth2RedirectUrl +
+                    "#error=" + encode("Unsupported OAuth2 principal");
+            getRedirectStrategy().sendRedirect(request, response, targetUrl);
+            return;
+        }
+
+        Account account = oauthPrincipal.getAccount();
+        JwtResponse jwtResponse = authService.loginOAuth2(account, request);
+
+        String targetUrl = oauth2RedirectUrl +
+                "#accessToken=" + encode(jwtResponse.getAccessToken()) +
+                "&refreshToken=" + encode(jwtResponse.getRefreshToken()) +
+                "&expiresIn=" + jwtResponse.getExpiresIn();
+
+        getRedirectStrategy().sendRedirect(request, response, targetUrl);
+    }
+    public OAuth2AuthenticationSuccessHandler(AuthService authService) {
+        this.authService = authService;
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+}

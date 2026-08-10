@@ -1,0 +1,111 @@
+package com.lorafilm.booking.booking.repository;
+
+import com.lorafilm.booking.booking.entity.Booking;
+import com.lorafilm.booking.booking.enums.BookingStatus;
+import com.lorafilm.booking.booking.enums.PaymentStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
+
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
+
+import java.time.Instant;
+import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.List;
+
+@Repository
+public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpecificationExecutor<Booking> {
+
+    Optional<Booking> findByPublicId(String publicId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :id AND b.isDeleted = false")
+    Optional<Booking> findByIdForPaymentUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.publicId = :publicId")
+    Optional<Booking> findByPublicIdWithLock(@Param("publicId") String publicId);
+
+    Optional<Booking> findByBookingCode(String bookingCode);
+
+    boolean existsByBookingCode(String bookingCode);
+
+    Page<Booking> findByUserId(Long userId, Pageable pageable);
+
+    Page<Booking> findByUserIdAndBookingStatus(Long userId, BookingStatus bookingStatus, Pageable pageable);
+
+    @Query("""
+            SELECT SUM(b.finalAmount)
+            FROM Booking b
+            WHERE b.userId = :userId
+              AND b.bookingStatus IN :bookingStatuses
+              AND b.paymentStatus = :paymentStatus
+              AND b.confirmedAt >= :periodStart
+              AND b.confirmedAt < :periodEnd
+              AND b.isDeleted = false
+            """)
+    BigDecimal sumPaidSpendingByUserAndPeriod(
+            @Param("userId") Long userId,
+            @Param("bookingStatuses") List<BookingStatus> bookingStatuses,
+            @Param("paymentStatus") PaymentStatus paymentStatus,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.userId = :userId
+              AND b.showtimeId = :showtimeId
+              AND b.bookingStatus = :status
+              AND b.isDeleted = false
+            ORDER BY b.createdAt ASC, b.id ASC
+            """)
+    List<Booking> findPendingByUserAndShowtimeForUpdate(
+            @Param("userId") Long userId,
+            @Param("showtimeId") Long showtimeId,
+            @Param("status") BookingStatus status);
+
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.userId = :userId
+              AND b.showtimePublicId = :showtimePublicId
+              AND b.bookingStatus = :status
+              AND b.expiresAt > :now
+              AND b.isDeleted = false
+            ORDER BY b.createdAt ASC, b.id ASC
+            """)
+    List<Booking> findActiveByUserAndShowtimePublicId(
+            @Param("userId") Long userId,
+            @Param("showtimePublicId") String showtimePublicId,
+            @Param("status") BookingStatus status,
+            @Param("now") Instant now);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.showtimePublicId = :showtimePublicId
+              AND b.isDeleted = false
+            ORDER BY b.createdAt ASC, b.id ASC
+            """)
+    List<Booking> findByShowtimePublicIdForEmergencyUpdate(
+            @Param("showtimePublicId") String showtimePublicId);
+
+    long countByCreatedAtAfter(java.time.Instant start);
+
+    long countByPaymentStatus(com.lorafilm.booking.booking.enums.PaymentStatus status);
+
+    long countByBookingStatus(com.lorafilm.booking.booking.enums.BookingStatus status);
+
+    @Query("SELECT b FROM Booking b " +
+           "WHERE b.bookingStatus = :status " +
+           "AND b.expiresAt <= :now")
+    List<Booking> findExpiredBookings(@Param("status") BookingStatus status,
+                                      @Param("now") java.time.Instant now,
+                                      Pageable pageable);
+}
