@@ -194,7 +194,7 @@ export default function BookingSuccessPage() {
                 <div className="w-full md:w-44 shrink-0 bg-zinc-950/60 p-6 flex flex-col items-center justify-center text-center gap-3 print:bg-white print:border-t print:border-black">
                   <div className="w-28 aspect-square bg-white rounded-xl p-2 shadow-inner shrink-0 flex items-center justify-center">
                     <TicketQrCode
-                      ticketCode={ticket.ticketCode}
+                      ticketCode={ticket.qrCode || ticket.ticketCode}
                       size={200}
                       className="max-h-full max-w-full"
                     />

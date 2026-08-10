@@ -13,7 +13,8 @@ const BLOCKED_CUSTOMER_DESTINATIONS = new Set([
 const isCustomerSafeDestination = pathname => Boolean(pathname)
   && !BLOCKED_CUSTOMER_DESTINATIONS.has(pathname)
   && !pathname.startsWith('/admin')
-  && !pathname.startsWith('/employee');
+  && !pathname.startsWith('/employee')
+  && !pathname.startsWith('/manager');
 
 export const resolvePostLoginPath = ({ role, permissions = [], from }) => {
   if (hasAdminAreaAccess(role, permissions)) {
@@ -21,7 +22,10 @@ export const resolvePostLoginPath = ({ role, permissions = [], from }) => {
   }
 
   const normalizedRole = String(role || '').replace(/^ROLE_/, '');
-  if (normalizedRole === 'STAFF' || normalizedRole === 'EMPLOYEE') {
+  if (normalizedRole === 'MANAGER') {
+    return '/manager';
+  }
+  if (normalizedRole === 'EMPLOYEE') {
     return '/employee';
   }
 

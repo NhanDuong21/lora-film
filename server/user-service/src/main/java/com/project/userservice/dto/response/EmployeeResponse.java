@@ -9,6 +9,8 @@ public record EmployeeResponse(
         Long accountId,
         String employeeCode,
         String fullName,
+        String avatarUrl,
+        String email,
         String phoneNumber,
         Long departmentId,
         String departmentCode,
@@ -18,6 +20,8 @@ public record EmployeeResponse(
         String positionName,
         LocalDate hireDate,
         BigDecimal baseSalary,
-        EmployeeStatus status
+        String cinemaPublicId,
+        EmployeeStatus status,
+        Integer version
 ) {
 }

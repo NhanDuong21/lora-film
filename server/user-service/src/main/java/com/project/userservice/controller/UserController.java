@@ -1,6 +1,7 @@
 package com.project.userservice.controller;
 
 import com.project.userservice.dto.response.ApiResponse;
+import com.project.userservice.dto.response.AccountDisplayNameResponse;
 import com.project.userservice.dto.response.UserProfileResponse;
 import com.project.userservice.service.UserService;
 import com.project.userservice.service.AvatarService;
@@ -94,13 +95,12 @@ public class UserController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         Long tokenAccountId = (Long) authentication.getPrincipal();
-        boolean isAdminOrStaff = authentication.getAuthorities().stream()
+        boolean canReadAnyProfile = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
-                        || a.getAuthority().equals("ROLE_STAFF")
                         || a.getAuthority().equals("CUSTOMER_VIEW")
                         || a.getAuthority().equals("EMPLOYEE_VIEW"));
 
-        if (!isAdminOrStaff && !accountId.equals(tokenAccountId)) {
+        if (!canReadAnyProfile && !accountId.equals(tokenAccountId)) {
             throw new ForbiddenException("You don't have permission to view this profile");
         }
 
@@ -109,7 +109,7 @@ public class UserController {
     }
 
     @GetMapping("/admin/batch")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')"
+    @PreAuthorize("hasRole('ADMIN')"
             + " or hasAnyAuthority('CUSTOMER_VIEW', 'EMPLOYEE_VIEW')")
     public ResponseEntity<ApiResponse<List<UserProfileResponse>>> getUserProfiles(
             @RequestParam List<Long> accountIds) {
@@ -118,8 +118,27 @@ public class UserController {
                 userService.getUserProfiles(accountIds)));
     }
 
+    @GetMapping("/directory/display-names")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ApiResponse<List<AccountDisplayNameResponse>>> getAccountDisplayNames(
+            @RequestParam List<Long> accountIds) {
+        List<Long> requestedIds = accountIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .limit(100)
+                .toList();
+        List<AccountDisplayNameResponse> displayNames = userService.getUserProfiles(requestedIds)
+                .stream()
+                .map(profile -> new AccountDisplayNameResponse(
+                        profile.getAccountId(), profile.getFullName()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Account display names retrieved successfully",
+                displayNames));
+    }
+
     @GetMapping("/admin/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')"
+    @PreAuthorize("hasRole('ADMIN')"
             + " or hasAnyAuthority('CUSTOMER_VIEW', 'EMPLOYEE_VIEW')")
     public ResponseEntity<ApiResponse<List<UserProfileResponse>>> searchUserProfiles(
             @RequestParam String query,

@@ -143,6 +143,58 @@ describe('useAutoSchedulePreview bounded loading', () => {
       .toBeInstanceOf(AbortSignal);
   });
 
+  it('publishes the selected schedule before loading a large candidate set in the background', async () => {
+    const backgroundGate = deferred();
+    adminAutoScheduleService.getPreview.mockImplementation(async (_id, params) => {
+      if (params.selected) {
+        return previewResponse({
+          items: [first],
+          totalPages: 1,
+          totalElements: 1,
+          previewOverrides: { totalCandidateCount: 20 },
+        });
+      }
+      if (params.page === 0) {
+        return previewResponse({
+          items: [first],
+          totalPages: 20,
+          totalElements: 20,
+          previewOverrides: { totalCandidateCount: 20 },
+        });
+      }
+
+      await backgroundGate.promise;
+      return previewResponse({
+        items: [{ ...second, itemPublicId: `candidate-${params.page}` }],
+        page: params.page,
+        totalPages: 20,
+        totalElements: 20,
+        previewOverrides: { totalCandidateCount: 20 },
+      });
+    });
+
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', {}));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.items.map(item => item.itemPublicId)).toEqual(['item-1']);
+    expect(result.current.isLoadingCandidates).toBe(true);
+    expect(result.current.capabilities.canSelect).toBe(true);
+    expect(adminAutoScheduleService.getPreview).toHaveBeenCalledWith(
+      'preview-1',
+      { page: 0, size: 100, selected: true, sort: 'startTime,asc' },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    await act(async () => {
+      backgroundGate.resolve();
+      await backgroundGate.promise;
+    });
+    await waitFor(() => expect(result.current.isLoadingCandidates).toBe(false));
+
+    expect(result.current.items).toHaveLength(20);
+    expect(result.current.candidateLoadingProgress.loadedPages).toBe(20);
+  });
+
   it('aborts obsolete refreshes, preview ID changes, and unmount without user-facing errors', async () => {
     const triggerToast = vi.fn();
     adminAutoScheduleService.getPreview.mockResolvedValueOnce(previewResponse());
@@ -288,6 +340,31 @@ describe('useAutoSchedulePreview selection compatibility', () => {
         { itemPublicId: 'item-2', selected: true },
       ],
     });
+  });
+
+  it('replaces one selected showtime atomically without updating unrelated candidates', async () => {
+    const triggerToast = vi.fn();
+    const { result } = renderHook(() => useAutoSchedulePreview('preview-1', { triggerToast }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let replaced;
+    await act(async () => {
+      replaced = await result.current.handleReplaceSelection('item-1', 'item-2');
+    });
+
+    expect(replaced).toBe(true);
+    expect(adminAutoScheduleService.updateSelections).toHaveBeenCalledWith('preview-1', {
+      expectedVersion: 3,
+      items: [
+        { itemPublicId: 'item-1', selected: false },
+        { itemPublicId: 'item-2', selected: true },
+      ],
+    });
+    expect(Array.from(result.current.selectedItemIds)).toEqual(['item-2']);
+    expect(triggerToast).toHaveBeenCalledWith(
+      'Đã thay suất và kiểm tra lại xung đột thành công.',
+      'success',
+    );
   });
 
   it('uses the complete snapshot for canonical occupancy guards', async () => {

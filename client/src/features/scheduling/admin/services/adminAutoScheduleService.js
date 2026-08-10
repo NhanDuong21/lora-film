@@ -1,6 +1,11 @@
 import apiClient from '@/services/apiClient';
 
 const adminAutoScheduleService = {
+  preflight: async (requestData, config = {}) => {
+    const response = await apiClient.post('/api/admin/auto-schedules/preflight', requestData, config);
+    return response.data;
+  },
+
   generatePreview: async (requestData) => {
     const response = await apiClient.post('/api/admin/showtime-schedules/generate-preview', requestData);
     return response.data;

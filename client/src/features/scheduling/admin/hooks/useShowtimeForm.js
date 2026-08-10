@@ -171,9 +171,8 @@ export default function useShowtimeForm({ triggerToast, onSuccess }) {
         triggerToast?.('Tạo suất chiếu thành công', 'success');
         if (onSuccess) onSuccess(res.data?.showtimePublicId);
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Lỗi khi tạo suất chiếu';
-      triggerToast?.(msg, 'error');
+    } catch {
+      triggerToast?.('Không thể tạo suất chiếu. Vui lòng kiểm tra dữ liệu và thử lại.', 'error');
     } finally {
       setIsSubmitting(false);
     }

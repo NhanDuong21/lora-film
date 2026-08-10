@@ -67,6 +67,7 @@ public class AdminMovieService {
         movie.setSlug(slug);
         movie.setDurationMinutes(request.getDurationMinutes());
         movie.setAgeRating(request.getAgeRating());
+        movie.setOriginalReleaseDate(request.getOriginalReleaseDate());
         movie.setReleaseDate(request.getReleaseDate());
         movie.setEndDate(request.getEndDate());
         movie.setCountry(request.getCountry());
@@ -81,7 +82,7 @@ public class AdminMovieService {
         validateMovieDates(request);
 
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
 
         operationalGuard.assertSchedulingFieldsEditable(movie, request);
 
@@ -94,6 +95,7 @@ public class AdminMovieService {
         movie.setSynopsis(request.getSynopsis());
         movie.setDurationMinutes(request.getDurationMinutes());
         movie.setAgeRating(request.getAgeRating());
+        movie.setOriginalReleaseDate(request.getOriginalReleaseDate());
         movie.setReleaseDate(request.getReleaseDate());
         movie.setEndDate(request.getEndDate());
         movie.setCountry(request.getCountry());
@@ -107,17 +109,17 @@ public class AdminMovieService {
     @Transactional
     public void assignGenres(String moviePublicId, List<String> genreIds) {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
         
         if ((movie.getStatus() == MovieStatus.UPCOMING || movie.getStatus() == MovieStatus.NOW_SHOWING) 
             && (genreIds == null || genreIds.isEmpty())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Published movie must have at least one genre", null);
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Phim đang phục vụ khách hàng phải có ít nhất một thể loại.", null);
         }
 
         List<String> uniqueGenreIds = genreIds == null ? new java.util.ArrayList<>() : genreIds.stream().distinct().collect(Collectors.toList());
         List<Genre> genres = genreRepository.findByPublicIdInAndDeletedAtIsNull(uniqueGenreIds);
         if (genres.size() != uniqueGenreIds.size()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "One or more genres do not exist", null);
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Có thể loại không tồn tại hoặc đã ngừng sử dụng.", null);
         }
 
         movieGenreRepository.deleteByMovieId(movie.getId());
@@ -134,7 +136,7 @@ public class AdminMovieService {
     @Transactional
     public void appendGenres(String moviePublicId, List<String> genreIds) {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
         
         if (genreIds == null || genreIds.isEmpty()) return;
 
@@ -157,7 +159,7 @@ public class AdminMovieService {
     @Transactional
     public void assignCredits(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCreditRequest> requests) {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
         
         movieCreditRepository.deleteByMovieId(movie.getId());
         movieCreditRepository.flush();
@@ -176,7 +178,7 @@ public class AdminMovieService {
         
         for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.Person person = personRepository.findByPublicIdAndDeletedAtIsNull(req.getPersonPublicId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found", null));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhân sự.", null));
             
             com.lorafilm.movie.movie.domain.entity.MovieCredit credit = new com.lorafilm.movie.movie.domain.entity.MovieCredit();
             credit.setMovie(movie);
@@ -192,7 +194,7 @@ public class AdminMovieService {
     @Transactional
     public void appendCredits(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCreditRequest> requests) {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
 
         if (requests == null || requests.isEmpty()) return;
 
@@ -208,7 +210,7 @@ public class AdminMovieService {
 
         for (com.lorafilm.movie.movie.dto.MovieCreditRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.Person person = personRepository.findByPublicIdAndDeletedAtIsNull(req.getPersonPublicId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found", null));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhân sự.", null));
 
             if (movieCreditRepository.existsByMovieIdAndPersonIdAndRoleTypeAndDeletedAtIsNull(movie.getId(), person.getId(), req.getRoleType())) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Person already has this role in the movie", null);
@@ -228,7 +230,7 @@ public class AdminMovieService {
     @Transactional
     public void assignProductionCompanies(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCompanyRequest> requests) {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
         
         movieProductionCompanyRepository.deleteByMovieId(movie.getId());
         movieProductionCompanyRepository.flush();
@@ -247,7 +249,7 @@ public class AdminMovieService {
 
         for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(req.getCompanyPublicId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found", null));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy hãng phim.", null));
             
             com.lorafilm.movie.movie.domain.entity.MovieProductionCompany mpc = new com.lorafilm.movie.movie.domain.entity.MovieProductionCompany();
             mpc.setMovie(movie);
@@ -261,7 +263,7 @@ public class AdminMovieService {
     @Transactional
     public void appendProductionCompanies(String moviePublicId, List<com.lorafilm.movie.movie.dto.MovieCompanyRequest> requests) {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(moviePublicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
         
         if (requests == null || requests.isEmpty()) return;
         
@@ -277,7 +279,7 @@ public class AdminMovieService {
 
         for (com.lorafilm.movie.movie.dto.MovieCompanyRequest req : uniqueRequests) {
             com.lorafilm.movie.movie.domain.entity.ProductionCompany company = productionCompanyRepository.findByPublicIdAndDeletedAtIsNull(req.getCompanyPublicId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Production company not found", null));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy hãng phim.", null));
             
             if (movieProductionCompanyRepository.existsByMovieIdAndProductionCompanyIdAndRole(movie.getId(), company.getId(), req.getRole())) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Company already has this role in the movie", null);
@@ -294,7 +296,7 @@ public class AdminMovieService {
 
     private void validateMovieDates(MovieRequest request) {
         if (request.getEndDate() != null && request.getEndDate().isBefore(request.getReleaseDate())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "End date cannot be before release date", null);
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Ngày kết thúc khai thác không được trước ngày bắt đầu khai thác.", null);
         }
     }
 
@@ -305,21 +307,21 @@ public class AdminMovieService {
         
         if (status == MovieStatus.UPCOMING) {
             if (!releaseDate.isAfter(today)) {
-                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For UPCOMING status, release date must be in the future", null);
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Phim Sắp chiếu phải có ngày bắt đầu khai thác sau hôm nay.", null);
             }
         } else if (status == MovieStatus.NOW_SHOWING) {
             if (releaseDate.isAfter(today)) {
-                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For NOW_SHOWING status, release date cannot be in the future", null);
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Phim Đang chiếu không thể có ngày bắt đầu khai thác trong tương lai.", null);
             }
             if (endDate != null && endDate.isBefore(today)) {
-                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For NOW_SHOWING status, end date cannot be in the past", null);
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Phim Đang chiếu không thể có ngày kết thúc khai thác trong quá khứ.", null);
             }
         } else if (status == MovieStatus.ENDED) {
             if (endDate == null) {
-                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For ENDED status, end date must be provided", null);
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Phim Đã kết thúc phải có ngày kết thúc khai thác.", null);
             }
             if (!endDate.isBefore(today)) {
-                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "For ENDED status, end date must be in the past", null);
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Ngày kết thúc khai thác của phim Đã kết thúc phải trước hôm nay.", null);
             }
         }
     }
@@ -365,14 +367,17 @@ public class AdminMovieService {
     @Transactional
     public void deleteMovie(String publicId) {
         Movie movie = movieRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
         
         if (showtimeRepository.existsByMovieIdAndDeletedAtIsNull(movie.getId())) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cannot delete movie because it has active showtimes.", null);
         }
 
         if (movie.getStatus() != MovieStatus.ENDED && movie.getStatus() != MovieStatus.DRAFT) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Cannot delete movie because it is not in Stopped Showing (ENDED) or Draft (DRAFT) status.", null);
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Chỉ có thể xóa phim đang ở trạng thái Chờ hoàn thiện hoặc Đã kết thúc.",
+                    null);
         }
         
         Long userId = 1L;

@@ -6,6 +6,7 @@ import com.project.authservice.entity.Role;
 import com.project.authservice.enums.AccountStatus;
 import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.repository.AccountRepository;
+import com.project.authservice.repository.AccessProfileRepository;
 import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.service.AccountService;
 import com.project.authservice.service.AuditLogService;
@@ -28,6 +29,7 @@ public class AccountServiceImpl implements AccountService {
     private final AuthOutboxService authOutboxService;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher;
+    private final AccessProfileRepository accessProfileRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -91,6 +93,12 @@ public class AccountServiceImpl implements AccountService {
         }
                 
         account.setRole(role);
+        if (!"EMPLOYEE".equals(role.getCode())) {
+            account.setAccessProfile(null);
+        }
+        if (!"MANAGER".equals(role.getCode())) {
+            account.setAssignedCinemaPublicIds(java.util.Set.of());
+        }
         account = accountRepository.save(account);
         
         credentialRevocationService.revokeAll(account.getId());
@@ -98,6 +106,67 @@ public class AccountServiceImpl implements AccountService {
         authOutboxService.record("ACCOUNT_ROLE_CHANGED", account.getId(),
                 java.util.Map.of("accountId", account.getId(), "role", roleCode));
         auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ROLE", servletRequest);
+        return mapToDto(account);
+    }
+
+    @Override
+    @Transactional
+    public AccountDto updateManagerCinemaAssignments(Long id, java.util.Set<String> cinemaPublicIds) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        if (account.getRole() == null || !"MANAGER".equals(account.getRole().getCode())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Cinema assignments can only be applied to MANAGER accounts");
+        }
+
+        java.util.Set<String> normalizedIds = cinemaPublicIds == null
+                ? java.util.Set.of()
+                : cinemaPublicIds.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(String::trim)
+                        .filter(value -> !value.isEmpty())
+                        .map(value -> value.toLowerCase(java.util.Locale.ROOT))
+                        .sorted()
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (account.getAssignedCinemaPublicIds().equals(normalizedIds)) {
+            return mapToDto(account);
+        }
+
+        account.setAssignedCinemaPublicIds(normalizedIds);
+        account = accountRepository.save(account);
+        credentialRevocationService.revokeAll(account.getId());
+        authOutboxService.record("MANAGER_CINEMA_ASSIGNMENTS_CHANGED", account.getId(),
+                java.util.Map.of(
+                        "accountId", account.getId(),
+                        "cinemaPublicIds", normalizedIds));
+        auditLogService.log(account.getId(), "UPDATE_MANAGER_CINEMA_ASSIGNMENTS", servletRequest);
+        return mapToDto(account);
+    }
+
+    @Override
+    @Transactional
+    public AccountDto updateAccountAccessProfile(Long id, Long accessProfileId) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        if (account.getRole() == null || !"EMPLOYEE".equals(account.getRole().getCode())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Access profiles can only be assigned to EMPLOYEE accounts");
+        }
+        com.project.authservice.entity.AccessProfile profile = accessProfileRepository.findById(accessProfileId)
+                .filter(item -> Boolean.TRUE.equals(item.getActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Access profile not found"));
+        if (account.getAccessProfile() != null && account.getAccessProfile().getId().equals(profile.getId())) {
+            return mapToDto(account);
+        }
+        account.setAccessProfile(profile);
+        account = accountRepository.save(account);
+        credentialRevocationService.revokeAll(account.getId());
+        authOutboxService.record("ACCOUNT_ACCESS_PROFILE_CHANGED", account.getId(),
+                java.util.Map.of(
+                        "accountId", account.getId(),
+                        "role", "EMPLOYEE",
+                        "accessProfile", profile.getCode()));
+        auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ACCESS_PROFILE", servletRequest);
         return mapToDto(account);
     }
 
@@ -111,11 +180,30 @@ public class AccountServiceImpl implements AccountService {
                         .code(account.getRole().getCode())
                         .name(account.getRole().getRoleName())
                         .build())
+                .accessProfile(mapAccessProfile(account.getAccessProfile()))
+                .assignedCinemaPublicIds(account.getAssignedCinemaPublicIds())
                 .enabled(account.getIsEnabled())
                 .status(account.getAccountStatus())
                 .createdAt(account.getCreatedAt())
                 .updatedAt(account.getUpdatedAt())
                 .build();
+    }
+
+    private com.project.authservice.dto.AccessProfileDto mapAccessProfile(
+            com.project.authservice.entity.AccessProfile profile) {
+        if (profile == null) {
+            return null;
+        }
+        com.project.authservice.dto.AccessProfileDto dto = new com.project.authservice.dto.AccessProfileDto();
+        dto.setId(profile.getId());
+        dto.setCode(profile.getCode());
+        dto.setName(profile.getName());
+        dto.setDescription(profile.getDescription());
+        dto.setActive(profile.getActive());
+        dto.setPermissionIds(profile.getPermissions().stream()
+                .map(com.project.authservice.entity.Permission::getId)
+                .collect(java.util.stream.Collectors.toSet()));
+        return dto;
     }
 
     @Override
@@ -128,12 +216,17 @@ public class AccountServiceImpl implements AccountService {
         }
 
         Role role = roleRepository.findByCode("EMPLOYEE")
-                .orElseThrow(() -> new ResourceNotFoundException("Role EMPLOYEE not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Workforce role EMPLOYEE not found"));
+        com.project.authservice.entity.AccessProfile accessProfile = accessProfileRepository
+                .findById(request.getAccessProfileId())
+                .filter(profile -> Boolean.TRUE.equals(profile.getActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Access profile not found"));
 
         Account account = new Account();
         account.setEmail(email);
         account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         account.setRole(role);
+        account.setAccessProfile(accessProfile);
         account.setAccountStatus(AccountStatus.ACTIVE);
         account.setIsEnabled(true);
         account.setIsDeleted(false);
@@ -167,7 +260,8 @@ public class AccountServiceImpl implements AccountService {
                               CredentialRevocationService credentialRevocationService,
                               AuthOutboxService authOutboxService,
                               org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
-                              com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher) {
+                              com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher,
+                              AccessProfileRepository accessProfileRepository) {
         this.accountRepository = accountRepository;
         this.roleRepository = roleRepository;
         this.auditLogService = auditLogService;
@@ -176,5 +270,6 @@ public class AccountServiceImpl implements AccountService {
         this.authOutboxService = authOutboxService;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
+        this.accessProfileRepository = accessProfileRepository;
     }
 }

@@ -3,11 +3,14 @@ package com.lorafilm.booking.booking.service.impl;
 import com.lorafilm.booking.audit.service.BookingAuditService;
 import com.lorafilm.booking.audit.service.BookingOperationLogService;
 import com.lorafilm.booking.booking.dto.BookingAdminResponse;
+import com.lorafilm.booking.booking.dto.response.EmergencyPaidBookingResponse;
+import com.lorafilm.booking.booking.dto.response.EmergencyShowtimeClosureResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.enums.PaymentStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingTicketRepository;
 import com.lorafilm.booking.booking.service.BookingStatusHistoryService;
 import com.lorafilm.booking.booking.service.BookingStatusTransitionService;
 import com.lorafilm.booking.booking.service.BookingTicketService;
@@ -18,6 +21,8 @@ import com.lorafilm.booking.common.exception.BusinessException;
 import com.lorafilm.booking.infrastructure.service.BookingOutboxService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import com.lorafilm.booking.reservation.service.SeatReservationService;
+import com.lorafilm.booking.reservation.entity.SeatReservation;
+import com.lorafilm.booking.reservation.repository.SeatReservationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class InternalBookingServiceImpl implements InternalBookingService {
@@ -43,6 +49,8 @@ public class InternalBookingServiceImpl implements InternalBookingService {
     private final BookingTicketService ticketService;
     private final SeatReservationService reservationService;
     private final BookingLifecycleService lifecycleService;
+    private final BookingTicketRepository bookingTicketRepository;
+    private final SeatReservationRepository seatReservationRepository;
 
     @Autowired
     public InternalBookingServiceImpl(BookingRepository bookingRepository,
@@ -55,7 +63,9 @@ public class InternalBookingServiceImpl implements InternalBookingService {
                                        BookingMetricsManager bookingMetricsManager,
                                        BookingTicketService ticketService,
                                        SeatReservationService reservationService,
-                                       BookingLifecycleService lifecycleService) {
+                                       BookingLifecycleService lifecycleService,
+                                       BookingTicketRepository bookingTicketRepository,
+                                       SeatReservationRepository seatReservationRepository) {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.statusTransitionService = statusTransitionService;
@@ -67,6 +77,8 @@ public class InternalBookingServiceImpl implements InternalBookingService {
         this.ticketService = ticketService;
         this.reservationService = reservationService;
         this.lifecycleService = lifecycleService;
+        this.bookingTicketRepository = bookingTicketRepository;
+        this.seatReservationRepository = seatReservationRepository;
     }
 
     /** Backwards-compatible constructor for existing unit callers. */
@@ -81,7 +93,7 @@ public class InternalBookingServiceImpl implements InternalBookingService {
                                        BookingTicketService ticketService) {
         this(bookingRepository, bookingMapper, statusTransitionService, historyService,
                 auditService, operationLogService, outboxService, bookingMetricsManager,
-                ticketService, null, null);
+                ticketService, null, null, null, null);
     }
 
     @Override
@@ -116,6 +128,88 @@ public class InternalBookingServiceImpl implements InternalBookingService {
 
         MDC.put("bookingId", booking.getPublicId());
         return bookingMapper.toAdminResponse(booking);
+    }
+
+    @Override
+    @Transactional
+    public EmergencyShowtimeClosureResponse closeShowtimeForEmergency(
+            String showtimePublicId,
+            String reason) {
+        if (showtimePublicId == null || showtimePublicId.isBlank()) {
+            throw new BusinessException("INVALID_SHOWTIME_ID", "Mã suất chiếu là bắt buộc");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("EMERGENCY_REASON_REQUIRED", "Lý do đóng khẩn cấp là bắt buộc");
+        }
+        if (lifecycleService == null || reservationService == null
+                || bookingTicketRepository == null || seatReservationRepository == null) {
+            throw new IllegalStateException("Emergency closure dependencies are unavailable");
+        }
+
+        List<SeatReservation> unlinkedHolds =
+                seatReservationRepository.findUnlinkedHeldByShowtimePublicIdForUpdate(showtimePublicId);
+        List<Long> unlinkedHoldIds = unlinkedHolds.stream().map(SeatReservation::getId).toList();
+        reservationService.releaseSeatsInternal(
+                unlinkedHoldIds,
+                "Giải phóng do phòng chiếu đóng khẩn cấp: " + reason.trim());
+
+        List<Booking> bookings = bookingRepository
+                .findByShowtimePublicIdForEmergencyUpdate(showtimePublicId);
+        List<EmergencyPaidBookingResponse> paidBookings = bookings.stream()
+                .filter(this::requiresPaidCustomerHandoff)
+                .map(this::toEmergencyPaidBooking)
+                .toList();
+
+        List<EmergencyPaidBookingResponse> pendingBookingSnapshots = bookings.stream()
+                .filter(booking -> booking.getBookingStatus() == BookingStatus.PENDING_PAYMENT)
+                .map(this::toEmergencyPaidBooking)
+                .toList();
+
+        List<String> cancelledPendingBookingPublicIds = bookings.stream()
+                .filter(booking -> booking.getBookingStatus() == BookingStatus.PENDING_PAYMENT)
+                .map(booking -> lifecycleService.cancel(
+                        booking,
+                        "EMERGENCY_AUDITORIUM_CLOSURE",
+                        reason.trim(),
+                        "MOVIE_SERVICE"))
+                .map(Booking::getPublicId)
+                .toList();
+
+        return new EmergencyShowtimeClosureResponse(
+                showtimePublicId,
+                unlinkedHoldIds.size(),
+                cancelledPendingBookingPublicIds,
+                pendingBookingSnapshots,
+                paidBookings);
+    }
+
+    private boolean requiresPaidCustomerHandoff(Booking booking) {
+        return booking.getPaymentStatus() == PaymentStatus.SUCCESS
+                && (booking.getBookingStatus() == BookingStatus.CONFIRMED
+                || booking.getBookingStatus() == BookingStatus.COMPLETED);
+    }
+
+    private EmergencyPaidBookingResponse toEmergencyPaidBooking(Booking booking) {
+        List<String> seatLabels = bookingTicketRepository
+                .findByBookingIdOrderBySeatLabelAsc(booking.getId())
+                .stream()
+                .map(ticket -> ticket.getSeatLabel())
+                .toList();
+        if (seatLabels.isEmpty()) {
+            seatLabels = seatReservationRepository.findAllByBookingId(booking.getId())
+                    .stream()
+                    .map(SeatReservation::getSeatLabel)
+                    .sorted()
+                    .toList();
+        }
+        return new EmergencyPaidBookingResponse(
+                booking.getPublicId(),
+                booking.getBookingCode(),
+                booking.getUserId(),
+                booking.getBookingStatus().name(),
+                booking.getFinalAmount(),
+                booking.getCurrency(),
+                seatLabels);
     }
 
     private BookingAdminResponse processStatusChange(String publicId, BookingStatus targetStatus, PaymentStatus targetPaymentStatus, String operationType, String reason) {

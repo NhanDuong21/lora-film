@@ -205,6 +205,27 @@ class ShowtimeStatusTransitionServiceImplTest {
     }
 
     @Test
+    void transitionStatus_ClosedFutureShowtimeCanReopenAfterIncidentIsResolved() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
+        Showtime showtime = new Showtime();
+        showtime.setStatus(ShowtimeStatus.CLOSED);
+        showtime.setStartTime(Instant.parse("2026-07-10T12:00:00Z"));
+        showtime.setEndTime(Instant.parse("2026-07-10T14:00:00Z"));
+        showtime.setBookingCloseTime(Instant.parse("2026-07-10T09:30:00Z"));
+        when(showtimeRepository.findByPublicIdForUpdate("pub-id")).thenReturn(Optional.of(showtime));
+        when(showtimeRepository.saveAndFlush(any(Showtime.class))).thenAnswer(i -> i.getArgument(0));
+        when(adminShowtimeMapper.toAdminResponse(any(Showtime.class))).thenReturn(new AdminShowtimeResponse());
+        UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
+        request.setStatus(ShowtimeStatus.OPEN_FOR_BOOKING);
+
+        transitionService.transitionStatus("pub-id", request);
+
+        assertEquals(ShowtimeStatus.OPEN_FOR_BOOKING, showtime.getStatus());
+        assertNull(showtime.getBookingCloseTime());
+        verify(openingPolicy).validateCanOpen(showtime, fixedClock.instant());
+    }
+
+    @Test
     void previewBatchStatus_GroupsBlockedItemsAndTreatsAlreadyOpenAsNoOp() {
         Showtime eligible = showtime("eligible", ShowtimeStatus.DRAFT, "2026-07-10T12:00:00Z");
         Showtime missingPrice = showtime("missing", ShowtimeStatus.DRAFT, "2026-07-10T13:00:00Z");

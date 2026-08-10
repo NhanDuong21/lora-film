@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Award,
-  BadgeDollarSign,
   BadgePercent,
   BellRing,
   Building,
   Calendar,
   CalendarRange,
+  CalendarClock,
   ChevronDown,
   Coffee,
   Coins,
@@ -17,18 +17,18 @@ import {
   Film,
   Gift,
   History,
+  Inbox,
   Home,
-  Key,
   LayoutDashboard,
   ListChecks,
   LogOut,
   Mail,
   Shield,
-  ShieldAlert,
   Tags,
   Ticket,
   TrendingUp,
   UserCircle,
+  UsersRound,
   Users,
   Zap,
   Armchair,
@@ -114,8 +114,8 @@ export default function AdminSidebar({
   const hasSystemAccess = canManageRoles || canManagePermissions
     || canConfigureSystem || canViewUserAudits;
   const roleLabel = isAccountantOnly
-    ? 'Finance'
-    : (isFullAdmin ? 'Admin' : normalizedRole.replaceAll('_', ' ') || 'Staff');
+    ? 'Tài chính'
+    : (isFullAdmin ? 'Quản trị viên' : 'Nhân viên');
   const adminHomePath = getAdminLandingPath(normalizedRole, permissions);
   const avatarUrl = getAvatarUrl(user?.avatarUrl);
 
@@ -157,7 +157,7 @@ export default function AdminSidebar({
       label: 'Khuyến mãi',
       visible: isFullAdmin,
       items: [
-        { key: 'promotions', label: 'Promotion Center', path: '/admin/promotions', icon: BadgePercent },
+        { key: 'promotions', label: 'Trung tâm khuyến mãi', path: '/admin/promotions', icon: BadgePercent },
       ],
     },
     {
@@ -172,7 +172,7 @@ export default function AdminSidebar({
     },
     {
       key: 'customers',
-      label: 'Khách hàng & Loyalty',
+      label: 'Khách hàng & tích điểm',
       visible: isFullAdmin || canManageCustomers,
       items: [
         ...(canManageCustomers
@@ -180,7 +180,7 @@ export default function AdminSidebar({
           : []),
         ...(isFullAdmin
           ? [
-              { key: 'scores-dashboard', label: 'Tổng quan Loyalty', path: '/admin/scores/dashboard', icon: Award },
+              { key: 'scores-dashboard', label: 'Tổng quan tích điểm', path: '/admin/scores/dashboard', icon: Award },
               { key: 'scores-tiers', label: 'Hạng thành viên', path: '/admin/scores/tiers', icon: Award },
               { key: 'scores-viewer', label: 'Tra cứu điểm thưởng', path: '/admin/scores/viewer', icon: Gift },
               { key: 'scores-reconciliation', label: 'Đối soát điểm', path: '/admin/scores/reconciliation', icon: History },
@@ -190,32 +190,34 @@ export default function AdminSidebar({
     },
     {
       key: 'people',
-      label: 'Nhân sự',
+      label: 'Nhân sự & tiền lương',
       visible: hasHumanResourcesAccess,
       items: [
-        ...(canManageEmployees ? [{ key: 'staff', label: 'Nhân viên', path: '/admin/staff', icon: Shield }] : []),
-        ...(canManageDepartments ? [{ key: 'departments', label: 'Phòng ban', path: '/admin/departments', icon: Building }] : []),
-        ...(canManagePositions ? [{ key: 'positions', label: 'Vị trí', path: '/admin/positions', icon: BadgeDollarSign }] : []),
-        ...(canManagePayroll ? [{ key: 'payroll', label: 'Bảng lương', path: '/admin/payroll', icon: TrendingUp }] : []),
+        ...(canManageEmployees ? [{ key: 'hr', label: 'Trung tâm nhân sự', path: '/admin/hr', icon: LayoutDashboard }] : []),
+        ...(canManageEmployees ? [{ key: 'approvals', label: 'Việc chờ duyệt', path: '/admin/approvals', icon: Inbox }] : []),
+        ...(canManageEmployees ? [{ key: 'staff', label: 'Hồ sơ nhân viên', path: '/admin/staff', icon: Shield }] : []),
+        ...(canManageEmployees ? [{ key: 'workforce', label: 'Lịch ca & chấm công', path: '/admin/workforce', icon: CalendarClock }] : []),
+        ...(canManagePayroll ? [{ key: 'payroll', label: 'Quy trình bảng lương', path: '/admin/payroll', icon: TrendingUp }] : []),
+        ...(canManageDepartments || canManagePositions ? [{ key: 'organization', label: 'Sơ đồ tổ chức', path: '/admin/organization', icon: UsersRound }] : []),
       ],
     },
     {
       key: 'system',
-      label: 'Hệ thống & thông báo',
+      label: 'Hệ thống',
       visible: hasSystemAccess,
       items: [
-        ...(canManageRoles ? [{ key: 'roles', label: 'Quản lý vai trò', path: '/admin/roles', icon: ShieldAlert }] : []),
-        ...(canConfigureSystem ? [{ key: 'accounts', label: 'Tài khoản đăng nhập', path: '/admin/accounts', icon: UserCircle }] : []),
-        ...(canManagePermissions ? [{ key: 'permissions', label: 'Quản lý quyền hạn', path: '/admin/permissions', icon: Key }] : []),
-        ...(canConfigureSystem ? [{ key: 'audits', label: 'Nhật ký truy cập', path: '/admin/audits', icon: FileSearch }] : []),
-        ...(canViewUserAudits ? [{ key: 'user-audits', label: 'Nhật ký nghiệp vụ', path: '/admin/user-audits', icon: FileSearch }] : []),
-        ...(isFullAdmin
-          ? [
-              { key: 'notification-dashboard', label: 'Tổng quan thông báo', path: '/admin/notifications', icon: BellRing },
-              { key: 'notification-templates', label: 'Mẫu thông báo', path: '/admin/notification-templates', icon: Mail },
-              { key: 'notification-operations', label: 'Vận hành gửi thông báo', path: '/admin/notification-operations', icon: ListChecks },
-            ]
-          : []),
+        ...(hasSystemAccess ? [{ key: 'accounts', label: 'Tài khoản & phân quyền', path: '/admin/accounts', icon: UserCircle }] : []),
+        ...(canConfigureSystem || canViewUserAudits ? [{ key: 'audits', label: 'Nhật ký hoạt động', path: '/admin/audits', icon: FileSearch }] : []),
+      ],
+    },
+    {
+      key: 'notifications',
+      label: 'Thông báo',
+      visible: isFullAdmin,
+      items: [
+        { key: 'notification-dashboard', label: 'Tổng quan thông báo', path: '/admin/notifications', icon: BellRing },
+        { key: 'notification-templates', label: 'Mẫu thông báo', path: '/admin/notification-templates', icon: Mail },
+        { key: 'notification-operations', label: 'Vận hành gửi thông báo', path: '/admin/notification-operations', icon: ListChecks },
       ],
     },
   ].filter(section => section.visible && section.items.length > 0);

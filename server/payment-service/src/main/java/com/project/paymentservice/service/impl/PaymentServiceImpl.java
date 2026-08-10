@@ -291,6 +291,12 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    public PaymentDetailResponse getPaymentForEmployee(Long paymentId) {
+        return detail(paymentRepository.findById(paymentId)
+                .orElseThrow(() -> notFound(String.valueOf(paymentId))));
+    }
+
+    @Override
     public CreatePaymentResponse createCashPayment(
             Long employeeId, String idempotencyKey, CreateCashPaymentRequest request) {
         validateCreateIdentity(request.getBookingPublicId(), null, request.getBookingCode());
@@ -547,6 +553,12 @@ public class PaymentServiceImpl implements PaymentService {
 
     private PaymentDetailResponse detail(Payment payment) {
         PaymentDetailResponse response = PaymentMapper.toDetailResponse(payment);
+        cashRepository.findById(payment.getId()).ifPresent(cash -> {
+            response.setReceivedAmount(cash.getReceivedAmount());
+            response.setChangeAmount(cash.getChangeAmount());
+            response.setCollectedByAccountId(cash.getCollectedByAccountId());
+            response.setCollectedAt(cash.getCollectedAt());
+        });
         response.setBookingDeliveryStatus(outboxService.deliveryStatus(payment.getPublicId()));
         return response;
     }

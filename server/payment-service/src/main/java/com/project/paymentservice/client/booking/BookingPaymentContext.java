@@ -53,6 +53,10 @@ public class BookingPaymentContext {
         private BigDecimal discountAmount;
         private BigDecimal totalAmount;
         private String currency;
+        private Instant showtimeStartsAt;
+        private String auditoriumPublicId;
+        private Integer auditoriumCapacity;
+        private String format;
 
         public AnalyticsSnapshotData() {
         }
@@ -78,5 +82,13 @@ public class BookingPaymentContext {
         public void setTotalAmount(BigDecimal value) { this.totalAmount = value; }
         public String getCurrency() { return currency; }
         public void setCurrency(String currency) { this.currency = currency; }
+        public Instant getShowtimeStartsAt() { return showtimeStartsAt; }
+        public void setShowtimeStartsAt(Instant value) { this.showtimeStartsAt = value; }
+        public String getAuditoriumPublicId() { return auditoriumPublicId; }
+        public void setAuditoriumPublicId(String value) { this.auditoriumPublicId = value; }
+        public Integer getAuditoriumCapacity() { return auditoriumCapacity; }
+        public void setAuditoriumCapacity(Integer value) { this.auditoriumCapacity = value; }
+        public String getFormat() { return format; }
+        public void setFormat(String value) { this.format = value; }
     }
 }

@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ExternalLink, Eye, X } from 'lucide-react';
+import { ArrowRightLeft, Check, ExternalLink, Eye, Loader2, X } from 'lucide-react';
 import { formatServiceDateKey } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 import { getCandidateValidationPresentation } from '@/features/scheduling/admin/utils/schedulingPresentation';
 
@@ -21,12 +21,25 @@ const DetailRow = ({ label, children }) => (
   </div>
 );
 
+const formatCurrency = value => value === null || value === undefined
+  ? '—'
+  : new Intl.NumberFormat('vi-VN', {
+    style: 'currency', currency: 'VND', maximumFractionDigits: 0,
+  }).format(Number(value));
+
+const formatPercent = value => value === null || value === undefined
+  ? '—'
+  : `${Math.round(Number(value) * 100)}%`;
+
 const AutoScheduleCandidateDrawer = ({
   candidate,
-  timezone,
   capabilities,
   selectionBlockedMessage,
   onToggleSelection,
+  replacementAlternatives = [],
+  onReplaceSelection,
+  isUpdatingSelection = false,
+  isLoadingAlternatives = false,
   canInspectOnTimeline,
   onShowDiagnostic,
   onClearDiagnostic,
@@ -35,6 +48,7 @@ const AutoScheduleCandidateDrawer = ({
 }) => {
   const panelRef = useRef(null);
   const closeButtonRef = useRef(null);
+  const [showAlternatives, setShowAlternatives] = useState(false);
 
   useEffect(() => {
     if (!candidate) return undefined;
@@ -78,6 +92,7 @@ const AutoScheduleCandidateDrawer = ({
     && candidate.validationStatus === 'VALID'
     && candidate.applyStatus === 'PENDING';
   const selectionDisabled = !capabilities.canSelect || Boolean(selectionBlockedMessage);
+  const canReplace = canOfferSelection && candidate.selected && Boolean(onReplaceSelection);
 
   return (
     <div
@@ -112,17 +127,21 @@ const AutoScheduleCandidateDrawer = ({
               Suất này đang được đánh dấu trên sơ đồ phòng chiếu để bạn kiểm tra; danh sách đã chọn không thay đổi.
             </div>
           )}
+          {candidate.selected && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-200">
+              <Check className="h-4 w-4" aria-hidden="true" /> Suất này đang nằm trong lịch đề xuất
+            </div>
+          )}
+
           <dl>
-            <DetailRow label="Phim / phiên bản">{candidate.movieTitle} · {candidate.versionName}</DetailRow>
             <DetailRow label="Phòng chiếu">{candidate.auditoriumName}</DetailRow>
             <DetailRow label="Ngày vận hành">{formatServiceDateKey(candidate.serviceDate)}</DetailRow>
             <DetailRow label="Bắt đầu">{candidate.startDateTimeDisplay}</DetailRow>
             <DetailRow label="Kết thúc phim">{candidate.endDateTimeDisplay}</DetailRow>
             <DetailRow label="Phòng sẵn sàng lúc">{candidate.occupancyEndDateTimeDisplay}</DetailRow>
-            <DetailRow label="Điểm ưu tiên">{candidate.score ?? '—'} <span className="text-xs text-zinc-500">(cao hơn tốt hơn)</span></DetailRow>
             <DetailRow label="Kiểm tra">{getCandidateValidationPresentation(candidate.validationStatus).label}</DetailRow>
             <DetailRow label="Kết quả tạo suất">{candidate.applyState.label}</DetailRow>
-            <DetailRow label="Lý do">{candidate.conciseReason || 'Không có'}</DetailRow>
+            <DetailRow label="Lý do hệ thống chọn">{candidate.conciseReason || 'Phương án phù hợp và không trùng lịch'}</DetailRow>
             {candidate.createdShowtimePath && (
               <DetailRow label="Suất chiếu đã tạo">
                 <Link
@@ -136,6 +155,69 @@ const AutoScheduleCandidateDrawer = ({
             )}
           </dl>
 
+          <details className="mt-5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <summary className="cursor-pointer text-sm font-bold text-zinc-300">Xem dự báo hỗ trợ quyết định</summary>
+            <dl className="mt-3">
+              <DetailRow label="Điểm ưu tiên">{candidate.score ?? '—'} <span className="text-xs text-zinc-500">(cao hơn tốt hơn)</span></DetailRow>
+              <DetailRow label="Khách dự kiến">{candidate.expectedAttendance ?? '—'}</DetailRow>
+              <DetailRow label="Lấp đầy dự kiến">{formatPercent(candidate.expectedOccupancy)}</DetailRow>
+              <DetailRow label="Doanh thu dự kiến">{formatCurrency(candidate.expectedRevenue)}</DetailRow>
+              <DetailRow label="Đóng góp mục tiêu">{formatCurrency(candidate.expectedContribution)}</DetailRow>
+              <DetailRow label="Độ tin cậy nhu cầu">{formatPercent(candidate.demandConfidence)}</DetailRow>
+              <DetailRow label="Giải thích nhu cầu">{candidate.demandExplanation || 'Chưa có dữ liệu giải thích'}</DetailRow>
+            </dl>
+          </details>
+
+          {canReplace && (
+            <div className="mt-5 rounded-xl border border-brand-orange/30 bg-brand-orange/5 p-4">
+              <button
+                type="button"
+                disabled={isUpdatingSelection}
+                onClick={() => setShowAlternatives(value => !value)}
+                aria-expanded={showAlternatives}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isUpdatingSelection ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ArrowRightLeft className="h-4 w-4" aria-hidden="true" />}
+                {isUpdatingSelection ? 'Đang thay suất…' : showAlternatives ? 'Ẩn phương án thay thế' : 'Tìm phương án thay thế'}
+              </button>
+
+              {showAlternatives && (
+                <div className="mt-4 space-y-2" aria-label="Phương án thay thế phù hợp">
+                  <p className="text-xs leading-5 text-zinc-400">Hệ thống chỉ hiển thị các phương án không trùng với phần lịch còn lại. Phương án cùng phim và gần giờ hiện tại được ưu tiên trước.</p>
+                  {replacementAlternatives.length === 0 ? (
+                    <p className="flex items-center gap-2 rounded-lg border border-dashed border-zinc-700 p-3 text-sm text-zinc-400">
+                      {isLoadingAlternatives && <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />}
+                      {isLoadingAlternatives
+                        ? 'Đang chuẩn bị các phương án thay thế an toàn…'
+                        : 'Chưa có phương án thay thế an toàn cho suất này.'}
+                    </p>
+                  ) : replacementAlternatives.map(alternative => (
+                    <article key={alternative.id} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-white">{alternative.movieTitle}</p>
+                          <p className="mt-1 text-xs text-zinc-400">{alternative.auditoriumName} · {alternative.startTimeDisplay}–{alternative.endTimeDisplay}</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {alternative.movieKey === candidate.movieKey && <span className="rounded-full bg-blue-500/10 px-2 py-1 text-[10px] font-bold text-blue-200">Cùng phim</span>}
+                            {alternative.auditoriumKey === candidate.auditoriumKey && <span className="rounded-full bg-violet-500/10 px-2 py-1 text-[10px] font-bold text-violet-200">Cùng phòng</span>}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isUpdatingSelection}
+                          onClick={() => onReplaceSelection(candidate.id, alternative.id)}
+                          className="shrink-0 rounded-lg border border-brand-orange/40 px-3 py-2 text-xs font-black text-brand-orange hover:bg-brand-orange/10 disabled:opacity-50"
+                        >
+                          Thay bằng suất này
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {canOfferSelection && (
             <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
               <button
@@ -145,7 +227,7 @@ const AutoScheduleCandidateDrawer = ({
                 className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check className="h-4 w-4" aria-hidden="true" />
-                {candidate.selected ? 'Bỏ chọn suất đề xuất' : 'Chọn suất đề xuất'}
+                {candidate.selected ? 'Bỏ khỏi lịch' : 'Thêm vào lịch'}
               </button>
               {selectionBlockedMessage && <p className="mt-2 text-xs text-red-300">{selectionBlockedMessage}</p>}
             </div>
@@ -168,15 +250,13 @@ const AutoScheduleCandidateDrawer = ({
           )}
 
           <details className="mt-5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <summary className="cursor-pointer text-sm font-bold text-zinc-300">Chi tiết kỹ thuật</summary>
-            <dl className="mt-3 break-all font-mono text-xs">
-              <DetailRow label="Múi giờ">{timezone}</DetailRow>
+            <summary className="cursor-pointer text-sm font-bold text-zinc-300">Dữ liệu nhận diện</summary>
+            <dl className="mt-3 break-all text-xs">
               <DetailRow label="Thứ tự rà soát">{candidate.rank ?? '—'}</DetailRow>
-              {Object.entries(candidate.technicalDetails).map(([key, value]) => (
-                <DetailRow key={key} label={key}>
-                  {value && typeof value === 'object' ? JSON.stringify(value) : String(value ?? '—')}
-                </DetailRow>
-              ))}
+              <DetailRow label="Mã phương án">{candidate.id}</DetailRow>
+              <DetailRow label="Mã phim">{candidate.moviePublicId}</DetailRow>
+              <DetailRow label="Mã phiên bản">{candidate.movieVersionPublicId}</DetailRow>
+              <DetailRow label="Mã phòng">{candidate.auditoriumPublicId}</DetailRow>
             </dl>
           </details>
         </div>

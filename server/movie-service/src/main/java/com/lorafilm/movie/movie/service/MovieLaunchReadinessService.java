@@ -89,10 +89,10 @@ public class MovieLaunchReadinessService {
         if (movie.getStatus() == MovieStatus.UPCOMING
                 && movie.getReleaseDate() != null
                 && !movie.getReleaseDate().isAfter(LocalDate.now(clock))
-                && !approvalPolicy.hasOperationalShowtime(movie.getId())) {
+                && !approvalPolicy.hasPublishedShowtime(movie.getId())) {
             warnings.add(new MovieLaunchReadinessResponse.LaunchIssue(
                     "RELEASE_DATE_REACHED_WITHOUT_SHOWTIME",
-                    "Đã đến ngày khởi chiếu nhưng phim chưa có suất chiếu đang hoạt động. Hãy tạo và mở suất chiếu.",
+                    "Đã tới ngày khai thác nhưng phim chưa có suất chiếu đã công bố. Phim đang được ẩn khỏi trang khách; hãy dời ngày khai thác hoặc chuẩn bị lịch cho đợt mới.",
                     "CREATE_SHOWTIME", null));
         }
 

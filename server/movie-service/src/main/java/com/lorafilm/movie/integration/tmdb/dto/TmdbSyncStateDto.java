@@ -1,5 +1,6 @@
 package com.lorafilm.movie.integration.tmdb.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class TmdbSyncStateDto {
@@ -11,6 +12,15 @@ public class TmdbSyncStateDto {
     private LocalDateTime stateUpdatedAt;
     private boolean stale;
     private int staleThresholdSeconds;
+    private String scope;
+    private LocalDate releaseDateFrom;
+    private LocalDate releaseDateTo;
+    private Integer maxMovies;
+    private int processedMovies;
+    private int importedMovies;
+    private int skippedMovies;
+    private String message;
+    private boolean automaticSyncEnabled;
 
     public TmdbSyncStateDto() {}
 
@@ -37,4 +47,22 @@ public class TmdbSyncStateDto {
 
     public int getStaleThresholdSeconds() { return staleThresholdSeconds; }
     public void setStaleThresholdSeconds(int staleThresholdSeconds) { this.staleThresholdSeconds = staleThresholdSeconds; }
+    public String getScope() { return scope; }
+    public void setScope(String scope) { this.scope = scope; }
+    public LocalDate getReleaseDateFrom() { return releaseDateFrom; }
+    public void setReleaseDateFrom(LocalDate releaseDateFrom) { this.releaseDateFrom = releaseDateFrom; }
+    public LocalDate getReleaseDateTo() { return releaseDateTo; }
+    public void setReleaseDateTo(LocalDate releaseDateTo) { this.releaseDateTo = releaseDateTo; }
+    public Integer getMaxMovies() { return maxMovies; }
+    public void setMaxMovies(Integer maxMovies) { this.maxMovies = maxMovies; }
+    public int getProcessedMovies() { return processedMovies; }
+    public void setProcessedMovies(int processedMovies) { this.processedMovies = processedMovies; }
+    public int getImportedMovies() { return importedMovies; }
+    public void setImportedMovies(int importedMovies) { this.importedMovies = importedMovies; }
+    public int getSkippedMovies() { return skippedMovies; }
+    public void setSkippedMovies(int skippedMovies) { this.skippedMovies = skippedMovies; }
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
+    public boolean isAutomaticSyncEnabled() { return automaticSyncEnabled; }
+    public void setAutomaticSyncEnabled(boolean automaticSyncEnabled) { this.automaticSyncEnabled = automaticSyncEnabled; }
 }

@@ -134,7 +134,8 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 px-6 md:px-12 py-10 transition-opacity duration-300 ${isRefreshing ? 'opacity-40 pointer-events-none' : ''}`}>
               {activeMovies.map((movie) => {
                 const ratingMeta = getAgeRatingLabel(movie.ageRating);
-                const canBook = movie.status === 'NOW_SHOWING' && movie.bookable !== false;
+                const canBook = ['NOW_SHOWING', 'UPCOMING'].includes(movie.status)
+                  && movie.bookable === true;
                 return (
                   <div
                     key={movie.publicId || movie.id}
@@ -223,12 +224,17 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
                             className="w-full max-w-[160px] bg-brand-orange hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-full flex items-center justify-center gap-2 transition-all text-sm shadow-md shadow-brand-orange/10 cursor-pointer"
                           >
                             <Ticket className="w-4 h-4" />
-                            Chọn suất
+                            {movie.status === 'UPCOMING' ? 'Đặt vé sớm' : 'Chọn suất'}
                           </button>
                         )}
                         {movie.status === 'NOW_SHOWING' && movie.bookable === false && (
                           <span className="w-full max-w-[160px] rounded-full border border-zinc-600 bg-zinc-900/80 px-4 py-2 text-center text-sm font-medium text-zinc-400">
-                            Sắp mở bán
+                            Tạm hết lịch
+                          </span>
+                        )}
+                        {movie.status === 'UPCOMING' && movie.bookable === false && (
+                          <span className="w-full max-w-[160px] rounded-full border border-amber-500/30 bg-zinc-900/80 px-4 py-2 text-center text-sm font-medium text-amber-200">
+                            Chưa mở bán
                           </span>
                         )}
 
@@ -311,7 +317,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
             <button
               onClick={() => setActiveTrailerUrl(null)}
               className="absolute top-4 right-4 bg-zinc-900/80 text-zinc-400 hover:text-white p-2 rounded-full transition-colors z-20 cursor-pointer"
-              aria-label="Close trailer"
+              aria-label="Đóng đoạn giới thiệu phim"
             >
               <X className="w-5 h-5" />
             </button>
@@ -319,7 +325,7 @@ export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propAc
             {/* Secure Video IFrame Instance */}
             <iframe
               src={`${activeTrailerUrl}?autoplay=1&rel=0&modestbranding=1`}
-              title="LoraFilm Cinematic Trailer Player"
+              title="Trình phát đoạn giới thiệu phim LoraFilm"
               className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen

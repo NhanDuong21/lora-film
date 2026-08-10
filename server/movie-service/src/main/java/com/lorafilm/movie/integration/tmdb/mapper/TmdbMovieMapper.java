@@ -33,7 +33,8 @@ public interface TmdbMovieMapper {
     @Mapping(target = "country", expression = "java(extractCountry(wrapper))")
     @Mapping(target = "status", expression = "java(MovieStatus.DRAFT)")
     @Mapping(target = "ageRating", expression = "java(wrapper.getMovie() != null && Boolean.TRUE.equals(wrapper.getMovie().getAdult()) ? AgeRating.T18 : AgeRating.P)")
-    @Mapping(target = "releaseDate", expression = "java(extractReleaseDate(wrapper))")
+    @Mapping(target = "originalReleaseDate", expression = "java(extractReleaseDate(wrapper))")
+    @Mapping(target = "releaseDate", expression = "java(extractInitialExhibitionDate(wrapper))")
     @Mapping(target = "slug", expression = "java(generateMovieSlug(extractTitle(wrapper), wrapper.getTmdbId()))")
     @Mapping(target = "activeSlug", expression = "java(generateMovieSlug(extractTitle(wrapper), wrapper.getTmdbId()))")
     Movie toEntity(TmdbMovieWrapperDto wrapper);
@@ -47,7 +48,8 @@ public interface TmdbMovieMapper {
     @Mapping(target = "durationMinutes", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getRuntimeMinutes() != null && wrapper.getMovie().getRuntimeMinutes() > 0 ? wrapper.getMovie().getRuntimeMinutes() : entity.getDurationMinutes())")
     @Mapping(target = "synopsis", expression = "java(extractOverview(wrapper))")
     @Mapping(target = "country", expression = "java(extractCountry(wrapper) != null ? extractCountry(wrapper) : entity.getCountry())")
-    @Mapping(target = "releaseDate", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getReleaseDate() != null && !wrapper.getMovie().getReleaseDate().isEmpty() ? parseReleaseDate(wrapper.getMovie().getReleaseDate(), entity.getReleaseDate()) : entity.getReleaseDate())")
+    @Mapping(target = "originalReleaseDate", expression = "java(wrapper.getMovie() != null && wrapper.getMovie().getReleaseDate() != null && !wrapper.getMovie().getReleaseDate().isEmpty() ? parseReleaseDate(wrapper.getMovie().getReleaseDate(), entity.getOriginalReleaseDate()) : entity.getOriginalReleaseDate())")
+    @Mapping(target = "releaseDate", ignore = true)
     void updateEntityFromDto(TmdbMovieWrapperDto wrapper, @MappingTarget Movie entity);
 
     @Named("generatePublicId")
@@ -89,14 +91,26 @@ public interface TmdbMovieMapper {
 
     @Named("extractReleaseDate")
     default java.time.LocalDate extractReleaseDate(TmdbMovieWrapperDto wrapper) {
-        if (wrapper == null || wrapper.getMovie() == null) return java.time.LocalDate.now();
-        return parseReleaseDate(wrapper.getMovie().getReleaseDate(), java.time.LocalDate.now());
+        if (wrapper == null || wrapper.getMovie() == null) return null;
+        return parseReleaseDate(wrapper.getMovie().getReleaseDate(), null);
+    }
+
+    /**
+     * Phim chưa phát hành có thể dùng ngày từ TMDB làm kế hoạch khai thác ban đầu.
+     * Phim cũ phải để admin chủ động lập một đợt khai thác mới, tránh xem ngày
+     * phát hành gốc là ngày phim từng được khai thác tại cụm rạp của hệ thống.
+     */
+    default java.time.LocalDate extractInitialExhibitionDate(TmdbMovieWrapperDto wrapper) {
+        java.time.LocalDate originalDate = extractReleaseDate(wrapper);
+        if (originalDate == null) return null;
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        return originalDate.isBefore(today) ? null : originalDate;
     }
 
     @Named("parseReleaseDate")
     default java.time.LocalDate parseReleaseDate(String releaseDateStr, java.time.LocalDate fallback) {
         if (releaseDateStr == null || releaseDateStr.isBlank()) {
-            return fallback != null ? fallback : java.time.LocalDate.now();
+            return fallback;
         }
         String trimmed = releaseDateStr.trim();
         try {
@@ -107,7 +121,7 @@ public interface TmdbMovieMapper {
                     return java.time.LocalDate.of(Integer.parseInt(trimmed), 1, 1);
                 } catch (Exception ignored) {}
             }
-            return fallback != null ? fallback : java.time.LocalDate.now();
+            return fallback;
         }
     }
 

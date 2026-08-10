@@ -33,7 +33,8 @@ class MovieLifecyclePolicyTest {
         assertEquals(ErrorCode.INVALID_MOVIE_STATUS_TRANSITION, exception.getErrorCode());
 
         Movie releasedDraft = movie(MovieStatus.DRAFT, TODAY, null);
-        assertDoesNotThrow(() -> policy.validateTransition(releasedDraft, MovieStatus.NOW_SHOWING));
+        assertThrows(BusinessException.class,
+                () -> policy.validateTransition(releasedDraft, MovieStatus.NOW_SHOWING));
     }
 
     @Test

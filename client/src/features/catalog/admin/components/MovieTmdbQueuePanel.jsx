@@ -8,11 +8,10 @@ export default function MovieTmdbQueuePanel({
   approval = {},
   onApprove,
 }) {
-  const future = breakdown?.future ?? 0;
-  const readyToShow = breakdown?.readyToShow ?? 0;
-  const needsSchedule = breakdown?.needsSchedule ?? 0;
+  const eligibleUpcoming = breakdown?.eligibleUpcoming ?? 0;
+  const releaseDateExpired = breakdown?.releaseDateExpired ?? 0;
   const undated = breakdown?.undated ?? 0;
-  const eligible = future + readyToShow;
+  const eligible = eligibleUpcoming;
   const approvalBatch = Math.min(eligible, limit);
 
   return (
@@ -26,8 +25,8 @@ export default function MovieTmdbQueuePanel({
             Xử lý phim nhập tự động
           </h2>
           <p className="mt-1 max-w-4xl text-xs leading-5 text-zinc-400">
-            Phim chưa tới ngày phát hành sẽ được duyệt sang “Sắp chiếu”. Phim đã tới ngày chỉ được duyệt sang
-            “Đang chiếu” khi có ít nhất một suất chiếu hợp lệ; hệ thống không còn tự động tạm ngừng phim cũ.
+            Chỉ phim có ngày bắt đầu khai thác sau hôm nay mới được duyệt sang Sắp chiếu. Phim đã tới ngày cần lập
+            một đợt khai thác mới trước khi duyệt; không có trường hợp duyệt thẳng từ Chờ hoàn thiện sang Đang chiếu.
           </p>
         </div>
       </div>
@@ -39,32 +38,25 @@ export default function MovieTmdbQueuePanel({
         </div>
       )}
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         <QueueBucket
           icon={<Clock3 className="h-4 w-4" />}
-          label="Phim sắp phát hành"
-          description="Đủ dữ liệu sẽ được chuyển sang Sắp chiếu"
-          count={future}
+          label="Đủ điều kiện về ngày"
+          description="Ngày khai thác sau hôm nay; có thể duyệt sang Sắp chiếu khi hồ sơ đầy đủ"
+          count={eligibleUpcoming}
           tone="emerald"
         />
         <QueueBucket
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Đủ lịch để đang chiếu"
-          description="Đã tới ngày và có suất chiếu hiện tại hoặc tương lai"
-          count={readyToShow}
-          tone="sky"
-        />
-        <QueueBucket
           icon={<AlertTriangle className="h-4 w-4" />}
-          label="Cần lập lịch chiếu"
-          description="Đã tới ngày nhưng chưa có suất chiếu hợp lệ; tiếp tục giữ Nháp"
-          count={needsSchedule}
+          label="Ngày khai thác không còn hợp lệ"
+          description="Ngày là hôm nay hoặc đã qua; cần đổi sang một ngày sau hôm nay để lập đợt mới"
+          count={releaseDateExpired}
           tone="amber"
         />
         <QueueBucket
           icon={<CircleHelp className="h-4 w-4" />}
-          label="Chưa có ngày khởi chiếu"
-          description="Cần mở hồ sơ để bổ sung ngày khởi chiếu tại hệ thống"
+          label="Chưa có ngày bắt đầu khai thác"
+          description="Cần mở hồ sơ để bổ sung thời gian khai thác tại rạp"
           count={undated}
           tone="zinc"
         />
@@ -87,10 +79,10 @@ export default function MovieTmdbQueuePanel({
       {approval.error && <InlineError message={approval.error} />}
       {approval.result && (
         <ActionResult
-          title="Kết quả duyệt phim theo lịch vận hành"
+          title="Kết quả duyệt phim sang Sắp chiếu"
           result={approval.result}
           successKey="approved"
-          successText="Đã chuyển sang trạng thái phù hợp"
+          successText="Đã chuyển sang Sắp chiếu"
         />
       )}
     </section>

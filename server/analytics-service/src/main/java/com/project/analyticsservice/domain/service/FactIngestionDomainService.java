@@ -76,6 +76,8 @@ public class FactIngestionDomainService {
         fact.setCinemaName(trimToNull(event.cinemaName()));
         fact.setAuditoriumPublicId(trimToNull(event.auditoriumPublicId()));
         fact.setShowtimePublicId(trimToNull(event.showtimePublicId()));
+        fact.setShowtimeStartsAt(event.showtimeStartsAt());
+        fact.setFormat(trimToNull(event.format()));
         fact.setPromotionPublicId(trimToNull(event.promotionPublicId()));
         fact.setPromotionName(trimToNull(event.promotionName()));
         fact.setMembershipTier(normalizeTier(event.membershipTier()));

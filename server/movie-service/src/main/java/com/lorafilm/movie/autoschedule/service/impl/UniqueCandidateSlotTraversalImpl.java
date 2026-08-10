@@ -47,8 +47,17 @@ public class UniqueCandidateSlotTraversalImpl implements UniqueCandidateSlotTrav
         for (OperatingWindow window : windows) {
             for (AutoScheduleGenerationContext.AuditoriumSnapshot auditorium : auditoriums) {
                 for (AutoScheduleGenerationContext.MovieVersionSnapshot version : versions) {
+                    if (!isCompatible(version, auditorium)) {
+                        continue;
+                    }
                     Integer duration = version.movie().durationMinutes();
                     if (duration == null || duration <= 0) {
+                        continue;
+                    }
+                    if ((version.movie().releaseDate() != null
+                            && window.getServiceDate().isBefore(version.movie().releaseDate()))
+                            || (version.movie().endDate() != null
+                            && window.getServiceDate().isAfter(version.movie().endDate()))) {
                         continue;
                     }
 
@@ -69,6 +78,14 @@ public class UniqueCandidateSlotTraversalImpl implements UniqueCandidateSlotTrav
                     for (long position = 0; position < positions; position++) {
                         long offsetMinutes = Math.multiplyExact(position, stepMinutes);
                         Instant start = window.getOpenInstant().plus(offsetMinutes, ChronoUnit.MINUTES);
+                        Instant end = start.plus(duration.longValue(), ChronoUnit.MINUTES);
+                        Instant occupancyEnd = end.plus(
+                                auditorium.effectiveCleaningBufferMinutes(), ChronoUnit.MINUTES);
+                        if (context.getCinemaClosures().overlaps(start, occupancyEnd)
+                                || context.maintenanceFor(auditorium.id()).overlaps(start, occupancyEnd)
+                                || context.showtimeConflictsFor(auditorium.id()).overlaps(start, occupancyEnd)) {
+                            continue;
+                        }
                         CandidateKey key = new CandidateKey(auditorium.id(), version.id(), start);
                         if (emitted.add(key)) {
                             count = Math.addExact(count, 1L);
@@ -76,9 +93,6 @@ public class UniqueCandidateSlotTraversalImpl implements UniqueCandidateSlotTrav
                                 return count;
                             }
                             if (consumer != null) {
-                                Instant end = start.plus(duration.longValue(), ChronoUnit.MINUTES);
-                                Instant occupancyEnd = end.plus(
-                                        auditorium.effectiveCleaningBufferMinutes(), ChronoUnit.MINUTES);
                                 consumer.accept(new CandidateSlot(
                                         window.getServiceDate(), window, auditorium, version,
                                         start, end, occupancyEnd));
@@ -89,6 +103,19 @@ public class UniqueCandidateSlotTraversalImpl implements UniqueCandidateSlotTrav
             }
         }
         return count;
+    }
+
+    private boolean isCompatible(AutoScheduleGenerationContext.MovieVersionSnapshot version,
+                                 AutoScheduleGenerationContext.AuditoriumSnapshot auditorium) {
+        if (version.format() == null || auditorium.screenType() == null) {
+            return true;
+        }
+        return switch (version.format()) {
+            case IMAX -> auditorium.screenType() == com.lorafilm.movie.auditorium.domain.enums.ScreenType.IMAX;
+            case FOUR_DX -> auditorium.screenType() == com.lorafilm.movie.auditorium.domain.enums.ScreenType.FOUR_DX;
+            case SCREENX -> auditorium.screenType() == com.lorafilm.movie.auditorium.domain.enums.ScreenType.SCREENX;
+            case TWO_D, THREE_D -> true;
+        };
     }
 
     private record CandidateKey(Long auditoriumId, Long movieVersionId, Instant startTime) {

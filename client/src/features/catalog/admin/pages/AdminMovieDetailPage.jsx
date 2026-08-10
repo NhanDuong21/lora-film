@@ -19,7 +19,7 @@ import MovieLaunchReadinessPanel from '../components/MovieLaunchReadinessPanel';
 const TABS = [
   { id: 'overview', number: '1', label: 'Thông tin phim', shortLabel: 'Thông tin', icon: Film },
   { id: 'versions', number: '2', label: 'Bản chiếu', shortLabel: 'Bản chiếu', icon: PlayCircle },
-  { id: 'media', number: '3', label: 'Poster & trailer', shortLabel: 'Hình ảnh', icon: ImageIcon },
+  { id: 'media', number: '3', label: 'Áp phích & đoạn giới thiệu', shortLabel: 'Hình ảnh', icon: ImageIcon },
   { id: 'genres', number: '4', label: 'Thể loại', shortLabel: 'Thể loại', icon: Tags },
   { id: 'credits', number: '5', label: 'Diễn viên & ê-kíp', shortLabel: 'Ê-kíp', icon: Users },
   { id: 'companies', number: '6', label: 'Nhà sản xuất', shortLabel: 'Đơn vị', icon: Building2 },

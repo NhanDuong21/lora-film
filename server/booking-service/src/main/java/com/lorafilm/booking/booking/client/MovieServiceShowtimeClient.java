@@ -78,6 +78,34 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
     }
 
     @Override
+    public ShowtimePresentationContext getPresentationByPublicId(String showtimePublicId) {
+        try {
+            PresentationEnvelope envelope = restClient.get()
+                    .uri("/internal/showtimes/by-public-id/{showtimePublicId}/presentation", showtimePublicId)
+                    .header("X-Internal-Token", internalToken)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                        throw new IntegrationException(
+                                "Movie Service rejected Showtime presentation request with status "
+                                        + response.getStatusCode());
+                    })
+                    .body(PresentationEnvelope.class);
+            if (envelope == null || envelope.data == null) {
+                throw new IntegrationException("Movie Service returned an empty Showtime presentation");
+            }
+            return new ShowtimePresentationContext(
+                    envelope.data.title,
+                    envelope.data.posterUrl,
+                    envelope.data.durationMinutes,
+                    envelope.data.ageRating);
+        } catch (IntegrationException ex) {
+            throw ex;
+        } catch (RestClientException ex) {
+            throw new IntegrationException("Cannot retrieve Showtime presentation from Movie Service", ex);
+        }
+    }
+
+    @Override
     public ShowtimeSeatLayoutResponse getSeatLayout(Long showtimeId) {
         try {
             SeatLayoutEnvelope envelope = restClient.get()
@@ -113,6 +141,10 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
 
     private static class SeatLayoutEnvelope {
         public ShowtimeSeatLayoutResponse data;
+    }
+
+    private static class PresentationEnvelope {
+        public ResourcePayload data;
     }
 
     private static class BookingContextPayload {
@@ -158,7 +190,11 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
                     movie.posterUrl,
                     cinema.name,
                     auditorium.name,
-                    seatContexts);
+                    seatContexts,
+                    auditorium.publicId,
+                    auditorium.capacity,
+                    movie.durationMinutes,
+                    movie.ageRating);
         }
     }
 
@@ -179,6 +215,9 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
         public String name;
         public String format;
         public String screenType;
+        public Integer capacity;
+        public Integer durationMinutes;
+        public String ageRating;
     }
 
     private static class SeatPayload {

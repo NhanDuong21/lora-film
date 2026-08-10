@@ -71,7 +71,7 @@ class AutoScheduleGenerationContextLoaderImplTest {
         loader = new AutoScheduleGenerationContextLoaderImpl(
                 operatingHourRepository, closureRepository, maintenanceRepository, showtimeRepository,
                 new CinemaOperatingWindowResolver(operatingHourRepository),
-                new ExistingShowtimeServiceDateClassifier());
+                new ExistingShowtimeServiceDateClassifier(), 50_000);
         cinema = cinema();
         auditorium = auditorium(2L, "aud-1", 20);
         movieVersion = movieVersion();
@@ -111,6 +111,7 @@ class AutoScheduleGenerationContextLoaderImplTest {
         }
 
         assertEquals(7, candidates.size());
+        assertEquals(50_000, context.getCandidateLimit());
         verify(operatingHourRepository, times(1)).findByCinemaId(1L);
         verify(closureRepository, times(1)).findOverlappingClosures(eq(1L), any(), any());
         verify(maintenanceRepository, times(1)).findActiveOverlapsForAutoSchedule(
@@ -162,7 +163,7 @@ class AutoScheduleGenerationContextLoaderImplTest {
 
         assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
                 context.getStrategyVersion());
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5,
+        assertEquals(AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1,
                 AutoScheduleStrategyVersions.CURRENT);
     }
 

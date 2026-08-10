@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import {
   Activity,
   ArrowLeft,
@@ -32,8 +32,10 @@ const TABS = [
 export default function AdminCinemaDetailPage() {
   const { cinemaPublicId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { triggerToast } = useOutletContext() || {};
-  const [activeTab, setActiveTab] = useState('health');
+  const requestedTab = searchParams.get('tab');
+  const activeTab = TABS.some(tab => tab.id === requestedTab) ? requestedTab : 'health';
   const {
     cinema,
     isLoading,
@@ -51,6 +53,12 @@ export default function AdminCinemaDetailPage() {
   useEffect(() => {
     fetchCinema();
   }, [fetchCinema]);
+
+  const openTab = tabId => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tabId);
+    setSearchParams(next, { replace: true });
+  };
 
   if (isLoading && !cinema) {
     return <LoadingState message="Đang tải trung tâm vận hành cụm rạp..." />;
@@ -100,7 +108,7 @@ export default function AdminCinemaDetailPage() {
             <button
               type="button"
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => openTab(tab.id)}
               className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-xs font-black transition ${
                 activeTab === tab.id
                   ? 'bg-orange-500 text-white'
@@ -118,7 +126,7 @@ export default function AdminCinemaDetailPage() {
         {activeTab === 'health' && (
           <CinemaHealthOverviewTab
             cinema={cinema}
-            onOpenTab={setActiveTab}
+            onOpenTab={openTab}
             onStatusChange={changeCinemaStatus}
           />
         )}
@@ -169,7 +177,7 @@ export default function AdminCinemaDetailPage() {
           <CinemaClosurePeriodsTab
             cinema={cinema}
             triggerToast={triggerToast}
-            onOpenRooms={() => setActiveTab('auditoriums')}
+            onOpenRooms={() => openTab('auditoriums')}
           />
         )}
       </main>

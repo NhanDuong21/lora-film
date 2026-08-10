@@ -396,11 +396,13 @@ export default function AdminPaymentDetailPage() {
 }
 
 const REFUND_STATUS_LABELS = {
+  PENDING_APPROVAL: 'Chờ quản lý rạp duyệt',
   REQUESTED: 'Đã tiếp nhận',
   PROCESSING: 'Đang hoàn qua nhà cung cấp',
   SUCCESS: 'Đã hoàn cho khách',
   FAILED: 'Hoàn tiền thất bại',
   REQUIRES_ACTION: 'Cần nhân viên xử lý',
+  REJECTED: 'Quản lý rạp đã từ chối',
   CANCELLED: 'Đã hủy yêu cầu',
 };
 

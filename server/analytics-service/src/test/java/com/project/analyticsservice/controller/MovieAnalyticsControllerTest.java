@@ -3,6 +3,7 @@ package com.project.analyticsservice.controller;
 import com.project.analyticsservice.common.ApiResponse;
 import com.project.analyticsservice.dto.*;
 import com.project.analyticsservice.application.MovieAnalyticsApplicationService;
+import com.project.analyticsservice.service.DemandHistorySnapshotService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -15,6 +16,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
+import java.time.Instant;
+import java.time.LocalDate;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -30,6 +34,49 @@ public class MovieAnalyticsControllerTest {
 
     @MockBean
     private MovieAnalyticsApplicationService movieAnalyticsService;
+
+    @MockBean
+    private DemandHistorySnapshotService demandHistorySnapshotService;
+
+    @Test
+    void demandSnapshot_InvalidInternalToken_Unauthorized() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/internal/analytics/demand-snapshot")
+                        .header("X-Internal-Token", "wrong-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"cinemaPublicId":"cinema-1","historyFrom":"2026-07-01",
+                                 "historyTo":"2026-07-31","cinemaTimezone":"UTC",
+                                 "moviePublicIds":["movie-1"]}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INTERNAL_TOKEN_INVALID"));
+    }
+
+    @Test
+    void demandSnapshot_ValidInternalToken_ReturnsAggregateOnly() throws Exception {
+        var aggregate = new DemandHistorySnapshotResponse.Aggregate(
+                1, 1, 5, new BigDecimal("0.5"), new BigDecimal("0.2"),
+                new BigDecimal("0.2"), BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, new BigDecimal("100000"), true);
+        when(demandHistorySnapshotService.snapshot(any())).thenReturn(
+                new DemandHistorySnapshotResponse("v1", Instant.parse("2026-08-01T00:00:00Z"),
+                        LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31),
+                        1, 1, aggregate, List.of(), List.of(), List.of()));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/internal/analytics/demand-snapshot")
+                        .header("X-Internal-Token", "secret-internal-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"cinemaPublicId":"cinema-1","historyFrom":"2026-07-01",
+                                 "historyTo":"2026-07-31","cinemaTimezone":"UTC",
+                                 "moviePublicIds":["movie-1"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sourceBookingFactCount").value(1))
+                .andExpect(jsonPath("$.data.cinemaPrior.averageOccupancy").value(0.5));
+    }
 
     @Test
     @WithMockUser(username = "admin", authorities = {"ROLE_ADMIN"})

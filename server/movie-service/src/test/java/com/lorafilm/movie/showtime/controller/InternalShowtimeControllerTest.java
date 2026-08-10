@@ -8,6 +8,7 @@ import com.lorafilm.movie.showtime.dto.request.BookingContextRequest;
 import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
 import com.lorafilm.movie.showtime.dto.response.BookingContextShowtimeDto;
 import com.lorafilm.movie.showtime.dto.response.BookingContextPricingDto;
+import com.lorafilm.movie.showtime.dto.ShowtimeMovieDto;
 import com.lorafilm.movie.showtime.service.ShowtimeBookingContextService;
 import com.lorafilm.movie.showtime.service.ShowtimeQueryService;
 import com.lorafilm.movie.common.security.InternalTokenFilter;
@@ -30,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import org.springframework.test.context.TestPropertySource;
@@ -107,6 +109,23 @@ class InternalShowtimeControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("ERR_401_UNAUTHORIZED"));
+    }
+
+    @Test
+    void getPresentation_validToken_returnsMovieFacts() throws Exception {
+        ShowtimeMovieDto movie = new ShowtimeMovieDto();
+        movie.setTitle("Movie 1");
+        movie.setDurationMinutes(150);
+        movie.setAgeRating("P");
+        when(showtimeBookingContextService.getPresentationByPublicId("showtime-1"))
+                .thenReturn(movie);
+
+        mockMvc.perform(get("/internal/showtimes/by-public-id/showtime-1/presentation")
+                .header("X-Internal-Token", validToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Movie 1"))
+                .andExpect(jsonPath("$.data.durationMinutes").value(150))
+                .andExpect(jsonPath("$.data.ageRating").value("P"));
     }
 
     @Test

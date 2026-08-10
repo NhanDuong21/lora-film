@@ -55,6 +55,7 @@ import com.lorafilm.booking.booking.service.BookingLifecycleService;
 import com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager;
 import com.lorafilm.booking.realtime.SeatAvailabilityEventService;
 import com.lorafilm.booking.infrastructure.client.dto.ShowtimeSeatLayoutResponse;
+import com.lorafilm.booking.infrastructure.client.EmployeeCinemaScopeClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -117,6 +118,7 @@ public class BookingServiceImpl implements BookingService {
     private SeatAvailabilityEventService seatAvailabilityEventService;
     private ScoreRedemptionClient scoreRedemptionClient;
     private PromotionReservationClient promotionReservationClient;
+    private EmployeeCinemaScopeClient employeeCinemaScopeClient;
 
     @Autowired
     public BookingServiceImpl(
@@ -175,6 +177,11 @@ public class BookingServiceImpl implements BookingService {
     @Autowired(required = false)
     public void setPromotionReservationClient(PromotionReservationClient service) {
         this.promotionReservationClient = service;
+    }
+
+    @Autowired(required = false)
+    public void setEmployeeCinemaScopeClient(EmployeeCinemaScopeClient service) {
+        this.employeeCinemaScopeClient = service;
     }
 
     /** Backwards-compatible constructor for existing unit/integration callers. */
@@ -238,7 +245,7 @@ public class BookingServiceImpl implements BookingService {
         ValidatedCreateRequest validatedRequest = validateCreateRequest(request);
 
         if (validatedRequest.seatPublicIds() != null) {
-            return createAtomicBookingFromSeats(currentUserId, validatedRequest);
+            return createAtomicBookingFromSeats(currentUserId, validatedRequest, request);
         }
 
         List<SeatReservation> reservations = reservationRepository
@@ -249,6 +256,7 @@ public class BookingServiceImpl implements BookingService {
         List<Long> seatIds = reservations.stream().map(SeatReservation::getSeatId).toList();
         ShowtimeBookingContext context = showtimeClient.getBookingContext(showtimeId, seatIds);
         validateShowtimeContext(context, showtimeId, validatedRequest.showtimePublicId(), seatIds);
+        requireAssignedCinemaForCounterSale(currentUserId, context.cinemaPublicId());
         validateSingleSeatGap(showtimeId, seatIds);
 
         Instant now = Instant.now();
@@ -273,6 +281,7 @@ public class BookingServiceImpl implements BookingService {
                 bookingDeadline,
                 null);
         booking.setShowtimePublicId(context.showtimePublicId());
+        applyCounterCustomer(booking, request);
 
         Booking savedBooking = saveNewPendingBooking(booking);
         persistAuthoritativePriceSnapshot(savedBooking, context);
@@ -301,6 +310,8 @@ public class BookingServiceImpl implements BookingService {
         snapshotRequest.setMovieId(context.movieId());
         snapshotRequest.setMovieTitle(context.movieTitle());
         snapshotRequest.setMoviePoster(context.moviePosterUrl());
+        snapshotRequest.setDuration(context.movieDurationMinutes());
+        snapshotRequest.setAgeRating(context.movieAgeRating());
         snapshotRequest.setShowtimeId(context.showtimeId());
         snapshotRequest.setShowtimeStart(context.startsAt());
         snapshotRequest.setShowtimeEnd(context.endsAt());
@@ -321,7 +332,10 @@ public class BookingServiceImpl implements BookingService {
         return bookingMapper.toResponse(savedBooking);
     }
 
-    private BookingResponse createAtomicBookingFromSeats(Long userId, ValidatedCreateRequest request) {
+    private BookingResponse createAtomicBookingFromSeats(
+            Long userId,
+            ValidatedCreateRequest request,
+            CreateBookingRequest createRequest) {
         ShowtimeBookingContext context = showtimeClient.getBookingContextByPublicId(
                 request.showtimePublicId(), request.seatPublicIds());
         if (context == null || context.startsAt() == null || !context.startsAt().isAfter(Instant.now())) {
@@ -338,6 +352,7 @@ public class BookingServiceImpl implements BookingService {
             throw new IntegrationException("Movie Service returned mismatched public seat information");
         }
         validateShowtimeContext(context, context.showtimeId(), request.showtimePublicId(), seatIds);
+        requireAssignedCinemaForCounterSale(userId, context.cinemaPublicId());
         validateSingleSeatGap(context.showtimeId(), seatIds);
         if (seatIds.size() > bookingPolicyProperties.getMaxSeatsPerBooking()) {
             throw new BusinessException("BOOKING_TOO_MANY_SEATS",
@@ -364,6 +379,8 @@ public class BookingServiceImpl implements BookingService {
                     context.ticketAmount(), BigDecimal.ZERO, context.serviceFee(), BigDecimal.ZERO,
                     context.discountAmount(), BigDecimal.ZERO, context.currency(), deadline, null);
             booking.setShowtimePublicId(context.showtimePublicId());
+            booking.setCinemaPublicId(context.cinemaPublicId());
+            applyCounterCustomer(booking, createRequest);
             Booking saved = saveNewPendingBooking(booking);
             persistAuthoritativePriceSnapshot(saved, context);
 
@@ -516,6 +533,8 @@ public class BookingServiceImpl implements BookingService {
         snapshotRequest.setMovieId(context.movieId());
         snapshotRequest.setMovieTitle(context.movieTitle());
         snapshotRequest.setMoviePoster(context.moviePosterUrl());
+        snapshotRequest.setDuration(context.movieDurationMinutes());
+        snapshotRequest.setAgeRating(context.movieAgeRating());
         snapshotRequest.setShowtimeId(context.showtimeId());
         snapshotRequest.setShowtimeStart(context.startsAt());
         snapshotRequest.setShowtimeEnd(context.endsAt());
@@ -1132,7 +1151,10 @@ public class BookingServiceImpl implements BookingService {
                         .map(seat -> new BookingPriceSnapshotPayload.SeatPriceLine(
                                 seat.seatId(), seat.seatLabel(), seat.seatType(), seat.price(),
                                 seat.seatPublicId()))
-                        .toList());
+                        .toList(),
+                context.startsAt(),
+                context.auditoriumPublicId(),
+                context.auditoriumCapacity());
         BookingPriceSnapshot snapshot = new BookingPriceSnapshot();
         snapshot.setBooking(booking);
         snapshot.setCurrency(context.currency());
@@ -1151,6 +1173,40 @@ public class BookingServiceImpl implements BookingService {
             return "BOX_OFFICE";
         }
         return "WEB";
+    }
+
+    private void applyCounterCustomer(Booking booking, CreateBookingRequest request) {
+        if (!(securityContextService.hasRole("EMPLOYEE")
+                || securityContextService.hasRole("OPERATIONS_MANAGER"))) {
+            return;
+        }
+        booking.setCounterCustomerAccountId(request.getCounterCustomerAccountId());
+        booking.setCounterCustomerName(request.getCounterCustomerName());
+        booking.setCounterCustomerPhone(request.getCounterCustomerPhone());
+        booking.setCounterCustomerEmail(request.getCounterCustomerEmail());
+    }
+
+    private void requireAssignedCinemaForCounterSale(Long accountId, String cinemaPublicId) {
+        if (!securityContextService.hasRole("EMPLOYEE")
+                && !securityContextService.hasRole("OPERATIONS_MANAGER")) {
+            return;
+        }
+        if (employeeCinemaScopeClient == null) {
+            throw new BusinessException(
+                    "EMPLOYEE_CINEMA_SCOPE_UNAVAILABLE",
+                    "Không thể kiểm tra rạp làm việc của nhân viên.",
+                    HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        String assignedCinema = employeeCinemaScopeClient.requireActiveCinema(accountId);
+        String requestedCinema = cinemaPublicId == null
+                ? ""
+                : cinemaPublicId.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!assignedCinema.equals(requestedCinema)) {
+            throw new BusinessException(
+                    "BOOKING_EMPLOYEE_CINEMA_SCOPE_DENIED",
+                    "Nhân viên chỉ được tạo đơn cho rạp đang được phân công.",
+                    HttpStatus.FORBIDDEN);
+        }
     }
 
     private String generateUniqueBookingCode() {

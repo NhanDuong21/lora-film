@@ -20,6 +20,7 @@ public class BookingMapper {
         response.setShowtimePublicId(booking.getShowtimePublicId());
         response.setMovieId(booking.getMovieId());
         response.setCinemaId(booking.getCinemaId());
+        response.setCinemaPublicId(booking.getCinemaPublicId());
         response.setAuditoriumId(booking.getAuditoriumId());
         response.setTicketAmount(booking.getTicketAmount());
         response.setFoodAmount(booking.getFoodAmount());
@@ -53,6 +54,7 @@ public class BookingMapper {
         response.setShowtimePublicId(booking.getShowtimePublicId());
         response.setMovieId(booking.getMovieId());
         response.setCinemaId(booking.getCinemaId());
+        response.setCinemaPublicId(booking.getCinemaPublicId());
         response.setAuditoriumId(booking.getAuditoriumId());
         response.setTicketAmount(booking.getTicketAmount());
         response.setFoodAmount(booking.getFoodAmount());
@@ -88,6 +90,10 @@ public class BookingMapper {
         return new com.lorafilm.booking.booking.dto.response.BookingResponse(
                 booking.getPublicId(),
                 booking.getBookingCode(),
+                booking.getCounterCustomerAccountId(),
+                booking.getCounterCustomerName(),
+                booking.getCounterCustomerPhone(),
+                booking.getCounterCustomerEmail(),
                 booking.getShowtimePublicId(),
                 booking.getBookingStatus(),
                 booking.getFinalAmount(),
@@ -112,6 +118,10 @@ public class BookingMapper {
         return new com.lorafilm.booking.booking.dto.response.BookingSummaryResponse(
                 booking.getPublicId(),
                 booking.getBookingCode(),
+                booking.getCounterCustomerAccountId(),
+                booking.getCounterCustomerName(),
+                booking.getCounterCustomerPhone(),
+                booking.getCounterCustomerEmail(),
                 booking.getShowtimeId(),
                 booking.getShowtimePublicId(),
                 booking.getBookingStatus(),
@@ -136,6 +146,10 @@ public class BookingMapper {
                 booking.getPublicId(),
                 booking.getBookingCode(),
                 booking.getUserId(),
+                booking.getCounterCustomerAccountId(),
+                booking.getCounterCustomerName(),
+                booking.getCounterCustomerPhone(),
+                booking.getCounterCustomerEmail(),
                 booking.getShowtimeId(),
                 booking.getShowtimePublicId(),
                 booking.getMovieId(),

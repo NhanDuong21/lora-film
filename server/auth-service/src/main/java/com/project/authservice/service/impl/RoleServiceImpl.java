@@ -4,7 +4,7 @@ import com.project.authservice.dto.PermissionDto;
 import com.project.authservice.dto.RoleDto;
 import com.project.authservice.entity.Permission;
 import com.project.authservice.entity.Role;
-import com.project.authservice.exception.DuplicateResourceException;
+import com.project.authservice.exception.BusinessException;
 import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.repository.PermissionRepository;
 import com.project.authservice.repository.RoleRepository;
@@ -17,12 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class RoleServiceImpl implements RoleService {
+
+    private static final Set<String> SYSTEM_ROLE_CODES = Set.of("ADMIN", "MANAGER", "EMPLOYEE", "CUSTOMER");
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -51,28 +52,7 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional
     public RoleDto createRole(RoleDto request) {
-        String name = request.getName().trim();
-        String code = normalizeCode(request.getCode() == null || request.getCode().isBlank()
-                ? name
-                : request.getCode());
-        if (roleRepository.existsByCode(code)) {
-            throw new DuplicateResourceException("Role code already exists: " + code);
-        }
-        if (roleRepository.existsByRoleNameIgnoreCase(name)) {
-            throw new DuplicateResourceException("Role name already exists: " + name);
-        }
-
-        Role role = Role.builder()
-                .code(code)
-                .roleName(name)
-                .description(trimToNull(request.getDescription()))
-                .build();
-
-        role.setPermissions(resolvePermissions(request));
-        
-        role = roleRepository.save(role);
-        auditLogService.log(null, "CREATE_ROLE", this.request);
-        return mapToDto(role);
+        throw new BusinessException("System roles are fixed and cannot be created from operations");
     }
 
     @Override
@@ -80,15 +60,10 @@ public class RoleServiceImpl implements RoleService {
     public RoleDto updateRole(Long id, RoleDto request) {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
-                
-        String name = request.getName().trim();
-        roleRepository.findByRoleNameIgnoreCase(name)
-                .filter(existing -> !existing.getId().equals(id))
-                .ifPresent(existing -> {
-                    throw new DuplicateResourceException("Role name already exists: " + name);
-                });
-        role.setRoleName(name);
-        role.setDescription(trimToNull(request.getDescription()));
+
+        if (!"EMPLOYEE".equals(role.getCode())) {
+            throw new BusinessException("Only EMPLOYEE permissions can be changed from operations");
+        }
 
         if (request.getPermissionIds() != null || request.getPermissions() != null) {
             role.setPermissions(resolvePermissions(request));
@@ -110,7 +85,7 @@ public class RoleServiceImpl implements RoleService {
     public void deleteRole(Long id) {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
-        if (Set.of("ADMIN", "CUSTOMER", "EMPLOYEE").contains(role.getCode())) {
+        if (SYSTEM_ROLE_CODES.contains(role.getCode())) {
             throw new IllegalStateException("Built-in role cannot be deleted");
         }
         roleRepository.delete(role);
@@ -156,16 +131,6 @@ public class RoleServiceImpl implements RoleService {
         return permissions;
     }
 
-    private String normalizeCode(String value) {
-        return value.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_");
-    }
-
-    private String trimToNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
-    }
     public RoleServiceImpl(RoleRepository roleRepository, PermissionRepository permissionRepository,
                            com.project.authservice.service.AuditLogService auditLogService,
                            jakarta.servlet.http.HttpServletRequest request,

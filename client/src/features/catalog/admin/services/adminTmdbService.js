@@ -13,13 +13,26 @@ const adminTmdbService = {
     return response.data;
   },
   
-  startBulkSync: async () => {
-    const response = await apiClient.post(`${BASE_URL}/sync/bulk/start`);
+  startBulkSync: async (request) => {
+    const response = await apiClient.post(`${BASE_URL}/sync/bulk/start`, request);
     return response.data;
   },
+
+  searchMovies: async (query, signal) => {
+    const response = await apiClient.get(`${BASE_URL}/movies/search`, {
+      params: { query, limit: 8 },
+      signal,
+    });
+    return response.data.data || [];
+  },
   
-  resetBulkSync: async () => {
-    const response = await apiClient.post(`${BASE_URL}/sync/bulk/reset`);
+  resetBulkSync: async (request) => {
+    const response = await apiClient.post(`${BASE_URL}/sync/bulk/reset`, request);
+    return response.data;
+  },
+
+  stopBulkSync: async () => {
+    const response = await apiClient.post(`${BASE_URL}/sync/bulk/stop`);
     return response.data;
   }
 };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Banknote, CheckCircle2, Clock3, Search, Ticket, XCircle } from 'lucide-react';
 import PaymentNoticeModal from '../../components/PaymentNoticeModal';
 import {
@@ -22,7 +22,12 @@ const operationKey = (operation, reference) => {
 };
 
 export default function EmployeeCashPaymentPage() {
-  const [reference, setReference] = useState('');
+  const initialReference = useMemo(
+    () => new URLSearchParams(window.location.search).get('reference') || '',
+    [],
+  );
+  const autoLookupDone = useRef(false);
+  const [reference, setReference] = useState(initialReference);
   const [booking, setBooking] = useState(null);
   const [payment, setPayment] = useState(null);
   const [receivedAmount, setReceivedAmount] = useState('');
@@ -46,19 +51,31 @@ export default function EmployeeCashPaymentPage() {
     }
   };
 
-  const lookup = event => {
-    event.preventDefault();
-    if (!reference.trim()) {
+  const lookupReference = candidate => {
+    if (!candidate.trim()) {
       setNotice({ tone: 'info', title: 'Thiếu mã đơn', message: 'Vui lòng nhập mã đặt vé hoặc UUID của đơn.' });
       return;
     }
     run(async () => {
-      const result = await lookupCashBooking(reference.trim());
+      const result = await lookupCashBooking(candidate.trim());
       setBooking(result);
       setPayment(null);
       setReceivedAmount(String(result.amount || ''));
     });
   };
+
+  const lookup = event => {
+    event.preventDefault();
+    lookupReference(reference);
+  };
+
+  useEffect(() => {
+    if (!initialReference || autoLookupDone.current) return;
+    autoLookupDone.current = true;
+    lookupReference(initialReference);
+    // Chỉ tự tra cứu một lần khi đi từ màn hình Đơn tại quầy.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialReference]);
 
   const create = () => run(async () => {
     const result = await createCashPayment(
@@ -121,7 +138,7 @@ export default function EmployeeCashPaymentPage() {
       {!booking ? (
         <div className="rounded-3xl border border-dashed border-zinc-800 py-20 text-center text-zinc-500">
           <Ticket className="mx-auto mb-4 h-12 w-12" />
-          <p>Thông tin authoritative từ Booking sẽ hiển thị tại đây.</p>
+          <p>Thông tin đơn chính xác từ hệ thống đặt vé sẽ hiển thị tại đây.</p>
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">

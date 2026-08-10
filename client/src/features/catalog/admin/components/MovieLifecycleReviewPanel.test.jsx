@@ -24,7 +24,7 @@ const renderPanel = (movie, tmdbReview) => render(
 );
 
 describe('MovieLifecycleReviewPanel approval target', () => {
-  it('offers UPCOMING for a future TMDB movie', () => {
+  it('cho phép duyệt sang Sắp chiếu khi ngày khai thác ở tương lai', () => {
     renderPanel(readyMovie, {
       approvalTarget: 'UPCOMING',
       canApprove: true,
@@ -35,26 +35,23 @@ describe('MovieLifecycleReviewPanel approval target', () => {
     expect(screen.queryByRole('button', { name: 'Duyệt sang Đang chiếu' })).not.toBeInTheDocument();
   });
 
-  it('offers NOW_SHOWING for a released movie with an operational showtime', () => {
-    renderPanel({ ...readyMovie, releaseDate: '2020-01-01', showtimeCount: 1 }, {
-      approvalTarget: 'NOW_SHOWING',
-      canApprove: true,
-      approvalBlockers: [],
-    });
-
-    expect(screen.getByRole('button', { name: 'Duyệt sang Đang chiếu' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: 'Duyệt sang Sắp chiếu' })).not.toBeInTheDocument();
-  });
-
-  it('keeps a released movie blocked while no operational showtime exists', () => {
-    const blocker = 'NOW_SHOWING requires at least one current or future non-cancelled showtime.';
+  it('không cho duyệt phim có ngày khai thác là hôm nay hoặc đã qua', () => {
+    const blocker = 'Muốn chuyển sang Sắp chiếu, ngày bắt đầu khai thác phải sau hôm nay.';
     renderPanel({ ...readyMovie, releaseDate: '2020-01-01' }, {
-      approvalTarget: 'NOW_SHOWING',
+      approvalTarget: 'UPCOMING',
       canApprove: false,
       approvalBlockers: [blocker],
     });
 
-    expect(screen.getByRole('button', { name: 'Duyệt sang Đang chiếu' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Duyệt sang Sắp chiếu' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Duyệt sang Đang chiếu' })).not.toBeInTheDocument();
     expect(screen.getByText(blocker)).toBeInTheDocument();
+  });
+
+  it('requires a future exhibition period before replaying an ended movie', () => {
+    renderPanel({ ...readyMovie, source: 'MANUAL', status: 'ENDED', releaseDate: '2020-01-01' });
+
+    expect(screen.getByRole('button', { name: 'Đưa vào đợt chiếu lại' })).toBeDisabled();
+    expect(screen.getByText('Hãy lập một đợt khai thác mới có ngày bắt đầu sau hôm nay.')).toBeInTheDocument();
   });
 });

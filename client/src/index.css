@@ -126,3 +126,78 @@
   }
 }
 
+@keyframes auto-schedule-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  50% {
+    transform: translateX(130%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+
+.auto-schedule-progress-bar {
+  animation: auto-schedule-progress 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auto-schedule-progress-bar {
+    animation: none;
+    transform: translateX(75%);
+  }
+}
+
+@media print {
+  body.printing-counter-receipt * {
+    visibility: hidden !important;
+  }
+
+  body.printing-counter-receipt #counter-cash-receipt,
+  body.printing-counter-receipt #counter-cash-receipt * {
+    visibility: visible !important;
+  }
+
+  body.printing-counter-receipt #counter-cash-receipt {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    color: #000;
+    box-shadow: none;
+  }
+
+  body.printing-employee-order *,
+  body.printing-cash-handover * {
+    visibility: hidden !important;
+  }
+
+  body.printing-employee-order #employee-order-receipt,
+  body.printing-employee-order #employee-order-receipt *,
+  body.printing-cash-handover #cash-handover-receipt,
+  body.printing-cash-handover #cash-handover-receipt * {
+    visibility: visible !important;
+  }
+
+  body.printing-employee-order #employee-order-receipt,
+  body.printing-cash-handover #cash-handover-receipt {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    color: #000;
+    box-shadow: none;
+  }
+}
+

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import useAdminShowtimes from '@/features/scheduling/admin/hooks/useAdminShowtimes';
 import ShowtimeTable from '@/features/scheduling/admin/components/ShowtimeTable';
@@ -6,6 +6,10 @@ import adminShowtimeService from '@/features/scheduling/admin/services/adminShow
 import {
   getBatchStatusReasonPresentation,
 } from '@/features/scheduling/admin/utils/schedulingPresentation';
+import {
+  readBatchReadinessCache,
+  writeBatchReadinessCache,
+} from '@/features/scheduling/admin/utils/batchReadinessCache';
 
 const canConfirmBatchTransition = summary => Boolean(
   summary?.actionAllowed
@@ -39,6 +43,8 @@ const AdminShowtimePage = () => {
     setSource,
     currentPage,
     setCurrentPage,
+    pageSize,
+    setPageSize,
     totalPages,
     totalElements,
     fetchShowtimes
@@ -55,7 +61,13 @@ const AdminShowtimePage = () => {
 
   const locationStateProcessed = useRef(false);
   const [isBatchActionLoading, setIsBatchActionLoading] = useState(false);
+  const [isBatchReadinessLoading, setIsBatchReadinessLoading] = useState(false);
+  const [batchReadiness, setBatchReadiness] = useState(() => (
+    readBatchReadinessCache(searchParams.get('batchId') || '')?.summary || null
+  ));
+  const [batchReadinessError, setBatchReadinessError] = useState('');
   const [batchActionDialog, setBatchActionDialog] = useState(null);
+  const batchReadinessGenerationRef = useRef(0);
 
   useEffect(() => {
     setCinemaSlug(searchParams.get('cinemaSlug') || '');
@@ -97,44 +109,86 @@ const AdminShowtimePage = () => {
   };
 
   const handleClearBatch = () => {
+    batchReadinessGenerationRef.current += 1;
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('batchId');
     nextSearchParams.delete('source');
     setSearchParams(nextSearchParams, { replace: true });
     setBatchId('');
     setSource('');
+    setBatchReadiness(null);
+    setBatchReadinessError('');
+    setBatchActionDialog(null);
   };
 
-  const handleClearFilters = () => {
+  const handleClearFilters = ({ preserveBatch = false } = {}) => {
     const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.delete('batchId');
-    nextSearchParams.delete('source');
+    if (!preserveBatch) {
+      batchReadinessGenerationRef.current += 1;
+      nextSearchParams.delete('batchId');
+      nextSearchParams.delete('source');
+    }
     nextSearchParams.delete('status');
     nextSearchParams.delete('cinemaSlug');
     nextSearchParams.delete('date');
     setSearchParams(nextSearchParams, { replace: true });
-    setBatchId('');
-    setSource('');
+    if (!preserveBatch) {
+      setBatchId('');
+      setSource('');
+      setBatchReadiness(null);
+      setBatchReadinessError('');
+      setBatchActionDialog(null);
+    }
     setStatus('');
     setCinemaSlug('');
     setDate('');
   };
 
-  const handleTransitionBatch = async (targetStatus) => {
-    if (!batchId) return;
+  const checkBatchReadiness = useCallback(async ({ showDialog = false, quiet = false, preserveCached = false } = {}) => {
+    if (!batchId) return null;
 
-    setIsBatchActionLoading(true);
+    const requestGeneration = batchReadinessGenerationRef.current + 1;
+    batchReadinessGenerationRef.current = requestGeneration;
+    setIsBatchReadinessLoading(true);
+    setBatchReadinessError('');
     try {
-      const res = await adminShowtimeService.previewBatchStatus(batchId, targetStatus);
+      const res = await adminShowtimeService.previewBatchStatus(batchId, 'OPEN_FOR_BOOKING');
+      if (requestGeneration !== batchReadinessGenerationRef.current) return null;
       if (res?.success && res.data) {
-        setBatchActionDialog({ phase: 'confirm', summary: res.data });
+        const normalizedSummary = { ...res.data, batchId: res.data.batchId || batchId };
+        setBatchReadiness(normalizedSummary);
+        writeBatchReadinessCache(batchId, normalizedSummary);
+        if (showDialog) setBatchActionDialog({ phase: 'confirm', summary: normalizedSummary });
+        return normalizedSummary;
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể kiểm tra điều kiện mở bán của đợt';
-      triggerToast?.(msg, 'error');
+      throw new Error('Dữ liệu kiểm tra chưa đầy đủ.');
+    } catch {
+      if (requestGeneration !== batchReadinessGenerationRef.current) return null;
+      const message = 'Không thể kiểm tra điều kiện mở bán lúc này. Vui lòng thử lại.';
+      if (!preserveCached) setBatchReadinessError(message);
+      if (!quiet) triggerToast?.(message, 'error');
+      return null;
     } finally {
-      setIsBatchActionLoading(false);
+      if (requestGeneration === batchReadinessGenerationRef.current) {
+        setIsBatchReadinessLoading(false);
+      }
     }
+  }, [batchId, triggerToast]);
+
+  useEffect(() => {
+    if (!batchId) return;
+    const cached = readBatchReadinessCache(batchId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- navigation can change the active batch without remounting this route.
+    setBatchReadiness(previous => previous?.batchId === batchId ? previous : cached?.summary || null);
+    void checkBatchReadiness({ quiet: true, preserveCached: Boolean(cached) });
+  }, [batchId, checkBatchReadiness]);
+
+  const handleOpenBatchDialog = () => {
+    if (!batchReadiness || batchReadiness.batchId !== batchId) {
+      void checkBatchReadiness({ showDialog: true });
+      return;
+    }
+    setBatchActionDialog({ phase: 'confirm', summary: batchReadiness });
   };
 
   const confirmBatchTransition = async () => {
@@ -149,12 +203,12 @@ const AdminShowtimePage = () => {
         setBatchActionDialog({ phase: 'result', summary: res.data });
         if (res.data.actionAllowed) {
           triggerToast?.(`Đã mở bán ${res.data.affectedCount} suất chiếu`, 'success');
-          fetchShowtimes();
+          await fetchShowtimes();
+          await checkBatchReadiness({ quiet: true });
         }
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể mở bán đợt; không có suất chiếu nào được thay đổi';
-      triggerToast?.(msg, 'error');
+    } catch {
+      triggerToast?.('Không thể mở bán lịch; không có suất chiếu nào được thay đổi.', 'error');
     } finally {
       setIsBatchActionLoading(false);
     }
@@ -178,6 +232,8 @@ const AdminShowtimePage = () => {
       setStatus={setStatus}
       currentPage={currentPage}
       setCurrentPage={setCurrentPage}
+      pageSize={pageSize}
+      setPageSize={setPageSize}
       totalPages={totalPages}
       totalElements={totalElements}
       batchId={batchId}
@@ -188,8 +244,13 @@ const AdminShowtimePage = () => {
       fetchShowtimes={fetchShowtimes}
       onClearBatch={handleClearBatch}
       onClearFilters={handleClearFilters}
-      onTransitionBatch={handleTransitionBatch}
+      batchReadiness={batchReadiness?.batchId === batchId ? batchReadiness : null}
+      batchReadinessError={batchReadinessError}
+      isBatchReadinessLoading={isBatchReadinessLoading}
+      onCheckBatch={() => checkBatchReadiness()}
+      onOpenBatch={handleOpenBatchDialog}
       isBatchActionLoading={isBatchActionLoading}
+      quickDrawerProps={{ seatControlApi: adminShowtimeService }}
     />
     {batchActionDialog && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -217,12 +278,6 @@ const AdminShowtimePage = () => {
                   return (
                     <li key={`${group.reasonCode || 'UNKNOWN'}-${index}`}>
                       {group.count} suất · {presentation.label}
-                      <details className="mt-1 text-[10px] text-amber-100/70">
-                        <summary className="cursor-pointer">Thông tin kỹ thuật</summary>
-                        <span className="font-mono">
-                          {group.reasonCode || 'NO_REASON_CODE'}: {group.reason || 'No safe reason supplied'}
-                        </span>
-                      </details>
                     </li>
                   );
                 })}

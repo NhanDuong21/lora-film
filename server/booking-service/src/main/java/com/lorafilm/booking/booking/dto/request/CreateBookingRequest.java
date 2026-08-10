@@ -5,6 +5,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
@@ -33,6 +36,19 @@ public class CreateBookingRequest {
             @Pattern(
                     regexp = ValidationConstants.UUID_PATTERN,
                     message = "reservationPublicId must be a valid UUID") String> reservationPublicIds;
+
+    @Positive(message = "counterCustomerAccountId must be positive")
+    private Long counterCustomerAccountId;
+
+    @Size(max = 150, message = "counterCustomerName must not exceed 150 characters")
+    private String counterCustomerName;
+
+    @Size(max = 30, message = "counterCustomerPhone must not exceed 30 characters")
+    private String counterCustomerPhone;
+
+    @Email(message = "counterCustomerEmail must be a valid email address")
+    @Size(max = 254, message = "counterCustomerEmail must not exceed 254 characters")
+    private String counterCustomerEmail;
 
     public CreateBookingRequest() {
     }
@@ -69,6 +85,38 @@ public class CreateBookingRequest {
 
     public void setSeatPublicIds(List<String> seatPublicIds) {
         this.seatPublicIds = seatPublicIds;
+    }
+
+    public Long getCounterCustomerAccountId() {
+        return counterCustomerAccountId;
+    }
+
+    public void setCounterCustomerAccountId(Long counterCustomerAccountId) {
+        this.counterCustomerAccountId = counterCustomerAccountId;
+    }
+
+    public String getCounterCustomerName() {
+        return counterCustomerName;
+    }
+
+    public void setCounterCustomerName(String counterCustomerName) {
+        this.counterCustomerName = counterCustomerName;
+    }
+
+    public String getCounterCustomerPhone() {
+        return counterCustomerPhone;
+    }
+
+    public void setCounterCustomerPhone(String counterCustomerPhone) {
+        this.counterCustomerPhone = counterCustomerPhone;
+    }
+
+    public String getCounterCustomerEmail() {
+        return counterCustomerEmail;
+    }
+
+    public void setCounterCustomerEmail(String counterCustomerEmail) {
+        this.counterCustomerEmail = counterCustomerEmail;
     }
 
 }

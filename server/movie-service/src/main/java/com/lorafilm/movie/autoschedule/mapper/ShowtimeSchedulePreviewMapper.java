@@ -88,6 +88,16 @@ public class ShowtimeSchedulePreviewMapper {
         response.setCreatedShowtimePublicId(item.getCreatedShowtime() != null ? item.getCreatedShowtime().getPublicId() : null);
         response.setApplyErrorCode(item.getApplyErrorCode());
         response.setApplyErrorMessage(item.getApplyErrorMessage());
+        response.setPricingSnapshot(item.getPricingSnapshot());
+        response.setExpectedAttendance(item.getExpectedAttendance());
+        response.setExpectedOccupancy(item.getExpectedOccupancy());
+        response.setExpectedRevenue(item.getExpectedRevenue());
+        response.setExpectedContribution(item.getExpectedContribution());
+        response.setDemandConfidence(item.getDemandConfidence());
+        response.setDemandExplanation(item.getDemandExplanation());
+        response.setDemandModelVersion(item.getDemandModelVersion());
+        response.setPrimeTime(item.getPrimeTime());
+        response.setRiskFlags(item.getRiskFlags());
         
         return response;
     }
@@ -121,6 +131,22 @@ public class ShowtimeSchedulePreviewMapper {
         summary.setAppliedAt(preview.getAppliedAt());
         summary.setAppliedBy(preview.getAppliedBy());
         summary.setFailureReason(preview.getFailureReason());
+        summary.setRequestScope(preview.getRequestScope());
+        summary.setPolicyVersion(preview.getPolicyVersion());
+        summary.setDemandModelVersion(preview.getDemandModelVersion());
+        summary.setSolverVersion(preview.getSolverVersion());
+        summary.setSolverStatus(preview.getSolverStatus());
+        summary.setEligibilityFingerprint(preview.getEligibilityFingerprint());
+        summary.setPricingFingerprint(preview.getPricingFingerprint());
+        summary.setConfigurationFingerprint(preview.getConfigurationFingerprint());
+        summary.setObjectiveValue(preview.getObjectiveValue());
+        summary.setObjectiveBestBound(preview.getObjectiveBestBound());
+        summary.setSolverDurationMillis(preview.getSolverDurationMillis());
+        summary.setSolverExplanation(preview.getSolverExplanation());
+        summary.setExpectedAttendance(preview.getExpectedAttendance());
+        summary.setExpectedOccupancy(preview.getExpectedOccupancy());
+        summary.setExpectedRevenue(preview.getExpectedRevenue());
+        summary.setExpectedContribution(preview.getExpectedContribution());
         return summary;
     }
 

@@ -28,8 +28,8 @@ class MovieLifecycleSchedulerTest {
         Movie expired = movie(3L, MovieStatus.NOW_SHOWING);
         when(repository.findReleasedByStatusForUpdate(MovieStatus.UPCOMING, today))
                 .thenReturn(List.of(ready, blocked));
-        when(approval.hasOperationalShowtime(1L)).thenReturn(true);
-        when(approval.hasOperationalShowtime(2L)).thenReturn(false);
+        when(approval.hasPublishedShowtime(1L)).thenReturn(true);
+        when(approval.hasPublishedShowtime(2L)).thenReturn(false);
         when(repository.findEndedByStatusForUpdate(MovieStatus.NOW_SHOWING, today))
                 .thenReturn(List.of(expired));
         when(repository.save(any(Movie.class))).thenAnswer(call -> call.getArgument(0));
@@ -40,9 +40,9 @@ class MovieLifecycleSchedulerTest {
         assertEquals(MovieStatus.UPCOMING, blocked.getStatus());
         assertEquals(MovieStatus.ENDED, expired.getStatus());
         verify(history).record(ready, MovieStatus.UPCOMING, MovieStatus.NOW_SHOWING,
-                "Automatically started on the local release date", null);
+                "Tự động bắt đầu khi đến ngày khai thác tại rạp", null);
         verify(history).record(expired, MovieStatus.NOW_SHOWING, MovieStatus.ENDED,
-                "Automatically ended after the local release window", null);
+                "Tự động kết thúc sau đợt khai thác tại rạp", null);
     }
 
     private Movie movie(Long id, MovieStatus status) {

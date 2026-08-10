@@ -26,17 +26,17 @@ public class TmdbProviderMovieService {
 
     public TmdbMovieWrapperDto fetchMovie(Long tmdbId) {
         if (tmdbId == null || tmdbId <= 0) {
-            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "tmdbId must be a positive number");
+            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "Mã TMDB phải là một số nguyên lớn hơn 0.");
         }
         try {
             JsonNode root = objectMapper.readTree(tmdbClient.fetchMovieDetails(tmdbId));
             if (root.has("success") && !root.get("success").asBoolean()) {
                 throw new BusinessException(
                         ErrorCode.TMDB_PROVIDER_UNAVAILABLE,
-                        "TMDB provider rejected the request: " + root.path("message").asText("Unknown provider error"));
+                        "Dịch vụ TMDB từ chối yêu cầu hoặc không tìm thấy phim phù hợp.");
             }
             if (!root.hasNonNull("data")) {
-                throw new BusinessException(ErrorCode.TMDB_PROVIDER_RESPONSE_INVALID, "TMDB response does not contain movie data");
+                throw new BusinessException(ErrorCode.TMDB_PROVIDER_RESPONSE_INVALID, "Dịch vụ TMDB không trả về dữ liệu phim hợp lệ.");
             }
 
             TmdbMovieWrapperDto wrapper = objectMapper.treeToValue(root.get("data"), TmdbMovieWrapperDto.class);
@@ -46,23 +46,23 @@ public class TmdbProviderMovieService {
             throw exception;
         } catch (JsonProcessingException exception) {
             log.error("Invalid TMDB response for movie {}", tmdbId, exception);
-            throw new BusinessException(ErrorCode.TMDB_PROVIDER_RESPONSE_INVALID, "Unable to parse TMDB movie response");
+            throw new BusinessException(ErrorCode.TMDB_PROVIDER_RESPONSE_INVALID, "Không thể đọc dữ liệu phim do TMDB trả về.");
         } catch (Exception exception) {
             log.error("TMDB provider request failed for movie {}", tmdbId, exception);
-            throw new BusinessException(ErrorCode.TMDB_PROVIDER_UNAVAILABLE, "Unable to fetch TMDB movie");
+            throw new BusinessException(ErrorCode.TMDB_PROVIDER_UNAVAILABLE, "Không thể kết nối tới dịch vụ TMDB. Vui lòng thử lại sau.");
         }
     }
 
     public void validateIdentity(Long expectedTmdbId, TmdbMovieWrapperDto wrapper) {
         if (wrapper == null || wrapper.getMovie() == null || wrapper.getTmdbId() == null || wrapper.getTmdbId() <= 0) {
-            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "TMDB payload must contain a positive tmdbId and movie data");
+            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "Dữ liệu TMDB thiếu mã phim hoặc nội dung phim hợp lệ.");
         }
         if (expectedTmdbId != null && !expectedTmdbId.equals(wrapper.getTmdbId())) {
-            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "TMDB response identity does not match the requested movie");
+            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "Mã phim TMDB trả về không khớp với phim được yêu cầu.");
         }
         Long nestedTmdbId = wrapper.getMovie().getTmdbId();
         if (nestedTmdbId != null && !wrapper.getTmdbId().equals(nestedTmdbId)) {
-            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "TMDB wrapper and movie identities do not match");
+            throw new BusinessException(ErrorCode.TMDB_IMPORT_INVALID_PAYLOAD, "Dữ liệu TMDB có mã phim không nhất quán.");
         }
     }
 }

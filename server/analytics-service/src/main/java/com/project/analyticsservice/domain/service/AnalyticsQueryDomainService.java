@@ -131,9 +131,7 @@ public class AnalyticsQueryDomainService {
                 .orElse(cinemaKey);
         List<AnalyticsResponses.Insight> scopedInsights = insights(range.start(), range.end())
                 .stream()
-                .filter(insight -> insight.rootCauses().stream().anyMatch(cause ->
-                        "CINEMA".equalsIgnoreCase(cause.dimensionType())
-                                && cinemaKey.equals(cause.dimensionKey())))
+                .filter(insight -> primaryCauseBelongsToCinema(insight, cinemaKey))
                 .toList();
         Set<Long> insightIds = scopedInsights.stream()
                 .map(AnalyticsResponses.Insight::id)
@@ -158,6 +156,16 @@ public class AnalyticsQueryDomainService {
                 recommendations(insightIds),
                 alerts(insightIds),
                 dataQuality());
+    }
+
+    private boolean primaryCauseBelongsToCinema(
+            AnalyticsResponses.Insight insight,
+            String cinemaKey) {
+        return insight.rootCauses().stream()
+                .min(Comparator.comparingInt(AnalyticsResponses.RootCause::rank))
+                .filter(cause -> "CINEMA".equalsIgnoreCase(cause.dimensionType()))
+                .map(cause -> cinemaKey.equals(cause.dimensionKey()))
+                .orElse(false);
     }
 
     public List<AnalyticsResponses.DailyKpi> daily(String start, String end) {

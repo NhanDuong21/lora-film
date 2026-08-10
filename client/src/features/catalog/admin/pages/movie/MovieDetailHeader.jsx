@@ -56,14 +56,14 @@ export default function MovieDetailHeader({ movie }) {
           {movie.primaryPoster ? (
             <LazyImage
               src={movie.primaryPoster}
-              alt={`Poster ${movie.title || 'phim'}`}
+              alt={`Áp phích ${movie.title || 'phim'}`}
               containerClassName="h-full w-full"
               className="h-full w-full object-cover"
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-2 text-center text-zinc-600">
               <ImageIcon className="h-6 w-6" />
-              <span className="text-[10px]">Chưa có poster</span>
+              <span className="text-[10px]">Chưa có áp phích</span>
             </div>
           )}
         </div>
@@ -88,7 +88,7 @@ export default function MovieDetailHeader({ movie }) {
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             <MetaItem
               icon={CalendarDays}
-              label="Khởi chiếu"
+              label="Bắt đầu khai thác"
               value={movie.releaseDate ? formatDate(movie.releaseDate) : ''}
               emptyText="Chưa có ngày"
             />

@@ -43,6 +43,21 @@ public interface AuditoriumMaintenanceWindowRepository extends JpaRepository<Aud
                                                            @Param("startTime") Instant startTime,
                                                            @Param("endTime") Instant endTime);
 
+    @Query("SELECT mw " +
+           "FROM AuditoriumMaintenanceWindow mw " +
+           "WHERE mw.auditorium.id = :auditoriumId " +
+           "  AND mw.id <> :excludedId " +
+           "  AND mw.status = :activeStatus " +
+           "  AND mw.startTime < :endTime " +
+           "  AND mw.endTime > :startTime " +
+           "ORDER BY mw.startTime ASC LIMIT 1")
+    Optional<AuditoriumMaintenanceWindow> findFirstOverlapExcluding(
+            @Param("auditoriumId") Long auditoriumId,
+            @Param("excludedId") Long excludedId,
+            @Param("activeStatus") ActionStatus activeStatus,
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime);
+
     @Query("SELECT mw FROM AuditoriumMaintenanceWindow mw JOIN FETCH mw.auditorium " +
            "WHERE mw.auditorium.id IN :auditoriumIds " +
            "AND mw.status = :activeStatus " +

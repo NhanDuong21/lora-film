@@ -16,6 +16,7 @@ public class BookingAdminResponse {
     private String showtimePublicId;
     private Long movieId;
     private Long cinemaId;
+    private String cinemaPublicId;
     private Long auditoriumId;
     private String movieTitle;
     private String moviePosterUrl;
@@ -106,6 +107,14 @@ public class BookingAdminResponse {
 
     public void setCinemaId(Long cinemaId) {
         this.cinemaId = cinemaId;
+    }
+
+    public String getCinemaPublicId() {
+        return cinemaPublicId;
+    }
+
+    public void setCinemaPublicId(String cinemaPublicId) {
+        this.cinemaPublicId = cinemaPublicId;
     }
 
     public Long getAuditoriumId() {

@@ -1,11 +1,11 @@
-# Staff operational runbook
+# Employee operational runbook
 
-Approved v1 demo scope: cash collection by booking.
+The canonical workforce role is `EMPLOYEE`. The employee workspace is assembled from permissions in the access token.
 
-1. Login with a STAFF account; `/employee` redirects to `/employee/payments/cash`.
-2. Enter a pending cash booking code and search.
-3. Confirm customer, booking status, amount and payment eligibility.
-4. Enter received amount, verify change and confirm once.
-5. Verify success feedback, payment/booking status and audit data.
+1. Apply `20260808_unify_employee_role_permissions.sql` to `auth_db`.
+2. Login again with an `EMPLOYEE` account so the new permission claims are issued.
+3. `/employee` redirects to the first permitted screen, preferring the dashboard.
+4. Verify that the menu contains only functions granted to the `EMPLOYEE` role.
+5. For cash collection, grant `PAYMENT_CASH_COLLECT`, enter a pending booking code and complete the collect flow.
 
-POS mock payment, check-in, schedules, dashboard and payroll are excluded from the STAFF navigation until their APIs and permissions are production-ready.
+Permission changes on the built-in `EMPLOYEE` role apply to every account assigned that role. Updating the role revokes their current credentials; users must authenticate again to receive the new claims.

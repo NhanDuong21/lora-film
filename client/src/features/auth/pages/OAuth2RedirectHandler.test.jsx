@@ -35,12 +35,25 @@ const customerAccessToken = [
   'signature'
 ].join('.');
 
+const employeeAccessToken = [
+  encode({ alg: 'none', typ: 'JWT' }),
+  encode({
+    sub: 'employee@example.com',
+    role: 'EMPLOYEE',
+    permissions: ['EMPLOYEE_DASHBOARD_VIEW'],
+    userId: 18,
+    exp: Math.floor(Date.now() / 1000) + 300
+  }),
+  'signature'
+].join('.');
+
 const renderCallback = entry => render(
   <MemoryRouter initialEntries={[entry]}>
     <Routes>
       <Route path="/oauth2/redirect" element={<OAuth2RedirectHandler />} />
       <Route path="/" element={<div>Home destination</div>} />
       <Route path="/admin" element={<div>Admin destination</div>} />
+      <Route path="/employee" element={<div>Employee destination</div>} />
       <Route path="/login" element={<div>Login destination</div>} />
     </Routes>
   </MemoryRouter>
@@ -86,6 +99,18 @@ describe('OAuth2RedirectHandler', () => {
     expect(login).toHaveBeenCalledWith(expect.objectContaining({
       accessToken: customerAccessToken,
       role: 'CUSTOMER'
+    }));
+  });
+
+  it('redirects the canonical EMPLOYEE role to the employee workspace', async () => {
+    renderCallback(
+      `/oauth2/redirect#accessToken=${employeeAccessToken}&refreshToken=refresh-token&expiresIn=900000`
+    );
+
+    expect(await screen.findByText('Employee destination')).toBeInTheDocument();
+    expect(login).toHaveBeenCalledWith(expect.objectContaining({
+      accessToken: employeeAccessToken,
+      role: 'EMPLOYEE'
     }));
   });
 });

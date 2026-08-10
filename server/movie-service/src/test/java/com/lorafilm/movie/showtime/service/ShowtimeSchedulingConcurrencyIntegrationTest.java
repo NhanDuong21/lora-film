@@ -102,7 +102,7 @@ class ShowtimeSchedulingConcurrencyIntegrationTest {
         movie.setCountry("US");
         movie.setStatus(MovieStatus.NOW_SHOWING);
         movie.setDurationMinutes(120);
-        movie.setReleaseDate(java.time.LocalDate.now().minusDays(1));
+        movie.setReleaseDate(java.time.LocalDate.of(2020, 1, 1));
         movie.setEndDate(java.time.LocalDate.now().plusDays(60));
         movie = movieRepository.save(movie);
 

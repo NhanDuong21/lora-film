@@ -104,7 +104,7 @@ class ShowtimeCommandServiceIntegrationTest {
         movie.setCountry("US");
         movie.setStatus(MovieStatus.NOW_SHOWING);
         movie.setDurationMinutes(120);
-        movie.setReleaseDate(java.time.LocalDate.now().minusDays(1));
+        movie.setReleaseDate(java.time.LocalDate.of(2020, 1, 1));
         movie = movieRepository.save(movie);
 
         movieVersion = new MovieVersion();

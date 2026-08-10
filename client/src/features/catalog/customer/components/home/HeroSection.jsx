@@ -134,7 +134,7 @@ export default function Hero() {
       <video
         autoPlay loop muted playsInline
         className="absolute inset-0 h-full w-full object-cover opacity-65"
-        src="https://res.cloudinary.com/dqc4hufot/video/upload/0603_ugvo4m.mp4"
+        src="/video/hero_banner.mp4"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/30 to-black/30" />
       <div className="relative z-10 mx-auto w-full max-w-7xl">

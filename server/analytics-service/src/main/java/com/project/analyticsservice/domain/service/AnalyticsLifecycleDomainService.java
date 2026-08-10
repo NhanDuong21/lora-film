@@ -6,6 +6,8 @@ import com.project.analyticsservice.entity.Recommendation;
 import com.project.analyticsservice.exception.BusinessException;
 import com.project.analyticsservice.repository.BusinessAlertRepository;
 import com.project.analyticsservice.repository.RecommendationRepository;
+import com.project.analyticsservice.repository.RootCauseFactorRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Comparator;
 
 @Service
 public class AnalyticsLifecycleDomainService {
@@ -21,18 +24,23 @@ public class AnalyticsLifecycleDomainService {
 
     private final BusinessAlertRepository alertRepository;
     private final RecommendationRepository recommendationRepository;
+    private final RootCauseFactorRepository rootCauseRepository;
 
     public AnalyticsLifecycleDomainService(
             BusinessAlertRepository alertRepository,
-            RecommendationRepository recommendationRepository) {
+            RecommendationRepository recommendationRepository,
+            RootCauseFactorRepository rootCauseRepository) {
         this.alertRepository = alertRepository;
         this.recommendationRepository = recommendationRepository;
+        this.rootCauseRepository = rootCauseRepository;
     }
 
     @Transactional
-    public AnalyticsResponses.ActionResult acknowledgeAlert(long id, String actor) {
+    public AnalyticsResponses.ActionResult acknowledgeAlert(
+            long id, String actor, Set<String> assignedCinemaKeys) {
         BusinessAlert alert = alertRepository.findById(id)
                 .orElseThrow(() -> notFound("Alert not found", "ANALYTICS_ALERT_NOT_FOUND"));
+        requireAssignedPrimaryCause(alert.getInsightId(), assignedCinemaKeys);
         if (!Boolean.TRUE.equals(alert.getAcknowledged())) {
             alert.setAcknowledged(true);
             alert.setAcknowledgedBy(normalizeActor(actor));
@@ -45,10 +53,11 @@ public class AnalyticsLifecycleDomainService {
 
     @Transactional
     public AnalyticsResponses.ActionResult updateRecommendation(
-            long id, String requestedStatus, String actor) {
+            long id, String requestedStatus, String actor, Set<String> assignedCinemaKeys) {
         Recommendation recommendation = recommendationRepository.findById(id)
                 .orElseThrow(() -> notFound(
                         "Recommendation not found", "ANALYTICS_RECOMMENDATION_NOT_FOUND"));
+        requireAssignedPrimaryCause(recommendation.getInsightId(), assignedCinemaKeys);
         String status = requestedStatus == null
                 ? "" : requestedStatus.trim().toUpperCase(Locale.ROOT);
         if (!RECOMMENDATION_STATUSES.contains(status)) {
@@ -72,6 +81,26 @@ public class AnalyticsLifecycleDomainService {
         }
         recommendationRepository.save(recommendation);
         return new AnalyticsResponses.ActionResult(id, status, now);
+    }
+
+    private void requireAssignedPrimaryCause(Long insightId, Set<String> assignedCinemaKeys) {
+        if (assignedCinemaKeys == null) {
+            return;
+        }
+        boolean allowed = rootCauseRepository
+                .findAllByInsightIdInOrderByInsightIdAscRankOrderAsc(java.util.List.of(insightId))
+                .stream()
+                .min(Comparator.comparingInt(value -> value.getRankOrder()))
+                .filter(value -> "CINEMA".equalsIgnoreCase(value.getDimensionType()))
+                .map(value -> value.getDimensionKey() == null
+                        ? ""
+                        : value.getDimensionKey().trim().toLowerCase(Locale.ROOT))
+                .filter(assignedCinemaKeys::contains)
+                .isPresent();
+        if (!allowed) {
+            throw new AccessDeniedException(
+                    "Bạn không được cập nhật cảnh báo hoặc khuyến nghị của rạp này.");
+        }
     }
 
     private String normalizeActor(String actor) {

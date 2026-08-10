@@ -37,7 +37,7 @@ class ShowtimeCandidateValidationServiceImplTest {
                         open.plus(30, ChronoUnit.MINUTES), open.plus(2, ChronoUnit.HOURS)))),
                 Map.of(), Map.of(), Map.of(), base.getPlanningStart(), base.getPlanningEnd());
         ShowtimeCandidate candidate = new ShowtimeCandidateGeneratorImpl(
-                new UniqueCandidateSlotTraversalImpl()).generate(context).get(0);
+                new UniqueCandidateSlotTraversalImpl()).generate(base).get(0);
         ShowtimeCandidateValidationServiceImpl service = new ShowtimeCandidateValidationServiceImpl(
                 new MovieShowtimeEligibilityPolicy(), new ShowtimeSchedulingRules());
 
@@ -84,7 +84,7 @@ class ShowtimeCandidateValidationServiceImplTest {
     }
 
     @Test
-    void releaseViolationIsPersistableCandidateRejectionRatherThanUniversePruning() {
+    void releaseViolationIsPrunedBeforeCandidateMaterialization() {
         AutoScheduleGenerationContext base = baseContext(15);
         AutoScheduleGenerationContext.MovieVersionSnapshot original = base.getMovieVersions().get(0);
         AutoScheduleGenerationContext.MovieSnapshot movie = original.movie();
@@ -106,11 +106,7 @@ class ShowtimeCandidateValidationServiceImplTest {
 
         List<ShowtimeCandidate> generated = new ShowtimeCandidateGeneratorImpl(
                 new UniqueCandidateSlotTraversalImpl()).generate(context);
-        CandidateValidationResult result = validator().validate(generated.get(0), context);
-
-        assertFalse(generated.isEmpty());
-        assertFalse(result.isValid());
-        assertEquals(ErrorCode.SHOWTIME_OUTSIDE_RELEASE_WINDOW.name(), result.getRejectionCode());
+        assertTrue(generated.isEmpty());
     }
 
     private AutoScheduleGenerationContext baseContext(int buffer) {

@@ -33,6 +33,14 @@ export const getUserProfiles = async (accountIds = []) => {
     return response.data.data || [];
 };
 
+export const getAccountDisplayNames = async (accountIds = []) => {
+    if (!accountIds.length) return [];
+    const response = await apiClient.get('/api/users/directory/display-names', {
+        params: { accountIds: accountIds.join(',') }
+    });
+    return response.data.data || [];
+};
+
 export const searchUserProfiles = async (query, limit = 20) => {
     if (!query?.trim()) return [];
     const response = await apiClient.get('/api/users/admin/search', {

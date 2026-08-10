@@ -6,7 +6,7 @@ const siteName = 'LoraFilm';
 
 const roleLabels = {
   ADMIN: 'Quản trị viên',
-  STAFF: 'Nhân viên',
+  MANAGER: 'Quản lý rạp',
   EMPLOYEE: 'Nhân viên',
   CUSTOMER: 'Khách hàng',
 };
@@ -41,17 +41,21 @@ const pageTitle = pathname => {
   if (path === '/payments/return') return 'Kết quả thanh toán';
 
   const adminTitles = [
+    ['/admin/hr', 'Trung tâm nhân sự'],
+    ['/admin/approvals', 'Việc chờ duyệt'],
+    ['/admin/organization', 'Sơ đồ tổ chức'],
     ['/admin/analytics', 'Phân tích và báo cáo'],
     ['/admin/members', 'Quản lý khách hàng'],
     ['/admin/staff', 'Quản lý nhân viên'],
+    ['/admin/workforce', 'Ca làm và chấm công'],
     ['/admin/departments', 'Quản lý phòng ban'],
     ['/admin/positions', 'Quản lý chức vụ'],
     ['/admin/payroll', 'Quản lý bảng lương'],
-    ['/admin/roles', 'Quản lý vai trò'],
-    ['/admin/accounts', 'Quản lý tài khoản'],
-    ['/admin/permissions', 'Quản lý quyền hạn'],
-    ['/admin/audits', 'Nhật ký bảo mật'],
-    ['/admin/user-audits', 'Nhật ký người dùng'],
+    ['/admin/roles', 'Tài khoản và phân quyền'],
+    ['/admin/accounts', 'Tài khoản và phân quyền'],
+    ['/admin/permissions', 'Tài khoản và phân quyền'],
+    ['/admin/audits', 'Nhật ký hoạt động'],
+    ['/admin/user-audits', 'Nhật ký hoạt động'],
     ['/admin/movie-operations', 'Vận hành phim'],
     ['/admin/movies', 'Quản lý phim'],
     ['/admin/genres', 'Quản lý thể loại'],
@@ -77,11 +81,32 @@ const pageTitle = pathname => {
   if (adminTitle) return adminTitle[1];
   if (path === '/admin') return 'Tổng quan quản trị';
 
-  if (path === '/employee' || path === '/employee/dashboard') return 'Bảng điều khiển nhân viên';
-  if (path === '/employee/checkin') return 'Soát vé tại rạp';
+  if (path === '/manager') return 'Tổng quan vận hành rạp';
+  if (path === '/manager/showtimes') return 'Lịch chiếu tại rạp';
+  if (path === '/manager/rooms') return 'Phòng chiếu và bảo trì';
+  if (path === '/manager/bookings') return 'Đơn đặt vé và giữ ghế';
+  if (path.startsWith('/manager/bookings/')) return 'Chi tiết đơn đặt vé';
+  if (path === '/manager/payments') return 'Giao dịch tại rạp';
+  if (path.startsWith('/manager/payments/')) return 'Chi tiết giao dịch tại rạp';
+  if (path === '/manager/staff') return 'Nhân sự và ca làm tại rạp';
+  if (path === '/manager/ticket-control') return 'Soát vé và bàn giao tại rạp';
+  if (path === '/manager/reports') return 'Báo cáo vận hành rạp';
+  if (path === '/manager/cinema') return 'Thông tin và giờ mở cửa';
+
+  if (path === '/employee' || path === '/employee/dashboard') return 'Tổng quan ca';
+  if (path === '/employee/box-office') return 'Bán vé tại quầy';
+  if (path === '/employee/orders') return 'Đơn tại quầy';
+  if (path.startsWith('/employee/orders/')) return 'Chi tiết đơn tại quầy';
+  if (path === '/employee/cash-session') return 'Chốt ca và bàn giao';
+  if (path === '/employee/ticket-scan') return 'Soát vé tại rạp';
+  if (path === '/employee/ticket-showtimes') return 'Suất chiếu và cửa phòng';
+  if (path === '/employee/ticket-history') return 'Lịch sử soát vé và sự cố';
+  if (path === '/employee/ticket-handoff') return 'Bàn giao ca soát vé';
+  if (path === '/employee/checkin') return 'Chấm công nhân viên';
   if (path === '/employee/schedules') return 'Lịch làm việc';
   if (path === '/employee/payroll') return 'Bảng lương nhân viên';
   if (path === '/employee/payments/cash') return 'Thu tiền mặt tại quầy';
+  if (path === '/employee/payments/refunds') return 'Hỗ trợ và hoàn tiền';
 
   return 'Trang LoraFilm';
 };

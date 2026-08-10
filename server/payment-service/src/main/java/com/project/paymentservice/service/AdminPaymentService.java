@@ -6,6 +6,7 @@ import com.project.paymentservice.dto.request.ReconciliationAssignRequest;
 import com.project.paymentservice.dto.request.ReconciliationResolveRequest;
 import com.project.paymentservice.dto.response.AdminPaymentDetailResponse;
 import com.project.paymentservice.dto.response.PaymentDetailResponse;
+import com.project.paymentservice.dto.response.ManagerPaymentSummaryResponse;
 import com.project.paymentservice.dto.response.RefundResponse;
 import com.project.paymentservice.entity.CashPaymentDetail;
 import com.project.paymentservice.entity.Payment;
@@ -51,6 +52,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.EnumSet;
 import com.project.paymentservice.enumtype.RefundStatus;
+import com.project.paymentservice.enumtype.RefundComponent;
 
 @Service
 public class AdminPaymentService {
@@ -99,8 +101,24 @@ public class AdminPaymentService {
             String query, PaymentStatus status, ProviderCode provider,
             ReconciliationStatus reconciliationStatus,
             Instant from, Instant to, Pageable pageable) {
+        return search(query, status, provider, reconciliationStatus, from, to, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PaymentDetailResponse> searchForCinema(
+            String cinemaPublicId,
+            String query, PaymentStatus status, ProviderCode provider,
+            ReconciliationStatus reconciliationStatus,
+            Instant from, Instant to, Pageable pageable) {
+        return search(query, status, provider, reconciliationStatus, from, to, cinemaPublicId, pageable);
+    }
+
+    private Page<PaymentDetailResponse> search(
+            String query, PaymentStatus status, ProviderCode provider,
+            ReconciliationStatus reconciliationStatus,
+            Instant from, Instant to, String cinemaPublicId, Pageable pageable) {
         Page<Payment> payments = paymentRepository.findAll(specification(
-                query, status, provider, reconciliationStatus, from, to), pageable);
+                query, status, provider, reconciliationStatus, from, to, cinemaPublicId), pageable);
         Map<Long, PaymentAnalyticsSnapshot> snapshots = snapshotRepository.findAllById(
                         payments.getContent().stream().map(Payment::getId).toList())
                 .stream()
@@ -134,11 +152,73 @@ public class AdminPaymentService {
     }
 
     @Transactional(readOnly = true)
+    public AdminPaymentDetailResponse detailForCinema(
+            String cinemaPublicId, String paymentPublicId) {
+        AdminPaymentDetailResponse response = detail(paymentPublicId);
+        String actualCinema = response.analyticsSnapshot().get("cinemaPublicId") == null
+                ? "" : response.analyticsSnapshot().get("cinemaPublicId").toString();
+        if (!actualCinema.equalsIgnoreCase(cinemaPublicId)) {
+            throw new BusinessException(
+                    "MANAGER_PAYMENT_SCOPE_DENIED",
+                    "Giao dịch không thuộc rạp bạn đang phụ trách.",
+                    HttpStatus.FORBIDDEN);
+        }
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    public ManagerPaymentSummaryResponse summaryForCinema(String cinemaPublicId) {
+        long total = countForCinema(cinemaPublicId, null, null);
+        long successful = countForCinema(cinemaPublicId, PaymentStatus.SUCCESS, null);
+        long processing = countForCinema(cinemaPublicId, PaymentStatus.PROCESSING, null)
+                + countForCinema(cinemaPublicId, PaymentStatus.PENDING, null);
+        long failed = countForCinema(cinemaPublicId, PaymentStatus.FAILED, null)
+                + countForCinema(cinemaPublicId, PaymentStatus.EXPIRED, null)
+                + countForCinema(cinemaPublicId, PaymentStatus.CANCELLED, null);
+        long needsFinanceReview = countForCinema(
+                cinemaPublicId, null, ReconciliationStatus.REQUIRED)
+                + countForCinema(cinemaPublicId, null, ReconciliationStatus.IN_REVIEW);
+        return new ManagerPaymentSummaryResponse(
+                total, successful, processing, failed, needsFinanceReview);
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentDetailResponse refundCandidateForCinema(
+            String cinemaPublicId, String reference) {
+        String normalized = reference == null ? "" : reference.trim();
+        Payment payment = paymentRepository.findByPublicId(normalized)
+                .or(() -> paymentRepository.findByPaymentTransactionCode(normalized))
+                .or(() -> paymentRepository.findFirstByBookingPublicIdAndStatusOrderByCreatedAtDesc(
+                        normalized, PaymentStatus.SUCCESS))
+                .orElseThrow(() -> new BusinessException(
+                        "PAYMENT_NOT_FOUND",
+                        "Không tìm thấy giao dịch đã thanh toán theo mã đã nhập.",
+                        HttpStatus.NOT_FOUND));
+        AdminPaymentDetailResponse detail = detailForCinema(cinemaPublicId, payment.getPublicId());
+        if (!PaymentStatus.SUCCESS.name().equals(detail.payment().getStatus())) {
+            throw new BusinessException(
+                    "PAYMENT_NOT_REFUNDABLE",
+                    "Chỉ giao dịch đã thanh toán thành công mới có thể lập yêu cầu hoàn.",
+                    HttpStatus.CONFLICT);
+        }
+        return detail.payment();
+    }
+
+    private long countForCinema(
+            String cinemaPublicId,
+            PaymentStatus status,
+            ReconciliationStatus reconciliationStatus) {
+        return paymentRepository.count(specification(
+                null, status, null, reconciliationStatus,
+                null, null, cinemaPublicId));
+    }
+
+    @Transactional(readOnly = true)
     public String exportCsv(
             String query, PaymentStatus status, ProviderCode provider,
             ReconciliationStatus reconciliationStatus, Instant from, Instant to) {
         List<Payment> payments = paymentRepository.findAll(
-                specification(query, status, provider, reconciliationStatus, from, to),
+                specification(query, status, provider, reconciliationStatus, from, to, null),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         StringBuilder csv = new StringBuilder(
                 "\uFEFFMã giao dịch,Payment UUID,Booking UUID,Provider,Trạng thái,Số tiền,Tiền tệ,Đối soát,Thời điểm tạo\n");
@@ -248,8 +328,9 @@ public class AdminPaymentService {
 
     private Specification<Payment> specification(
             String query, PaymentStatus status, ProviderCode provider,
-            ReconciliationStatus reconciliationStatus, Instant from, Instant to) {
-        return (root, ignored, builder) -> {
+            ReconciliationStatus reconciliationStatus, Instant from, Instant to,
+            String cinemaPublicId) {
+        return (root, criteriaQuery, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (query != null && !query.isBlank()) {
                 String pattern = "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
@@ -273,6 +354,14 @@ public class AdminPaymentService {
             }
             if (to != null) {
                 predicates.add(builder.lessThan(root.get("createdAt"), to));
+            }
+            if (cinemaPublicId != null && !cinemaPublicId.isBlank()) {
+                var cinemaPayments = criteriaQuery.subquery(Long.class);
+                var snapshot = cinemaPayments.from(PaymentAnalyticsSnapshot.class);
+                cinemaPayments.select(snapshot.get("paymentId"));
+                cinemaPayments.where(builder.equal(
+                        snapshot.get("cinemaPublicId"), cinemaPublicId.trim().toLowerCase(Locale.ROOT)));
+                predicates.add(root.get("id").in(cinemaPayments));
             }
             return builder.and(predicates.toArray(Predicate[]::new));
         };
@@ -316,6 +405,7 @@ public class AdminPaymentService {
         response.setBookingDeliveryStatus(outboxService.deliveryStatus(payment.getPublicId()));
         if (snapshot != null) {
             response.setMovieTitle(snapshot.getMovieTitle());
+            response.setCinemaPublicId(snapshot.getCinemaPublicId());
             response.setTicketCount(snapshot.getTicketCount());
             response.setTicketAmount(snapshot.getTicketAmount());
             response.setFoodAmount(snapshot.getFoodAmount());
@@ -332,6 +422,19 @@ public class AdminPaymentService {
                 payment.getId(), EnumSet.of(RefundStatus.SUCCESS));
         response.setRefundedAmount(succeeded);
         response.setRefundableAmount(payment.getAmount().subtract(reserved).max(BigDecimal.ZERO));
+        BigDecimal concessionReserved = refundRepository.sumReservedAmountByComponent(
+                payment.getId(),
+                RefundComponent.CONCESSION,
+                EnumSet.of(
+                        RefundStatus.REQUESTED,
+                        RefundStatus.PROCESSING,
+                        RefundStatus.SUCCESS,
+                        RefundStatus.REQUIRES_ACTION));
+        concessionReserved = concessionReserved == null ? BigDecimal.ZERO : concessionReserved;
+        BigDecimal foodAmount = snapshot == null || snapshot.getFoodAmount() == null
+                ? BigDecimal.ZERO : snapshot.getFoodAmount();
+        response.setConcessionRefundableAmount(
+                foodAmount.subtract(concessionReserved).max(BigDecimal.ZERO));
         return response;
     }
 

@@ -42,6 +42,7 @@ COMING_SOON
         "synopsis": "After the devastating events...",
         "durationMinutes": 181,
         "ageRating": "P",
+        "originalReleaseDate": "2019-04-26",
         "releaseDate": "2019-04-26",
         "endDate": "2019-07-26",
         "genres": ["Action", "Sci-Fi"],
@@ -80,6 +81,7 @@ GET /api/movies/{movieSlug}
     "synopsis": "After the devastating events...",
     "durationMinutes": 181,
     "ageRating": "P",
+    "originalReleaseDate": "2019-04-26",
     "releaseDate": "2019-04-26",
     "endDate": "2019-07-26",
     "genres": ["Action", "Sci-Fi"],
@@ -88,6 +90,16 @@ GET /api/movies/{movieSlug}
   }
 }
 ```
+
+---
+
+### Quy ước ngày của phim
+
+* `originalReleaseDate`: ngày phát hành gốc từ TMDB hoặc nhà phát hành.
+* `releaseDate`: ngày bắt đầu đợt khai thác hiện tại tại rạp.
+* `endDate`: ngày kết thúc đợt khai thác hiện tại tại rạp.
+* Khi chiếu lại phim cũ, tạo đợt khai thác mới; không sửa `originalReleaseDate`.
+* Phim cũ mới nhập từ TMDB có `releaseDate = null` cho tới khi quản trị viên lập một đợt khai thác tương lai.
 
 ---
 

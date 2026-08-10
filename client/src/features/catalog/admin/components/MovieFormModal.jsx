@@ -24,13 +24,14 @@ const emptyForm = () => ({
   originalTitle: '',
   durationMinutes: '',
   ageRating: 'P',
+  originalReleaseDate: '',
   showingStartDate: '',
   endDate: '',
   country: '',
   synopsis: '',
 });
 
-const OPTIONAL_FIELDS = ['originalTitle', 'country', 'endDate', 'synopsis'];
+const OPTIONAL_FIELDS = ['originalTitle', 'originalReleaseDate', 'country', 'endDate', 'synopsis'];
 
 const hasOptionalMovieInformation = movie => OPTIONAL_FIELDS.some(field => Boolean(movie?.[field]));
 
@@ -62,6 +63,7 @@ export default function MovieFormModal({
       originalTitle: selectedMovie.originalTitle || '',
       durationMinutes: selectedMovie.durationMinutes || '',
       ageRating: selectedMovie.ageRating || 'P',
+      originalReleaseDate: selectedMovie.originalReleaseDate || '',
       showingStartDate: selectedMovie.releaseDate || '',
       endDate: selectedMovie.endDate || '',
       country: selectedMovie.country || '',
@@ -81,14 +83,14 @@ export default function MovieFormModal({
       errors.ageRating = 'Vui lòng chọn phân loại độ tuổi.';
     }
     if (!formBasic.showingStartDate) {
-      errors.showingStartDate = 'Vui lòng chọn ngày khởi chiếu.';
+      errors.showingStartDate = 'Vui lòng chọn ngày bắt đầu khai thác tại rạp.';
     }
     if (
       formBasic.endDate
       && formBasic.showingStartDate
       && new Date(formBasic.endDate) < new Date(formBasic.showingStartDate)
     ) {
-      errors.endDate = 'Ngày ngừng chiếu phải sau ngày khởi chiếu.';
+      errors.endDate = 'Ngày kết thúc khai thác phải sau ngày bắt đầu.';
     }
 
     if (OPTIONAL_FIELDS.some(field => errors[field])) {
@@ -109,6 +111,7 @@ export default function MovieFormModal({
         originalTitle: formBasic.originalTitle.trim() || null,
         durationMinutes: Number(formBasic.durationMinutes),
         ageRating: formBasic.ageRating,
+        originalReleaseDate: formBasic.originalReleaseDate || null,
         releaseDate: formBasic.showingStartDate || getTodayString(),
         endDate: formBasic.endDate || null,
         country: formBasic.country.trim() || null,
@@ -242,10 +245,10 @@ export default function MovieFormModal({
                         ))}
                       </Select>
                     </Field>
-                    <Field label="Ngày khởi chiếu" required error={formErrors.showingStartDate}>
+                    <Field label="Ngày bắt đầu khai thác tại rạp" required error={formErrors.showingStartDate}>
                       <Input
                         type="date"
-                        aria-label="Ngày khởi chiếu"
+                        aria-label="Ngày bắt đầu khai thác tại rạp"
                         value={formBasic.showingStartDate}
                         onChange={event => setFormBasic(current => ({ ...current, showingStartDate: event.target.value }))}
                       />
@@ -269,7 +272,7 @@ export default function MovieFormModal({
                         </span>
                       </span>
                       <span className="mt-1 block text-xs leading-5 text-zinc-500">
-                        Tên gốc, quốc gia, ngày ngừng chiếu và tóm tắt nội dung
+                        Ngày phát hành gốc, quốc gia, ngày kết thúc khai thác và tóm tắt nội dung
                       </span>
                     </span>
                     <ChevronDown
@@ -290,6 +293,14 @@ export default function MovieFormModal({
                             placeholder="Tên phim ở ngôn ngữ gốc"
                           />
                         </Field>
+                        <Field label="Ngày phát hành gốc">
+                          <Input
+                            type="date"
+                            aria-label="Ngày phát hành gốc"
+                            value={formBasic.originalReleaseDate}
+                            onChange={event => setFormBasic(current => ({ ...current, originalReleaseDate: event.target.value }))}
+                          />
+                        </Field>
                         <Field label="Quốc gia sản xuất">
                           <Input
                             aria-label="Quốc gia sản xuất"
@@ -298,10 +309,10 @@ export default function MovieFormModal({
                             placeholder="Ví dụ: Việt Nam, Hoa Kỳ"
                           />
                         </Field>
-                        <Field label="Ngày ngừng chiếu" error={formErrors.endDate}>
+                        <Field label="Ngày kết thúc khai thác tại rạp" error={formErrors.endDate}>
                           <Input
                             type="date"
-                            aria-label="Ngày ngừng chiếu"
+                            aria-label="Ngày kết thúc khai thác tại rạp"
                             value={formBasic.endDate}
                             onChange={event => setFormBasic(current => ({ ...current, endDate: event.target.value }))}
                           />
@@ -336,7 +347,7 @@ export default function MovieFormModal({
                         <Image className="h-4 w-4" />
                       </span>
                       <span>
-                        <span className="block text-xs font-bold text-zinc-200">Poster và hình ảnh</span>
+                        <span className="block text-xs font-bold text-zinc-200">Áp phích và hình ảnh</span>
                         <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500">Chọn ảnh hiển thị chính</span>
                       </span>
                     </li>

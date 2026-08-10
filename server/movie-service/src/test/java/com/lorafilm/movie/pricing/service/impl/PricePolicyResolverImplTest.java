@@ -75,6 +75,8 @@ class PricePolicyResolverImplTest {
         showtime.setAuditorium(auditorium);
         showtime.setStartTime(Instant.parse("2026-07-25T03:00:00Z")); // Saturday 10:00 local
         lenient().when(seatRepository.findActiveSeatTypesByAuditoriumId(2L)).thenReturn(List.of(vip));
+        lenient().when(seatRepository.findActiveSeatTypesByAuditoriumIds(List.of(2L)))
+                .thenReturn(List.<Object[]>of(new Object[]{2L, vip}));
     }
 
     @Test

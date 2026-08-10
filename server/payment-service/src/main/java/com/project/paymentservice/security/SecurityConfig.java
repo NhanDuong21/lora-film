@@ -7,6 +7,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.http.HttpMethod;
 
 @Configuration
@@ -38,12 +39,14 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
                         "/v3/api-docs", "/health", "/", "/error").permitAll()
                 .requestMatchers("/api/payments/callback/**", "/api/payments/return/**").permitAll()
-                .requestMatchers("/internal/payments/refunds/**").permitAll()
+                .requestMatchers("/internal/payments/refunds/**", "/internal/payments/emergency/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/admin/payments/**")
                     .hasAnyRole("ADMIN", "ACCOUNTANT")
                 .requestMatchers("/api/admin/payments/**").hasRole("ADMIN")
+                .requestMatchers("/api/manager/payments/**").hasRole("MANAGER")
                 .requestMatchers("/api/employee/**")
-                    .hasAnyRole("STAFF", "EMPLOYEE", "SUPERVISOR", "ADMIN")
+                    .access(new WebExpressionAuthorizationManager(
+                            "hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('PAYMENT_CASH_COLLECT'))"))
                 .requestMatchers("/api/payments/**").authenticated()
                 .anyRequest().authenticated()
             )

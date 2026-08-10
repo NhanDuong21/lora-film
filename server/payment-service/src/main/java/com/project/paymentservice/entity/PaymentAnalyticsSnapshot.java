@@ -32,6 +32,14 @@ public class PaymentAnalyticsSnapshot {
     private String showtimePublicId;
     @Column(name = "cinema_public_id", columnDefinition = "char(36)")
     private String cinemaPublicId;
+    @Column(name = "auditorium_public_id", columnDefinition = "char(36)")
+    private String auditoriumPublicId;
+    @Column(name = "showtime_starts_at")
+    private Instant showtimeStartsAt;
+    @Column(name = "auditorium_capacity")
+    private Integer auditoriumCapacity;
+    @Column(name = "movie_format", length = 30)
+    private String format;
     @Column(name = "ticket_count", nullable = false)
     private Integer ticketCount;
     @Column(name = "ticket_amount", nullable = false, precision = 12, scale = 2)
@@ -63,6 +71,14 @@ public class PaymentAnalyticsSnapshot {
     public void setShowtimePublicId(String value) { this.showtimePublicId = value; }
     public String getCinemaPublicId() { return cinemaPublicId; }
     public void setCinemaPublicId(String value) { this.cinemaPublicId = value; }
+    public String getAuditoriumPublicId() { return auditoriumPublicId; }
+    public void setAuditoriumPublicId(String value) { this.auditoriumPublicId = value; }
+    public Instant getShowtimeStartsAt() { return showtimeStartsAt; }
+    public void setShowtimeStartsAt(Instant value) { this.showtimeStartsAt = value; }
+    public Integer getAuditoriumCapacity() { return auditoriumCapacity; }
+    public void setAuditoriumCapacity(Integer value) { this.auditoriumCapacity = value; }
+    public String getFormat() { return format; }
+    public void setFormat(String value) { this.format = value; }
     public Integer getTicketCount() { return ticketCount; }
     public void setTicketCount(Integer ticketCount) { this.ticketCount = ticketCount; }
     public BigDecimal getTicketAmount() { return ticketAmount; }

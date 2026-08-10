@@ -65,6 +65,16 @@ public class PricePolicyResolverImpl implements PricePolicyResolver {
                     (ignored, range) -> range == null ? new LocalDateRange(localDate, localDate)
                             : range.include(localDate));
         }
+        List<Long> auditoriumIds = showtimes.stream()
+                .map(showtime -> showtime.getAuditorium().getId())
+                .distinct().sorted().toList();
+        if (!auditoriumIds.isEmpty()) {
+            for (Object[] row : seatRepository.findActiveSeatTypesByAuditoriumIds(auditoriumIds)) {
+                seatTypesByAuditorium.computeIfAbsent((Long) row[0], ignored -> new ArrayList<>())
+                        .add((SeatType) row[1]);
+            }
+            auditoriumIds.forEach(id -> seatTypesByAuditorium.putIfAbsent(id, List.of()));
+        }
         Map<Long, List<PricePolicy>> policiesByCinema = new HashMap<>();
         rangesByCinema.forEach((cinemaId, range) -> policiesByCinema.put(
                 cinemaId,
@@ -75,9 +85,8 @@ public class PricePolicyResolverImpl implements PricePolicyResolver {
         for (Showtime showtime : showtimes) {
             ZoneId zoneId = parseZoneId(showtime.getCinema().getTimezone());
             ZonedDateTime localStart = showtime.getStartTime().atZone(zoneId);
-            List<SeatType> requiredSeatTypes = seatTypesByAuditorium.computeIfAbsent(
-                    showtime.getAuditorium().getId(),
-                    auditoriumId -> seatRepository.findActiveSeatTypesByAuditoriumId(auditoriumId));
+            List<SeatType> requiredSeatTypes = seatTypesByAuditorium
+                    .getOrDefault(showtime.getAuditorium().getId(), List.of());
             List<PricePolicy> policies = policiesByCinema
                     .getOrDefault(showtime.getCinema().getId(), List.of())
                     .stream()

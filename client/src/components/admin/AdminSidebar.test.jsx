@@ -63,6 +63,17 @@ describe('AdminSidebar', () => {
     expect(screen.queryByText('Bảo mật')).not.toBeInTheDocument();
   });
 
+  it('organizes human resources around daily workflows', () => {
+    renderSidebar({ role: 'ADMIN', permissions: [] }, 'hr');
+
+    expect(screen.getByRole('button', { name: 'Nhân sự & tiền lương' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trung tâm nhân sự' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Việc chờ duyệt' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lịch ca & chấm công' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quy trình bảng lương' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sơ đồ tổ chức' })).toBeInTheDocument();
+  });
+
   it('renders the current avatar in the admin account card', () => {
     const avatarUrl = 'https://res.cloudinary.com/demo/image/upload/avatar.jpg';
     renderSidebar({
@@ -83,11 +94,28 @@ describe('AdminSidebar', () => {
 
   it('shows notification administration links for full administrators', () => {
     renderSidebar();
-    openSection('Hệ thống & thông báo');
+    openSection('Thông báo');
 
     expect(screen.getByRole('button', { name: 'Tổng quan thông báo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mẫu thông báo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Vận hành gửi thông báo' })).toBeInTheDocument();
+  });
+
+  it('separates system administration from notification operations', () => {
+    renderSidebar();
+
+    expect(screen.getByRole('button', { name: 'Hệ thống' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thông báo' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hệ thống & thông báo' })).not.toBeInTheDocument();
+
+    openSection('Hệ thống');
+    expect(screen.getByRole('button', { name: 'Tài khoản & phân quyền' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nhật ký hoạt động' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quản lý vai trò' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quản lý quyền hạn' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nhật ký truy cập' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nhật ký nghiệp vụ' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tổng quan thông báo' })).not.toBeInTheDocument();
   });
 
   it('allows each operational group to be collapsed independently', () => {

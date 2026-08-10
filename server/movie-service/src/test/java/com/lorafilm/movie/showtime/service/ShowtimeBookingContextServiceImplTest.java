@@ -27,6 +27,7 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieMedia;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.domain.enums.AgeRating;
 import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.pricing.domain.entity.ShowtimePrice;
 import com.lorafilm.movie.seat.domain.entity.Seat;
@@ -87,6 +88,8 @@ class ShowtimeBookingContextServiceImplTest {
         movie.setPublicId("movie-1");
         movie.setSlug("movie-1");
         movie.setTitle("Movie 1");
+        movie.setDurationMinutes(150);
+        movie.setAgeRating(AgeRating.P);
 
         MovieVersion movieVersion = new MovieVersion();
         movieVersion.setId(1L);
@@ -160,12 +163,26 @@ class ShowtimeBookingContextServiceImplTest {
         assertEquals(1L, response.getCinemaId());
         assertEquals(1L, response.getAuditoriumId());
         assertEquals("https://cdn.lorafilm.test/movie-1.jpg", response.getMovie().getPosterUrl());
+        assertEquals(150, response.getMovie().getDurationMinutes());
+        assertEquals("P", response.getMovie().getAgeRating());
         assertEquals(2, response.getSelectedSeats().size());
         assertEquals(null, response.getSelectedSeats().get(0).getPairGroup());
         assertNotNull(response.getPricing());
         assertEquals(new BigDecimal("200000"), response.getPricing().getTotalAmount());
         assertEquals("VND", response.getPricing().getCurrency());
         assertNotNull(response.getBookingExpiredAt());
+    }
+
+    @Test
+    void getPresentationByPublicId_returnsMovieFactsEvenOutsideBookingFlow() {
+        when(showtimeRepository.findByPublicIdAndDeletedAtIsNull("showtime-1"))
+                .thenReturn(Optional.of(showtime));
+
+        var response = showtimeService.getPresentationByPublicId("showtime-1");
+
+        assertEquals("Movie 1", response.getTitle());
+        assertEquals(150, response.getDurationMinutes());
+        assertEquals("P", response.getAgeRating());
     }
 
     @Test

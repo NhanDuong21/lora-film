@@ -180,7 +180,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @org.springframework.transaction.annotation.Transactional
     public CinemaResponse updateCinema(String publicId, UpdateCinemaRequest request) {
-        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+        Cinema cinema = cinemaRepository.findByPublicIdForScheduling(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
         // Validate timezone
@@ -226,7 +226,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @org.springframework.transaction.annotation.Transactional
     public CinemaResponse updateCinemaStatus(String publicId, CinemaStatus targetStatus) {
-        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+        Cinema cinema = cinemaRepository.findByPublicIdForScheduling(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
         CinemaStatus currentStatus = cinema.getStatus();
@@ -413,7 +413,7 @@ public class CinemaServiceImpl implements CinemaService {
     @org.springframework.transaction.annotation.Transactional
     public List<OperatingHourResponse> updateOperatingHours(String cinemaPublicId,
             List<OperatingHourUpdateRequest> requests) {
-        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+        Cinema cinema = cinemaRepository.findByPublicIdForScheduling(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
         if (requests == null || requests.size() != 7) {
@@ -476,7 +476,8 @@ public class CinemaServiceImpl implements CinemaService {
     @org.springframework.transaction.annotation.Transactional
     public CinemaClosurePeriodResponse createClosurePeriod(String cinemaPublicId,
             CreateCinemaClosurePeriodRequest request) {
-        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(cinemaPublicId)
+        // Shared scheduling lock: apply and closure creation serialize on cinema first.
+        Cinema cinema = cinemaRepository.findByPublicIdForScheduling(cinemaPublicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
 
         if (!request.getEndTime().isAfter(request.getStartTime())) {

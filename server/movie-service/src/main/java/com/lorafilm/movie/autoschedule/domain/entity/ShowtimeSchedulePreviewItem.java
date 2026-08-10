@@ -15,6 +15,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.List;
+import com.lorafilm.movie.autoschedule.model.CandidatePricingSnapshot;
 
 @Entity
 @Table(name = "showtime_schedule_preview_items", uniqueConstraints = {
@@ -68,6 +70,38 @@ public class ShowtimeSchedulePreviewItem {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "score_breakdown_json", columnDefinition = "json")
     private Map<String, BigDecimal> scoreBreakdown;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "pricing_snapshot_json", columnDefinition = "json")
+    private CandidatePricingSnapshot pricingSnapshot;
+
+    @Column(name = "expected_attendance", precision = 12, scale = 2)
+    private BigDecimal expectedAttendance;
+
+    @Column(name = "expected_occupancy", precision = 12, scale = 6)
+    private BigDecimal expectedOccupancy;
+
+    @Column(name = "expected_revenue", precision = 19, scale = 2)
+    private BigDecimal expectedRevenue;
+
+    @Column(name = "expected_contribution", precision = 19, scale = 2)
+    private BigDecimal expectedContribution;
+
+    @Column(name = "demand_confidence", precision = 12, scale = 6)
+    private BigDecimal demandConfidence;
+
+    @Column(name = "demand_explanation", length = 500)
+    private String demandExplanation;
+
+    @Column(name = "demand_model_version", length = 64)
+    private String demandModelVersion;
+
+    @Column(name = "prime_time", nullable = false)
+    private Boolean primeTime = false;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "risk_flags_json", columnDefinition = "json")
+    private List<String> riskFlags;
 
     @Column(name = "ranking_position", nullable = false)
     private Integer rankingPosition;
@@ -131,6 +165,16 @@ public class ShowtimeSchedulePreviewItem {
         
         item.setScore(candidate.getScore());
         item.setScoreBreakdown(candidate.getScoreBreakdown());
+        item.setPricingSnapshot(candidate.getPricingSnapshot());
+        item.setExpectedAttendance(candidate.getExpectedAttendance());
+        item.setExpectedOccupancy(candidate.getExpectedOccupancy());
+        item.setExpectedRevenue(candidate.getExpectedRevenue());
+        item.setExpectedContribution(candidate.getExpectedContribution());
+        item.setDemandConfidence(candidate.getDemandConfidence());
+        item.setDemandExplanation(candidate.getDemandExplanation());
+        item.setDemandModelVersion(candidate.getDemandModelVersion());
+        item.setPrimeTime(candidate.isPrimeTime());
+        item.setRiskFlags(candidate.getRiskFlags());
         item.setRankingPosition(candidate.getRankingPosition());
         item.setValidationStatus(candidate.getValidationStatus());
         item.setRejectionCode(candidate.getRejectionCode());
@@ -242,6 +286,27 @@ public class ShowtimeSchedulePreviewItem {
     public void setScoreBreakdown(Map<String, BigDecimal> scoreBreakdown) {
         this.scoreBreakdown = scoreBreakdown;
     }
+
+    public CandidatePricingSnapshot getPricingSnapshot() { return pricingSnapshot; }
+    public void setPricingSnapshot(CandidatePricingSnapshot value) { this.pricingSnapshot = value; }
+    public BigDecimal getExpectedAttendance() { return expectedAttendance; }
+    public void setExpectedAttendance(BigDecimal value) { this.expectedAttendance = value; }
+    public BigDecimal getExpectedOccupancy() { return expectedOccupancy; }
+    public void setExpectedOccupancy(BigDecimal value) { this.expectedOccupancy = value; }
+    public BigDecimal getExpectedRevenue() { return expectedRevenue; }
+    public void setExpectedRevenue(BigDecimal value) { this.expectedRevenue = value; }
+    public BigDecimal getExpectedContribution() { return expectedContribution; }
+    public void setExpectedContribution(BigDecimal value) { this.expectedContribution = value; }
+    public BigDecimal getDemandConfidence() { return demandConfidence; }
+    public void setDemandConfidence(BigDecimal value) { this.demandConfidence = value; }
+    public String getDemandExplanation() { return demandExplanation; }
+    public void setDemandExplanation(String value) { this.demandExplanation = value; }
+    public String getDemandModelVersion() { return demandModelVersion; }
+    public void setDemandModelVersion(String value) { this.demandModelVersion = value; }
+    public Boolean getPrimeTime() { return primeTime; }
+    public void setPrimeTime(Boolean value) { this.primeTime = value; }
+    public List<String> getRiskFlags() { return riskFlags; }
+    public void setRiskFlags(List<String> value) { this.riskFlags = value; }
 
     public Integer getRankingPosition() {
         return rankingPosition;

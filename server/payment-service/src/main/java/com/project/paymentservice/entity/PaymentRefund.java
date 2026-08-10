@@ -62,6 +62,14 @@ public class PaymentRefund {
     private ActorType requestedByActor;
     @Column(name = "requested_by_account_id")
     private Long requestedByAccountId;
+    @Column(name = "reviewed_by_account_id")
+    private Long reviewedByAccountId;
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+    @Column(name = "review_note_sanitized", columnDefinition = "text")
+    private String reviewNoteSanitized;
+    @Column(name = "completed_by_account_id")
+    private Long completedByAccountId;
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private RefundStatus status = RefundStatus.REQUESTED;
@@ -138,6 +146,14 @@ public class PaymentRefund {
     public void setRequestedByActor(ActorType value) { this.requestedByActor = value; }
     public Long getRequestedByAccountId() { return requestedByAccountId; }
     public void setRequestedByAccountId(Long value) { this.requestedByAccountId = value; }
+    public Long getReviewedByAccountId() { return reviewedByAccountId; }
+    public void setReviewedByAccountId(Long value) { this.reviewedByAccountId = value; }
+    public Instant getReviewedAt() { return reviewedAt; }
+    public void setReviewedAt(Instant value) { this.reviewedAt = value; }
+    public String getReviewNoteSanitized() { return reviewNoteSanitized; }
+    public void setReviewNoteSanitized(String value) { this.reviewNoteSanitized = value; }
+    public Long getCompletedByAccountId() { return completedByAccountId; }
+    public void setCompletedByAccountId(Long value) { this.completedByAccountId = value; }
     public RefundStatus getStatus() { return status; }
     public void setStatus(RefundStatus value) { this.status = value; }
     public String getProviderOrderId() { return providerOrderId; }

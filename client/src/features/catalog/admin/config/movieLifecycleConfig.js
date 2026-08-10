@@ -6,15 +6,7 @@ export const MOVIE_TRANSITIONS = {
       variant: 'primary',
       requiresPublishChecklist: true,
       confirmTitle: 'Duyệt phim sang Sắp chiếu?',
-      confirmDescription: 'Phim sẽ được chuyển sang trạng thái Sắp chiếu.'
-    },
-    {
-      target: 'NOW_SHOWING',
-      label: 'Duyệt sang Đang chiếu',
-      variant: 'primary',
-      requiresPublishChecklist: true,
-      confirmTitle: 'Duyệt phim sang Đang chiếu?',
-      confirmDescription: 'Phim đã tới ngày phát hành và có lịch chiếu hợp lệ nên sẽ được chuyển sang trạng thái Đang chiếu.'
+      confirmDescription: 'Phim sẽ chuyển sang Sắp chiếu. Ngày bắt đầu khai thác phải sau hôm nay.'
     },
     {
       target: 'INACTIVE',
@@ -26,14 +18,6 @@ export const MOVIE_TRANSITIONS = {
     }
   ],
   UPCOMING: [
-    {
-      target: 'NOW_SHOWING',
-      label: 'Bắt đầu công chiếu',
-      variant: 'primary',
-      requiresPublishChecklist: true,
-      confirmTitle: 'Bắt đầu công chiếu phim?',
-      confirmDescription: 'Sau khi chuyển trạng thái, phim sẽ được hiển thị là Đang chiếu.'
-    },
     {
       target: 'INACTIVE',
       label: 'Chuyển sang Không hoạt động',
@@ -72,11 +56,11 @@ export const MOVIE_TRANSITIONS = {
     },
     {
       target: 'UPCOMING',
-      label: 'Chuyển lại Sắp chiếu',
+      label: 'Đưa vào đợt chiếu lại',
       variant: 'warning',
       requiresPublishChecklist: true,
-      confirmTitle: 'Khôi phục phim về Sắp chiếu?',
-      confirmDescription: 'Phim sẽ xuất hiện trở lại trong nhóm Sắp chiếu. Hãy chắc chắn trước khi thực hiện.'
+      confirmTitle: 'Đưa phim vào đợt chiếu lại?',
+      confirmDescription: 'Phim sẽ xuất hiện trở lại trong nhóm Sắp chiếu theo đợt khai thác mới. Hãy lập đợt khai thác trước khi thực hiện.'
     }
   ],
   INACTIVE: [

@@ -155,6 +155,47 @@ ON permissions(module);
 
 
 -- =====================================================
+-- TABLE: access_profiles
+-- Nhóm quyền nghiệp vụ dành cho tài khoản EMPLOYEE
+-- =====================================================
+
+CREATE TABLE access_profiles
+(
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    description VARCHAR(500) NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_access_profiles_code UNIQUE(code)
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE access_profile_permissions
+(
+    access_profile_id BIGINT NOT NULL,
+    permission_id BIGINT NOT NULL,
+    PRIMARY KEY (access_profile_id, permission_id),
+    CONSTRAINT fk_access_profile_permissions_profile
+        FOREIGN KEY (access_profile_id) REFERENCES access_profiles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_access_profile_permissions_permission
+        FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE accounts
+    ADD COLUMN access_profile_id BIGINT NULL AFTER is_deleted,
+    ADD INDEX idx_accounts_access_profile (access_profile_id),
+    ADD CONSTRAINT fk_accounts_access_profile
+        FOREIGN KEY (access_profile_id) REFERENCES access_profiles(id);
+
+
+-- =====================================================
 -- TABLE: account_roles
 -- Quan hệ N-N giữa Account và Role
 -- =====================================================
@@ -191,6 +232,32 @@ COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX idx_account_roles_role
 ON account_roles(role_id);
+
+
+-- =====================================================
+-- TABLE: manager_cinema_assignments
+-- Phạm vi rạp mà mỗi tài khoản MANAGER được phép điều hành
+-- =====================================================
+
+CREATE TABLE manager_cinema_assignments
+(
+    account_id BIGINT NOT NULL,
+    cinema_public_id VARCHAR(36) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (account_id, cinema_public_id),
+
+    CONSTRAINT fk_manager_cinema_assignments_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(id)
+        ON DELETE CASCADE
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_manager_cinema_assignments_cinema
+ON manager_cinema_assignments(cinema_public_id);
 
 
 

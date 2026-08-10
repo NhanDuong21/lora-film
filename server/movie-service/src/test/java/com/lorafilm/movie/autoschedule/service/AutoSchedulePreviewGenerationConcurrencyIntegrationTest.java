@@ -10,6 +10,18 @@ import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicy;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicyRule;
+import com.lorafilm.movie.pricing.domain.enums.PriceDayType;
+import com.lorafilm.movie.pricing.domain.enums.PricePolicyStatus;
+import com.lorafilm.movie.pricing.repository.PricePolicyRepository;
+import com.lorafilm.movie.seat.domain.entity.Seat;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatStatus;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +34,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -75,14 +90,29 @@ public class AutoSchedulePreviewGenerationConcurrencyIntegrationTest {
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private SeatTypeRepository seatTypeRepository;
+
+    @Autowired
+    private SeatRepository seatRepository;
+
+    @Autowired
+    private PricePolicyRepository pricePolicyRepository;
+
     private Cinema cinema;
     private Auditorium auditorium;
     private Movie movie;
     private MovieVersion movieVersion;
+    private LocalDate planningDate;
 
     @BeforeEach
     void setUp() {
+        planningDate = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(1);
         jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
+        jdbcTemplate.execute("TRUNCATE TABLE price_policy_rules");
+        jdbcTemplate.execute("TRUNCATE TABLE price_policies");
+        jdbcTemplate.execute("TRUNCATE TABLE seats");
+        jdbcTemplate.execute("TRUNCATE TABLE seat_types");
         jdbcTemplate.execute("TRUNCATE TABLE showtime_schedule_preview_items");
         jdbcTemplate.execute("TRUNCATE TABLE showtime_schedule_previews");
         jdbcTemplate.execute("TRUNCATE TABLE auditoriums");
@@ -125,7 +155,7 @@ public class AutoSchedulePreviewGenerationConcurrencyIntegrationTest {
         cinema.setStatus(com.lorafilm.movie.cinema.domain.enums.CinemaStatus.ACTIVE);
         cinema = cinemaRepository.save(cinema);
 
-        jdbcTemplate.update("INSERT INTO cinema_operating_hours (cinema_id, day_of_week, open_time, close_time, is_closed, created_at, updated_at) VALUES (?, ?, '08:00:00', '23:00:00', false, NOW(), NOW())", cinema.getId(), LocalDate.now().getDayOfWeek().getValue());
+        jdbcTemplate.update("INSERT INTO cinema_operating_hours (cinema_id, day_of_week, open_time, close_time, is_closed, created_at, updated_at) VALUES (?, ?, '08:00:00', '23:00:00', false, NOW(), NOW())", cinema.getId(), planningDate.getDayOfWeek().getValue());
 
         auditorium = new Auditorium();
         auditorium.setPublicId(UUID.randomUUID().toString());
@@ -137,6 +167,46 @@ public class AutoSchedulePreviewGenerationConcurrencyIntegrationTest {
         auditorium.setStatus(com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus.ACTIVE);
         auditorium.setCleaningBufferMinutes(15);
         auditorium = auditoriumRepository.save(auditorium);
+
+        SeatType standardSeatType = new SeatType();
+        standardSeatType.setPublicId(UUID.randomUUID().toString());
+        standardSeatType.setCode(SeatTypeCode.STANDARD);
+        standardSeatType.setName("Standard");
+        standardSeatType.setStatus(ActiveStatus.ACTIVE);
+        standardSeatType = seatTypeRepository.saveAndFlush(standardSeatType);
+
+        Seat seat = new Seat();
+        seat.setPublicId(UUID.randomUUID().toString());
+        seat.setAuditorium(auditorium);
+        seat.setSeatType(standardSeatType);
+        seat.setRowLabel("A");
+        seat.setSeatNumber(1);
+        seat.setSeatCode("A1");
+        seat.setPositionRow(1);
+        seat.setPositionColumn(1);
+        seat.setStatus(SeatStatus.ACTIVE);
+        seatRepository.saveAndFlush(seat);
+
+        PricePolicy policy = new PricePolicy();
+        policy.setPublicId(UUID.randomUUID().toString());
+        policy.setName("Concurrency policy");
+        policy.setCinema(cinema);
+        policy.setEffectiveFrom(planningDate.minusDays(1));
+        policy.setEffectiveTo(planningDate.plusDays(60));
+        policy.setStatus(PricePolicyStatus.ACTIVE);
+        policy.setCurrency("VND");
+        policy.setPriority(0);
+        policy.setActivatedAt(Instant.now());
+        policy.setActivatedBy(1L);
+
+        PricePolicyRule rule = new PricePolicyRule();
+        rule.setPublicId(UUID.randomUUID().toString());
+        rule.setSeatType(standardSeatType);
+        rule.setDayType(PriceDayType.ALL_DAYS);
+        rule.setPrice(new BigDecimal("75000.00"));
+        rule.setActive(true);
+        policy.addRule(rule);
+        pricePolicyRepository.saveAndFlush(policy);
     }
 
     @Test
@@ -156,8 +226,8 @@ public class AutoSchedulePreviewGenerationConcurrencyIntegrationTest {
                     latch.await();
                     GenerateShowtimeSchedulePreviewRequest request = new GenerateShowtimeSchedulePreviewRequest();
                     request.setCinemaPublicId(cinema.getPublicId());
-                    request.setScheduleFrom(LocalDate.now());
-                    request.setScheduleTo(LocalDate.now());
+                    request.setScheduleFrom(planningDate);
+                    request.setScheduleTo(planningDate);
                     request.setAuditoriumPublicIds(List.of(auditorium.getPublicId()));
                     request.setMovieVersionPublicIds(List.of(movieVersion.getPublicId()));
                     request.setSlotGranularityMinutes(30);

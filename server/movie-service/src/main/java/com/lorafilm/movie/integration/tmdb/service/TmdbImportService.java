@@ -10,6 +10,8 @@ import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieResponse;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbMovieWrapperDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbImportOutcome;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbImportResult;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbBulkSyncRequest;
+import com.lorafilm.movie.integration.tmdb.dto.TmdbSyncScope;
 import com.lorafilm.movie.integration.tmdb.mapper.TmdbMovieMapper;
 import com.lorafilm.movie.integration.tmdb.repository.TmdbSyncStateRepository;
 import com.lorafilm.movie.movie.domain.entity.Movie;
@@ -47,6 +49,8 @@ import com.lorafilm.movie.integration.tmdb.dto.TmdbGenreDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbPersonDto;
 import com.lorafilm.movie.integration.tmdb.dto.TmdbTrailerDto;
 import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.common.exception.BusinessException;
+import com.lorafilm.movie.common.exception.ErrorCode;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.UUID;
 import java.time.LocalDate;
@@ -55,6 +59,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -65,6 +70,7 @@ public class TmdbImportService {
     private static final String SYNC_TYPE_BULK = "TMDB_BULK_EXPORT";
 
     private final AtomicBoolean stopRequested = new AtomicBoolean(false);
+    private final AtomicBoolean bulkSyncRunning = new AtomicBoolean(false);
     private volatile Thread bulkSyncThread;
 
     private final TmdbClient tmdbClient;
@@ -120,12 +126,25 @@ public class TmdbImportService {
         this.providerMovieService = providerMovieService;
     }
 
+    @Transactional
     public void stopBulkSync() {
         log.info("Request to stop TMDB Bulk Sync received.");
         stopRequested.set(true);
-        if (bulkSyncThread != null && bulkSyncThread.isAlive()) {
-            bulkSyncThread.interrupt();
+        Thread runningThread = bulkSyncThread;
+        boolean hasRunningThread = bulkSyncRunning.get()
+                && runningThread != null
+                && runningThread.isAlive();
+        if (hasRunningThread) {
+            runningThread.interrupt();
         }
+
+        syncStateRepository.findBySyncType(SYNC_TYPE_BULK).ifPresent(syncState -> {
+            syncState.setStatus(hasRunningThread ? "STOPPING" : "IDLE");
+            syncState.setStatusMessage(hasRunningThread
+                    ? "Đã nhận yêu cầu dừng. Hệ thống đang kết thúc tác vụ hiện tại."
+                    : "Đã dừng tiến trình nhập phim. Hiện không có tác vụ nào đang chạy.");
+            syncStateRepository.save(syncState);
+        });
     }
 
     public TmdbSyncState getBulkSyncStatus() {
@@ -149,6 +168,10 @@ public class TmdbImportService {
         syncState.setCursor("0");
         syncState.setStatus("IDLE");
         syncState.setLastSyncTime(null);
+        syncState.setProcessedMovies(0);
+        syncState.setImportedMovies(0);
+        syncState.setSkippedMovies(0);
+        syncState.setStatusMessage("Đã đưa tiến trình về trạng thái sẵn sàng.");
         syncStateRepository.save(syncState);
         log.info("TMDB Bulk Sync state reset to cursor 0 and status IDLE.");
     }
@@ -157,14 +180,30 @@ public class TmdbImportService {
      * Scenario 1: Bulk Export loop
      */
     public void runBulkSync() {
-        runBulkSync(false);
+        runBulkSync(TmdbBulkSyncRequest.futureDefault(), false);
     }
 
     public void runBulkSync(boolean force) {
-        if (!properties.isSyncEnabled() && !force) {
-            log.info("TMDB Bulk Sync is disabled in properties.");
-            return;
+        runBulkSync(TmdbBulkSyncRequest.futureDefault(), force);
+    }
+
+    public void validateBulkSyncRequest(TmdbBulkSyncRequest request) {
+        if (!properties.isIntegrationEnabled()) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Kết nối TMDB đang tắt. Hãy bật TMDB_INTEGRATION_ENABLED trước khi nhập phim.");
         }
+        normalizeFilter(request);
+    }
+
+    public void runBulkSync(TmdbBulkSyncRequest requestedFilter, boolean force) {
+        if (!properties.isIntegrationEnabled()) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Kết nối TMDB đang tắt. Hãy bật TMDB_INTEGRATION_ENABLED trước khi nhập phim.");
+        }
+
+        EffectiveSyncFilter filter = normalizeFilter(requestedFilter);
         
         TmdbSyncState syncState = syncStateRepository.findBySyncType(SYNC_TYPE_BULK)
                 .orElseGet(() -> {
@@ -175,10 +214,14 @@ public class TmdbImportService {
                     return syncStateRepository.save(state);
                 });
 
-        if (force) {
+        boolean requestChanged = !matches(syncState, filter);
+        if (force || requestChanged || "COMPLETED".equals(syncState.getStatus()) || "FAILED".equals(syncState.getStatus())) {
             log.info("Force flag enabled. Resetting TMDB sync state status to IDLE and cursor to 0.");
             syncState.setStatus("IDLE");
             syncState.setCursor("0");
+            syncState.setProcessedMovies(0);
+            syncState.setImportedMovies(0);
+            syncState.setSkippedMovies(0);
             syncStateRepository.save(syncState);
         } else if ("IN_PROGRESS".equals(syncState.getStatus())) {
             // Check if stuck based on threshold
@@ -193,8 +236,14 @@ public class TmdbImportService {
             }
         }
 
+        if (!bulkSyncRunning.compareAndSet(false, true)) {
+            log.warn("Một tiến trình nhập phim TMDB khác đang chạy. Bỏ qua yêu cầu trùng lặp.");
+            return;
+        }
+
         stopRequested.set(false);
         bulkSyncThread = Thread.currentThread();
+        applyFilter(syncState, filter);
 
         try {
             log.info("Triggering TMDB export download on Node.js...");
@@ -203,42 +252,73 @@ public class TmdbImportService {
             Thread.sleep(2000);
             
             syncState.setStatus("IN_PROGRESS");
+            syncState.setStatusMessage("Đang đọc dữ liệu và nhập các phim phù hợp vào trạng thái Chờ hoàn thiện.");
             syncStateRepository.save(syncState);
             
             boolean hasMore = true;
             String currentCursor = syncState.getCursor();
             int retryCount = 0;
             int maxRetries = 5;
+            int processedMovies = valueOrZero(syncState.getProcessedMovies());
+            int importedMovies = valueOrZero(syncState.getImportedMovies());
+            int skippedMovies = valueOrZero(syncState.getSkippedMovies());
+            boolean reachedLimit = false;
             
-            while (hasMore) {
+            while (hasMore && !reachedLimit) {
                 if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
                     log.info("TMDB Bulk Sync stopped by user request at cursor {}", currentCursor);
                     syncState.setStatus("IDLE");
+                    syncState.setStatusMessage("Đã dừng theo yêu cầu của quản trị viên. Có thể tiếp tục lại sau.");
                     syncStateRepository.save(syncState);
                     return;
                 }
 
                 try {
                     log.info("Fetching TMDB export with cursor {}", currentCursor);
-                    String responseBody = tmdbClient.fetchMoviesExport(currentCursor, properties.getBatchSize());
+                    String responseBody = tmdbClient.fetchMoviesExport(
+                            currentCursor, properties.getBatchSize(), filter.from(), filter.to());
                     TmdbMovieResponse response = objectMapper.readValue(responseBody, TmdbMovieResponse.class);
                     
                     if (response != null && response.getMovies() != null) {
-                        try {
-                            if (self != null) {
-                                self.importMovies(response.getMovies());
-                            } else {
-                                importMovies(response.getMovies());
+                        for (TmdbMovieWrapperDto wrapper : response.getMovies()) {
+                            if (completeStopIfRequested(syncState, currentCursor)) {
+                                return;
                             }
-                        } catch (Exception e) {
-                            log.error("Failed to batch import movies at cursor {}: {}", currentCursor, e.getMessage(), e);
+                            if (processedMovies >= filter.maxMovies()) {
+                                reachedLimit = true;
+                                break;
+                            }
+                            if (!matches(wrapper, filter)) {
+                                continue;
+                            }
+
+                            processedMovies++;
+                            try {
+                                TmdbImportResult result = importMovieSafely(wrapper);
+                                if (result.outcome() == TmdbImportOutcome.CREATED) {
+                                    importedMovies++;
+                                } else {
+                                    skippedMovies++;
+                                }
+                            } catch (RuntimeException exception) {
+                                skippedMovies++;
+                                log.error("Không thể nhập phim TMDB {}: {}",
+                                        wrapper == null ? null : wrapper.getTmdbId(), exception.getMessage(), exception);
+                            }
+                        }
+
+                        if (completeStopIfRequested(syncState, currentCursor)) {
+                            return;
                         }
                         
                         currentCursor = response.getNextCursor();
                         hasMore = Boolean.TRUE.equals(response.getHasMore());
-                        
-                        
                         syncState.setCursor(currentCursor);
+                        syncState.setProcessedMovies(processedMovies);
+                        syncState.setImportedMovies(importedMovies);
+                        syncState.setSkippedMovies(skippedMovies);
+                        syncState.setStatusMessage("Đã xét " + processedMovies + " phim phù hợp; nhập mới "
+                                + importedMovies + " phim.");
                         syncStateRepository.save(syncState);
                         
                         retryCount = 0; // Reset retry count on success
@@ -250,6 +330,9 @@ public class TmdbImportService {
                 } catch (InterruptedException e) {
                     log.info("TMDB Bulk Sync interrupted at cursor {}", currentCursor);
                     syncState.setStatus("IDLE");
+                    syncState.setStatusMessage(stopRequested.get()
+                            ? "Đã dừng tiến trình nhập phim theo yêu cầu của quản trị viên."
+                            : "Tiến trình đã bị gián đoạn. Có thể tiếp tục lại sau.");
                     syncStateRepository.save(syncState);
                     Thread.currentThread().interrupt();
                     return;
@@ -257,6 +340,7 @@ public class TmdbImportService {
                     if (stopRequested.get() || Thread.currentThread().isInterrupted()) {
                         log.info("TMDB Bulk Sync stopped during exception handling at cursor {}", currentCursor);
                         syncState.setStatus("IDLE");
+                        syncState.setStatusMessage("Đã dừng theo yêu cầu của quản trị viên.");
                         syncStateRepository.save(syncState);
                         return;
                     }
@@ -272,22 +356,121 @@ public class TmdbImportService {
                 }
             }
 
+            if (completeStopIfRequested(syncState, currentCursor)) {
+                return;
+            }
+
             syncState.setStatus("COMPLETED");
             syncState.setLastSyncTime(LocalDateTime.now());
+            syncState.setStatusMessage(reachedLimit
+                    ? "Đã hoàn thành theo giới hạn " + filter.maxMovies() + " phim."
+                    : "Đã đọc hết dữ liệu trong phạm vi đã chọn.");
             syncStateRepository.save(syncState);
             log.info("TMDB Bulk Sync completed successfully.");
         } catch (InterruptedException e) {
             log.info("TMDB Bulk Sync thread interrupted.");
             syncState.setStatus("IDLE");
+            syncState.setStatusMessage(stopRequested.get()
+                    ? "Đã dừng tiến trình nhập phim theo yêu cầu của quản trị viên."
+                    : "Tiến trình đã bị gián đoạn. Có thể tiếp tục lại sau.");
             syncStateRepository.save(syncState);
             Thread.currentThread().interrupt();
         } catch (Exception e) {
             log.error("TMDB Bulk sync process stopped with error: {}", e.getMessage());
             syncState.setStatus("FAILED");
+            syncState.setStatusMessage("Không thể hoàn thành việc nhập phim. Vui lòng kiểm tra kết nối TMDB và thử lại.");
             syncStateRepository.save(syncState);
         } finally {
             bulkSyncThread = null;
+            bulkSyncRunning.set(false);
         }
+    }
+
+    private EffectiveSyncFilter normalizeFilter(TmdbBulkSyncRequest request) {
+        TmdbBulkSyncRequest source = request == null ? TmdbBulkSyncRequest.futureDefault() : request;
+        TmdbSyncScope scope = source.getScope() == null ? TmdbSyncScope.FUTURE : source.getScope();
+        int maxMovies = source.getMaxMovies() == null ? 500 : source.getMaxMovies();
+        if (maxMovies < 1 || maxMovies > 5000) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Số phim tối đa phải nằm trong khoảng từ 1 đến 5.000.");
+        }
+
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+        LocalDate from = source.getReleaseDateFrom();
+        LocalDate to = source.getReleaseDateTo();
+        if (scope == TmdbSyncScope.FUTURE) {
+            from = from == null || !from.isAfter(today) ? today.plusDays(1) : from;
+            to = to == null ? today.plusYears(1) : to;
+        } else if (scope == TmdbSyncScope.PAST) {
+            if (from == null || to == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "Khi nhập phim quá khứ, vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.");
+            }
+            if (!to.isBefore(today)) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "Khoảng phim quá khứ phải kết thúc trước ngày hôm nay.");
+            }
+        } else if (scope == TmdbSyncScope.RANGE && (from == null || to == null)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Vui lòng chọn đầy đủ khoảng ngày phát hành cần nhập.");
+        }
+
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Ngày bắt đầu không được sau ngày kết thúc.");
+        }
+        return new EffectiveSyncFilter(scope, from, to, maxMovies);
+    }
+
+    private boolean matches(TmdbMovieWrapperDto wrapper, EffectiveSyncFilter filter) {
+        if (wrapper == null || wrapper.getMovie() == null) {
+            return false;
+        }
+        if (filter.scope() == TmdbSyncScope.ALL) {
+            return true;
+        }
+        LocalDate originalReleaseDate = movieMapper.extractReleaseDate(wrapper);
+        if (originalReleaseDate == null) {
+            return false;
+        }
+        return (filter.from() == null || !originalReleaseDate.isBefore(filter.from()))
+                && (filter.to() == null || !originalReleaseDate.isAfter(filter.to()));
+    }
+
+    private boolean matches(TmdbSyncState state, EffectiveSyncFilter filter) {
+        return Objects.equals(state.getSyncScope(), filter.scope().name())
+                && Objects.equals(state.getReleaseDateFrom(), filter.from())
+                && Objects.equals(state.getReleaseDateTo(), filter.to())
+                && Objects.equals(state.getMaxMovies(), filter.maxMovies());
+    }
+
+    private void applyFilter(TmdbSyncState state, EffectiveSyncFilter filter) {
+        state.setSyncScope(filter.scope().name());
+        state.setReleaseDateFrom(filter.from());
+        state.setReleaseDateTo(filter.to());
+        state.setMaxMovies(filter.maxMovies());
+    }
+
+    private int valueOrZero(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private boolean completeStopIfRequested(TmdbSyncState syncState, String currentCursor) {
+        if (!stopRequested.get() && !Thread.currentThread().isInterrupted()) {
+            return false;
+        }
+        syncState.setCursor(currentCursor);
+        syncState.setStatus("IDLE");
+        syncState.setStatusMessage("Đã dừng tiến trình nhập phim theo yêu cầu của quản trị viên.");
+        syncStateRepository.save(syncState);
+        return true;
+    }
+
+    private record EffectiveSyncFilter(
+            TmdbSyncScope scope,
+            LocalDate from,
+            LocalDate to,
+            int maxMovies) {
     }
 
     /**
@@ -360,7 +543,7 @@ public class TmdbImportService {
                     wrapper.getTmdbId(),
                     outcome,
                     winner.getPublicId(),
-                    "A concurrent request already imported this movie; existing data was preserved");
+                    "Một yêu cầu khác vừa nhập phim này; hệ thống giữ nguyên dữ liệu đã có.");
         }
     }
 
@@ -377,7 +560,7 @@ public class TmdbImportService {
                     wrapper.getTmdbId(),
                     TmdbImportOutcome.REJECTED_BY_PROVIDER,
                     null,
-                    "Provider rejected movie; nothing was imported");
+                    "Nguồn TMDB từ chối cung cấp phim; hệ thống không nhập dữ liệu.");
         }
 
         Movie existingMovie = movieRepository.findByTmdbId(wrapper.getTmdbId()).orElse(null);
@@ -391,8 +574,8 @@ public class TmdbImportService {
                     outcome,
                     existingMovie.getPublicId(),
                     outcome == TmdbImportOutcome.DELETED_TOMBSTONE
-                            ? "Deleted TMDB movie is preserved as a tombstone"
-                            : "Movie is already imported; existing data was preserved");
+                            ? "Phim TMDB từng bị xóa nên hệ thống giữ dấu vết và không nhập lại."
+                            : "Phim đã được nhập; hệ thống giữ nguyên dữ liệu hiện có.");
         }
 
         Movie newMovie = movieMapper.toEntity(wrapper);
@@ -406,7 +589,7 @@ public class TmdbImportService {
                 wrapper.getTmdbId(),
                 TmdbImportOutcome.CREATED,
                 newMovie.getPublicId(),
-                "Movie imported as DRAFT");
+                "Phim đã được nhập vào trạng thái Chờ hoàn thiện.");
     }
 
     private String resolveUniqueMovieSlug(String baseSlug, Long tmdbId, Long existingMovieId) {

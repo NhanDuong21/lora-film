@@ -11,6 +11,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.math.BigDecimal;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleOptimizationResult;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleRequestScopeSnapshot;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "showtime_schedule_previews")
@@ -89,6 +94,55 @@ public class ShowtimeSchedulePreview {
 
     @Column(name = "request_fingerprint", nullable = false, length = 64, columnDefinition = "CHAR(64)")
     private String requestFingerprint;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "request_scope_json", columnDefinition = "json")
+    private AutoScheduleRequestScopeSnapshot requestScope;
+
+    @Column(name = "policy_version", length = 50)
+    private String policyVersion;
+
+    @Column(name = "demand_model_version", length = 64)
+    private String demandModelVersion;
+
+    @Column(name = "solver_version", length = 64)
+    private String solverVersion;
+
+    @Column(name = "solver_status", length = 30)
+    private String solverStatus;
+
+    @Column(name = "eligibility_fingerprint", length = 64, columnDefinition = "CHAR(64)")
+    private String eligibilityFingerprint;
+
+    @Column(name = "pricing_fingerprint", length = 64, columnDefinition = "CHAR(64)")
+    private String pricingFingerprint;
+
+    @Column(name = "configuration_fingerprint", length = 64, columnDefinition = "CHAR(64)")
+    private String configurationFingerprint;
+
+    @Column(name = "objective_value", precision = 19, scale = 3)
+    private BigDecimal objectiveValue;
+
+    @Column(name = "objective_best_bound", precision = 19, scale = 3)
+    private BigDecimal objectiveBestBound;
+
+    @Column(name = "solver_duration_millis")
+    private Long solverDurationMillis;
+
+    @Column(name = "solver_explanation", length = 500)
+    private String solverExplanation;
+
+    @Column(name = "expected_attendance", precision = 19, scale = 2)
+    private BigDecimal expectedAttendance;
+
+    @Column(name = "expected_occupancy", precision = 12, scale = 6)
+    private BigDecimal expectedOccupancy;
+
+    @Column(name = "expected_revenue", precision = 19, scale = 2)
+    private BigDecimal expectedRevenue;
+
+    @Column(name = "expected_contribution", precision = 19, scale = 2)
+    private BigDecimal expectedContribution;
 
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
@@ -391,6 +445,39 @@ public class ShowtimeSchedulePreview {
     public void setRequestFingerprint(String requestFingerprint) {
         this.requestFingerprint = requestFingerprint;
     }
+
+    public AutoScheduleRequestScopeSnapshot getRequestScope() { return requestScope; }
+    public void setRequestScope(AutoScheduleRequestScopeSnapshot value) { this.requestScope = value; }
+    public String getPolicyVersion() { return policyVersion; }
+    public void setPolicyVersion(String value) { this.policyVersion = value; }
+    public String getDemandModelVersion() { return demandModelVersion; }
+    public void setDemandModelVersion(String value) { this.demandModelVersion = value; }
+    public String getSolverVersion() { return solverVersion; }
+    public void setSolverVersion(String value) { this.solverVersion = value; }
+    public String getSolverStatus() { return solverStatus; }
+    public void setSolverStatus(String value) { this.solverStatus = value; }
+    public String getEligibilityFingerprint() { return eligibilityFingerprint; }
+    public void setEligibilityFingerprint(String value) { this.eligibilityFingerprint = value; }
+    public String getPricingFingerprint() { return pricingFingerprint; }
+    public void setPricingFingerprint(String value) { this.pricingFingerprint = value; }
+    public String getConfigurationFingerprint() { return configurationFingerprint; }
+    public void setConfigurationFingerprint(String value) { this.configurationFingerprint = value; }
+    public BigDecimal getObjectiveValue() { return objectiveValue; }
+    public void setObjectiveValue(BigDecimal value) { this.objectiveValue = value; }
+    public BigDecimal getObjectiveBestBound() { return objectiveBestBound; }
+    public void setObjectiveBestBound(BigDecimal value) { this.objectiveBestBound = value; }
+    public Long getSolverDurationMillis() { return solverDurationMillis; }
+    public void setSolverDurationMillis(Long value) { this.solverDurationMillis = value; }
+    public String getSolverExplanation() { return solverExplanation; }
+    public void setSolverExplanation(String value) { this.solverExplanation = value; }
+    public BigDecimal getExpectedAttendance() { return expectedAttendance; }
+    public void setExpectedAttendance(BigDecimal value) { this.expectedAttendance = value; }
+    public BigDecimal getExpectedOccupancy() { return expectedOccupancy; }
+    public void setExpectedOccupancy(BigDecimal value) { this.expectedOccupancy = value; }
+    public BigDecimal getExpectedRevenue() { return expectedRevenue; }
+    public void setExpectedRevenue(BigDecimal value) { this.expectedRevenue = value; }
+    public BigDecimal getExpectedContribution() { return expectedContribution; }
+    public void setExpectedContribution(BigDecimal value) { this.expectedContribution = value; }
 
     public String getFailureReason() {
         return failureReason;

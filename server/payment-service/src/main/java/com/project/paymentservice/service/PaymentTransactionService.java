@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
 
 @Service
 public class PaymentTransactionService {
@@ -285,6 +286,50 @@ public class PaymentTransactionService {
     }
 
     @Transactional
+    public EmergencyPaymentStopResult stopActiveAttemptsForEmergency(
+            List<String> bookingPublicIds,
+            String reason) {
+        if (bookingPublicIds == null || bookingPublicIds.isEmpty()) {
+            return new EmergencyPaymentStopResult(0, List.of());
+        }
+        List<Payment> payments = paymentRepository
+                .findByBookingPublicIdInForEmergencyUpdate(bookingPublicIds);
+        Instant now = Instant.now();
+        int stoppedCount = 0;
+        for (Payment payment : payments) {
+            if (!transitionService.isActive(payment.getStatus())) {
+                continue;
+            }
+            PaymentStatus previous = payment.getStatus();
+            payment.setStatus(PaymentStatus.CANCELLED);
+            payment.setCancelledAt(now);
+            payment.setFailureCode("EMERGENCY_SHOWTIME_CLOSED");
+            payment.setFailureMessageSanitized(sanitize(reason, 500));
+            payment.setSettlementHoldUntil(null);
+            releaseActiveGuard(payment);
+            paymentRepository.save(payment);
+            outboxService.enqueueBookingResult(payment, "CANCELLED", now);
+            logService.log(payment.getId(), PaymentLogEventType.PAYMENT_CANCELLED,
+                    "AUDITORIUM_EMERGENCY", ActorType.SYSTEM, null,
+                    previous, PaymentStatus.CANCELLED,
+                    "Payment stopped because the auditorium was closed for an emergency",
+                    "{}");
+            stoppedCount++;
+        }
+        List<String> alreadySuccessfulBookingPublicIds = payments.stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.SUCCESS)
+                .map(Payment::getBookingPublicId)
+                .distinct()
+                .toList();
+        return new EmergencyPaymentStopResult(stoppedCount, alreadySuccessfulBookingPublicIds);
+    }
+
+    public record EmergencyPaymentStopResult(
+            int stoppedPaymentAttemptCount,
+            List<String> alreadySuccessfulBookingPublicIds) {
+    }
+
+    @Transactional
     public Payment collectCash(
             String paymentPublicId,
             Long employeeId,
@@ -494,6 +539,10 @@ public class PaymentTransactionService {
         snapshot.setMovieTitle(data.getMovieTitle());
         snapshot.setShowtimePublicId(data.getShowtimePublicId());
         snapshot.setCinemaPublicId(data.getCinemaPublicId());
+        snapshot.setAuditoriumPublicId(data.getAuditoriumPublicId());
+        snapshot.setShowtimeStartsAt(data.getShowtimeStartsAt());
+        snapshot.setAuditoriumCapacity(data.getAuditoriumCapacity());
+        snapshot.setFormat(data.getFormat());
         snapshot.setTicketCount(data.getTicketCount());
         snapshot.setTicketAmount(defaultAmount(data.getTicketAmount(), context.getAmount()));
         snapshot.setFoodAmount(defaultAmount(data.getFoodAmount(), BigDecimal.ZERO));

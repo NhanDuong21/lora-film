@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from 'lucide-react';
 import { jwtDecode } from "jwt-decode";
-import { getAdminLandingPath, hasAdminAreaAccess } from '@/features/internal-staff/admin/permissionAccess';
+import { resolvePostLoginPath } from '@/features/auth/utils/loginRedirect';
 
 function OAuth2RedirectHandler() {
     const { login } = useAuth();
@@ -51,13 +51,10 @@ function OAuth2RedirectHandler() {
 
                     await login(sessionData);
 
-                    if (hasAdminAreaAccess(role, decodedToken.permissions || [])) {
-                        navigate(getAdminLandingPath(role, decodedToken.permissions || []), { replace: true });
-                    } else if (role === "EMPLOYEE" || role === "STAFF" || role === "ROLE_STAFF") {
-                        navigate("/employee", { replace: true });
-                    } else {
-                        navigate("/", { replace: true });
-                    }
+                    navigate(resolvePostLoginPath({
+                        role,
+                        permissions: decodedToken.permissions || []
+                    }), { replace: true });
 
                 } catch {
                     navigate("/login", { state: { error: "Lỗi xử lý đăng nhập." }, replace: true });

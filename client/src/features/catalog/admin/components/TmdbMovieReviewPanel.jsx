@@ -234,7 +234,7 @@ export default function TmdbMovieReviewPanel({ movie, review, isLoading, isRefre
               </p>
               {review.approvalTarget && (
                 <p className="mt-1 text-xs font-semibold text-sky-300">
-                  Trạng thái sau duyệt: {review.approvalTarget === 'NOW_SHOWING' ? 'Đang chiếu' : 'Sắp chiếu'}
+                  Trạng thái sau duyệt: Sắp chiếu
                 </p>
               )}
               <p className="mt-1 text-xs leading-5 text-zinc-500">

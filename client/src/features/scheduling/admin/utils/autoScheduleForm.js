@@ -88,8 +88,11 @@ export const buildAutoScheduleRequestFingerprint = (request) => JSON.stringify({
   cinemaPublicId: request.cinemaPublicId,
   scheduleFrom: request.scheduleFrom,
   scheduleTo: request.scheduleTo,
+  planningDays: request.planningDays == null ? null : Number(request.planningDays),
   movieVersionPublicIds: [...(request.movieVersionPublicIds || [])].sort(),
   auditoriumPublicIds: [...(request.auditoriumPublicIds || [])].sort(),
+  excludeMovieVersionPublicIds: [...(request.excludeMovieVersionPublicIds || [])].sort(),
+  excludeAuditoriumPublicIds: [...(request.excludeAuditoriumPublicIds || [])].sort(),
   slotGranularityMinutes: Number(request.slotGranularityMinutes),
   previewTtlMinutes: Number(request.previewTtlMinutes),
 });

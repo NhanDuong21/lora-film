@@ -16,8 +16,16 @@ describe('resolvePostLoginPath', () => {
     })).toBe('/');
   });
 
-  it('keeps STAFF on the supported cash workflow entry point', () => {
-    expect(resolvePostLoginPath({ role: 'ROLE_STAFF' })).toBe('/employee');
+  it('keeps EMPLOYEE on the permission-aware employee entry point', () => {
+    expect(resolvePostLoginPath({ role: 'ROLE_EMPLOYEE' })).toBe('/employee');
+  });
+
+  it('keeps MANAGER inside the assigned-cinema workspace', () => {
+    expect(resolvePostLoginPath({ role: 'ROLE_MANAGER' })).toBe('/manager');
+  });
+
+  it('does not treat the retired STAFF role as an employee identity', () => {
+    expect(resolvePostLoginPath({ role: 'ROLE_STAFF' })).toBe('/');
   });
 
   it('keeps ADMIN on the admin landing page', () => {

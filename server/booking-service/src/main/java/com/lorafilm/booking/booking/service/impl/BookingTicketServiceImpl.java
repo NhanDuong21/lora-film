@@ -1,12 +1,14 @@
 package com.lorafilm.booking.booking.service.impl;
 
 import com.lorafilm.booking.booking.dto.BookingTicketDto;
+import com.lorafilm.booking.booking.dto.BookingPriceSnapshotPayload;
 import com.lorafilm.booking.booking.dto.CreateTicketRequest;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingTicket;
 import com.lorafilm.booking.booking.enums.TicketStatus;
 import com.lorafilm.booking.booking.mapper.BookingTicketMapper;
 import com.lorafilm.booking.booking.repository.BookingRepository;
+import com.lorafilm.booking.booking.repository.BookingPriceSnapshotRepository;
 import com.lorafilm.booking.booking.repository.BookingTicketRepository;
 import com.lorafilm.booking.booking.service.BookingTicketService;
 import com.lorafilm.booking.common.exception.BookingNotFoundException;
@@ -39,6 +41,7 @@ public class BookingTicketServiceImpl implements BookingTicketService {
     private final BookingSnapshotRepository bookingSnapshotRepository;
     private final ObjectMapper objectMapper;
     private com.lorafilm.booking.infrastructure.service.BookingOutboxService outboxService;
+    private final BookingPriceSnapshotRepository bookingPriceSnapshotRepository;
     private String ticketAccessBaseUrl = "http://localhost:5173/tickets";
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BookingTicketServiceImpl.class);
 
@@ -46,11 +49,13 @@ public class BookingTicketServiceImpl implements BookingTicketService {
             BookingRepository bookingRepository,
             BookingTicketMapper bookingTicketMapper,
             BookingSnapshotRepository bookingSnapshotRepository,
+            BookingPriceSnapshotRepository bookingPriceSnapshotRepository,
             ObjectMapper objectMapper) {
         this.bookingTicketRepository = bookingTicketRepository;
         this.bookingRepository = bookingRepository;
         this.bookingTicketMapper = bookingTicketMapper;
         this.bookingSnapshotRepository = bookingSnapshotRepository;
+        this.bookingPriceSnapshotRepository = bookingPriceSnapshotRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -222,6 +227,11 @@ public class BookingTicketServiceImpl implements BookingTicketService {
         if (outboxService == null || tickets.isEmpty()) {
             return;
         }
+        if (isBoxOfficeBooking(booking.getId())) {
+            log.info("Booking {} was sold at the box office; tickets remain print-only and no employee notification is created.",
+                    booking.getPublicId());
+            return;
+        }
         Map<String, Object> payload = new LinkedHashMap<>();
         put(payload, "userPublicId", String.valueOf(booking.getUserId()));
 
@@ -281,6 +291,24 @@ public class BookingTicketServiceImpl implements BookingTicketService {
                 + "?access=" + first.getQrCode());
         put(payload, "locale", "vi-VN");
         outboxService.createOutboxEvent("Booking", booking.getId(), "TICKET_ISSUED", payload);
+    }
+
+    private boolean isBoxOfficeBooking(Long bookingId) {
+        if (bookingId == null) {
+            return false;
+        }
+        return bookingPriceSnapshotRepository.findByBookingId(bookingId)
+                .map(snapshot -> {
+                    try {
+                        BookingPriceSnapshotPayload payload = objectMapper.readValue(
+                                snapshot.getPricingBreakdownJson(), BookingPriceSnapshotPayload.class);
+                        return "BOX_OFFICE".equalsIgnoreCase(payload.channel());
+                    } catch (Exception exception) {
+                        log.warn("Cannot read Booking channel for ticket delivery, bookingId={}", bookingId, exception);
+                        return false;
+                    }
+                })
+                .orElse(false);
     }
 
     private List<Map<String, Object>> foodItems(Booking booking) {

@@ -1,9 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense } from 'react';
-import { PageLoader, ProtectedRoute } from '@/components/common/RouteGuards';
+import { PageLoader, PermissionRoute, ProtectedRoute } from '@/components/common/RouteGuards';
+import { EMPLOYEE_PERMISSIONS } from '@/features/internal-staff/employee/employeeAccess';
 
 const PaymentReturnPage = lazy(() => import('./customer/pages/PaymentReturnPage'));
 const EmployeeCashPaymentPage = lazy(() => import('./employee/pages/EmployeeCashPaymentPage'));
+const EmployeeRefundRequestPage = lazy(() => import('./employee/pages/EmployeeRefundRequestPage'));
 const AdminPaymentsPage = lazy(() => import('./admin/pages/AdminPaymentsPage'));
 const AdminPaymentDetailPage = lazy(() => import('./admin/pages/AdminPaymentDetailPage'));
 
@@ -28,7 +30,22 @@ export const customerPaymentRoutes = [
 ];
 
 export const employeePaymentRoutes = [
-  { path: 'payments/cash', element: lazyPage(EmployeeCashPaymentPage) },
+  {
+    path: 'payments/cash',
+    element: (
+      <PermissionRoute requiredPermissions={[EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT]}>
+        {lazyPage(EmployeeCashPaymentPage)}
+      </PermissionRoute>
+    ),
+  },
+  {
+    path: 'payments/refunds',
+    element: (
+      <PermissionRoute requiredPermissions={[EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT]}>
+        {lazyPage(EmployeeRefundRequestPage)}
+      </PermissionRoute>
+    ),
+  },
 ];
 
 export const adminPaymentRoutes = [

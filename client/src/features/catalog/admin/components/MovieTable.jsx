@@ -1,12 +1,12 @@
 import {
   AlertTriangle,
+  CalendarDays,
   Film,
   Image as ImageIcon,
   Pencil,
   RefreshCw,
   Trash2
 } from 'lucide-react';
-import SkeletonTable from '@/components/common/SkeletonTable';
 import { EmptyState, LazyImage, StatusBadge } from '@/components/common/ui/uiKit';
 import { getStatusConfig } from '@/features/catalog/admin/config/movieStatusConfig';
 import { getMovieReadinessView } from '@/features/catalog/admin/utils/movieReadiness';
@@ -84,6 +84,127 @@ function Pagination({
   );
 }
 
+function MoviePosterCard({ movie, onOpenDetail, onOpenEdit, onDelete }) {
+  const readiness = getMovieReadinessView(movie);
+  const readinessConfig = READINESS_STATUS_CONFIG[readiness.healthStatus]
+    || READINESS_STATUS_CONFIG.UNKNOWN;
+  const issues = readiness.issues;
+  const primaryIssue = issues[0];
+  const statusConfig = getStatusConfig(movie.status);
+  const canDelete = movie.status === 'DRAFT';
+  const title = movie.title || 'Phim chưa đặt tên';
+
+  return (
+    <article
+      data-testid="movie-poster-card"
+      className="group flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/55 shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-1 hover:border-zinc-600 hover:shadow-2xl hover:shadow-black/30"
+    >
+      <button
+        type="button"
+        onClick={() => onOpenDetail(movie)}
+        aria-label={`Mở hồ sơ ${title}`}
+        className="relative block aspect-[2/3] w-full overflow-hidden bg-zinc-900 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500"
+      >
+        {movie.primaryPoster ? (
+          <LazyImage
+            src={movie.primaryPoster}
+            alt={`Áp phích ${title}`}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <span className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-zinc-600">
+            <ImageIcon size={34} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Chưa có áp phích</span>
+          </span>
+        )}
+
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black via-black/70 to-transparent" />
+        <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/75 px-2.5 py-1 text-[10px] font-bold text-zinc-200 backdrop-blur-sm">
+          {getSourceLabel(movie.source)}
+        </span>
+        <span className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
+          <span className="line-clamp-2 text-base font-black leading-5 text-white drop-shadow-lg">
+            {title}
+          </span>
+          <span className="shrink-0 rounded-lg border border-white/10 bg-black/75 px-2 py-1 text-[10px] font-bold text-zinc-200 backdrop-blur-sm">
+            {movie.ageRating || 'Chưa phân loại'}
+          </span>
+        </span>
+      </button>
+
+      <div className="flex flex-1 flex-col p-4">
+        <div className="flex items-start justify-between gap-2">
+          <StatusBadge status={movie.status} label={statusConfig.label} />
+          <span className="rounded-lg bg-zinc-950 px-2 py-1 text-[10px] font-semibold text-zinc-400">
+            {movie.durationMinutes ? `${movie.durationMinutes} phút` : 'Chưa có thời lượng'}
+          </span>
+        </div>
+
+        <div className="mt-4 min-h-[94px] rounded-xl border border-zinc-800 bg-black/20 p-3">
+          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${readinessConfig.className}`}>
+            {readinessConfig.label}
+          </span>
+          <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-zinc-300">
+            {primaryIssue ? getIssueText(primaryIssue) : 'Đủ dữ liệu cơ bản để đưa vào khai thác.'}
+          </p>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            {primaryIssue && issues.length > 1
+              ? `Còn ${issues.length - 1} mục cần kiểm tra · `
+              : ''}
+            {movie.activeVersionCount || 0} phiên bản · {movie.mediaCount || 0} hình ảnh/video
+          </p>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 divide-x divide-zinc-800 rounded-xl border border-zinc-800 bg-zinc-950/60 py-3">
+          <div className="min-w-0 px-3">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-600">
+              <CalendarDays className="h-3 w-3" />
+              Khai thác
+            </p>
+            <p className="mt-1 truncate text-xs font-bold text-zinc-200">
+              {movie.releaseDate ? formatDate(movie.releaseDate) : 'Chưa đặt ngày'}
+            </p>
+          </div>
+          <div className="min-w-0 px-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-600">Suất chiếu</p>
+            <p className={`mt-1 truncate text-xs font-bold ${(movie.showtimeCount || 0) > 0 ? 'text-emerald-300' : 'text-zinc-500'}`}>
+              {(movie.showtimeCount || 0) > 0 ? `${movie.showtimeCount} suất` : 'Chưa có'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-auto grid grid-cols-[1fr_auto] gap-2 pt-4">
+          <button
+            type="button"
+            onClick={() => onOpenDetail(movie)}
+            className="rounded-xl bg-orange-500 px-3 py-2.5 text-xs font-black text-black transition hover:bg-orange-400"
+          >
+            Mở hồ sơ
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenEdit(movie)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2.5 text-xs font-bold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
+          >
+            <Pencil size={13} />
+            Sửa nhanh
+          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(movie.publicId, movie.title)}
+              className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-xl py-2 text-[11px] font-semibold text-red-400 transition hover:bg-red-500/10"
+            >
+              <Trash2 size={12} />
+              Xóa bản nháp
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function MovieTable({
   movies,
   isInitialLoading,
@@ -102,8 +223,17 @@ function MovieTable({
 }) {
   if (isInitialLoading) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70">
-        <SkeletonTable columns={5} rows={6} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" aria-label="Đang tải danh sách phim">
+        {Array.from({ length: 10 }, (_, index) => (
+          <div key={index} className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/55">
+            <div className="aspect-[2/3] animate-pulse bg-zinc-800" />
+            <div className="space-y-3 p-4">
+              <div className="h-5 w-2/3 animate-pulse rounded bg-zinc-800" />
+              <div className="h-20 animate-pulse rounded-xl bg-zinc-800/70" />
+              <div className="h-11 animate-pulse rounded-xl bg-zinc-800/70" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -161,151 +291,16 @@ function MovieTable({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1120px] table-fixed">
-          <thead className="border-b border-zinc-800 bg-black/30 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
-            <tr>
-              <th className="w-[29%] px-5 py-4">Phim</th>
-              <th className="w-[24%] px-5 py-4">Cần làm</th>
-              <th className="w-[16%] px-5 py-4">Khởi chiếu</th>
-              <th className="w-[15%] px-5 py-4">Hiển thị với khách</th>
-              <th className="w-[16%] px-5 py-4 text-right">Hành động</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/80">
-            {movies.map((movie) => {
-              const readiness = getMovieReadinessView(movie);
-              const readinessConfig = READINESS_STATUS_CONFIG[readiness.healthStatus]
-                || READINESS_STATUS_CONFIG.UNKNOWN;
-              const issues = readiness.issues;
-              const primaryIssue = issues[0];
-              const statusConfig = getStatusConfig(movie.status);
-              const canDelete = movie.status === 'DRAFT';
-
-              return (
-                <tr
-                  key={movie.publicId}
-                  className="align-top transition-colors hover:bg-white/[0.025]"
-                >
-                  <td className="px-5 py-5">
-                    <div className="flex min-w-0 gap-4">
-                      <div className="h-28 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900">
-                        {movie.primaryPoster ? (
-                          <LazyImage
-                            src={movie.primaryPoster}
-                            alt={`Poster ${movie.title}`}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-zinc-600">
-                            <ImageIcon size={22} />
-                            <span className="text-[9px] font-semibold uppercase">Chưa có poster</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 py-1">
-                        <button
-                          type="button"
-                          onClick={() => onOpenDetail(movie)}
-                          className="line-clamp-2 text-left text-base font-extrabold text-white transition hover:text-orange-400"
-                        >
-                          {movie.title || 'Phim chưa đặt tên'}
-                        </button>
-                        <p className="mt-2 text-xs font-medium text-zinc-500">
-                          {getSourceLabel(movie.source)}
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-400">
-                          <span className="rounded-md bg-zinc-900 px-2 py-1">
-                            {movie.ageRating || 'Chưa phân loại tuổi'}
-                          </span>
-                          <span className="rounded-md bg-zinc-900 px-2 py-1">
-                            {movie.durationMinutes ? `${movie.durationMinutes} phút` : 'Chưa có thời lượng'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="px-5 py-5">
-                    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${readinessConfig.className}`}>
-                      {readinessConfig.label}
-                    </span>
-                    {primaryIssue ? (
-                      <>
-                        <p className="mt-3 line-clamp-2 text-sm font-semibold leading-5 text-zinc-200">
-                          {getIssueText(primaryIssue)}
-                        </p>
-                        {issues.length > 1 && (
-                          <p className="mt-1 text-xs text-zinc-500">
-                            Còn {issues.length - 1} mục cần kiểm tra
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="mt-3 text-sm leading-5 text-zinc-400">
-                        Đủ dữ liệu cơ bản để đưa vào khai thác.
-                      </p>
-                    )}
-                    <p className="mt-2 text-xs text-zinc-600">
-                      {movie.activeVersionCount || 0} phiên bản · {movie.mediaCount || 0} hình ảnh/video
-                    </p>
-                  </td>
-
-                  <td className="px-5 py-5">
-                    <p className="font-bold text-white">
-                      {movie.releaseDate ? formatDate(movie.releaseDate) : 'Chưa đặt ngày khởi chiếu'}
-                    </p>
-                    <p className={`mt-2 text-xs font-semibold ${(movie.showtimeCount || 0) > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                      {(movie.showtimeCount || 0) > 0
-                        ? `${movie.showtimeCount} suất chiếu`
-                        : 'Chưa có suất chiếu'}
-                    </p>
-                  </td>
-
-                  <td className="px-5 py-5">
-                    <StatusBadge
-                      status={movie.status}
-                      label={statusConfig.label}
-                    />
-                    <p className="mt-3 text-xs leading-5 text-zinc-500">
-                      {statusConfig.description}
-                    </p>
-                  </td>
-
-                  <td className="px-5 py-5">
-                    <div className="flex flex-col items-stretch gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onOpenDetail(movie)}
-                        className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-extrabold text-black transition hover:bg-orange-400"
-                      >
-                        Mở hồ sơ
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenEdit(movie)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-bold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-                      >
-                        <Pencil size={14} />
-                        Sửa nhanh
-                      </button>
-                      {canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => onDelete(movie.publicId, movie.title)}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-red-400 transition hover:bg-red-500/10"
-                        >
-                          <Trash2 size={13} />
-                          Xóa bản nháp
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 md:p-5">
+        {movies.map(movie => (
+          <MoviePosterCard
+            key={movie.publicId}
+            movie={movie}
+            onOpenDetail={onOpenDetail}
+            onOpenEdit={onOpenEdit}
+            onDelete={onDelete}
+          />
+        ))}
       </div>
 
       <Pagination

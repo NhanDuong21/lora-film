@@ -34,6 +34,7 @@ public interface PaymentService {
             Long accountId, String idempotencyKey, Long paymentId);
     EmployeeBookingPaymentResponse lookupBookingForCash(String reference);
     PaymentDetailResponse getPaymentForEmployee(String paymentPublicId);
+    PaymentDetailResponse getPaymentForEmployee(Long paymentId);
     CreatePaymentResponse createCashPayment(
             Long employeeId, String idempotencyKey, CreateCashPaymentRequest request);
     CashCollectResponse collectCashPayment(

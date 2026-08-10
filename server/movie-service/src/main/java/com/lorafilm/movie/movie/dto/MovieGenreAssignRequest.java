@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public class MovieGenreAssignRequest {
-    @NotNull(message = "Genre IDs cannot be null")
+    @NotNull(message = "Vui lòng chọn ít nhất một thể loại.")
     private List<String> genreIds;
 
     public MovieGenreAssignRequest() {}

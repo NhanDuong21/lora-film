@@ -18,6 +18,7 @@ public class EmployeeBookingPaymentResponse {
     private Instant expiresAt;
     private String movieTitle;
     private Integer ticketCount;
+    private String cinemaPublicId;
 
     public EmployeeBookingPaymentResponse() {
     }
@@ -34,6 +35,7 @@ public class EmployeeBookingPaymentResponse {
         if (context.getAnalyticsSnapshot() != null) {
             response.movieTitle = context.getAnalyticsSnapshot().getMovieTitle();
             response.ticketCount = context.getAnalyticsSnapshot().getTicketCount();
+            response.cinemaPublicId = context.getAnalyticsSnapshot().getCinemaPublicId();
         }
         return response;
     }
@@ -47,4 +49,5 @@ public class EmployeeBookingPaymentResponse {
     public Instant getExpiresAt() { return expiresAt; }
     public String getMovieTitle() { return movieTitle; }
     public Integer getTicketCount() { return ticketCount; }
+    public String getCinemaPublicId() { return cinemaPublicId; }
 }

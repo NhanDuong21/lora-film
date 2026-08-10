@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.math.BigDecimal;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleRequestScopeSnapshot;
 
 public class ShowtimeSchedulePreviewSummaryResponse {
 
@@ -41,6 +43,22 @@ public class ShowtimeSchedulePreviewSummaryResponse {
     private Long appliedBy;
 
     private String failureReason;
+    private AutoScheduleRequestScopeSnapshot requestScope;
+    private String policyVersion;
+    private String demandModelVersion;
+    private String solverVersion;
+    private String solverStatus;
+    private String eligibilityFingerprint;
+    private String pricingFingerprint;
+    private String configurationFingerprint;
+    private BigDecimal objectiveValue;
+    private BigDecimal objectiveBestBound;
+    private Long solverDurationMillis;
+    private String solverExplanation;
+    private BigDecimal expectedAttendance;
+    private BigDecimal expectedOccupancy;
+    private BigDecimal expectedRevenue;
+    private BigDecimal expectedContribution;
 
     public ShowtimeSchedulePreviewSummaryResponse() {
     }
@@ -132,4 +150,36 @@ public class ShowtimeSchedulePreviewSummaryResponse {
 
     public String getFailureReason() { return failureReason; }
     public void setFailureReason(String failureReason) { this.failureReason = failureReason; }
+    public AutoScheduleRequestScopeSnapshot getRequestScope() { return requestScope; }
+    public void setRequestScope(AutoScheduleRequestScopeSnapshot value) { this.requestScope = value; }
+    public String getPolicyVersion() { return policyVersion; }
+    public void setPolicyVersion(String value) { this.policyVersion = value; }
+    public String getDemandModelVersion() { return demandModelVersion; }
+    public void setDemandModelVersion(String value) { this.demandModelVersion = value; }
+    public String getSolverVersion() { return solverVersion; }
+    public void setSolverVersion(String value) { this.solverVersion = value; }
+    public String getSolverStatus() { return solverStatus; }
+    public void setSolverStatus(String value) { this.solverStatus = value; }
+    public String getEligibilityFingerprint() { return eligibilityFingerprint; }
+    public void setEligibilityFingerprint(String value) { this.eligibilityFingerprint = value; }
+    public String getPricingFingerprint() { return pricingFingerprint; }
+    public void setPricingFingerprint(String value) { this.pricingFingerprint = value; }
+    public String getConfigurationFingerprint() { return configurationFingerprint; }
+    public void setConfigurationFingerprint(String value) { this.configurationFingerprint = value; }
+    public BigDecimal getObjectiveValue() { return objectiveValue; }
+    public void setObjectiveValue(BigDecimal value) { this.objectiveValue = value; }
+    public BigDecimal getObjectiveBestBound() { return objectiveBestBound; }
+    public void setObjectiveBestBound(BigDecimal value) { this.objectiveBestBound = value; }
+    public Long getSolverDurationMillis() { return solverDurationMillis; }
+    public void setSolverDurationMillis(Long value) { this.solverDurationMillis = value; }
+    public String getSolverExplanation() { return solverExplanation; }
+    public void setSolverExplanation(String value) { this.solverExplanation = value; }
+    public BigDecimal getExpectedAttendance() { return expectedAttendance; }
+    public void setExpectedAttendance(BigDecimal value) { this.expectedAttendance = value; }
+    public BigDecimal getExpectedOccupancy() { return expectedOccupancy; }
+    public void setExpectedOccupancy(BigDecimal value) { this.expectedOccupancy = value; }
+    public BigDecimal getExpectedRevenue() { return expectedRevenue; }
+    public void setExpectedRevenue(BigDecimal value) { this.expectedRevenue = value; }
+    public BigDecimal getExpectedContribution() { return expectedContribution; }
+    public void setExpectedContribution(BigDecimal value) { this.expectedContribution = value; }
 }

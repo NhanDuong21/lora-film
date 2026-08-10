@@ -80,25 +80,25 @@ public class MovieReadinessEvaluator {
         if (missingGenre) {
             throw new BusinessException(
                     ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED,
-                    "Movie must have at least 1 genre to be published");
+                    "Phim phải có ít nhất một thể loại trước khi được duyệt.");
         }
         if (missingActiveVersion && missingPrimaryPoster) {
             throw new BusinessException(
                     ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED,
-                    "Movie must have at least one active version and one primary poster to publish");
+                    "Phim phải có ít nhất một bản chiếu đang hoạt động và một poster chính trước khi được duyệt.");
         }
         if (missingActiveVersion) {
             throw new BusinessException(
                     ErrorCode.MOVIE_ACTIVE_VERSION_REQUIRED,
-                    "Movie must have at least one active version to publish");
+                    "Phim phải có ít nhất một bản chiếu đang hoạt động trước khi được duyệt.");
         }
         if (missingPrimaryPoster) {
             throw new BusinessException(
                     ErrorCode.MOVIE_PRIMARY_POSTER_REQUIRED,
-                    "Movie must have at least one active primary poster to publish");
+                    "Phim phải có một poster chính đang hoạt động trước khi được duyệt.");
         }
 
-        throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Movie is incomplete");
+        throw new BusinessException(ErrorCode.MOVIE_PUBLISH_VALIDATION_FAILED, "Thông tin phim chưa đầy đủ để duyệt.");
     }
 
     private boolean hasBlocker(MovieReadinessDto readiness, String code) {
@@ -135,7 +135,7 @@ public class MovieReadinessEvaluator {
         NO_ACTIVE_VERSION(MovieReadinessEvaluator.NO_ACTIVE_VERSION, Severity.BLOCKER, "Phim chưa có phiên bản đang hoạt động."),
         NO_ACTIVE_PRIMARY_POSTER(MovieReadinessEvaluator.NO_ACTIVE_PRIMARY_POSTER, Severity.BLOCKER, "Phim chưa có poster chính đang hoạt động."),
         MISSING_TITLE(MovieReadinessEvaluator.MISSING_TITLE, Severity.WARNING, "Cần kiểm tra lại: Thiếu tên phim."),
-        MISSING_RELEASE_DATE(MovieReadinessEvaluator.MISSING_RELEASE_DATE, Severity.WARNING, "Cần kiểm tra lại: Thiếu ngày khởi chiếu."),
+        MISSING_RELEASE_DATE(MovieReadinessEvaluator.MISSING_RELEASE_DATE, Severity.WARNING, "Cần kiểm tra lại: Thiếu ngày bắt đầu khai thác tại rạp."),
         MISSING_AGE_RATING(MovieReadinessEvaluator.MISSING_AGE_RATING, Severity.WARNING, "Cần kiểm tra lại: Thiếu phân loại độ tuổi."),
         INVALID_DURATION(MovieReadinessEvaluator.INVALID_DURATION, Severity.WARNING, "Cần kiểm tra lại: Thời lượng không hợp lệ."),
         SUSPICIOUS_DURATION(MovieReadinessEvaluator.SUSPICIOUS_DURATION, Severity.WARNING, "Cần kiểm tra thời lượng.");

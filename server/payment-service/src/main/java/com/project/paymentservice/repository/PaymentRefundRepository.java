@@ -23,6 +23,38 @@ public interface PaymentRefundRepository extends JpaRepository<PaymentRefund, Lo
     List<PaymentRefund> findByPaymentIdOrderByCreatedAtDesc(Long paymentId);
     Page<PaymentRefund> findByStatus(RefundStatus status, Pageable pageable);
 
+    Page<PaymentRefund> findByPaymentIdIn(Collection<Long> paymentIds, Pageable pageable);
+    Page<PaymentRefund> findByPaymentIdInAndStatus(
+            Collection<Long> paymentIds, RefundStatus status, Pageable pageable);
+
+    @Query("""
+            select coalesce(sum(r.requestedAmount), 0)
+            from PaymentRefund r
+            where r.providerCode = com.project.paymentservice.enumtype.ProviderCode.CASH
+              and r.status = com.project.paymentservice.enumtype.RefundStatus.SUCCESS
+              and r.completedByAccountId = :employeeAccountId
+              and r.succeededAt >= :from
+              and r.succeededAt <= :to
+            """)
+    BigDecimal sumSuccessfulCashRefunds(
+            @Param("employeeAccountId") Long employeeAccountId,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
+    @Query("""
+            select count(r)
+            from PaymentRefund r
+            where r.providerCode = com.project.paymentservice.enumtype.ProviderCode.CASH
+              and r.status = com.project.paymentservice.enumtype.RefundStatus.SUCCESS
+              and r.completedByAccountId = :employeeAccountId
+              and r.succeededAt >= :from
+              and r.succeededAt <= :to
+            """)
+    long countSuccessfulCashRefunds(
+            @Param("employeeAccountId") Long employeeAccountId,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from PaymentRefund r where r.id = :id")
     Optional<PaymentRefund> findByIdForUpdate(@Param("id") Long id);

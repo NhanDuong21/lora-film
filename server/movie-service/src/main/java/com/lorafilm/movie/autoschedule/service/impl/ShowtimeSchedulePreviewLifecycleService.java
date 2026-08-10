@@ -12,6 +12,9 @@ import com.lorafilm.movie.autoschedule.domain.enums.SchedulePreviewStatus;
 import com.lorafilm.movie.autoschedule.model.NormalizedGeneratePreviewRequest;
 import com.lorafilm.movie.autoschedule.model.AutoScheduleStrategyVersions;
 import com.lorafilm.movie.autoschedule.model.ShowtimeCandidate;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleOptimizationResult;
+import com.lorafilm.movie.autoschedule.model.AutoScheduleRequestScopeSnapshot;
+import com.lorafilm.movie.autoschedule.dto.response.AutoSchedulePreflightResponse;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewItemRepository;
 import com.lorafilm.movie.autoschedule.repository.ShowtimeSchedulePreviewRepository;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -26,11 +29,14 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 public class ShowtimeSchedulePreviewLifecycleService {
 
     private static final int MAX_FAILURE_REASON_LENGTH = 500;
+    public static final String POLICY_VERSION = "AUTO_SCHEDULE_POLICY_V1";
 
     private final ShowtimeSchedulePreviewRepository previewRepository;
     private final ShowtimeSchedulePreviewItemRepository itemRepository;
@@ -81,6 +87,39 @@ public class ShowtimeSchedulePreviewLifecycleService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ShowtimeSchedulePreview createOptimizedPreview(
+            NormalizedGeneratePreviewRequest request,
+            Cinema cinema,
+            String strategyVersion,
+            String fingerprint,
+            Long adminUserId,
+            AutoSchedulePreflightResponse preflight,
+            AutoScheduleOptimizationResult optimization,
+            String demandModelVersion) {
+        ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
+                cinema, request.getScheduleFrom(), request.getScheduleTo(),
+                request.getSlotGranularityMinutes(), request.getPreviewTtlMinutes(),
+                strategyVersion, request.getIdempotencyKey(), fingerprint,
+                adminUserId, Instant.now(clock));
+        preview.setRequestScope(new AutoScheduleRequestScopeSnapshot(
+                request.getCinemaPublicId(), request.getScheduleFrom(), request.getScheduleTo(),
+                request.getSlotGranularityMinutes(), request.getMovieVersionPublicIds(),
+                request.getAuditoriumPublicIds()));
+        preview.setPolicyVersion(POLICY_VERSION);
+        preview.setDemandModelVersion(demandModelVersion);
+        preview.setSolverVersion(optimization.solverVersion());
+        preview.setSolverStatus(optimization.status().name());
+        preview.setEligibilityFingerprint(preflight.eligibilityFingerprint());
+        preview.setPricingFingerprint(preflight.pricingFingerprint());
+        preview.setConfigurationFingerprint(preflight.configurationFingerprint());
+        preview.setObjectiveValue(optimization.objectiveValue());
+        preview.setObjectiveBestBound(optimization.bestBound());
+        preview.setSolverDurationMillis(optimization.durationMillis());
+        preview.setSolverExplanation(optimization.explanation());
+        return previewRepository.saveAndFlush(preview);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markPreviewFailed(Long previewId, String failureReason) {
         previewRepository.findById(previewId).ifPresent(preview -> {
             String sanitizedReason = failureReason != null && failureReason.length() > MAX_FAILURE_REASON_LENGTH ?
@@ -119,6 +158,24 @@ public class ShowtimeSchedulePreviewLifecycleService {
         preview.setValidCandidateCount(valid);
         preview.setRejectedCandidateCount(rejected);
         preview.setSelectedCandidateCount(selected);
+
+        List<ShowtimeCandidate> selectedCandidates = candidates.stream()
+                .filter(ShowtimeCandidate::isSelected).toList();
+        BigDecimal attendance = selectedCandidates.stream()
+                .map(ShowtimeCandidate::getExpectedAttendance)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal capacity = selectedCandidates.stream()
+                .map(candidate -> BigDecimal.valueOf(candidate.getAuditoriumCapacity()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        preview.setExpectedAttendance(attendance);
+        preview.setExpectedOccupancy(capacity.signum() == 0 ? BigDecimal.ZERO
+                : attendance.divide(capacity, 6, RoundingMode.HALF_UP));
+        preview.setExpectedRevenue(selectedCandidates.stream()
+                .map(ShowtimeCandidate::getExpectedRevenue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        preview.setExpectedContribution(selectedCandidates.stream()
+                .map(ShowtimeCandidate::getExpectedContribution)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
 
         previewRepository.save(preview);
     }

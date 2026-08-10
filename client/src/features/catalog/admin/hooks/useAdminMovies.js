@@ -41,7 +41,7 @@ const unwrapTmdbQueueBreakdown = envelope => {
   if (
     envelope?.success !== true
     || !breakdown
-    || !['total', 'future', 'readyToShow', 'needsSchedule', 'undated']
+    || !['total', 'eligibleUpcoming', 'releaseDateExpired', 'undated']
       .every(key => Number.isFinite(breakdown[key]))
   ) {
     throw new Error('Phản hồi phân loại hàng đợi TMDB không đúng định dạng.');

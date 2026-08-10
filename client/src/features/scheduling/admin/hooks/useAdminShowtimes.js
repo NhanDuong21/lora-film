@@ -23,7 +23,7 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize] = useState(100);
+  const [pageSize, setPageSize] = useState(25);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const requestGenerationRef = useRef(0);
@@ -106,7 +106,7 @@ export default function useAdminShowtimes({ triggerToast, initialFilters } = {})
     batchId, setBatchId,
     source, setSource,
     currentPage, setCurrentPage,
-    pageSize,
+    pageSize, setPageSize,
     totalPages,
     totalElements,
     fetchShowtimes

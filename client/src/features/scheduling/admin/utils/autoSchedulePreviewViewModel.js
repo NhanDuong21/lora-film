@@ -115,6 +115,16 @@ export const buildCandidateViewModels = (items, { selectedItemIds, timezone }) =
       applyState,
       score: item.score ?? null,
       rank: item.rankingPosition ?? null,
+      expectedAttendance: item.expectedAttendance ?? null,
+      expectedOccupancy: item.expectedOccupancy ?? null,
+      expectedRevenue: item.expectedRevenue ?? null,
+      expectedContribution: item.expectedContribution ?? null,
+      demandConfidence: item.demandConfidence ?? null,
+      demandExplanation: item.demandExplanation || '',
+      demandModelVersion: item.demandModelVersion || null,
+      primeTime: Boolean(item.primeTime),
+      riskFlags: item.riskFlags || [],
+      pricingSnapshot: item.pricingSnapshot || null,
       conciseReason: getConciseReason(item),
       palette: getMoviePalette(movieKey),
       createdShowtimePublicId: item.applyStatus === 'CREATED'
@@ -137,6 +147,9 @@ export const buildCandidateViewModels = (items, { selectedItemIds, timezone }) =
         applyErrorCode: item.applyErrorCode || null,
         applyErrorMessage: item.applyErrorMessage || null,
         scoreBreakdown: item.scoreBreakdown || null,
+        demandModelVersion: item.demandModelVersion || null,
+        riskFlags: item.riskFlags || [],
+        pricingFingerprint: item.pricingSnapshot?.fingerprint || null,
       },
     };
   });

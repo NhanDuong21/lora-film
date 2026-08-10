@@ -14,9 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AutoScheduleStrategyVersionsTest {
 
     @Test
-    void s5IsSupportedAndCurrentAfterDistributionActivation() {
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5,
+    void demandCpSatIsCurrentAndLegacyVersionsRemainSupported() {
+        assertEquals(AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1,
                 AutoScheduleStrategyVersions.CURRENT);
+        assertTrue(AutoScheduleStrategyVersions.isSupported(
+                AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1));
         assertTrue(AutoScheduleStrategyVersions.isSupported(
                 AutoScheduleStrategyVersions.BALANCED_V1_S5));
         assertTrue(AutoScheduleStrategyVersions.isSupported(
@@ -43,7 +45,7 @@ class AutoScheduleStrategyVersionsTest {
 
         assertEquals(AutoScheduleStrategyVersions.LEGACY_BALANCED_V1_S3,
                 preview.getStrategyVersion());
-        assertEquals(AutoScheduleStrategyVersions.BALANCED_V1_S5,
+        assertEquals(AutoScheduleStrategyVersions.DEMAND_CP_SAT_V1,
                 AutoScheduleStrategyVersions.CURRENT);
     }
 }

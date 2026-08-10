@@ -65,6 +65,9 @@ const hookValue = ({
   selectedIds = new Set(items.filter(item => item.selected).map(item => item.itemPublicId)),
   isRefreshing = false,
   isUpdatingSelection = false,
+  isLoadingCandidates = false,
+  candidateLoadingProgress = { loadedPages: 0, totalPages: 0, loadedItems: 0, totalItems: 0 },
+  candidateLoadError = '',
   snapshotError = null,
   pricingPreflight = {
     complete: true,
@@ -101,6 +104,9 @@ const hookValue = ({
     loadingProgress: isRefreshing
       ? { loadedPages: 2, totalPages: 4, loadedItems: 200, totalItems: 361 }
       : { loadedPages: 1, totalPages: 1, loadedItems: items.length, totalItems: items.length },
+    isLoadingCandidates,
+    candidateLoadingProgress,
+    candidateLoadError,
     snapshotError,
     pricingPreflight,
     pricingPreflightError,
@@ -109,6 +115,7 @@ const hookValue = ({
     isApplying: false,
     isUpdatingSelection,
     handleToggleSelection: vi.fn(),
+    handleReplaceSelection: vi.fn().mockResolvedValue(true),
     handleBulkSelection: vi.fn(),
     handleApply: vi.fn(),
     checkPricingReadiness: vi.fn(),
@@ -156,6 +163,26 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
       success: true,
       data: { actionAllowed: true, affectedCount: 1 },
     });
+  });
+
+  it('keeps the selected schedule usable while advanced alternatives load in the background', () => {
+    useAutoSchedulePreview.mockReturnValue(hookValue({
+      previewOverrides: { totalCandidateCount: 13096 },
+      isLoadingCandidates: true,
+      candidateLoadingProgress: {
+        loadedPages: 7,
+        totalPages: 131,
+        loadedItems: 700,
+        totalItems: 13096,
+      },
+    }));
+
+    renderPage();
+
+    const backgroundStatus = screen.getByText('Lịch đã sẵn sàng để rà soát').closest('section');
+    expect(backgroundStatus).toHaveTextContent('7/131 trang');
+    expect(screen.getByText('(13096 phương án)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Tạo 1 suất chiếu/i })).toBeEnabled();
   });
 
   it('discards an unapplied preview and opens a prefilled recreate flow', async () => {
@@ -267,7 +294,7 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.queryByTestId('timeline-candidate-item-1')).not.toBeInTheDocument();
     expect(screen.getByText('Tạo lúc 10:00 23/07/2026')).toBeInTheDocument();
     expect(screen.getByText(/Mã lịch:/)).toHaveTextContent('PREVIEW1');
-    expect(screen.getByText('previewPublicId: preview-1')).toBeInTheDocument();
+    expect(screen.getByText('Mã đầy đủ: preview-1')).toBeInTheDocument();
   });
 
   it('uses authoritative serviceDate for after-midnight candidates and extends the axis beyond 24:00', () => {
@@ -513,6 +540,33 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     await waitFor(() => expect(timelineButton).toHaveFocus());
   });
 
+  it('guides the operator through the review flow and offers safe contextual replacement', async () => {
+    const items = [
+      candidate(1),
+      candidate(2, {
+        selected: false,
+        startTime: '2026-07-24T12:00:00Z',
+        endTime: '2026-07-24T13:00:00Z',
+        occupancyEndTime: '2026-07-24T13:15:00Z',
+      }),
+    ];
+    const value = hookValue({ items, selectedIds: new Set(['item-1']) });
+    useAutoSchedulePreview.mockReturnValue(value);
+    renderPage();
+
+    const reviewSteps = screen.getByRole('navigation', { name: 'Các bước duyệt lịch' });
+    expect(reviewSteps).toHaveTextContent('Rà soát lịch');
+    expect(reviewSteps).toHaveTextContent('Điều chỉnh');
+    expect(reviewSteps).toHaveTextContent('Kiểm tra giá');
+    expect(reviewSteps).toHaveTextContent('Tạo suất chiếu');
+
+    fireEvent.click(screen.getByTestId('timeline-candidate-item-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm phương án thay thế' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thay bằng suất này' }));
+
+    await waitFor(() => expect(value.handleReplaceSelection).toHaveBeenCalledWith('item-1', 'item-2'));
+  });
+
   it('retains Milestone B lifecycle defaults and mutation locking during snapshot refresh', () => {
     useAutoSchedulePreview.mockReturnValue(hookValue({ isRefreshing: true }));
     renderPage();
@@ -545,6 +599,8 @@ describe('AdminAutoSchedulePreviewPage Milestone C', () => {
     expect(screen.getByRole('tab', { name: /Suất chiếu đã tạo \(1\)/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: /Tạo \d+ suất chiếu/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText('Xem lại lịch đã tạo theo phòng và thời gian').closest('details')).not.toHaveAttribute('open');
+    expect(screen.queryByRole('navigation', { name: 'Các bước duyệt lịch' })).not.toBeInTheDocument();
   });
 
   it('emphasizes APPLIED metadata and links only CREATED items to operational Showtimes', () => {

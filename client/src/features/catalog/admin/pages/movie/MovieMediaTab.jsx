@@ -64,8 +64,8 @@ export default function MovieMediaTab({ movie, onUpdate }) {
       <AsyncState isLoading={isLoading} error={error} onRetry={reload}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-zinc-100">Poster, hình ảnh và trailer</h3>
-            <p className="mt-1 text-xs text-zinc-500">Đặt poster chính để phim đủ điều kiện phát hành.</p>
+            <h3 className="text-base font-bold text-zinc-100">Áp phích, hình ảnh và đoạn giới thiệu</h3>
+            <p className="mt-1 text-xs text-zinc-500">Đặt áp phích chính để phim đủ điều kiện phát hành.</p>
           </div>
           {!showAdd && (
             <button

@@ -23,6 +23,7 @@ public class PaymentDetailResponse {
     private String bookingDeliveryStatus;
     private String externalTransactionId;
     private String movieTitle;
+    private String cinemaPublicId;
     private Integer ticketCount;
     @JsonSerialize(using = MoneyJsonSerializer.class)
     private BigDecimal ticketAmount;
@@ -34,6 +35,14 @@ public class PaymentDetailResponse {
     private BigDecimal refundedAmount;
     @JsonSerialize(using = MoneyJsonSerializer.class)
     private BigDecimal refundableAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal concessionRefundableAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal receivedAmount;
+    @JsonSerialize(using = MoneyJsonSerializer.class)
+    private BigDecimal changeAmount;
+    private Long collectedByAccountId;
+    private Instant collectedAt;
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -70,6 +79,8 @@ public class PaymentDetailResponse {
     public void setExternalTransactionId(String value) { this.externalTransactionId = value; }
     public String getMovieTitle() { return movieTitle; }
     public void setMovieTitle(String value) { this.movieTitle = value; }
+    public String getCinemaPublicId() { return cinemaPublicId; }
+    public void setCinemaPublicId(String value) { this.cinemaPublicId = value; }
     public Integer getTicketCount() { return ticketCount; }
     public void setTicketCount(Integer value) { this.ticketCount = value; }
     public BigDecimal getTicketAmount() { return ticketAmount; }
@@ -82,6 +93,16 @@ public class PaymentDetailResponse {
     public void setRefundedAmount(BigDecimal value) { this.refundedAmount = value; }
     public BigDecimal getRefundableAmount() { return refundableAmount; }
     public void setRefundableAmount(BigDecimal value) { this.refundableAmount = value; }
+    public BigDecimal getConcessionRefundableAmount() { return concessionRefundableAmount; }
+    public void setConcessionRefundableAmount(BigDecimal value) { this.concessionRefundableAmount = value; }
+    public BigDecimal getReceivedAmount() { return receivedAmount; }
+    public void setReceivedAmount(BigDecimal value) { this.receivedAmount = value; }
+    public BigDecimal getChangeAmount() { return changeAmount; }
+    public void setChangeAmount(BigDecimal value) { this.changeAmount = value; }
+    public Long getCollectedByAccountId() { return collectedByAccountId; }
+    public void setCollectedByAccountId(Long value) { this.collectedByAccountId = value; }
+    public Instant getCollectedAt() { return collectedAt; }
+    public void setCollectedAt(Instant value) { this.collectedAt = value; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getCreatedAt() { return createdAt; }

@@ -1,7 +1,10 @@
 package com.lorafilm.movie.showtime.service.impl;
 
 import com.lorafilm.movie.common.dto.PageResponse;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeSource;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
@@ -18,8 +21,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,10 +30,15 @@ public class AdminShowtimeQueryServiceImpl implements AdminShowtimeQueryService 
 
     private final ShowtimeRepository showtimeRepository;
     private final AdminShowtimeMapper adminShowtimeMapper;
+    private final MovieMediaRepository movieMediaRepository;
 
-    public AdminShowtimeQueryServiceImpl(ShowtimeRepository showtimeRepository, AdminShowtimeMapper adminShowtimeMapper) {
+    public AdminShowtimeQueryServiceImpl(
+            ShowtimeRepository showtimeRepository,
+            AdminShowtimeMapper adminShowtimeMapper,
+            MovieMediaRepository movieMediaRepository) {
         this.showtimeRepository = showtimeRepository;
         this.adminShowtimeMapper = adminShowtimeMapper;
+        this.movieMediaRepository = movieMediaRepository;
     }
 
     @Override
@@ -70,8 +78,9 @@ public class AdminShowtimeQueryServiceImpl implements AdminShowtimeQueryService 
         Pageable pageable = PageRequest.of(page, size, Sort.by("startTime").descending());
         Page<Showtime> showtimePage = showtimeRepository.findAll(spec, pageable);
 
+        Map<Long, String> primaryPosters = loadPrimaryPosters(showtimePage.getContent());
         List<AdminShowtimeResponse> responses = showtimePage.getContent().stream()
-                .map(adminShowtimeMapper::toAdminResponse)
+                .map(showtime -> toResponse(showtime, primaryPosters))
                 .collect(Collectors.toList());
 
         return new PageResponse<>(
@@ -88,6 +97,31 @@ public class AdminShowtimeQueryServiceImpl implements AdminShowtimeQueryService 
     public AdminShowtimeResponse getAdminShowtimeByPublicId(String publicId) {
         Showtime showtime = showtimeRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found"));
-        return adminShowtimeMapper.toAdminResponse(showtime);
+        return toResponse(showtime, loadPrimaryPosters(List.of(showtime)));
+    }
+
+    private Map<Long, String> loadPrimaryPosters(List<Showtime> showtimes) {
+        List<Long> movieIds = showtimes.stream()
+                .filter(showtime -> showtime.getMovie() != null && showtime.getMovie().getId() != null)
+                .map(showtime -> showtime.getMovie().getId())
+                .distinct()
+                .toList();
+        if (movieIds.isEmpty()) return Map.of();
+        return movieMediaRepository
+                .findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                        movieIds, MovieMediaType.POSTER, ActiveStatus.ACTIVE)
+                .stream()
+                .collect(Collectors.toMap(
+                        media -> media.getMovie().getId(),
+                        media -> media.getUrl(),
+                        (first, ignored) -> first));
+    }
+
+    private AdminShowtimeResponse toResponse(Showtime showtime, Map<Long, String> primaryPosters) {
+        AdminShowtimeResponse response = adminShowtimeMapper.toAdminResponse(showtime);
+        if (response != null && response.getMovie() != null && showtime.getMovie() != null) {
+            response.getMovie().setPosterUrl(primaryPosters.get(showtime.getMovie().getId()));
+        }
+        return response;
     }
 }

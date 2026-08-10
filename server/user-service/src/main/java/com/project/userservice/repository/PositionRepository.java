@@ -14,4 +14,6 @@ public interface PositionRepository extends JpaRepository<Position, Long> {
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
     Page<Position> findByIsDeletedFalseAndTitleContainingIgnoreCase(String keyword, Pageable pageable);
     List<Position> findByIsDeletedFalseOrderByTitleAsc();
+    boolean existsByDepartmentIdAndIsDeletedFalse(Long departmentId);
+    long countByDepartmentIdAndIsDeletedFalse(Long departmentId);
 }

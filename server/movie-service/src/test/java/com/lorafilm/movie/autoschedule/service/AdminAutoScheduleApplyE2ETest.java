@@ -18,10 +18,17 @@ import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.movie.domain.entity.Movie;
+import com.lorafilm.movie.movie.domain.entity.Genre;
+import com.lorafilm.movie.movie.domain.entity.MovieGenre;
+import com.lorafilm.movie.movie.domain.entity.MovieMedia;
 import com.lorafilm.movie.movie.domain.entity.MovieVersion;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.common.enums.ActiveStatus;
 import com.lorafilm.movie.movie.repository.MovieRepository;
+import com.lorafilm.movie.movie.repository.GenreRepository;
+import com.lorafilm.movie.movie.repository.MovieGenreRepository;
+import com.lorafilm.movie.movie.repository.MovieMediaRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
 import com.lorafilm.movie.pricing.domain.entity.PricePolicy;
 import com.lorafilm.movie.pricing.domain.entity.PricePolicyRule;
@@ -119,6 +126,12 @@ public class AdminAutoScheduleApplyE2ETest {
     @Autowired
     private MovieVersionRepository movieVersionRepository;
     @Autowired
+    private GenreRepository genreRepository;
+    @Autowired
+    private MovieGenreRepository movieGenreRepository;
+    @Autowired
+    private MovieMediaRepository movieMediaRepository;
+    @Autowired
     private SeatTypeRepository seatTypeRepository;
     @Autowired
     private SeatRepository seatRepository;
@@ -150,7 +163,10 @@ public class AdminAutoScheduleApplyE2ETest {
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();
+        movieGenreRepository.deleteAllInBatch();
+        movieMediaRepository.deleteAllInBatch();
         movieRepository.deleteAllInBatch();
+        genreRepository.deleteAllInBatch();
 
         Cinema cinema = new Cinema();
         cinema.setPublicId("CINEMA_" + UUID.randomUUID().toString().substring(0, 8));
@@ -229,6 +245,27 @@ public class AdminAutoScheduleApplyE2ETest {
         movie.setEndDate(LocalDate.now().plusDays(60));
         movie = movieRepository.saveAndFlush(movie);
 
+        Genre genre = new Genre();
+        genre.setPublicId(UUID.randomUUID().toString());
+        genre.setName("Drama");
+        genre.setSlug("drama-" + UUID.randomUUID());
+        genre.setStatus(ActiveStatus.ACTIVE);
+        genre = genreRepository.saveAndFlush(genre);
+        MovieGenre movieGenre = new MovieGenre();
+        movieGenre.setMovie(movie);
+        movieGenre.setGenre(genre);
+        movieGenreRepository.saveAndFlush(movieGenre);
+
+        MovieMedia poster = new MovieMedia();
+        poster.setPublicId(UUID.randomUUID().toString());
+        poster.setMovie(movie);
+        poster.setMediaType(MovieMediaType.POSTER);
+        poster.setUrl("https://example.test/poster.jpg");
+        poster.setDisplayOrder(0);
+        poster.setIsPrimary(true);
+        poster.setStatus(ActiveStatus.ACTIVE);
+        movieMediaRepository.saveAndFlush(poster);
+
         MovieVersion version = new MovieVersion();
         version.setPublicId("VER_" + UUID.randomUUID().toString().substring(0, 8));
         version.setVersionName("2D SUB");
@@ -238,12 +275,14 @@ public class AdminAutoScheduleApplyE2ETest {
         version.setStatus(ActiveStatus.ACTIVE);
         version = movieVersionRepository.saveAndFlush(version);
 
+        LocalDate planningDate = LocalDate.now(java.time.ZoneId.of(cinema.getTimezone())).plusDays(1);
         ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
-                cinema, LocalDate.now(), LocalDate.now(), 15, 60, "hash123", "fingerprint", 1L, Instant.now()
+                cinema, planningDate, planningDate, 15, 60, "hash123", "fingerprint", 1L, Instant.now()
         );
         org.springframework.test.util.ReflectionTestUtils.setField(preview, "publicId", "PREVIEW_" + UUID.randomUUID().toString().substring(0, 8));
         preview = previewRepository.saveAndFlush(preview);
         preview.markPreviewed();
+        preview.setSolverStatus("FEASIBLE");
         preview.setSelectedCandidateCount(1);
         preview = previewRepository.saveAndFlush(preview);
 
@@ -262,7 +301,7 @@ public class AdminAutoScheduleApplyE2ETest {
         c1.setEndTime(baseTime.plus(120, ChronoUnit.MINUTES));
         c1.setOccupancyEndTime(baseTime.plus(135, ChronoUnit.MINUTES));
         c1.setOperatingWindow(new com.lorafilm.movie.autoschedule.model.OperatingWindow(
-                LocalDate.now(java.time.ZoneId.of(cinema.getTimezone())),
+                planningDate,
                 baseTime.minus(30, ChronoUnit.MINUTES),
                 baseTime.plus(4, ChronoUnit.HOURS)));
         c1.setScore(BigDecimal.TEN);
@@ -271,6 +310,7 @@ public class AdminAutoScheduleApplyE2ETest {
         c1.setValidationStatus(PreviewItemValidationStatus.VALID);
         c1.setSelected(true);
         ShowtimeSchedulePreviewItem item1 = ShowtimeSchedulePreviewItem.createItem(preview, c1);
+        item1.setServiceDate(planningDate);
         org.springframework.test.util.ReflectionTestUtils.setField(item1, "publicId", "ITEM_1_" + UUID.randomUUID().toString().substring(0, 8));
         itemRepository.saveAndFlush(item1);
 
@@ -292,7 +332,10 @@ public class AdminAutoScheduleApplyE2ETest {
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();
+        movieGenreRepository.deleteAllInBatch();
+        movieMediaRepository.deleteAllInBatch();
         movieRepository.deleteAllInBatch();
+        genreRepository.deleteAllInBatch();
     }
 
     @Test

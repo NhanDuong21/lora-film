@@ -1,10 +1,15 @@
 package com.project.userservice.controller;
 
 import com.project.userservice.dto.request.EmployeeRequest;
+import com.project.userservice.dto.request.CinemaAssignmentRequest;
+import com.project.userservice.dto.request.EmploymentActionRequest;
 import com.project.userservice.dto.response.ApiResponse;
 import com.project.userservice.dto.response.EmployeeResponse;
+import com.project.userservice.dto.response.EligibleEmployeeAccountResponse;
+import com.project.userservice.dto.response.EmploymentActionResponse;
 import com.project.userservice.enumtype.EmployeeStatus;
 import com.project.userservice.service.EmployeeService;
+import com.project.userservice.security.CurrentActor;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +27,13 @@ public class EmployeeController {
         this.service = service;
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> getMyWorkContext() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Employee work context retrieved",
+                service.get(CurrentActor.accountId())));
+    }
+
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAnyAuthority('EMPLOYEE_VIEW', 'PAYROLL_VIEW', 'PAYROLL_CREATE', 'PAYROLL_UPDATE')")
     public ResponseEntity<ApiResponse<Page<EmployeeResponse>>> search(
@@ -29,9 +41,11 @@ public class EmployeeController {
             @RequestParam(required = false) EmployeeStatus status,
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Long positionId,
+            @RequestParam(required = false) String cinemaPublicId,
+            @RequestParam(defaultValue = "false") boolean excludeCurrentAccount,
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success("Employees retrieved",
-                service.search(keyword, status, departmentId, positionId, pageable)));
+                service.search(keyword, status, departmentId, positionId, cinemaPublicId, excludeCurrentAccount, pageable)));
     }
 
     @GetMapping("/{accountId}")
@@ -40,46 +54,46 @@ public class EmployeeController {
         return ResponseEntity.ok(ApiResponse.success("Employee retrieved", service.get(accountId)));
     }
 
+    @GetMapping("/eligible-accounts")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')")
+    public ResponseEntity<ApiResponse<Page<EligibleEmployeeAccountResponse>>> eligibleAccounts(
+            @RequestParam(required = false) String keyword,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Eligible employee accounts retrieved", service.eligibleAccounts(keyword, pageable)));
+    }
+
+    @GetMapping("/{accountId}/actions")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_VIEW')")
+    public ResponseEntity<ApiResponse<Page<EmploymentActionResponse>>> actionHistory(
+            @PathVariable Long accountId,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Employment action history retrieved", service.actionHistory(accountId, pageable)));
+    }
+
+    @PostMapping("/{accountId}/actions")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_UPDATE')")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> applyAction(
+            @PathVariable Long accountId,
+            @jakarta.validation.Valid @RequestBody EmploymentActionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Employment action applied", service.applyAction(accountId, request)));
+    }
+
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_CREATE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')")
     public ResponseEntity<ApiResponse<EmployeeResponse>> create(@Valid @RequestBody EmployeeRequest request) {
         return ResponseEntity.status(201).body(ApiResponse.success("Employee created", service.create(request)));
     }
 
-    @PutMapping("/{accountId}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_UPDATE')")
-    public ResponseEntity<ApiResponse<EmployeeResponse>> update(@PathVariable Long accountId,
-                                                                 @Valid @RequestBody EmployeeRequest request) {
-        return ResponseEntity.ok(ApiResponse.success("Employee updated", service.update(accountId, request)));
+    @PutMapping("/{accountId}/cinema-assignment")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> assignCinema(
+            @PathVariable Long accountId,
+            @Valid @RequestBody CinemaAssignmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật rạp làm việc",
+                service.assignCinema(accountId, request.cinemaPublicId())));
     }
 
-    @PutMapping("/{accountId}/suspend")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_UPDATE')")
-    public ResponseEntity<ApiResponse<EmployeeResponse>> suspend(@PathVariable Long accountId) {
-        return ResponseEntity.ok(ApiResponse.success("Employee suspended",
-                service.changeStatus(accountId, EmployeeStatus.SUSPENDED)));
-    }
-
-    @PutMapping("/{accountId}/activate")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_UPDATE')")
-    public ResponseEntity<ApiResponse<EmployeeResponse>> activate(@PathVariable Long accountId) {
-        return ResponseEntity.ok(ApiResponse.success("Employee activated",
-                service.changeStatus(accountId, EmployeeStatus.ACTIVE)));
-    }
-
-    @PutMapping("/{accountId}/resign")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_UPDATE')")
-    public ResponseEntity<ApiResponse<EmployeeResponse>> resign(@PathVariable Long accountId) {
-        return ResponseEntity.ok(ApiResponse.success("Employee resigned",
-                service.changeStatus(accountId, EmployeeStatus.RESIGNED)));
-    }
-
-    @PutMapping("/{accountId}/transfer")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER') or hasAuthority('EMPLOYEE_ASSIGN_POSITION')")
-    public ResponseEntity<ApiResponse<EmployeeResponse>> transfer(@PathVariable Long accountId,
-            @RequestParam(required = false) Long departmentId,
-            @RequestParam(required = false) Long positionId) {
-        return ResponseEntity.ok(ApiResponse.success("Employee transferred",
-                service.transfer(accountId, departmentId, positionId)));
-    }
 }

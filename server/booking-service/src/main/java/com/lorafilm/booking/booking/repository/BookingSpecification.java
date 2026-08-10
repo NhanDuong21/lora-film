@@ -26,6 +26,12 @@ public class BookingSpecification {
         return (root, query, cb) -> status == null ? null : cb.equal(root.get("bookingStatus"), status);
     }
 
+    public static Specification<Booking> hasCinemaPublicId(String cinemaPublicId) {
+        return (root, query, cb) -> cinemaPublicId == null || cinemaPublicId.isBlank()
+                ? null
+                : cb.equal(root.get("cinemaPublicId"), cinemaPublicId.trim().toLowerCase(java.util.Locale.ROOT));
+    }
+
     public static Specification<Booking> filterBy(BookingFilterRequest filter) {
         return (root, query, cb) -> {
             if (filter == null) {
@@ -34,6 +40,12 @@ public class BookingSpecification {
 
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("isDeleted")));
+
+            if (filter.getCinemaPublicId() != null && !filter.getCinemaPublicId().isBlank()) {
+                predicates.add(cb.equal(
+                        root.get("cinemaPublicId"),
+                        filter.getCinemaPublicId().trim().toLowerCase(java.util.Locale.ROOT)));
+            }
 
             if (filter.getBookingCode() != null && !filter.getBookingCode().trim().isEmpty()) {
                 predicates.add(cb.like(cb.lower(root.get("bookingCode")), "%" + filter.getBookingCode().trim().toLowerCase() + "%"));

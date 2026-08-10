@@ -49,14 +49,14 @@ export const hasAdminAreaAccess = (role, permissions = []) =>
 const ADMIN_LANDING_ROUTES = [
   ['DASHBOARD_VIEW', '/admin'],
   ['CUSTOMER_VIEW', '/admin/members'],
-  ['EMPLOYEE_VIEW', '/admin/staff'],
+  ['EMPLOYEE_VIEW', '/admin/hr'],
   ['DEPARTMENT_VIEW', '/admin/departments'],
   ['POSITION_VIEW', '/admin/positions'],
   ['PAYROLL_VIEW', '/admin/payroll'],
-  ['ROLE_VIEW', '/admin/roles'],
-  ['PERMISSION_VIEW', '/admin/permissions'],
+  ['ROLE_VIEW', '/admin/accounts?tab=access'],
+  ['PERMISSION_VIEW', '/admin/accounts?tab=access'],
   ['SYSTEM_CONFIGURATION', '/admin/accounts'],
-  ['USER_AUDIT_VIEW', '/admin/user-audits'],
+  ['USER_AUDIT_VIEW', '/admin/audits?tab=operations'],
   ['PERM_VIEW_FINANCE', '/admin/analytics']
 ];
 

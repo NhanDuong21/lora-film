@@ -24,6 +24,7 @@ import com.lorafilm.movie.common.security.CurrentUserProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +50,7 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
     private final CurrentUserProvider currentUserProvider;
     private final ShowtimeSchedulePreviewExpiryService expiryService;
     private final Clock clock;
+    private AutoScheduleMetrics metrics = AutoScheduleMetrics.noop();
 
     public ShowtimeSchedulePreviewServiceImpl(
             ShowtimeSchedulePreviewRepository previewRepository,
@@ -63,6 +65,11 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
         this.currentUserProvider = currentUserProvider;
         this.expiryService = expiryService;
         this.clock = clock;
+    }
+
+    @Autowired
+    void setMetrics(AutoScheduleMetrics metrics) {
+        this.metrics = metrics;
     }
 
     @Override
@@ -219,6 +226,7 @@ public class ShowtimeSchedulePreviewServiceImpl implements ShowtimeSchedulePrevi
 
         updateSelectionRows(preview.getId(), changedToSelected, false, true, now, currentUserId);
         updateSelectionRows(preview.getId(), changedToDeselected, true, false, now, currentUserId);
+        metrics.recordAdminModification(changedItemCount);
 
         ShowtimeSchedulePreview updatedPreview = previewRepository.findByPublicIdWithCinema(previewPublicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTO_SCHEDULE_PREVIEW_DATA_INCONSISTENT));

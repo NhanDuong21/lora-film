@@ -32,6 +32,6 @@ class EventValidationServiceTest {
                 9L, "movie-9", "Movie", "showtime-1", "cinema-1", "Cinema",
                 "room-1", 2, 100, new BigDecimal(ticket), new BigDecimal(food),
                 new BigDecimal(discount), new BigDecimal(total),
-                "user-1", "promo-1", "Promo", "GOLD", "VNPAY");
+                "user-1", "promo-1", "Promo", "GOLD", "VNPAY", null, null);
     }
 }

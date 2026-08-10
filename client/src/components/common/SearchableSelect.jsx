@@ -84,7 +84,7 @@ export default function SearchableSelect({
         bottom: shouldFlip ? `${window.innerHeight - rect.top + 6}px` : 'auto',
         left: `${rect.left}px`,
         width: `${rect.width}px`,
-        zIndex: 50,
+        zIndex: 80,
       });
     };
 

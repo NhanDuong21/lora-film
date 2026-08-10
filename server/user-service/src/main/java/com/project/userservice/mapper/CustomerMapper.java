@@ -5,6 +5,7 @@ import com.project.userservice.entity.CustomerProfile;
 import com.project.userservice.entity.User;
 import com.project.userservice.exception.BusinessException;
 import org.springframework.stereotype.Component;
+import com.project.userservice.security.PiiAccess;
 
 @Component
 public class CustomerMapper {
@@ -14,7 +15,7 @@ public class CustomerMapper {
             throw new BusinessException("User not found", "USER_001");
         }
         return new CustomerResponse(profile.getId(), user.getAccountId(), profile.getCustomerCode(),
-                user.getFullName(), user.getEmail(), user.getPhoneNumber(), user.getGender(),
+                user.getFullName(), user.getEmail(), PiiAccess.maskPhone(user.getPhoneNumber()), user.getGender(),
                 user.getBirthday(), user.getAvatarUrl(), user.getStatus(), profile.getJoinedAt(),
                 profile.getNote());
     }

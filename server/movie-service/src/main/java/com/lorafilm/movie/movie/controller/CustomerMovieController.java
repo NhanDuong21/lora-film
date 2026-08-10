@@ -49,7 +49,7 @@ public class CustomerMovieController {
             case "title" -> "title";
             default -> throw new com.lorafilm.movie.common.exception.BusinessException(
                     com.lorafilm.movie.common.exception.ErrorCode.VALIDATION_ERROR,
-                    "Customer movie sort must be createdAt, releaseDate or title");
+                    "Chỉ có thể sắp xếp phim theo ngày tạo, ngày khai thác hoặc tên phim.");
         };
         org.springframework.data.domain.Sort.Direction direction =
                 sortParts.length > 1 && "asc".equalsIgnoreCase(sortParts[1])

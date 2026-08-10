@@ -442,7 +442,7 @@ export default function BookingDetailPage() {
                       </div>
                       {ticketsUsable ? (
                         <TicketQrCode
-                          ticketCode={ticket.ticketCode}
+                          ticketCode={ticket.qrCode || ticket.ticketCode}
                           className="h-20 w-20 rounded-lg bg-white p-1"
                         />
                       ) : (

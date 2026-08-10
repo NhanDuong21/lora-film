@@ -39,8 +39,9 @@ CREATE TABLE movies (
     synopsis TEXT,
     duration_minutes INT NOT NULL,
     age_rating VARCHAR(20) NOT NULL COMMENT 'P, K, T13, T16, T18',
-    release_date DATE NOT NULL,
-    end_date DATE NULL COMMENT 'Null nghĩa là chưa xác định ngày ngừng chiếu',
+    original_release_date DATE NULL COMMENT 'Ngày phát hành gốc từ TMDB hoặc nhà phát hành',
+    release_date DATE NULL COMMENT 'Ngày bắt đầu đợt khai thác hiện tại tại rạp',
+    end_date DATE NULL COMMENT 'Ngày kết thúc đợt khai thác hiện tại tại rạp',
     country VARCHAR(100),
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, UPCOMING, NOW_SHOWING, ENDED, INACTIVE',
     version BIGINT NOT NULL DEFAULT 0,
@@ -52,7 +53,8 @@ CREATE TABLE movies (
     deleted_by BIGINT NULL,
     CONSTRAINT chk_movies_duration CHECK (duration_minutes > 0),
     CONSTRAINT chk_movies_dates CHECK (
-        end_date IS NULL
+        release_date IS NULL
+        OR end_date IS NULL
         OR end_date >= release_date
     ),
     UNIQUE KEY uk_movies_active_slug (active_slug),
@@ -71,6 +73,25 @@ CREATE TABLE movie_status_history (
     changed_by BIGINT NULL,
     CONSTRAINT fk_movie_status_history_movie FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
     INDEX idx_movie_status_history_order (movie_id, changed_at, id)
+);
+
+CREATE TABLE movie_exhibition_periods (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    public_id CHAR(36) NOT NULL UNIQUE,
+    movie_id BIGINT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NULL,
+    note VARCHAR(500) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by BIGINT NULL,
+    updated_by BIGINT NULL,
+    deleted_at TIMESTAMP NULL,
+    deleted_by BIGINT NULL,
+    CONSTRAINT fk_movie_exhibition_period_movie FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE,
+    CONSTRAINT chk_movie_exhibition_period_dates CHECK (end_date IS NULL OR end_date >= start_date),
+    INDEX idx_movie_exhibition_period_order (movie_id, start_date, id),
+    INDEX idx_movie_exhibition_period_deleted_at (deleted_at)
 );
 
 CREATE TABLE movie_translations (
@@ -127,6 +148,14 @@ CREATE TABLE tmdb_sync_state (
     `cursor` VARCHAR(255) COMMENT 'Con trỏ đánh dấu vị trí dữ liệu đã đồng bộ',
     status VARCHAR(50) NOT NULL COMMENT 'Trạng thái đồng bộ (IDLE, IN_PROGRESS, COMPLETED, FAILED)',
     last_sync_time DATETIME COMMENT 'Mốc thời gian hoàn thành lần đồng bộ thành công gần nhất',
+    sync_scope VARCHAR(30) NULL COMMENT 'Phạm vi phim được chọn để nhập',
+    release_date_from DATE NULL,
+    release_date_to DATE NULL,
+    max_movies INT NULL,
+    processed_movies INT NOT NULL DEFAULT 0,
+    imported_movies INT NOT NULL DEFAULT 0,
+    skipped_movies INT NOT NULL DEFAULT 0,
+    status_message VARCHAR(500) NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) COMMENT 'Quản lý trạng thái đồng bộ dữ liệu từ TMDB';
@@ -295,6 +324,7 @@ CREATE TABLE cinemas (
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT, ACTIVE, MAINTENANCE, TEMPORARILY_CLOSED, INACTIVE, PERMANENTLY_CLOSED',
     opened_date DATE NULL,
     closed_date DATE NULL,
+    auto_schedule_engine VARCHAR(20) NOT NULL DEFAULT 'CP_SAT' COMMENT 'CP_SAT or LEGACY; CP_SAT is the default for new previews',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
@@ -414,7 +444,13 @@ CREATE TABLE auditorium_maintenance_windows (
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP NOT NULL,
     reason VARCHAR(255) COMMENT 'Bảo trì riêng cho 1 phòng',
-    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, CANCELLED',
+    maintenance_type VARCHAR(30) NOT NULL DEFAULT 'PLANNED' COMMENT 'PLANNED, EMERGENCY',
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, RESOLVED, CANCELLED',
+    actual_end_time TIMESTAMP NULL COMMENT 'Thời điểm thực tế phòng hoạt động trở lại',
+    resolved_by BIGINT NULL,
+    resolution_note VARCHAR(500) NULL,
+    extension_note VARCHAR(500) NULL,
+    emergency_summary_json TEXT NULL COMMENT 'Kết quả đồng bộ giữ ghế, thanh toán và danh sách khách cần bàn giao',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_by BIGINT NULL,
@@ -724,6 +760,23 @@ CREATE TABLE showtime_schedule_previews (
     request_fingerprint CHAR(64) NOT NULL
         COMMENT 'SHA-256 của normalized generate request',
 
+    request_scope_json JSON NULL,
+    policy_version VARCHAR(50) NULL,
+    demand_model_version VARCHAR(64) NULL,
+    solver_version VARCHAR(64) NULL,
+    solver_status VARCHAR(30) NULL,
+    eligibility_fingerprint CHAR(64) NULL,
+    pricing_fingerprint CHAR(64) NULL,
+    configuration_fingerprint CHAR(64) NULL,
+    objective_value DECIMAL(19, 3) NULL,
+    objective_best_bound DECIMAL(19, 3) NULL,
+    solver_duration_millis BIGINT NULL,
+    solver_explanation VARCHAR(500) NULL,
+    expected_attendance DECIMAL(19, 2) NULL,
+    expected_occupancy DECIMAL(12, 6) NULL,
+    expected_revenue DECIMAL(19, 2) NULL,
+    expected_contribution DECIMAL(19, 2) NULL,
+
     failure_reason VARCHAR(500) NULL,
 
     version BIGINT NOT NULL DEFAULT 0
@@ -833,6 +886,17 @@ CREATE TABLE showtime_schedule_preview_items (
 
     score_breakdown_json JSON NULL
         COMMENT 'Chi tiết các thành phần score để audit và explainability',
+
+    pricing_snapshot_json JSON NULL,
+    expected_attendance DECIMAL(12, 2) NULL,
+    expected_occupancy DECIMAL(12, 6) NULL,
+    expected_revenue DECIMAL(19, 2) NULL,
+    expected_contribution DECIMAL(19, 2) NULL,
+    demand_confidence DECIMAL(12, 6) NULL,
+    demand_explanation VARCHAR(500) NULL,
+    demand_model_version VARCHAR(64) NULL,
+    prime_time BOOLEAN NOT NULL DEFAULT FALSE,
+    risk_flags_json JSON NULL,
 
     ranking_position INT NOT NULL DEFAULT 0,
 

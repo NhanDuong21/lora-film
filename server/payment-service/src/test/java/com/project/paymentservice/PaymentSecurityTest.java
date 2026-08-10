@@ -23,6 +23,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -55,6 +57,10 @@ public class PaymentSecurityTest {
     }
 
     private String generateJwt(Long userId, String email, String role) {
+        return generateJwt(userId, email, role, List.of());
+    }
+
+    private String generateJwt(Long userId, String email, String role, Collection<String> permissions) {
         byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
         SecretKey key = Keys.hmacShaKeyFor(keyBytes);
         
@@ -71,6 +77,9 @@ public class PaymentSecurityTest {
         }
         if (role != null) {
             builder.claim("role", role);
+        }
+        if (permissions != null && !permissions.isEmpty()) {
+            builder.claim("permissions", permissions);
         }
                 
         return builder.compact();
@@ -175,18 +184,30 @@ public class PaymentSecurityTest {
     }
 
     @Test
-    void staffAndLegacyEmployeeRolesCanReachCashEndpoints() throws Exception {
+    void employeeNeedsCashCollectionPermissionToReachCashEndpoints() throws Exception {
         String paymentPublicId = "11111111-1111-4111-8111-111111111111";
 
         mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
                 .header("Authorization", "Bearer "
-                        + generateJwt(20L, "staff@test.com", "STAFF")))
-                .andExpect(status().isNotFound());
+                        + generateJwt(20L, "employee@test.com", "EMPLOYEE")))
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
                 .header("Authorization", "Bearer "
-                        + generateJwt(21L, "employee@test.com", "EMPLOYEE")))
+                        + generateJwt(21L, "cashier@test.com", "EMPLOYEE",
+                                List.of("PAYMENT_CASH_COLLECT"))))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void retiredStaffRoleCannotUseCashEndpointsEvenWithThePermissionClaim() throws Exception {
+        String paymentPublicId = "11111111-1111-4111-8111-111111111111";
+
+        mockMvc.perform(get("/api/employee/payments/" + paymentPublicId)
+                .header("Authorization", "Bearer "
+                        + generateJwt(20L, "legacy.staff@test.com", "STAFF",
+                                List.of("PAYMENT_CASH_COLLECT"))))
+                .andExpect(status().isForbidden());
     }
 
     @Test

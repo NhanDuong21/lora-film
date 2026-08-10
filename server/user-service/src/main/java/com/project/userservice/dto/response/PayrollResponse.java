@@ -1,6 +1,8 @@
 package com.project.userservice.dto.response;
 
 import com.project.userservice.enumtype.PayrollStatus;
+import com.project.userservice.enumtype.PayrollSourceType;
+import com.project.userservice.enumtype.ReconciliationStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,9 +21,32 @@ public record PayrollResponse(
         BigDecimal deduction,
         BigDecimal totalSalary,
         PayrollStatus status,
+        Long createdBy,
         Long approvedBy,
         LocalDateTime approvedAt,
+        Long paidBy,
         LocalDateTime paidAt,
+        String paymentReference,
+        String bankBatchReference,
+        String accountingReference,
+        ReconciliationStatus reconciliationStatus,
+        Long reconciledBy,
+        LocalDateTime reconciledAt,
+        String reconciliationNote,
+        PayrollSourceType sourceType,
+        String sourceChecksum,
+        Integer scheduledMinutes,
+        Integer workedMinutes,
+        Integer paidLeaveMinutes,
+        Integer overtimeMinutes,
+        Long cancelledBy,
+        String cancellationReason,
+        String createdByName,
+        String approvedByName,
+        String paidByName,
+        String reconciledByName,
+        String cancelledByName,
+        Integer version,
         List<PayrollDetailResponse> details
 ) {
 }

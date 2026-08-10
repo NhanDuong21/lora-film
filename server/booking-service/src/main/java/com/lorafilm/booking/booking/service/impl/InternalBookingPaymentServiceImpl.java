@@ -946,7 +946,11 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                         .add(defaultAmount(booking.getVoucherDiscount()))
                         .add(defaultAmount(booking.getScoreDiscount())),
                 booking.getFinalAmount(),
-                normalizeCurrency(booking.getCurrency()));
+                normalizeCurrency(booking.getCurrency()),
+                priceSnapshot.showtimeStartsAt(),
+                priceSnapshot.auditoriumPublicId(),
+                priceSnapshot.auditoriumCapacity(),
+                priceSnapshot.format());
     }
 
     private boolean hasLiveHeldReservations(Long bookingId, Instant now) {

@@ -15,7 +15,7 @@ import MovieStatusTransitionDialog from './MovieStatusTransitionDialog';
 const CHECKLIST = [
   { key: 'hasGenre', label: 'Chọn ít nhất một thể loại', tab: 'genres' },
   { key: 'hasActiveVersion', label: 'Có bản chiếu đang hoạt động', tab: 'versions' },
-  { key: 'hasPrimaryPoster', label: 'Có poster chính đang hoạt động', tab: 'media' },
+  { key: 'hasPrimaryPoster', label: 'Có áp phích chính đang hoạt động', tab: 'media' },
 ];
 
 export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate, onNavigateToTab }) {
@@ -42,14 +42,11 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
 
   const currentStatus = movie.status || 'UNKNOWN';
   const releaseDate = movie.releaseDate ? new Date(`${movie.releaseDate}T00:00:00`) : null;
-  const inferredApprovalTarget = tmdbReview?.approvalTarget
-    || (releaseDate && releaseDate <= new Date() ? 'NOW_SHOWING' : 'UPCOMING');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const hasFutureReleaseDate = Boolean(releaseDate && releaseDate > today);
   const configuredTransitions = MOVIE_TRANSITIONS[currentStatus] || [];
-  const allowedTransitions = currentStatus === 'DRAFT'
-    ? configuredTransitions.filter(transition => (
-        !transition.requiresPublishChecklist || transition.target === inferredApprovalTarget
-      ))
-    : configuredTransitions;
+  const allowedTransitions = configuredTransitions;
   const readiness = getMovieReadinessView(movie);
   const checklist = getPublishChecklist(readiness);
   const isDraft = currentStatus === 'DRAFT';
@@ -106,9 +103,9 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
               </h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
                 {isDraft
-                  ? inferredApprovalTarget === 'NOW_SHOWING'
-                    ? 'Phim đã tới ngày phát hành. Hãy hoàn thiện dữ liệu và lập ít nhất một suất chiếu hợp lệ trước khi duyệt sang Đang chiếu.'
-                    : 'Phim chưa tới ngày phát hành. Khi đủ dữ liệu bắt buộc, phim sẽ được duyệt sang Sắp chiếu.'
+                  ? hasFutureReleaseDate
+                    ? 'Khi đủ dữ liệu bắt buộc, phim sẽ được duyệt sang Sắp chiếu. Đến ngày khai thác, hệ thống tự chuyển sang Đang chiếu nếu có suất chiếu đã công bố.'
+                    : 'Ngày bắt đầu khai thác phải sau hôm nay mới có thể duyệt sang Sắp chiếu. Hãy lập một đợt khai thác mới nếu muốn chiếu lại phim.'
                   : 'Các thao tác bên dưới thay đổi việc phim có được hiển thị và nhận lịch chiếu hay không.'}
               </p>
             </div>
@@ -195,7 +192,17 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
                 if (transition.requiresPublishChecklist) {
                   if (currentStatus === 'DRAFT' && !movie.releaseDate) {
                     isDisabled = true;
-                    disableReason = 'Cần bổ sung ngày khởi chiếu tại hệ thống trước khi duyệt.';
+                    disableReason = 'Cần bổ sung ngày bắt đầu khai thác tại rạp trước khi duyệt.';
+                  } else if (currentStatus === 'DRAFT' && !hasFutureReleaseDate) {
+                    isDisabled = true;
+                    disableReason = 'Ngày bắt đầu khai thác phải sau hôm nay. Hãy lập một đợt khai thác mới.';
+                  } else if (
+                    currentStatus === 'ENDED'
+                    && transition.target === 'UPCOMING'
+                    && !hasFutureReleaseDate
+                  ) {
+                    isDisabled = true;
+                    disableReason = 'Hãy lập một đợt khai thác mới có ngày bắt đầu sau hôm nay.';
                   } else if (readiness.healthStatus === 'BLOCKED') {
                     isDisabled = true;
                     disableReason = 'Còn mục bắt buộc chưa hoàn thiện.';
@@ -206,13 +213,6 @@ export default function MovieLifecycleReviewPanel({ movie, tmdbReview, onUpdate,
                   if (movie.source === 'TMDB' && currentStatus === 'DRAFT' && tmdbReview?.canApprove === false) {
                     isDisabled = true;
                     disableReason = tmdbReview.approvalBlockers?.[0] || 'Phim nhập tự động chưa đủ điều kiện duyệt.';
-                  }
-                  if (currentStatus === 'DRAFT'
-                    && transition.target === 'NOW_SHOWING'
-                    && !tmdbReview
-                    && !(movie.showtimeCount > 0)) {
-                    isDisabled = true;
-                    disableReason = 'Cần lập ít nhất một suất chiếu hiện tại hoặc tương lai trước khi duyệt.';
                   }
                 }
 

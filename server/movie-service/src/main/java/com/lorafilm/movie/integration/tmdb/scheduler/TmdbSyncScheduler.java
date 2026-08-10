@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @EnableScheduling
-@ConditionalOnProperty(name = "tmdb.sync-enabled", havingValue = "true")
+@ConditionalOnProperty(name = "tmdb.scheduler.enabled", havingValue = "true")
 public class TmdbSyncScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(TmdbSyncScheduler.class);

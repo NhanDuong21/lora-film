@@ -4,6 +4,7 @@ public enum PayrollStatus {
     DRAFT,
     PENDING_APPROVAL,
     APPROVED,
+    PAYMENT_PENDING,
     PAID,
     CANCELLED
 }

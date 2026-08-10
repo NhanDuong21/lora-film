@@ -7,11 +7,17 @@ import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import java.time.Clock;
 
 @Configuration
 public class ApplicationConfig {
 
     private static final String BEARER_AUTH = "bearerAuth";
+
+    @Bean
+    public Clock clock() {
+        return Clock.systemUTC();
+    }
 
     @Bean
     public OpenAPI analyticsServiceOpenAPI() {

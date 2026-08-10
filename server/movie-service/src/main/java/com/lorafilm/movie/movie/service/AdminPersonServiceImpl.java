@@ -36,7 +36,7 @@ public class AdminPersonServiceImpl implements AdminPersonService {
     @Transactional
     public PersonDto updatePerson(String publicId, PersonRequest request) {
         Person person = personRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhân sự."));
         
         mapRequestToEntity(request, person);
         
@@ -48,7 +48,7 @@ public class AdminPersonServiceImpl implements AdminPersonService {
     @Transactional
     public void deletePerson(String publicId) {
         Person person = personRepository.findByPublicIdAndDeletedAtIsNull(publicId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Person not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhân sự."));
         
         person.performSoftDelete(getCurrentUserId());
         personRepository.save(person);

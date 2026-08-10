@@ -2,6 +2,7 @@ package com.lorafilm.movie.autoschedule.service.impl;
 
 import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreviewItem;
+import com.lorafilm.movie.autoschedule.domain.entity.ShowtimeSchedulePreview;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
 import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
@@ -35,7 +36,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
                 .when(validationService).validateScheduling(org.mockito.ArgumentMatchers.any());
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateAll(null, List.of(item), Instant.now()));
+                () -> service.validateAll(previewFor(item), List.of(item), Instant.now()));
 
         assertEquals(ErrorCode.SHOWTIME_OVERLAPS_CINEMA_CLOSURE, ex.getErrorCode());
         verify(validationService).validateScheduling(org.mockito.ArgumentMatchers.any());
@@ -50,7 +51,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
         item.getMovie().setDurationMinutes(91);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateAll(null, List.of(item), Instant.now()));
+                () -> service.validateAll(previewFor(item), List.of(item), Instant.now()));
 
         assertEquals(ErrorCode.AUTO_SCHEDULE_CANDIDATE_CHANGED, ex.getErrorCode());
         verify(validationService, never()).validateScheduling(org.mockito.ArgumentMatchers.any());
@@ -65,7 +66,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
         item.getAuditorium().setCleaningBufferMinutes(30);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateAll(null, List.of(item), Instant.now()));
+                () -> service.validateAll(previewFor(item), List.of(item), Instant.now()));
 
         assertEquals(ErrorCode.AUTO_SCHEDULE_CANDIDATE_CHANGED, ex.getErrorCode());
         verify(validationService, never()).validateScheduling(org.mockito.ArgumentMatchers.any());
@@ -84,7 +85,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
         overlapping.setOccupancyEndTime(Instant.parse("2026-07-22T13:15:00Z"));
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateAll(null, List.of(first, overlapping), Instant.now()));
+                () -> service.validateAll(previewFor(first), List.of(first, overlapping), Instant.now()));
 
         assertEquals(ErrorCode.AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP, ex.getErrorCode());
         verify(validationService, never()).validateScheduling(org.mockito.ArgumentMatchers.any());
@@ -103,7 +104,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
                 "later", 1L, "13:00:00", "14:45:00", "15:00:00", 105, 15);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateAll(null, List.of(outer, nested, later), Instant.now()));
+                () -> service.validateAll(previewFor(outer), List.of(outer, nested, later), Instant.now()));
 
         assertEquals(ErrorCode.AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP, ex.getErrorCode());
         verify(validationService, never()).validateScheduling(org.mockito.ArgumentMatchers.any());
@@ -119,7 +120,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
         ShowtimeSchedulePreviewItem adjacent = item(
                 "adjacent", 1L, "11:15:00", "12:15:00", "12:30:00", 60, 15);
 
-        service.validateAll(null, List.of(first, adjacent), Instant.now());
+        service.validateAll(previewFor(first), List.of(first, adjacent), Instant.now());
 
         verify(validationService, times(2)).validateScheduling(org.mockito.ArgumentMatchers.any());
     }
@@ -134,7 +135,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
         ShowtimeSchedulePreviewItem otherAuditorium = item(
                 "other", 2L, "10:00:00", "11:00:00", "11:15:00", 60, 15);
 
-        service.validateAll(null, List.of(first, otherAuditorium), Instant.now());
+        service.validateAll(previewFor(first), List.of(first, otherAuditorium), Instant.now());
 
         verify(validationService, times(2)).validateScheduling(org.mockito.ArgumentMatchers.any());
     }
@@ -150,7 +151,7 @@ class AutoScheduleApplyRevalidationServiceImplTest {
                 "cleaning-overlap", 1L, "11:05:00", "12:05:00", "12:20:00", 60, 15);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateAll(null, List.of(first, cleaningOverlap), Instant.now()));
+                () -> service.validateAll(previewFor(first), List.of(first, cleaningOverlap), Instant.now()));
 
         assertEquals(ErrorCode.AUTO_SCHEDULE_SELECTED_ITEMS_OVERLAP, ex.getErrorCode());
         verify(validationService, never()).validateScheduling(org.mockito.ArgumentMatchers.any());
@@ -175,6 +176,14 @@ class AutoScheduleApplyRevalidationServiceImplTest {
         item.setEndTime(Instant.parse("2026-07-22T11:30:00Z"));
         item.setOccupancyEndTime(Instant.parse("2026-07-22T11:45:00Z"));
         return item;
+    }
+
+    private ShowtimeSchedulePreview previewFor(ShowtimeSchedulePreviewItem item) {
+        item.getCinema().setTimezone("UTC");
+        ShowtimeSchedulePreview preview = mock(ShowtimeSchedulePreview.class);
+        org.mockito.Mockito.when(preview.getCinema()).thenReturn(item.getCinema());
+        org.mockito.Mockito.when(preview.getTimezoneSnapshot()).thenReturn("UTC");
+        return preview;
     }
 
     private ShowtimeSchedulePreviewItem item(String publicId,

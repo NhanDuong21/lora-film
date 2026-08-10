@@ -84,6 +84,16 @@ const adminMovieService = {
     return response.data;
   },
 
+  getExhibitionPeriods: async (movieId) => {
+    const response = await apiClient.get(`/api/admin/movies/${movieId}/exhibition-periods`);
+    return response.data?.data || [];
+  },
+
+  createExhibitionPeriod: async (movieId, payload) => {
+    const response = await apiClient.post(`/api/admin/movies/${movieId}/exhibition-periods`, payload);
+    return response.data?.data;
+  },
+
   deleteMovie: async (publicId) => {
     const response = await apiClient.delete(`/api/admin/movies/${publicId}`);
     return response.data;

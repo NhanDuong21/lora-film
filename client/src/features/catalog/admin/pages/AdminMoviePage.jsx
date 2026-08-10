@@ -85,14 +85,13 @@ export default function AdminMoviePage() {
   };
 
   const handleBulkApprove = async () => {
-    const eligibleCount = (adminMovies.queueBreakdown.data?.future || 0)
-      + (adminMovies.queueBreakdown.data?.readyToShow || 0);
+    const eligibleCount = adminMovies.queueBreakdown.data?.eligibleUpcoming || 0;
     const count = Math.min(eligibleCount, 100);
     if (count <= 0) return;
 
     const confirmed = await triggerConfirm?.({
-      title: `Duyệt tối đa ${count} phim mới?`,
-      message: 'Phim tương lai sẽ sang Sắp chiếu. Phim đã tới ngày chỉ sang Đang chiếu khi có suất chiếu hợp lệ. Mỗi phim vẫn được kiểm tra lại trước khi lưu.',
+      title: `Duyệt tối đa ${count} phim?`,
+      message: 'Chỉ phim có ngày bắt đầu khai thác sau hôm nay mới được duyệt sang Sắp chiếu. Mỗi phim vẫn được kiểm tra lại trước khi lưu.',
       confirmLabel: 'Kiểm tra và duyệt',
     });
     if (!confirmed) return;
@@ -109,14 +108,14 @@ export default function AdminMoviePage() {
         <header className="flex flex-col justify-between gap-5 border-b border-zinc-800 pb-6 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-400">
-              Nội dung & phát hành
+              Nội dung & khai thác
             </p>
             <h1 className="mt-2 text-2xl font-black text-white md:text-3xl">Quản lý phim</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
               Chọn nhóm phim cần xử lý, hoàn thiện hồ sơ rồi đưa phim vào phục vụ khách hàng.
             </p>
             <p className="mt-3 inline-flex rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-500">
-              Quy trình: Chọn phim → Hoàn thiện nội dung → Kiểm tra điều kiện → Duyệt phát hành
+              Quy trình: Chọn phim → Hoàn thiện nội dung → Lập đợt khai thác → Duyệt phục vụ
             </p>
           </div>
           <button
@@ -315,9 +314,9 @@ export default function AdminMoviePage() {
         <details className="group rounded-2xl border border-zinc-800 bg-zinc-900/25">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
             <span>
-              <span className="block text-sm font-semibold text-zinc-300">Thông tin hệ thống nhập phim</span>
+              <span className="block text-sm font-semibold text-zinc-300">Trung tâm nhập phim từ TMDB</span>
               <span className="mt-1 block text-xs text-zinc-600">
-                Chỉ cần mở khi cần kiểm tra tình trạng đồng bộ dữ liệu.
+                Chọn phạm vi phim, bắt đầu hoặc dừng tiến trình nhập dữ liệu.
               </span>
             </span>
             <ChevronDown className="h-5 w-5 text-zinc-600 transition group-open:rotate-180" />

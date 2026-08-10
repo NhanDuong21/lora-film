@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -35,11 +36,28 @@ public class AutoScheduleApplyRevalidationServiceImpl implements AutoScheduleApp
             return;
         }
 
+        validateTimezoneSnapshot(preview);
+
         // Check candidate-candidate overlap first
         validateCandidateCandidateOverlaps(selectedItems);
 
         for (ShowtimeSchedulePreviewItem item : selectedItems) {
             revalidateItem(item);
+        }
+    }
+
+    private void validateTimezoneSnapshot(ShowtimeSchedulePreview preview) {
+        if (preview == null || preview.getCinema() == null
+                || preview.getTimezoneSnapshot() == null
+                || !preview.getTimezoneSnapshot().equals(preview.getCinema().getTimezone())) {
+            throw new BusinessException(
+                    ErrorCode.AUTO_SCHEDULE_PREVIEW_STALE,
+                    "Cinema timezone changed after preview generation");
+        }
+        try {
+            ZoneId.of(preview.getTimezoneSnapshot());
+        } catch (RuntimeException invalidZone) {
+            throw new BusinessException(ErrorCode.INVALID_CINEMA_TIMEZONE);
         }
     }
 

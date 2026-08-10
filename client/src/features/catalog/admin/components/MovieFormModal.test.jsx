@@ -72,7 +72,7 @@ describe('MovieFormModal', () => {
     fireEvent.change(screen.getByLabelText('Thời lượng (phút)'), {
       target: { value: '115' },
     });
-    fireEvent.change(screen.getByLabelText('Ngày khởi chiếu'), {
+    fireEvent.change(screen.getByLabelText('Ngày bắt đầu khai thác tại rạp'), {
       target: { value: '2026-11-13' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Tạo và tiếp tục' }));
@@ -83,6 +83,7 @@ describe('MovieFormModal', () => {
         originalTitle: null,
         durationMinutes: 115,
         ageRating: 'P',
+        originalReleaseDate: null,
         releaseDate: '2026-11-13',
         endDate: null,
         country: null,

@@ -39,6 +39,9 @@ public class Employee {
     @Column(name = "hire_date")
     private LocalDate hireDate;
 
+    @Column(name = "cinema_public_id", length = 36)
+    private String cinemaPublicId;
+
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private EmployeeStatus status = EmployeeStatus.ACTIVE;
@@ -107,6 +110,14 @@ public class Employee {
 
     public void setHireDate(LocalDate hireDate) {
         this.hireDate = hireDate;
+    }
+
+    public String getCinemaPublicId() {
+        return cinemaPublicId;
+    }
+
+    public void setCinemaPublicId(String cinemaPublicId) {
+        this.cinemaPublicId = cinemaPublicId;
     }
 
     public EmployeeStatus getStatus() {

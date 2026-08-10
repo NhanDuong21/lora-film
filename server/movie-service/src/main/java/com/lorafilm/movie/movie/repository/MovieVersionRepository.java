@@ -11,6 +11,7 @@ import com.lorafilm.movie.movie.domain.enums.MovieFormat;
 
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 
 public interface MovieVersionRepository extends JpaRepository<MovieVersion, Long> {
     Optional<MovieVersion> findByPublicIdAndDeletedAtIsNull(String publicId);
@@ -23,6 +24,24 @@ public interface MovieVersionRepository extends JpaRepository<MovieVersion, Long
     List<MovieVersion> findByMovieIdAndDeletedAtIsNull(Long movieId);
     
     List<MovieVersion> findByMovieIdAndStatusAndDeletedAtIsNull(Long movieId, ActiveStatus status);
+
+    @Query("""
+            select mv from MovieVersion mv
+            join fetch mv.movie m
+            where mv.status = :versionStatus
+              and mv.deletedAt is null
+              and m.status in :movieStatuses
+              and m.deletedAt is null
+              and m.durationMinutes > 0
+              and (m.releaseDate is null or m.releaseDate <= :toDate)
+              and (m.endDate is null or m.endDate >= :fromDate)
+            order by m.id asc, mv.id asc
+            """)
+    List<MovieVersion> findEligibleForAutoSchedule(
+            @Param("versionStatus") ActiveStatus versionStatus,
+            @Param("movieStatuses") List<MovieStatus> movieStatuses,
+            @Param("fromDate") java.time.LocalDate fromDate,
+            @Param("toDate") java.time.LocalDate toDate);
 
     boolean existsByMovieIdAndFormatAndAudioLanguageAndSubtitleLanguageAndDubLanguage(
         Long movieId, MovieFormat format, String audioLanguage, String subtitleLanguage, String dubLanguage

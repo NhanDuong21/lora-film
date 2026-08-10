@@ -33,6 +33,8 @@ public record PaymentSucceededEvent(
         @JsonAlias("promotionId") String promotionPublicId,
         String promotionName,
         String membershipTier,
-        String paymentMethod
+        String paymentMethod,
+        Instant showtimeStartsAt,
+        String format
 ) {
 }

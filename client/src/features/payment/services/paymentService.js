@@ -40,6 +40,7 @@ const ERROR_MESSAGES = {
   REFUND_IDEMPOTENCY_CONFLICT: 'Mã chống xử lý trùng đã được dùng cho một yêu cầu hoàn tiền khác.',
   REFUND_AMOUNT_REQUIRED: 'Vui lòng nhập số tiền cần hoàn.',
   REFUND_AMOUNT_EXCEEDS_AVAILABLE: 'Số tiền hoàn vượt quá số tiền còn có thể hoàn.',
+  REFUND_PARTIAL_MUST_BE_LESS_THAN_REMAINING: 'Hoàn một phần phải nhỏ hơn số tiền còn lại. Nếu cần hoàn hết, hãy chọn “Hoàn toàn bộ”.',
   REFUND_COMPONENT_INVALID: 'Phạm vi hoàn tiền không phù hợp với hình thức đã chọn.',
   TICKET_REFUND_NOT_SUPPORTED: 'Hiện chưa hỗ trợ hoàn riêng từng vé. Vui lòng xử lý ở cấp toàn bộ đơn.',
   REFUND_NOT_RETRYABLE: 'Yêu cầu hoàn tiền này không thể thử lại ở trạng thái hiện tại.',
@@ -65,6 +66,11 @@ export const getPaymentStatus = async paymentPublicId =>
 
 export const getPayment = async paymentPublicId =>
   unwrap(await apiClient.get(`/api/payments/${paymentPublicId}`));
+
+export const getPaymentsForBooking = async bookingPublicId =>
+  unwrap(await apiClient.get(`/api/payments/booking/${bookingPublicId}`, {
+    params: { page: 0, size: 20 },
+  }));
 
 export const completeMockPayment = async (paymentPublicId, simulatedStatus) =>
   unwrap(await apiClient.post(
@@ -94,6 +100,25 @@ export const cancelCashPayment = async (paymentPublicId, idempotencyKey) =>
     `/api/employee/payments/${paymentPublicId}/cash/cancel`,
     {},
     { headers: { 'Idempotency-Key': idempotencyKey } },
+  ));
+
+export const lookupRefundCandidate = async reference =>
+  unwrap(await apiClient.get('/api/employee/payments/refund-candidate', { params: { reference } }));
+
+export const createEmployeeRefundRequest = async (paymentPublicId, payload, idempotencyKey) =>
+  unwrap(await apiClient.post(
+    `/api/employee/payments/${paymentPublicId}/refund-requests`,
+    payload,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  ));
+
+export const getEmployeeCashRefunds = async () =>
+  unwrap(await apiClient.get('/api/employee/payments/refund-requests/cash-pending'));
+
+export const completeEmployeeCashRefund = async (refundPublicId, payload) =>
+  unwrap(await apiClient.post(
+    `/api/employee/payments/refund-requests/${refundPublicId}/cash/complete`,
+    payload,
   ));
 
 export const searchAdminPayments = async params =>

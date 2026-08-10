@@ -35,6 +35,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -122,42 +123,33 @@ class MovieServiceImplLifecycleTest {
     }
 
     @Test
-    void releasedDraftCanBeApprovedToNowShowingWhenItHasAnOperationalShowtime() {
+    void draftCannotBeApprovedDirectlyToNowShowing() {
         Movie movie = movie(30L, MovieStatus.DRAFT, 120);
         movie.setReleaseDate(LocalDate.now());
-        MovieDto expected = new MovieDto();
-        expected.setStatus(MovieStatus.NOW_SHOWING);
         when(movieRepository.findByPublicIdForUpdate("movie-30")).thenReturn(Optional.of(movie));
-        when(showtimeRepository.existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
-                any(), any(), any())).thenReturn(true);
-        when(movieGenreRepository.findByMovieId(30L)).thenReturn(List.of(genreLink(movie)));
-        when(movieVersionRepository.existsActiveVersion(30L)).thenReturn(true);
-        when(movieMediaRepository.existsPrimaryPoster(30L)).thenReturn(true);
-        when(movieRepository.save(movie)).thenReturn(movie);
-        when(movieMediaRepository.findFirstByMovieIdAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
-                any(), any(), any())).thenReturn(Optional.empty());
-        when(movieMapper.toDto(any(), anyList(), isNull())).thenReturn(expected);
 
-        MovieDto result = service.updateMovieStatus("movie-30", MovieStatus.NOW_SHOWING);
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.updateMovieStatus("movie-30", MovieStatus.NOW_SHOWING));
 
-        assertEquals(MovieStatus.NOW_SHOWING, movie.getStatus());
-        assertEquals(MovieStatus.NOW_SHOWING, result.getStatus());
+        assertEquals(ErrorCode.INVALID_MOVIE_STATUS_TRANSITION, exception.getErrorCode());
+        assertEquals(MovieStatus.DRAFT, movie.getStatus());
+        verify(movieRepository, never()).save(movie);
     }
 
     @Test
-    void releasedDraftStaysDraftWithoutAnOperationalShowtime() {
-        Movie movie = movie(31L, MovieStatus.DRAFT, 120);
+    void upcomingMovieCannotBeStartedManually() {
+        Movie movie = movie(31L, MovieStatus.UPCOMING, 120);
         movie.setReleaseDate(LocalDate.now());
         when(movieRepository.findByPublicIdForUpdate("movie-31")).thenReturn(Optional.of(movie));
-        when(showtimeRepository.existsByMovieIdAndStatusInAndEndTimeAfterAndDeletedAtIsNull(
-                any(), any(), any())).thenReturn(false);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.updateMovieStatus("movie-31", MovieStatus.NOW_SHOWING));
 
         assertEquals(ErrorCode.INVALID_MOVIE_STATUS_TRANSITION, exception.getErrorCode());
-        assertEquals(MovieStatus.DRAFT, movie.getStatus());
+        assertEquals(MovieStatus.UPCOMING, movie.getStatus());
+        assertTrue(exception.getMessage().contains("Hệ thống sẽ tự chuyển"));
         verify(movieRepository, never()).save(movie);
     }
 
@@ -218,20 +210,19 @@ class MovieServiceImplLifecycleTest {
     }
 
     @Test
-    void tmdbQueueBreakdownReturnsFutureOldAndUndatedCounts() {
+    void tmdbQueueBreakdownSeparatesEligibleExpiredAndUndatedMovies() {
         AdminMovieListQuery filter = new AdminMovieListQuery();
         filter.setStatus("DRAFT");
         filter.setSource("TMDB");
 
         when(movieRepository.count(any(Specification.class)))
-                .thenReturn(17L, 8L, 4L, 2L, 3L);
+                .thenReturn(17L, 8L, 6L, 3L);
 
         TmdbQueueBreakdownResponse response = service.getTmdbQueueBreakdown(filter);
 
         assertEquals(17L, response.total());
-        assertEquals(8L, response.future());
-        assertEquals(4L, response.readyToShow());
-        assertEquals(2L, response.needsSchedule());
+        assertEquals(8L, response.eligibleUpcoming());
+        assertEquals(6L, response.releaseDateExpired());
         assertEquals(3L, response.undated());
     }
 

@@ -281,6 +281,55 @@ CREATE TABLE `cash_payment_details` (
   COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
+-- TABLE: counter_cash_sessions
+-- PURPOSE:
+--   Cash drawer lifecycle for a box-office employee. The stored close snapshot
+--   is immutable operational evidence for handover and variance review.
+-- ============================================================================
+CREATE TABLE `counter_cash_sessions` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `public_id` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `employee_account_id` bigint NOT NULL,
+  `cinema_public_id` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `status` varchar(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'OPEN',
+  `opening_float` decimal(12,2) NOT NULL DEFAULT 0,
+  `cash_sales` decimal(12,2) NULL,
+  `cash_transaction_count` bigint NULL,
+  `cash_refunds` decimal(12,2) NULL,
+  `cash_refund_count` bigint NULL,
+  `expected_cash` decimal(12,2) NULL,
+  `counted_cash` decimal(12,2) NULL,
+  `variance_amount` decimal(12,2) NULL,
+  `opening_note_sanitized` varchar(500) NULL,
+  `closing_note_sanitized` varchar(1000) NULL,
+  `opened_at` datetime(6) NOT NULL,
+  `closed_at` datetime(6) NULL,
+  `version` int NOT NULL DEFAULT 0,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+      ON UPDATE CURRENT_TIMESTAMP(6),
+
+  CONSTRAINT `pk_counter_cash_sessions` PRIMARY KEY (`id`),
+  CONSTRAINT `uk_counter_cash_sessions_public_id` UNIQUE (`public_id`),
+  CONSTRAINT `chk_counter_cash_sessions_status` CHECK (`status` IN ('OPEN', 'CLOSED')),
+  CONSTRAINT `chk_counter_cash_sessions_opening_float` CHECK (`opening_float` >= 0),
+  CONSTRAINT `chk_counter_cash_sessions_counted_cash` CHECK (`counted_cash` IS NULL OR `counted_cash` >= 0),
+  CONSTRAINT `chk_counter_cash_sessions_closed_fields` CHECK (
+    (`status` = 'OPEN' AND `closed_at` IS NULL)
+    OR (`status` = 'CLOSED' AND `closed_at` IS NOT NULL
+        AND `expected_cash` IS NOT NULL AND `counted_cash` IS NOT NULL
+        AND `variance_amount` IS NOT NULL)
+  ),
+
+  INDEX `idx_counter_cash_sessions_employee_opened`
+      (`employee_account_id`, `opened_at`),
+  INDEX `idx_counter_cash_sessions_cinema_status`
+      (`cinema_public_id`, `status`, `opened_at`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
 -- TABLE: payment_analytics_snapshots
 -- PURPOSE:
 --   Immutable Booking-owned business dimensions used to publish a complete
@@ -297,6 +346,11 @@ CREATE TABLE `payment_analytics_snapshots` (
       CHARACTER SET ascii COLLATE ascii_bin NULL,
   `cinema_public_id` char(36)
       CHARACTER SET ascii COLLATE ascii_bin NULL,
+  `auditorium_public_id` char(36)
+      CHARACTER SET ascii COLLATE ascii_bin NULL,
+  `showtime_starts_at` datetime(6) NULL,
+  `auditorium_capacity` int NULL,
+  `movie_format` varchar(30) NULL,
   `ticket_count` int NOT NULL,
   `ticket_amount` decimal(12,2) NOT NULL DEFAULT 0,
   `food_amount` decimal(12,2) NOT NULL DEFAULT 0,
@@ -314,6 +368,8 @@ CREATE TABLE `payment_analytics_snapshots` (
       ON DELETE RESTRICT,
   CONSTRAINT `chk_payment_analytics_ticket_count`
       CHECK (`ticket_count` > 0),
+  CONSTRAINT `chk_payment_analytics_capacity`
+      CHECK (`auditorium_capacity` IS NULL OR `auditorium_capacity` > 0),
   CONSTRAINT `chk_payment_analytics_amounts`
       CHECK (
         `ticket_amount` >= 0
@@ -553,6 +609,10 @@ CREATE TABLE `payment_refunds` (
   `automatic` boolean NOT NULL DEFAULT FALSE,
   `requested_by_actor` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `requested_by_account_id` bigint NULL,
+  `reviewed_by_account_id` bigint NULL,
+  `reviewed_at` datetime(6) NULL,
+  `review_note_sanitized` text NULL,
+  `completed_by_account_id` bigint NULL,
 
   `status` varchar(30) CHARACTER SET ascii COLLATE ascii_bin
       NOT NULL DEFAULT 'REQUESTED',
@@ -608,8 +668,8 @@ CREATE TABLE `payment_refunds` (
       ),
   CONSTRAINT `chk_payment_refunds_status`
       CHECK (`status` IN (
-        'REQUESTED', 'PROCESSING', 'SUCCESS', 'FAILED',
-        'REQUIRES_ACTION', 'CANCELLED'
+        'PENDING_APPROVAL', 'REQUESTED', 'PROCESSING', 'SUCCESS', 'FAILED',
+        'REQUIRES_ACTION', 'CANCELLED', 'REJECTED'
       )),
   CONSTRAINT `chk_payment_refunds_retry_count` CHECK (`retry_count` >= 0),
   CONSTRAINT `chk_payment_refunds_terminal_timestamp`
@@ -627,7 +687,9 @@ CREATE TABLE `payment_refunds` (
 
   INDEX `idx_payment_refunds_payment_created` (`payment_id`, `created_at`),
   INDEX `idx_payment_refunds_queue` (`status`, `next_attempt_at`),
-  INDEX `idx_payment_refunds_reason` (`reason_code`, `created_at`)
+  INDEX `idx_payment_refunds_reason` (`reason_code`, `created_at`),
+  INDEX `idx_payment_refunds_completed_by`
+      (`completed_by_account_id`, `succeeded_at`)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;

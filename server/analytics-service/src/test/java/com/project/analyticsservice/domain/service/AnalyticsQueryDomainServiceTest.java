@@ -1,7 +1,9 @@
 package com.project.analyticsservice.domain.service;
 
 import com.project.analyticsservice.dto.AnalyticsResponses;
+import com.project.analyticsservice.entity.BusinessInsight;
 import com.project.analyticsservice.entity.CinemaPerformanceDaily;
+import com.project.analyticsservice.entity.RootCauseFactor;
 import com.project.analyticsservice.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -143,6 +145,59 @@ class AnalyticsQueryDomainServiceTest {
         assertEquals(BigDecimal.ZERO.setScale(2), dashboard.summary().netRevenue());
         assertEquals(0, dashboard.summary().bookingCount());
         assertTrue(dashboard.daily().isEmpty());
+    }
+
+    @Test
+    void dashboard_ShouldOnlyReturnInsightsWhosePrimaryCauseBelongsToSelectedCinema() {
+        BusinessInsight secondaryCauseOnly = insight(1L, "Ảnh hưởng phụ tại rạp");
+        BusinessInsight primaryCause = insight(2L, "Nguyên nhân chính tại rạp");
+        when(insightRepository.findAllByResolvedFalseAndStatDateBetweenOrderByCreatedAtDesc(
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 2)))
+                .thenReturn(List.of(secondaryCauseOnly, primaryCause));
+        when(rootCauseRepository.findAllByInsightIdInOrderByInsightIdAscRankOrderAsc(
+                List.of(1L, 2L)))
+                .thenReturn(List.of(
+                        rootCause(1L, 1, "cinema-2"),
+                        rootCause(1L, 2, "cinema-1"),
+                        rootCause(2L, 1, "cinema-1")));
+        when(cinemaRepository.findAllByCinemaKeyAndStatDateBetweenOrderByStatDateAsc(
+                "cinema-1", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 2)))
+                .thenReturn(List.of(cinemaKpi(
+                        LocalDate.of(2026, 7, 1), "100000", 4, 8, "0.00", "0.50")));
+
+        AnalyticsResponses.Dashboard dashboard =
+                service.dashboard("2026-07-01", "2026-07-02", "cinema-1");
+
+        assertEquals(1, dashboard.insights().size());
+        assertEquals(2L, dashboard.insights().getFirst().id());
+    }
+
+    private BusinessInsight insight(long id, String title) {
+        BusinessInsight value = new BusinessInsight();
+        value.setId(id);
+        value.setStatDate(LocalDate.of(2026, 7, 1));
+        value.setEntityType("SYSTEM");
+        value.setEntityKey("ALL");
+        value.setSeverity("WARNING");
+        value.setCategory("OCCUPANCY");
+        value.setTitle(title);
+        value.setSummary(title);
+        value.setRootCause(title);
+        value.setConfidenceScore(new BigDecimal("0.80"));
+        value.setResolved(false);
+        value.setCreatedAt(Instant.now());
+        return value;
+    }
+
+    private RootCauseFactor rootCause(long insightId, int rank, String cinemaKey) {
+        RootCauseFactor value = new RootCauseFactor();
+        value.setInsightId(insightId);
+        value.setRankOrder(rank);
+        value.setCauseType("CINEMA_LOW_OCCUPANCY");
+        value.setDimensionType("CINEMA");
+        value.setDimensionKey(cinemaKey);
+        value.setContributionScore(new BigDecimal("0.70"));
+        return value;
     }
 
     private CinemaPerformanceDaily cinemaKpi(

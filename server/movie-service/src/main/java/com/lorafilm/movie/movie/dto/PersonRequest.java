@@ -17,14 +17,14 @@ public class PersonRequest {
 
     private String biography;
 
-    @jakarta.validation.constraints.Past(message = "Birth date must be in the past")
+    @jakarta.validation.constraints.Past(message = "Ngày sinh phải là một ngày trong quá khứ.")
     private LocalDate birthDate;
 
     @Size(max = 100)
     private String nationality;
 
     @Size(max = 500)
-    @org.hibernate.validator.constraints.URL(message = "Invalid URL format")
+    @org.hibernate.validator.constraints.URL(message = "Địa chỉ ảnh đại diện không đúng định dạng.")
     @jakarta.validation.constraints.Pattern(regexp = "^(?i)(https?://).*\\.(jpg|jpeg|png|gif|webp|svg|bmp)([\\?#].*)?$", message = "URL must start with http/https and be a valid image file (.jpg, .png, etc.)")
     private String profileImageUrl;
 

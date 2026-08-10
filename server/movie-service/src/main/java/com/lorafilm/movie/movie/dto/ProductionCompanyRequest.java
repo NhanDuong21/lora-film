@@ -14,7 +14,7 @@ public class ProductionCompanyRequest {
     private String country;
 
     @Size(max = 500)
-    @org.hibernate.validator.constraints.URL(message = "Invalid URL format")
+    @org.hibernate.validator.constraints.URL(message = "Địa chỉ trang web không đúng định dạng.")
     @jakarta.validation.constraints.Pattern(regexp = "^(?i)(https?://).*\\.(jpg|jpeg|png|gif|webp|svg|bmp)([\\?#].*)?$", message = "URL must start with http/https and be a valid image file (.jpg, .png, etc.)")
     private String logoUrl;
 

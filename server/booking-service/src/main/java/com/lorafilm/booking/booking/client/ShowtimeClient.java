@@ -11,5 +11,9 @@ public interface ShowtimeClient {
         throw new UnsupportedOperationException("Public Showtime booking context is not configured");
     }
 
+    default ShowtimePresentationContext getPresentationByPublicId(String showtimePublicId) {
+        return null;
+    }
+
     ShowtimeSeatLayoutResponse getSeatLayout(Long showtimeId);
 }

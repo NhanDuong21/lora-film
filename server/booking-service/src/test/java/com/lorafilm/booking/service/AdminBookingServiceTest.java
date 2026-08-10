@@ -8,6 +8,8 @@ import com.lorafilm.booking.booking.dto.BookingFilterRequest;
 import com.lorafilm.booking.booking.dto.BookingSnapshotDto;
 import com.lorafilm.booking.booking.dto.BookingOperationsSummaryResponse;
 import com.lorafilm.booking.booking.dto.UpdateBookingStatusRequest;
+import com.lorafilm.booking.booking.client.ShowtimeClient;
+import com.lorafilm.booking.booking.client.ShowtimePresentationContext;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.mapper.BookingMapper;
@@ -68,6 +70,8 @@ public class AdminBookingServiceTest {
     private SeatReservationRepository seatReservationRepository;
     @Mock
     private BookingPaymentEventRepository paymentEventRepository;
+    @Mock
+    private ShowtimeClient showtimeClient;
 
     @Mock
     private com.lorafilm.booking.infrastructure.monitoring.BookingMetricsManager bookingMetricsManager;
@@ -155,6 +159,28 @@ public class AdminBookingServiceTest {
         assertEquals("BK1001", result.getBookingCode());
         assertEquals(Collections.emptyList(), result.getTickets());
         assertEquals(Collections.emptyList(), result.getStatusHistories());
+    }
+
+    @Test
+    public void getBookingDetail_EnrichesLegacySnapshotPresentationFacts() {
+        sampleBooking.setShowtimePublicId("showtime-1");
+        BookingSnapshotDto snapshot = new BookingSnapshotDto();
+        snapshot.setShowtimeStart(java.time.Instant.parse("2026-08-10T02:00:00Z"));
+        snapshot.setShowtimeEnd(java.time.Instant.parse("2026-08-10T04:30:00Z"));
+        when(bookingRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000"))
+                .thenReturn(Optional.of(sampleBooking));
+        when(snapshotService.findByBooking(10L)).thenReturn(snapshot);
+        when(ticketService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(historyService.findByBooking(10L)).thenReturn(Collections.emptyList());
+        when(showtimeClient.getPresentationByPublicId("showtime-1"))
+                .thenReturn(new ShowtimePresentationContext("Movie 1", null, 150, "P"));
+        ReflectionTestUtils.setField(adminBookingService, "showtimeClient", showtimeClient);
+
+        BookingDetailResponse result = adminBookingService.getBookingDetail(
+                "550e8400-e29b-41d4-a716-446655440000");
+
+        assertEquals(150, result.getSnapshot().getDuration());
+        assertEquals("P", result.getSnapshot().getAgeRating());
     }
 
     @Test

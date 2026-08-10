@@ -87,6 +87,15 @@ public class SystemBootstrap {
             new PermissionData("EMPLOYEE_UPDATE", "Update employee", "Employee Management"),
             new PermissionData("EMPLOYEE_DELETE", "Delete employee", "Employee Management"),
             new PermissionData("EMPLOYEE_ASSIGN_POSITION", "Assign employee position", "Employee Management"),
+
+            // Employee self-service
+            new PermissionData("EMPLOYEE_DASHBOARD_VIEW", "View employee dashboard", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_SCHEDULE_VIEW", "View own work schedule and leave requests", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_LEAVE_CREATE", "Create and cancel own leave requests", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_ATTENDANCE_VIEW", "View own attendance", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_ATTENDANCE_UPDATE", "Check in and check out own shifts", "Employee Self Service"),
+            new PermissionData("EMPLOYEE_PAYROLL_VIEW", "View own payroll", "Employee Self Service"),
+            new PermissionData("PAYMENT_CASH_COLLECT", "Collect cash payments at the counter", "Payment Operations"),
             
             // Department Management
             new PermissionData("DEPARTMENT_VIEW", "View departments", "Department Management"),
@@ -150,19 +159,56 @@ public class SystemBootstrap {
             ).contains(p.getCode()))
             .collect(Collectors.toSet());
 
-        createRoleIfNotExists("ADMIN", "Administrator", new HashSet<>(allPermissions));
-        createRoleIfNotExists("EMPLOYEE", "Employee", new HashSet<>()); // Base employee, gets more via position
-        createRoleIfNotExists("CUSTOMER", "Customer", customerPermissions);
+        Set<Permission> employeePermissions = allPermissions.stream()
+            .filter(p -> Arrays.asList(
+                "AUTH_LOGIN", "AUTH_LOGOUT", "AUTH_REFRESH_TOKEN",
+                "AUTH_VIEW_PROFILE", "AUTH_UPDATE_PROFILE", "AUTH_CHANGE_PASSWORD",
+                "EMPLOYEE_DASHBOARD_VIEW", "EMPLOYEE_SCHEDULE_VIEW",
+                "EMPLOYEE_LEAVE_CREATE", "EMPLOYEE_ATTENDANCE_VIEW",
+                "EMPLOYEE_ATTENDANCE_UPDATE", "EMPLOYEE_PAYROLL_VIEW",
+                "PAYMENT_CASH_COLLECT"
+            ).contains(p.getCode()))
+            .collect(Collectors.toSet());
+
+        Set<Permission> managerPermissions = allPermissions.stream()
+            .filter(p -> Arrays.asList(
+                "DASHBOARD_VIEW", "CUSTOMER_VIEW", "EMPLOYEE_VIEW",
+                "DEPARTMENT_VIEW", "POSITION_VIEW", "BOOKING_VIEW", "BOOKING_MANAGE",
+                "MOVIE_VIEW", "CINEMA_MANAGE", "SHOWTIME_MANAGE", "PRICING_MANAGE",
+                "PAYMENT_VIEW", "PROMOTION_MANAGE", "ANALYTICS_MANAGE",
+                "SCORE_MANAGE", "MEMBERSHIP_TIER_MANAGE"
+            ).contains(p.getCode()))
+            .collect(Collectors.toSet());
+
+        createRoleIfNotExists("ADMIN", "System administrator",
+                "Full access to the LoraFilm back office", new HashSet<>(allPermissions));
+        createRoleIfNotExists("MANAGER", "Cinema manager",
+                "Manages cinema operations and reports", managerPermissions);
+        createRoleIfNotExists("EMPLOYEE", "Employee",
+                "Performs assigned cinema tasks based on granted permissions", employeePermissions);
+        createRoleIfNotExists("CUSTOMER", "Customer",
+                "Can browse movies and manage bookings", customerPermissions);
     }
 
-    private void createRoleIfNotExists(String code, String name, Set<Permission> permissions) {
+    private void createRoleIfNotExists(String code, String name, String description, Set<Permission> permissions) {
         roleRepository.findByCode(code).ifPresentOrElse(
-            r -> log.debug("Role {} already exists.", code),
+            role -> {
+                boolean metadataChanged = !name.equals(role.getRoleName())
+                        || !description.equals(role.getDescription());
+                if (metadataChanged) {
+                    role.setRoleName(name);
+                    role.setDescription(description);
+                    roleRepository.save(role);
+                    log.info("Normalized built-in role metadata: {}", code);
+                } else {
+                    log.debug("Role {} already exists.", code);
+                }
+            },
             () -> {
                 Role r = Role.builder()
                     .code(code)
-                    .roleName(code) // Repository searches by roleName
-                    .description(name)
+                    .roleName(name)
+                    .description(description)
                     .permissions(permissions)
                     .build();
                 roleRepository.save(r);

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 
 public class MovieCompanyAssignRequest {
-    @NotEmpty(message = "Companies cannot be empty")
+    @NotEmpty(message = "Danh sách hãng phim không được để trống.")
     @Valid
     private List<MovieCompanyRequest> companies;
 

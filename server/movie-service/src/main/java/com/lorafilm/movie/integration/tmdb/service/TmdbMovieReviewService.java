@@ -139,7 +139,7 @@ public class TmdbMovieReviewService {
                 field("synopsis", "Mô tả", movie.getSynopsis(), movieMapper.extractOverview(provider)),
                 field("durationMinutes", "Thời lượng", movie.getDurationMinutes(), providerDuration),
                 field("ageRating", "Phân loại tuổi", movie.getAgeRating(), providerAgeRating),
-                field("releaseDate", "Ngày khởi chiếu", movie.getReleaseDate(), movieMapper.extractReleaseDate(provider)),
+                field("originalReleaseDate", "Ngày phát hành gốc", movie.getOriginalReleaseDate(), movieMapper.extractReleaseDate(provider)),
                 field("country", "Quốc gia", movie.getCountry(), movieMapper.extractCountry(provider)));
     }
 

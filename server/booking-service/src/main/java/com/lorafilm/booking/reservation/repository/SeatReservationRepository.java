@@ -120,6 +120,17 @@ public interface SeatReservationRepository extends JpaRepository<SeatReservation
     List<SeatReservation> findAllActiveReservationsByShowtimePublicId(
             @Param("showtimePublicId") String showtimePublicId, @Param("now") Instant now);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT sr FROM SeatReservation sr
+        WHERE sr.showtimePublicId = :showtimePublicId
+          AND sr.status = 'HELD'
+          AND sr.bookingId IS NULL
+        ORDER BY sr.id
+        """)
+    List<SeatReservation> findUnlinkedHeldByShowtimePublicIdForUpdate(
+            @Param("showtimePublicId") String showtimePublicId);
+
     @Query("""
         SELECT DISTINCT bt.seatId FROM BookingTicket bt 
         JOIN bt.booking b 

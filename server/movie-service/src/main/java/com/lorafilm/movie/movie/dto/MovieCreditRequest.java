@@ -15,7 +15,7 @@ public class MovieCreditRequest {
     @jakarta.validation.constraints.Pattern(regexp = "^[^<>]*$", message = "Character name contains invalid characters")
     private String characterName;
 
-    @jakarta.validation.constraints.Min(value = 0, message = "Display order must be a non-negative number")
+    @jakarta.validation.constraints.Min(value = 0, message = "Thứ tự hiển thị không được là số âm.")
     private Integer displayOrder = 0;
 
     public MovieCreditRequest() {}

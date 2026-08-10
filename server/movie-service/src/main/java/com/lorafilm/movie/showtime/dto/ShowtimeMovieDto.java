@@ -5,6 +5,8 @@ public class ShowtimeMovieDto {
     private String slug;
     private String title;
     private String posterUrl;
+    private Integer durationMinutes;
+    private String ageRating;
 
     public ShowtimeMovieDto() {}
 
@@ -16,4 +18,8 @@ public class ShowtimeMovieDto {
     public void setTitle(String title) { this.title = title; }
     public String getPosterUrl() { return posterUrl; }
     public void setPosterUrl(String posterUrl) { this.posterUrl = posterUrl; }
+    public Integer getDurationMinutes() { return durationMinutes; }
+    public void setDurationMinutes(Integer durationMinutes) { this.durationMinutes = durationMinutes; }
+    public String getAgeRating() { return ageRating; }
+    public void setAgeRating(String ageRating) { this.ageRating = ageRating; }
 }

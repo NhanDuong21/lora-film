@@ -22,6 +22,18 @@ import com.lorafilm.movie.movie.domain.entity.MovieVersion;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.repository.MovieRepository;
 import com.lorafilm.movie.movie.repository.MovieVersionRepository;
+import com.lorafilm.movie.common.enums.ActiveStatus;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicy;
+import com.lorafilm.movie.pricing.domain.entity.PricePolicyRule;
+import com.lorafilm.movie.pricing.domain.enums.PriceDayType;
+import com.lorafilm.movie.pricing.domain.enums.PricePolicyStatus;
+import com.lorafilm.movie.pricing.repository.PricePolicyRepository;
+import com.lorafilm.movie.seat.domain.entity.Seat;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
+import com.lorafilm.movie.seat.domain.enums.SeatStatus;
+import com.lorafilm.movie.seat.domain.enums.SeatTypeCode;
+import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +46,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -108,6 +122,15 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private SeatTypeRepository seatTypeRepository;
+
+    @Autowired
+    private SeatRepository seatRepository;
+
+    @Autowired
+    private PricePolicyRepository pricePolicyRepository;
+
     private String previewPublicId;
     private Long initialVersion;
 
@@ -116,9 +139,14 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
         // Clean up
         jdbcTemplate.execute("DELETE FROM cinema_operating_hours");
         jdbcTemplate.execute("DELETE FROM showtime_status_history");
+        jdbcTemplate.execute("DELETE FROM showtime_prices");
         itemRepository.deleteAllInBatch();
         previewRepository.deleteAllInBatch();
         jdbcTemplate.execute("DELETE FROM showtimes");
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+        jdbcTemplate.execute("DELETE FROM seats");
+        jdbcTemplate.execute("DELETE FROM seat_types");
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();
@@ -147,6 +175,46 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
         auditorium.setCapacity(100);
         auditorium.setCleaningBufferMinutes(15);
         auditorium = auditoriumRepository.saveAndFlush(auditorium);
+
+        LocalDate planningDate = LocalDate.now(ZoneId.of(cinema.getTimezone())).plusDays(1);
+        SeatType standardSeatType = new SeatType();
+        standardSeatType.setPublicId(UUID.randomUUID().toString());
+        standardSeatType.setCode(SeatTypeCode.STANDARD);
+        standardSeatType.setName("Standard");
+        standardSeatType.setStatus(ActiveStatus.ACTIVE);
+        standardSeatType = seatTypeRepository.saveAndFlush(standardSeatType);
+
+        Seat seat = new Seat();
+        seat.setPublicId(UUID.randomUUID().toString());
+        seat.setAuditorium(auditorium);
+        seat.setSeatType(standardSeatType);
+        seat.setRowLabel("A");
+        seat.setSeatNumber(1);
+        seat.setSeatCode("A1");
+        seat.setPositionRow(1);
+        seat.setPositionColumn(1);
+        seat.setStatus(SeatStatus.ACTIVE);
+        seatRepository.saveAndFlush(seat);
+
+        PricePolicy policy = new PricePolicy();
+        policy.setPublicId(UUID.randomUUID().toString());
+        policy.setName("Apply concurrency policy");
+        policy.setCinema(cinema);
+        policy.setEffectiveFrom(planningDate.minusDays(1));
+        policy.setEffectiveTo(planningDate.plusDays(60));
+        policy.setStatus(PricePolicyStatus.ACTIVE);
+        policy.setCurrency("VND");
+        policy.setPriority(0);
+        policy.setActivatedAt(Instant.now());
+        policy.setActivatedBy(1L);
+        PricePolicyRule rule = new PricePolicyRule();
+        rule.setPublicId(UUID.randomUUID().toString());
+        rule.setSeatType(standardSeatType);
+        rule.setDayType(PriceDayType.ALL_DAYS);
+        rule.setPrice(new BigDecimal("75000.00"));
+        rule.setActive(true);
+        policy.addRule(rule);
+        pricePolicyRepository.saveAndFlush(policy);
         
         Movie movie = new Movie();
         movie.setPublicId("MOVIE_APPLY_" + UUID.randomUUID().toString().substring(0, 8));
@@ -173,7 +241,7 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
         version = movieVersionRepository.saveAndFlush(version);
 
         ShowtimeSchedulePreview preview = ShowtimeSchedulePreview.createGenerating(
-                cinema, java.time.LocalDate.now(), java.time.LocalDate.now(), 30, 60,
+                cinema, planningDate, planningDate, 30, 60,
                 UUID.randomUUID().toString(), "fp", 1L, Instant.now());
         org.springframework.test.util.ReflectionTestUtils.setField(preview, "publicId", "PREVIEW_APPLY_" + UUID.randomUUID().toString().substring(0, 8));
         org.springframework.test.util.ReflectionTestUtils.setField(preview, "status", SchedulePreviewStatus.PREVIEWED);
@@ -181,6 +249,7 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
         org.springframework.test.util.ReflectionTestUtils.setField(preview, "expiresAt", Instant.now().plus(1, ChronoUnit.HOURS));
         org.springframework.test.util.ReflectionTestUtils.setField(preview, "totalCandidateCount", 1);
         org.springframework.test.util.ReflectionTestUtils.setField(preview, "selectedCandidateCount", 1);
+        preview.setSolverStatus("FEASIBLE");
         
         preview = previewRepository.saveAndFlush(preview);
         previewPublicId = preview.getPublicId();
@@ -196,6 +265,10 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
         candidate.setStartTime(baseTime);
         candidate.setEndTime(baseTime.plus(120, ChronoUnit.MINUTES));
         candidate.setOccupancyEndTime(baseTime.plus(135, ChronoUnit.MINUTES));
+        candidate.setOperatingWindow(new com.lorafilm.movie.autoschedule.model.OperatingWindow(
+                planningDate,
+                baseTime.minus(30, ChronoUnit.MINUTES),
+                baseTime.plus(4, ChronoUnit.HOURS)));
         
         candidate.setScore(BigDecimal.TEN);
         candidate.setScoreBreakdown(java.util.Map.of("test", BigDecimal.TEN));
@@ -204,6 +277,7 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
         candidate.setSelected(true);
         
         ShowtimeSchedulePreviewItem item = ShowtimeSchedulePreviewItem.createItem(preview, candidate);
+        item.setServiceDate(planningDate);
         org.springframework.test.util.ReflectionTestUtils.setField(item, "publicId", "ITEM_APPLY_" + UUID.randomUUID().toString().substring(0, 8));
         
         itemRepository.saveAndFlush(item);
@@ -215,9 +289,14 @@ public class AutoSchedulePreviewApplyConcurrencyIntegrationTest {
     void tearDown() {
         jdbcTemplate.execute("DELETE FROM cinema_operating_hours");
         jdbcTemplate.execute("DELETE FROM showtime_status_history");
+        jdbcTemplate.execute("DELETE FROM showtime_prices");
         itemRepository.deleteAllInBatch();
         previewRepository.deleteAllInBatch();
         jdbcTemplate.execute("DELETE FROM showtimes");
+        jdbcTemplate.execute("DELETE FROM price_policy_rules");
+        jdbcTemplate.execute("DELETE FROM price_policies");
+        jdbcTemplate.execute("DELETE FROM seats");
+        jdbcTemplate.execute("DELETE FROM seat_types");
         auditoriumRepository.deleteAllInBatch();
         cinemaRepository.deleteAllInBatch();
         movieVersionRepository.deleteAllInBatch();

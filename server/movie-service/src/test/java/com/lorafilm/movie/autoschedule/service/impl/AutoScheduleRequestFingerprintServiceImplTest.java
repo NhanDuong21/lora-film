@@ -91,13 +91,14 @@ class AutoScheduleRequestFingerprintServiceImplTest {
         assertEquals("3c92d5fc4918d3e99b1d59773c483043c6c4bab8ee362a7a2dd09f20aaa9f0f3", legacy);
         assertEquals(current, fingerprintService.generateFingerprint(
                 request, AutoScheduleStrategyVersions.CURRENT));
-        assertEquals(phaseS5, current,
-                "S5 must be current after the distribution activation checkpoint");
+        assertNotEquals(phaseS5, current,
+                "Demand CP-SAT must have a distinct fingerprint from legacy S5");
         assertNotEquals(legacy, current);
         assertNotEquals(legacy, phaseS2);
         assertNotEquals(phaseS2, current);
         assertNotEquals(phaseS3, phaseS4);
         assertNotEquals(phaseS4, phaseS5);
+        assertEquals("5889d3e5d78e77299783b1543a7f19b7a070918c1c6868d34b9df41a4c29f380", current);
     }
 
     @Test

@@ -19,6 +19,7 @@ import { adminConcessionRoutes } from "@/features/concessions-sales/admin/routes
 import { employeeConcessionRoutes } from "@/features/concessions-sales/employee/routes";
 import { adminStaffRoutes } from "@/features/internal-staff/admin/routes";
 import { employeeStaffRoutes } from "@/features/internal-staff/employee/routes";
+import { managerRoutes } from "@/features/internal-staff/manager/routes";
 import { customerScoreRoutes } from "@/features/score/customer/routes";
 import { adminScoreRoutes } from "@/features/score/admin/routes";
 import { adminNotificationRoutes } from "@/features/notifications/admin/routes";
@@ -34,6 +35,7 @@ import {
 import MainLayout from "@/components/layout/MainLayout";
 import AdminLayout from "@/components/admin/AdminLayout";
 import EmployeeLayout from "@/components/employee/EmployeeLayout";
+import ManagerLayout from "@/components/manager/ManagerLayout";
 import { ForbiddenPage, NotFoundPage, ServerErrorPage, UnauthorizedPage } from "@/features/auth/pages/ErrorPages";
 
 const adminOnly = element => (
@@ -77,7 +79,7 @@ function AppRoutes() {
 
                 {/* Employee Routes */}
                 <Route path="/employee" element={
-                    <RoleRoute allowedRoles={["STAFF", "ADMIN"]}>
+                    <RoleRoute allowedRoles={["EMPLOYEE", "ADMIN"]}>
                         <EmployeeLayout />
                     </RoleRoute>
                 }>
@@ -87,10 +89,25 @@ function AppRoutes() {
                             <Route key={`conc-emp-${index}`} path={route.path} element={route.element} />
                     ))}
                     {employeeStaffRoutes.map((route, index) => (
-                        <Route key={`staff-emp-${index}`} path={route.path} element={route.element} />
+                        route.index
+                            ? <Route key={`staff-emp-${index}`} index element={route.element} />
+                            : <Route key={`staff-emp-${index}`} path={route.path} element={route.element} />
                     ))}
                     {employeePaymentRoutes.map((route, index) => (
                         <Route key={`payment-emp-${index}`} path={route.path} element={route.element} />
+                    ))}
+                </Route>
+
+                {/* Cinema Manager Routes */}
+                <Route path="/manager" element={
+                    <RoleRoute allowedRoles={["MANAGER"]}>
+                        <ManagerLayout />
+                    </RoleRoute>
+                }>
+                    {managerRoutes.map((route, index) => (
+                        route.index
+                            ? <Route key={`manager-${index}`} index element={route.element} />
+                            : <Route key={`manager-${index}`} path={route.path} element={route.element} />
                     ))}
                 </Route>
 

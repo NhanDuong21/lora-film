@@ -1,214 +1,237 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { getCustomers, setCustomerBlocked, getDashboard } from '../services/userAdminService';
+import {
+  applyCustomerAccessAction,
+  getCustomer,
+  getCustomers,
+  getDashboard
+} from '../services/userAdminService';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
-import AdminStatCard from '../components/AdminStatCard';
 import useAdminAccess from '../hooks/useAdminAccess';
-import { Users, UserPlus, UserCheck, UserX, Search, Filter, ShieldBan, ShieldCheck } from 'lucide-react';
+import {
+  ActionModal,
+  ConsolePagination,
+  ConsolePanel,
+  DetailDrawer,
+  DetailGrid,
+  MetricStrip,
+  OperationsHeader
+} from '../components/OperationsConsole';
+import { Download, Search, ShieldAlert, UserCheck, UserPlus, Users } from 'lucide-react';
+
+const EMPTY_RESULT = { content: [], totalPages: 0, totalElements: 0 };
 
 export default function AdminMembersPage() {
   const can = useAdminAccess();
-  const canUpdateCustomers = can('CUSTOMER_UPDATE');
-  const [query, setQuery] = useState({ keyword: '', status: '', page: 0, size: 10 });
-  const [result, setResult] = useState({ content: [], totalPages: 0, totalElements: 0 });
-  const [state, setState] = useState({ loading: true, error: '' });
-  const [stats, setStats] = useState({ total: 0, active: 0, blocked: 0, new: 0 });
+  const canUpdate = can('CUSTOMER_UPDATE');
   const outlet = useOutletContext();
-  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
   const notify = outlet?.triggerToast || (() => undefined);
+  const [filters, setFilters] = useState({ keyword: '', status: '', page: 0, size: 15 });
+  const deferredKeyword = useDeferredValue(filters.keyword);
+  const [result, setResult] = useState(EMPTY_RESULT);
+  const [dashboard, setDashboard] = useState(null);
+  const [state, setState] = useState({ loading: true, error: '' });
+  const [selected, setSelected] = useState(null);
+  const [selectedLoading, setSelectedLoading] = useState(false);
+  const [accessAction, setAccessAction] = useState(null);
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const query = useMemo(() => ({
+    page: filters.page,
+    size: filters.size,
+    keyword: deferredKeyword.trim() || undefined,
+    status: filters.status || undefined
+  }), [deferredKeyword, filters.page, filters.size, filters.status]);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
     try {
-      const [data, dashboard] = await Promise.all([
-        getCustomers({
-          ...query,
-          keyword: query.keyword || undefined,
-          status: query.status || undefined
-        }),
+      const [customers, summary] = await Promise.all([
+        getCustomers(query),
         can('DASHBOARD_VIEW') ? getDashboard() : Promise.resolve(null)
       ]);
-      setResult(data || { content: [], totalPages: 0, totalElements: 0 });
-      
-      // Calculate basic stats for the current view if we don't have a dedicated endpoint
-      if (query.page === 0 && !query.keyword && !query.status) {
-        setStats({
-          total: dashboard?.totalCustomers ?? data.totalElements ?? 0,
-          active: dashboard?.activeCustomers ?? data.content.filter(c => c.status === 'ACTIVE').length,
-          blocked: dashboard?.blockedCustomers ?? data.content.filter(c => c.status === 'BLOCKED').length,
-          new: data.content.filter(c => {
-             if (!c.joinedAt) return false;
-             return (new Date() - new Date(c.joinedAt)) / (1000 * 60 * 60 * 24) < 7;
-          }).length || 0
-        });
-      }
-      
+      setResult(customers || EMPTY_RESULT);
+      setDashboard(summary);
       setState({ loading: false, error: '' });
     } catch (error) {
-      setState({ loading: false, error: error?.message || 'Không thể tải khách hàng.' });
+      setState({ loading: false, error: error?.message || 'Không thể tải danh sách khách hàng.' });
     }
   }, [can, query]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
-  const toggleBlocked = async (customer) => {
-    const nextAction = customer.status === 'BLOCKED' ? 'mở khóa' : 'khóa';
-    if (!await confirmAction(`Xác nhận ${nextAction} khách hàng ${customer.customerCode}?`)) return;
+  const openCustomer = async customer => {
+    setSelected(customer);
+    setSelectedLoading(true);
     try {
-      await setCustomerBlocked(customer.id, customer.status !== 'BLOCKED');
-      await load();
-      notify(`Đã ${nextAction} khách hàng.`);
+      setSelected(await getCustomer(customer.id));
     } catch (error) {
-      setState(value => ({ ...value, error: error?.message || 'Không thể đổi trạng thái.' }));
+      notify(error?.message || 'Không thể tải hồ sơ khách hàng.', 'error');
+    } finally {
+      setSelectedLoading(false);
     }
   };
 
-  const exportCurrentPage = () => {
+  const submitAccessAction = async event => {
+    event.preventDefault();
+    if (!accessAction || reason.trim().length < 5) return;
+    setSubmitting(true);
+    try {
+      const updated = await applyCustomerAccessAction(accessAction.customer.id, {
+        type: accessAction.type,
+        reason: reason.trim()
+      });
+      setSelected(updated);
+      setAccessAction(null);
+      setReason('');
+      await load();
+      notify(accessAction.type === 'BLOCK' ? 'Đã khóa quyền truy cập khách hàng.' : 'Đã khôi phục quyền truy cập.');
+    } catch (error) {
+      notify(error?.message || 'Không thể cập nhật quyền truy cập.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const exportVisible = () => {
     const rows = [
-      ['customerCode', 'fullName', 'email', 'phoneNumber', 'status', 'joinedAt'],
-      ...(result.content || []).map(customer => [
-        customer.customerCode,
-        customer.fullName,
-        customer.email,
-        customer.phoneNumber,
-        customer.status,
-        customer.joinedAt
-      ])
+      ['Mã khách hàng', 'Họ tên', 'Email', 'Số điện thoại', 'Trạng thái', 'Ngày tham gia'],
+      ...result.content.map(item => [item.customerCode, item.fullName, item.email, item.phoneNumber, item.status, item.joinedAt])
     ];
     const csv = rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `customers-page-${query.page + 1}.csv`;
+    link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    notify('Đã xuất dữ liệu trang hiện tại.');
   };
 
+  const metrics = [
+    { label: 'Khách hàng', value: dashboard?.totalCustomers ?? result.totalElements, hint: 'Không gồm tài khoản nhân sự', icon: Users, tone: 'border-blue-500/20 bg-blue-500/10 text-blue-400' },
+    { label: 'Đang hoạt động', value: dashboard?.activeCustomers ?? '—', hint: 'Có thể đăng nhập và đặt vé', icon: UserCheck, tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' },
+    { label: 'Bị khóa', value: dashboard?.blockedCustomers ?? '—', hint: 'Yêu cầu xử lý có lý do', icon: ShieldAlert, tone: 'border-red-500/20 bg-red-500/10 text-red-400' },
+    { label: 'Kết quả hiện tại', value: result.totalElements, hint: deferredKeyword || filters.status ? 'Theo bộ lọc' : 'Toàn bộ hồ sơ', icon: UserPlus, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-400' }
+  ];
+
   return (
-    <section className="flex-1 space-y-6 overflow-auto bg-[#050506] p-6 text-white md:p-8">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <h1 className="text-2xl font-black uppercase tracking-wider text-white">Quản lý <span className="text-brand-orange">Khách Hàng</span></h1>
-          <p className="mt-1 text-sm text-zinc-500">Xem danh sách, tìm kiếm và quản lý trạng thái tài khoản thành viên.</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={exportCurrentPage} disabled={!result.content?.length} className="px-4 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-sm font-bold hover:bg-zinc-800 transition-colors flex items-center gap-2 text-zinc-300 disabled:opacity-40">
-             Xuất trang hiện tại
+    <section className="min-h-full space-y-6 bg-[#050506] p-5 text-white md:p-8">
+      <OperationsHeader
+        eyebrow="Customer operations"
+        title="Trung tâm khách hàng"
+        description="Tra cứu hồ sơ thành viên, kiểm soát quyền truy cập và theo dõi trạng thái bằng dữ liệu vận hành thực. Tài khoản nhân sự được loại khỏi không gian này."
+        actions={(
+          <button type="button" onClick={exportVisible} disabled={!result.content.length} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-black text-zinc-200 hover:bg-white/10 disabled:opacity-40">
+            <Download size={17} /> Xuất kết quả đang xem
           </button>
-        </div>
-      </header>
+        )}
+      />
 
-      {/* Dashboard Statistics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <AdminStatCard title="Tổng thành viên" value={stats.total} icon={Users} colorClass="bg-blue-500/10 text-blue-500 border-blue-500/20" />
-        <AdminStatCard title="Thành viên mới (trang)" value={stats.new} icon={UserPlus} colorClass="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" />
-        <AdminStatCard title="Đang hoạt động" value={stats.active} icon={UserCheck} colorClass="bg-brand-orange/10 text-brand-orange border-brand-orange/20" />
-        <AdminStatCard title="Bị khóa" value={stats.blocked} icon={UserX} colorClass="bg-red-500/10 text-red-500 border-red-500/20" />
-      </div>
+      <MetricStrip items={metrics} />
 
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
-          <input 
-            value={query.keyword} 
-            placeholder="Tìm theo tên, email, sđt, CCCD..."
-            onChange={event => setQuery(value => ({ ...value, keyword: event.target.value, page: 0 }))} 
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-10 pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-brand-orange outline-none transition-colors"
-          />
-        </div>
-        <div className="w-full md:w-56 relative">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4 z-10 pointer-events-none" />
-          <select 
-            value={query.status}
-            onChange={event => setQuery(value => ({ ...value, status: event.target.value, page: 0 }))}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl h-10 pl-10 pr-4 text-sm text-zinc-100 outline-none focus:border-brand-orange appearance-none relative"
+      <ConsolePanel>
+        <div className="flex flex-col gap-3 border-b border-white/10 p-4 lg:flex-row">
+          <label className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
+            <input
+              value={filters.keyword}
+              onChange={event => setFilters(value => ({ ...value, keyword: event.target.value, page: 0 }))}
+              placeholder="Tên, email, số điện thoại, CCCD hoặc mã khách hàng"
+              aria-label="Tìm khách hàng"
+              className="h-11 w-full rounded-xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm outline-none transition focus:border-brand-orange"
+            />
+          </label>
+          <select
+            value={filters.status}
+            onChange={event => setFilters(value => ({ ...value, status: event.target.value, page: 0 }))}
+            aria-label="Lọc trạng thái khách hàng"
+            className="h-11 min-w-56 rounded-xl border border-white/10 bg-black/30 px-4 text-sm font-semibold outline-none focus:border-brand-orange"
           >
             <option value="">Tất cả trạng thái</option>
-            <option value="ACTIVE">Hoạt động</option>
-            <option value="BLOCKED">Đã khóa</option>
+            <option value="ACTIVE">Đang hoạt động</option>
+            <option value="BLOCKED">Bị khóa</option>
             <option value="INACTIVE">Ngừng hoạt động</option>
           </select>
         </div>
-      </div>
 
-      <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!result.content?.length} emptyMessage="Không tìm thấy khách hàng nào">
-        <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/30">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-zinc-950/50 text-xs uppercase font-black text-zinc-500 tracking-wider">
-              <tr>
-                <th className="p-4 rounded-tl-2xl">Mã KH</th>
-                <th className="p-4">Khách hàng</th>
-                <th className="p-4">Liên hệ</th>
-                <th className="p-4">Trạng thái</th>
-                <th className="p-4 text-right rounded-tr-2xl">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {result.content?.map(customer => (
-                <tr key={customer.id} className="hover:bg-zinc-800/20 transition-colors group">
-                  <td className="p-4">
-                    <span className="font-mono text-xs text-zinc-400 bg-zinc-900 px-2 py-1 rounded-md border border-zinc-800 group-hover:border-zinc-700 transition-colors">
-                      {customer.customerCode || customer.id?.substring(0, 8)}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <p className="font-bold text-zinc-100">{customer.fullName}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{customer.email || '—'}</p>
-                  </td>
-                  <td className="p-4 text-zinc-300">
-                    <p>{customer.phoneNumber || '—'}</p>
-                  </td>
-                  <td className="p-4">
-                    <StatusBadge status={customer.status} label={customer.status === 'BLOCKED' ? 'Bị khóa' : customer.status === 'ACTIVE' ? 'Hoạt động' : undefined} />
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      {canUpdateCustomers && <button
-                        type="button" 
-                        onClick={() => toggleBlocked(customer)}
-                        className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 ${
-                          customer.status === 'BLOCKED' 
-                            ? 'border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10' 
-                            : 'border-red-500/30 text-red-500 hover:bg-red-500/10'
-                        }`}
-                      >
-                        {customer.status === 'BLOCKED' ? <ShieldCheck size={14} /> : <ShieldBan size={14} />}
-                        {customer.status === 'BLOCKED' ? 'Mở khóa' : 'Khóa'}
-                      </button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {/* Pagination */}
-        {result.totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
-            <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              Trang {query.page + 1} / {result.totalPages} <span className="mx-2">•</span> Tổng: {result.totalElements}
-            </span>
-            <div className="flex justify-end gap-2">
-              <button 
-                disabled={query.page === 0} 
-                onClick={() => setQuery(value => ({ ...value, page: value.page - 1 }))}
-                className="rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-zinc-900 transition-colors"
-              >
-                Trước
-              </button>
-              <button 
-                disabled={query.page + 1 >= result.totalPages}
-                onClick={() => setQuery(value => ({ ...value, page: value.page + 1 }))}
-                className="rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:hover:bg-zinc-900 transition-colors"
-              >
-                Tiếp
-              </button>
+        <AsyncState loading={state.loading} error={state.error} onRetry={load} empty={!result.content.length} emptyMessage="Không có khách hàng phù hợp">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-white/[0.025] text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
+                <tr><th className="px-5 py-4">Khách hàng</th><th className="px-5 py-4">Liên hệ</th><th className="px-5 py-4">Tham gia</th><th className="px-5 py-4">Trạng thái</th><th className="px-5 py-4 text-right">Hồ sơ</th></tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {result.content.map(customer => (
+                  <tr key={customer.id} className="group hover:bg-white/[0.025]">
+                    <td className="px-5 py-4"><p className="font-black text-zinc-100">{customer.fullName}</p><p className="mt-1 font-mono text-xs text-zinc-600">{customer.customerCode}</p></td>
+                    <td className="px-5 py-4"><p className="text-zinc-300">{customer.email || '—'}</p><p className="mt-1 text-xs text-zinc-600">{customer.phoneNumber || 'Chưa cập nhật số điện thoại'}</p></td>
+                    <td className="px-5 py-4 text-zinc-400">{customer.joinedAt || '—'}</td>
+                    <td className="px-5 py-4"><StatusBadge status={customer.status} label={customer.status === 'ACTIVE' ? 'Hoạt động' : customer.status === 'BLOCKED' ? 'Bị khóa' : 'Ngừng hoạt động'} /></td>
+                    <td className="px-5 py-4 text-right"><button type="button" onClick={() => openCustomer(customer)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 hover:border-brand-orange/50 hover:text-brand-orange">Mở hồ sơ</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ConsolePagination page={filters.page} totalPages={result.totalPages} totalElements={result.totalElements} onPage={page => setFilters(value => ({ ...value, page }))} />
+        </AsyncState>
+      </ConsolePanel>
+
+      <DetailDrawer
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        title={selected?.fullName || 'Hồ sơ khách hàng'}
+        subtitle={selected?.customerCode}
+        footer={canUpdate && selected ? (
+          <button
+            type="button"
+            onClick={() => { setReason(''); setAccessAction({ customer: selected, type: selected.status === 'BLOCKED' ? 'UNBLOCK' : 'BLOCK' }); }}
+            className={`w-full rounded-xl px-4 py-3 text-sm font-black ${selected.status === 'BLOCKED' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-red-500/10 text-red-400 ring-1 ring-inset ring-red-500/30 hover:bg-red-500/20'}`}
+          >
+            {selected.status === 'BLOCKED' ? 'Khôi phục quyền truy cập' : 'Khóa quyền truy cập'}
+          </button>
+        ) : null}
+      >
+        {selectedLoading ? <p className="text-sm text-zinc-500">Đang tải hồ sơ…</p> : selected ? (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-orange-500/10 to-transparent p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Trạng thái tài khoản</p>
+              <div className="mt-3"><StatusBadge status={selected.status} label={selected.status === 'ACTIVE' ? 'Đang hoạt động' : selected.status === 'BLOCKED' ? 'Đã khóa' : 'Ngừng hoạt động'} /></div>
+              <p className="mt-3 text-xs leading-5 text-zinc-500">Mọi thay đổi quyền truy cập đều yêu cầu lý do và được ghi vào audit log.</p>
+            </div>
+            <DetailGrid items={[
+              { label: 'Email', value: selected.email },
+              { label: 'Số điện thoại', value: selected.phoneNumber },
+              { label: 'Giới tính', value: selected.gender },
+              { label: 'Ngày sinh', value: selected.birthday },
+              { label: 'Ngày tham gia', value: selected.joinedAt },
+              { label: 'Account ID', value: selected.accountId }
+            ]} />
+            <div>
+              <h3 className="text-sm font-black text-white">Ghi chú vận hành</h3>
+              <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm leading-6 text-zinc-400">{selected.note || 'Chưa có ghi chú cho khách hàng này.'}</p>
             </div>
           </div>
-        )}
-      </AsyncState>
+        ) : null}
+      </DetailDrawer>
+
+      <ActionModal
+        open={Boolean(accessAction)}
+        onClose={() => setAccessAction(null)}
+        title={accessAction?.type === 'BLOCK' ? 'Khóa quyền truy cập' : 'Khôi phục quyền truy cập'}
+        description={accessAction?.type === 'BLOCK' ? 'Tài khoản sẽ không thể đăng nhập. Hãy ghi lý do đủ rõ để ca trực sau có thể xử lý.' : 'Khách hàng sẽ có thể đăng nhập lại. Lý do khôi phục được lưu vào audit log.'}
+        onSubmit={submitAccessAction}
+        submitLabel={accessAction?.type === 'BLOCK' ? 'Xác nhận khóa' : 'Xác nhận khôi phục'}
+        submitting={submitting}
+        tone={accessAction?.type === 'BLOCK' ? 'danger' : 'orange'}
+      >
+        <label className="block text-xs font-black uppercase tracking-wider text-zinc-500">Lý do *</label>
+        <textarea value={reason} onChange={event => setReason(event.target.value)} minLength={5} maxLength={500} required rows={4} placeholder="Mô tả nguyên nhân và căn cứ xử lý…" className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm leading-6 outline-none focus:border-brand-orange" />
+      </ActionModal>
     </section>
   );
 }

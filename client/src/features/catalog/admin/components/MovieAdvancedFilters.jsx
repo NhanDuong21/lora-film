@@ -9,7 +9,7 @@ import {
 const FILTER_LABELS = {
   source: { TMDB: 'TMDB', MANUAL: 'Thủ công' },
   healthStatus: { READY: 'Sẵn sàng', WARNING: 'Cần kiểm tra', BLOCKED: 'Bị chặn' },
-  hasPrimaryPoster: { true: 'Có poster chính', false: 'Thiếu poster chính' },
+  hasPrimaryPoster: { true: 'Có áp phích chính', false: 'Thiếu áp phích chính' },
   hasActiveVersion: { true: 'Có phiên bản hoạt động', false: 'Thiếu phiên bản hoạt động' },
   hasShowtime: { true: 'Có lịch chiếu', false: 'Chưa có lịch chiếu' },
 };
@@ -47,7 +47,7 @@ export default function MovieAdvancedFilters({ query, genres, isOpen, onApply, o
     if (query.genrePublicId) items.push({ key: 'genrePublicId', label: genreNames.get(query.genrePublicId) || 'Thể loại đã chọn' });
     if (query.country) items.push({ key: 'country', label: `Quốc gia: ${query.country}` });
     if (query.releaseDateFrom || query.releaseDateTo) {
-      items.push({ key: 'releaseDateRange', label: `Phát hành: ${query.releaseDateFrom || '…'} → ${query.releaseDateTo || '…'}` });
+      items.push({ key: 'releaseDateRange', label: `Khai thác: ${query.releaseDateFrom || '…'} → ${query.releaseDateTo || '…'}` });
     }
     if (query.tmdbUpdatedFrom || query.tmdbUpdatedTo) {
       items.push({ key: 'tmdbUpdatedRange', label: `TMDB: ${query.tmdbUpdatedFrom || '…'} → ${query.tmdbUpdatedTo || '…'}` });
@@ -84,11 +84,11 @@ export default function MovieAdvancedFilters({ query, genres, isOpen, onApply, o
                 <option value="BLOCKED">Bị chặn</option>
               </select>
             </FilterField>
-            <FilterField label="Poster chính">
+            <FilterField label="Áp phích chính">
               <select className={inputClass} value={draft.hasPrimaryPoster} onChange={event => updateDraft('hasPrimaryPoster', event.target.value)}>
                 <option value="">Tất cả</option>
-                <option value="true">Có poster chính</option>
-                <option value="false">Thiếu poster chính</option>
+                <option value="true">Có áp phích chính</option>
+                <option value="false">Thiếu áp phích chính</option>
               </select>
             </FilterField>
             <FilterField label="Phiên bản hoạt động">
@@ -116,12 +116,12 @@ export default function MovieAdvancedFilters({ query, genres, isOpen, onApply, o
               </select>
             </FilterField>
             <FilterField label="Quốc gia">
-              <input className={inputClass} value={draft.country} onChange={event => updateDraft('country', event.target.value)} placeholder="Ví dụ: Vietnam" />
+                <input className={inputClass} value={draft.country} onChange={event => updateDraft('country', event.target.value)} placeholder="Ví dụ: Việt Nam" />
             </FilterField>
             <FilterField label="Sắp xếp">
               <select className={inputClass} value={draft.sort} onChange={event => updateDraft('sort', event.target.value)}>
-                <option value="releaseDate,desc">Ngày phát hành mới nhất</option>
-                <option value="releaseDate,asc">Ngày phát hành cũ nhất</option>
+                <option value="releaseDate,desc">Ngày khai thác mới nhất</option>
+                <option value="releaseDate,asc">Ngày khai thác cũ nhất</option>
                 <option value="updatedAt,desc">Cập nhật gần nhất</option>
                 <option value="tmdbLastUpdated,desc">TMDB cập nhật gần nhất</option>
                 <option value="createdAt,desc">Tạo gần nhất</option>
@@ -133,10 +133,10 @@ export default function MovieAdvancedFilters({ query, genres, isOpen, onApply, o
 
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <fieldset className="rounded-xl border border-zinc-800 p-3">
-              <legend className="px-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Ngày phát hành</legend>
+              <legend className="px-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400">Ngày bắt đầu khai thác</legend>
               <div className="grid grid-cols-2 gap-3">
-                <input aria-label="Ngày phát hành từ" type="date" className={inputClass} value={draft.releaseDateFrom} onChange={event => updateDraft('releaseDateFrom', event.target.value)} />
-                <input aria-label="Ngày phát hành đến" type="date" className={inputClass} value={draft.releaseDateTo} onChange={event => updateDraft('releaseDateTo', event.target.value)} />
+                <input aria-label="Ngày bắt đầu khai thác từ" type="date" className={inputClass} value={draft.releaseDateFrom} onChange={event => updateDraft('releaseDateFrom', event.target.value)} />
+                <input aria-label="Ngày bắt đầu khai thác đến" type="date" className={inputClass} value={draft.releaseDateTo} onChange={event => updateDraft('releaseDateTo', event.target.value)} />
               </div>
             </fieldset>
             <fieldset className="rounded-xl border border-zinc-800 p-3">

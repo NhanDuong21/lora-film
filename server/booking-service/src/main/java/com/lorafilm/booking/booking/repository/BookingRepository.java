@@ -86,6 +86,16 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
             @Param("status") BookingStatus status,
             @Param("now") Instant now);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.showtimePublicId = :showtimePublicId
+              AND b.isDeleted = false
+            ORDER BY b.createdAt ASC, b.id ASC
+            """)
+    List<Booking> findByShowtimePublicIdForEmergencyUpdate(
+            @Param("showtimePublicId") String showtimePublicId);
+
     long countByCreatedAtAfter(java.time.Instant start);
 
     long countByPaymentStatus(com.lorafilm.booking.booking.enums.PaymentStatus status);

@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.HashMap;
@@ -76,22 +77,22 @@ public class CustomerMovieService {
             Pageable pageable) {
         Specification<Movie> spec = Specification.where(
                 com.lorafilm.movie.movie.repository.MovieSpecification.isNotDeleted());
+        LocalDate today = LocalDate.now(clock);
 
         if (statusStr == null || statusStr.isBlank() || "all".equalsIgnoreCase(statusStr)) {
             spec = spec.and(
-                    com.lorafilm.movie.movie.repository.MovieSpecification.isPubliclyVisible());
+                    com.lorafilm.movie.movie.repository.MovieSpecification.isCustomerCatalogVisible(today));
         } else if ("now-showing".equalsIgnoreCase(statusStr)) {
             spec = spec.and(
                     com.lorafilm.movie.movie.repository.MovieSpecification.hasStatus(
                             MovieStatus.NOW_SHOWING));
         } else if ("coming-soon".equalsIgnoreCase(statusStr)) {
             spec = spec.and(
-                    com.lorafilm.movie.movie.repository.MovieSpecification.hasStatus(
-                            MovieStatus.UPCOMING));
+                    com.lorafilm.movie.movie.repository.MovieSpecification.isFutureUpcoming(today));
         } else {
             throw new BusinessException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Invalid status query. Must be all, now-showing or coming-soon.",
+                    "Trạng thái lọc không hợp lệ. Chỉ chấp nhận tất cả, đang chiếu hoặc sắp chiếu.",
                     null);
         }
 
@@ -134,14 +135,17 @@ public class CustomerMovieService {
 
     public com.lorafilm.movie.movie.dto.MovieDetailDto getMovieDetail(String identifier) {
         Movie movie = movieRepository.findByIdentifierAndDeletedAtIsNull(identifier)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null));
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null));
         
-        boolean normallyVisible = movie.getStatus() != MovieStatus.DRAFT
-                && movie.getStatus() != MovieStatus.INACTIVE;
+        boolean normallyVisible = movie.getStatus() == MovieStatus.NOW_SHOWING
+                || movie.getStatus() == MovieStatus.ENDED
+                || (movie.getStatus() == MovieStatus.UPCOMING
+                    && movie.getReleaseDate() != null
+                    && movie.getReleaseDate().isAfter(LocalDate.now(clock)));
         if (!normallyVisible && !showtimeRepository
                 .existsByMovieIdAndStatusAndStartTimeAfterAndDeletedAtIsNull(
                         movie.getId(), ShowtimeStatus.OPEN_FOR_BOOKING, Instant.now(clock))) {
-            throw new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Movie not found", null);
+            throw new BusinessException(ErrorCode.MOVIE_NOT_FOUND, "Không tìm thấy phim.", null);
         }
 
         var detail = movieService.getMovieByIdentifier(movie.getPublicId());
