@@ -1,13 +1,14 @@
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Banknote, CalendarDays, ClipboardCheck, ClipboardList, Clock3, Clapperboard,
-  History, Home, LayoutDashboard, LogOut, QrCode, RotateCcw, Ticket, User, WalletCards,
+  History, Home, LayoutDashboard, LogOut, QrCode, RotateCcw, Ticket, WalletCards,
 } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   EMPLOYEE_PERMISSIONS,
   hasEmployeeAccess,
 } from '@/features/internal-staff/employee/employeeAccess';
+import RoleAvatar from '@/components/common/RoleAvatar';
 
 const EMPLOYEE_MENU_GROUPS = [
   {
@@ -138,7 +139,10 @@ export default function EmployeeLayout() {
         </div>
         <div className="mt-auto space-y-2 border-t border-zinc-800 p-4">
           <div className="hidden items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 md:flex">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-zinc-800 text-amber-500"><User size={16} /></span>
+            <RoleAvatar
+              user={user}
+              className="h-8 w-8 border border-amber-500/30"
+            />
             <div className="min-w-0"><p className="text-[10px] font-black uppercase text-zinc-500">Nhân viên</p><p className="truncate text-xs font-bold text-white">{user?.fullName || user?.name || 'Employee'}</p></div>
           </div>
           <button type="button" onClick={() => navigate('/')} className="flex w-full items-center justify-center rounded-xl py-2.5 text-xs text-zinc-400 hover:bg-zinc-800 md:justify-start md:px-5"><Home className="h-4 w-4 md:mr-3" /><span className="hidden md:inline">Trang chủ</span></button>

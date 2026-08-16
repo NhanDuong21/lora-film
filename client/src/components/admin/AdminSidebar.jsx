@@ -35,43 +35,9 @@ import {
   Armchair,
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
-import { getOptimizedImageUrl } from '@/utils/imageOptimization';
+import RoleAvatar from '@/components/common/RoleAvatar';
 
 const sidebarStateStorageKey = 'lorafilm.admin.sidebar.sections.v1';
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-
-const resolveMediaUrl = value => (
-  value?.startsWith('/') ? `${apiBaseUrl}${value}` : value
-);
-
-const getAvatarUrl = value => getOptimizedImageUrl(resolveMediaUrl(value), {
-  width: 256,
-  height: 256,
-  quality: 90,
-  gravity: 'face',
-});
-
-function SidebarAvatar({ avatarUrl, alt, fallback }) {
-  const [failedUrl, setFailedUrl] = useState('');
-  const shouldRenderImage = Boolean(avatarUrl) && failedUrl !== avatarUrl;
-
-  if (shouldRenderImage) {
-    return (
-      <img
-        src={avatarUrl}
-        alt={alt}
-        className="h-10 w-10 shrink-0 rounded-full border border-brand-orange/30 object-cover"
-        onError={() => setFailedUrl(avatarUrl)}
-      />
-    );
-  }
-
-  return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-orange/20 bg-brand-orange/10 text-sm font-bold text-brand-orange">
-      {fallback}
-    </div>
-  );
-}
 
 const readSidebarState = () => {
   if (typeof window === 'undefined') return {};
@@ -126,7 +92,6 @@ export default function AdminSidebar({
     ? 'Kế toán'
     : (isFullAdmin ? 'Quản trị viên' : 'Nhân viên');
   const adminHomePath = getAdminLandingPath(normalizedRole, permissions);
-  const avatarUrl = getAvatarUrl(user?.avatarUrl);
 
   const sections = [
     {
@@ -349,10 +314,11 @@ export default function AdminSidebar({
       <div className="p-4 border-t border-zinc-800/60 bg-zinc-950 shrink-0">
         <div className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-2xl flex flex-col gap-3 hover-scale">
           <div className="flex items-center justify-start gap-3">
-            <SidebarAvatar
-              avatarUrl={avatarUrl}
+            <RoleAvatar
+              user={user}
               alt={`Ảnh đại diện ${user?.fullName || 'tài khoản quản trị'}`}
-              fallback={roleLabel.slice(0, 2).toUpperCase()}
+              fallbackAlt={`Ảnh mặc định theo vai trò của ${user?.fullName || roleLabel}`}
+              className="h-10 w-10 border border-brand-orange/30"
             />
             <div className="truncate">
               <span className="text-[10px] text-zinc-500 font-bold block uppercase tracking-wider truncate">{roleLabel}</span>

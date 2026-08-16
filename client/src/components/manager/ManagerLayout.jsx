@@ -13,11 +13,11 @@ import {
   ShieldCheck,
   Ticket,
   UsersRound,
-  User,
   Wrench,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import managerCinemaService from '@/features/internal-staff/manager/services/managerCinemaService';
+import RoleAvatar from '@/components/common/RoleAvatar';
 
 const MANAGER_MENUS = [
   { path: '/manager', end: true, label: 'Việc cần xử lý hôm nay', icon: CircleGauge },
@@ -111,7 +111,10 @@ export default function ManagerLayout() {
 
         <div className="space-y-2 border-t border-white/10 p-3 lg:p-4">
           <div className="hidden items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 lg:flex">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-800 text-brand-orange"><User size={17} /></span>
+            <RoleAvatar
+              user={user}
+              className="h-9 w-9 border border-brand-orange/30"
+            />
             <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-wide text-zinc-600">Quản lý rạp</p><p className="truncate text-xs font-bold text-white">{user?.fullName || user?.name || user?.email}</p></div>
           </div>
           <button type="button" onClick={handleLogout} className="flex min-h-11 w-full items-center justify-center rounded-xl text-red-400 hover:bg-red-500/10 lg:justify-start lg:px-4"><LogOut className="h-5 w-5 lg:mr-3" /><span className="hidden text-sm font-bold lg:inline">Đăng xuất</span></button>

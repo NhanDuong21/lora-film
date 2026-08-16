@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { getRoleFallbackAvatar } from './avatarUtils';
+import { getRoleFallbackAvatar, getSignedInUserFallbackAvatar } from './avatarUtils';
 import { PersonAvatar } from './HrWorkspace';
 
 describe('PersonAvatar', () => {
@@ -20,6 +20,17 @@ describe('PersonAvatar', () => {
     ['FINANCE_ADMIN', '/images/ketoan.png']
   ])('chọn ảnh mặc định theo vai trò %s', (role, expectedUrl) => {
     expect(getRoleFallbackAvatar(role)).toBe(expectedUrl);
+  });
+
+  it.each([
+    [{ role: 'ADMIN', permissions: [] }, '/images/main-logo.png'],
+    [{ role: 'MANAGER', permissions: ['ANALYTICS_VIEW'] }, '/images/manager_avt.png'],
+    [{ role: 'EMPLOYEE', permissions: ['PAYMENT_RECONCILE'] }, '/images/ketoan.png'],
+    [{ role: 'EMPLOYEE', permissions: ['CUSTOMER_VIEW'] }, '/images/chamsockhachhang.png'],
+    [{ role: 'EMPLOYEE', permissions: ['PAYMENT_CASH_COLLECT'] }, '/images/employee_banve.png'],
+    [{ role: 'EMPLOYEE', permissions: ['TICKET_SCAN'] }, '/images/employee_banve.png'],
+  ])('maps the signed-in sidebar user to %s', (user, expectedUrl) => {
+    expect(getSignedInUserFallbackAvatar(user)).toBe(expectedUrl);
   });
 
   it('shows a role fallback when the uploaded avatar cannot load', () => {
