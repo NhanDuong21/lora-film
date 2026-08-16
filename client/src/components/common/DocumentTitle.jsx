@@ -39,6 +39,11 @@ const pageTitle = pathname => {
   if (path === '/promotions') return 'Ưu đãi thành viên';
   if (path === '/loyalty') return 'Điểm thưởng thành viên';
   if (path === '/payments/return') return 'Kết quả thanh toán';
+  if (path === '/support/payment') return 'Hướng dẫn thanh toán';
+  if (path === '/support/refunds') return 'Chính sách đổi, hủy và hoàn vé';
+  if (path === '/support/faq') return 'Câu hỏi thường gặp';
+  if (path === '/support/terms') return 'Điều khoản sử dụng';
+  if (path === '/support/privacy') return 'Chính sách bảo mật';
 
   const adminTitles = [
     ['/admin/hr', 'Trung tâm nhân sự'],

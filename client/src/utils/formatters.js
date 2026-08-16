@@ -71,34 +71,34 @@ export const getAgeRatingLabel = (rating) => {
     P: {
       label: "P",
       description: "Phổ biến rộng rãi",
-      bgClass: "bg-green-500/10 text-green-500 border-green-500/20",
+      bgClass: "bg-emerald-500 text-zinc-950 border-emerald-300/70",
     },
     K: {
       label: "K",
       description: "Dưới 13 tuổi cần người đi cùng",
-      bgClass: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+      bgClass: "bg-sky-500 text-white border-sky-300/70",
     },
     T13: {
       label: "T13",
       description: "Trên 13 tuổi",
-      bgClass: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+      bgClass: "bg-amber-400 text-zinc-950 border-amber-200/70",
     },
     T16: {
       label: "T16",
       description: "Trên 16 tuổi",
-      bgClass: "bg-brand-orange/10 text-brand-orange border-brand-orange/20",
+      bgClass: "bg-brand-orange text-white border-orange-300/70",
     },
     T18: {
       label: "T18",
       description: "Trên 18 tuổi",
-      bgClass: "bg-red-500/10 text-red-500 border-red-500/20",
+      bgClass: "bg-red-600 text-white border-red-300/70",
     },
   };
 
   return ratingDetails[cleanRating] || {
     label: cleanRating,
     description: `Phân loại ${cleanRating}`,
-    bgClass: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    bgClass: "bg-zinc-800 text-white border-zinc-500/70",
   };
 };
 

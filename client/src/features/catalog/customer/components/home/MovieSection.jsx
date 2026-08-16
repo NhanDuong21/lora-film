@@ -1,335 +1,277 @@
-// eslint-disable-next-line no-unused-vars
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Ticket, Play, X, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  AlertCircle,
+  ArrowRight,
+  Play,
+  RefreshCw,
+  Ticket,
+  X,
+} from 'lucide-react';
 
 import { useMoviesQuery } from '@/features/catalog/customer/hooks/useHomepageMovies';
 import MovieSectionSkeleton from './MovieSectionSkeleton';
 import {
-  formatGenres,
-  formatDuration,
   formatDate,
+  formatDuration,
   getAgeRatingLabel,
-  getYoutubeEmbedUrl
+  getYoutubeEmbedUrl,
 } from '@/utils/formatters';
 
 const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2318181b'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='24' fill='%2352525b'>LORA FILM</text><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%233f3f46'>Không có ảnh bìa</text></svg>";
 
-const formatPrice = (value, currency = 'VND') => value == null
+const formatPrice = value => value == null
   ? null
-  : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currency || 'VND' }).format(value);
+  : `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value))}đ`;
 
-export default function MovieGrid({ onSelectMovie, onNavigate, activeTab: propActiveTab, onChangeActiveTab, onBuyTicket }) {
+const compactGenres = genres => {
+  if (!Array.isArray(genres) || genres.length === 0) return 'Đang cập nhật thể loại';
+  return genres
+    .map(genre => (typeof genre === 'string' ? genre : genre?.genreName || genre?.name))
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(value => value.replace(/^Phim\s+/i, ''))
+    .join(', ');
+};
+
+export default function MovieSection({
+  onSelectMovie,
+  onNavigate,
+  activeTab: propActiveTab,
+  onChangeActiveTab,
+  onBuyTicket,
+}) {
   const navigate = useNavigate();
-  // Internal tab state as fallback
   const [localActiveTab, setLocalActiveTab] = useState('NOW_SHOWING');
-  const activeTab = propActiveTab !== undefined ? propActiveTab : localActiveTab;
-  const setActiveTab = onChangeActiveTab !== undefined ? onChangeActiveTab : setLocalActiveTab;
-
   const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
+  const activeTab = propActiveTab ?? localActiveTab;
+  const setActiveTab = onChangeActiveTab ?? setLocalActiveTab;
 
-  // Setup queries for both tabs independently
   const nowShowingQuery = useMoviesQuery({
     status: 'NOW_SHOWING',
     sort: 'createdAt,desc',
-    size: 8
+    size: 8,
   });
-
   const upcomingQuery = useMoviesQuery({
     status: 'UPCOMING',
     sort: 'createdAt,desc',
-    size: 8
+    size: 8,
   });
-
-  // Extract variables for the active tab
   const activeQuery = activeTab === 'NOW_SHOWING' ? nowShowingQuery : upcomingQuery;
   const {
-    movies: activeMovies,
+    movies,
     loading,
     isRefreshing,
     error,
-    page,
-    setPage,
-    totalPages,
-    first,
-    last,
-    retry
+    retry,
   } = activeQuery;
 
-  const handlePageChange = (newPage) => {
-    if (newPage < 0 || newPage >= totalPages) return;
-    setPage(newPage);
-    
-    // Smooth scroll to the movie section as requested
-    const element = document.getElementById('phim');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
+  const openMovie = movie => {
+    const identifier = movie.slug || movie.publicId;
+    if (onSelectMovie) onSelectMovie(identifier);
+    else navigate(`/movies/${identifier}`);
+  };
+
+  const openShowtimes = movie => {
+    const identifier = movie.slug || movie.publicId;
+    if (onBuyTicket) onBuyTicket(identifier);
+    else if (onNavigate) onNavigate('movie-detail', { movieId: identifier });
+    else navigate(`/movies/${identifier}`);
   };
 
   return (
-    <section id="phim" className="relative px-6 md:px-12 py-16 bg-zinc-950 border-t border-zinc-900/60">
-      {/* Grid Header & Filters */}
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8 border-b border-zinc-800/80 pb-4">
-        <div className="flex items-center gap-8">
-          <button
-            onClick={() => setActiveTab('NOW_SHOWING')}
-            className={`text-lg md:text-xl font-black tracking-wider uppercase pb-2 transition-all duration-300 relative ${
-              activeTab === 'NOW_SHOWING'
-                ? 'text-brand-orange border-b-2 border-brand-orange drop-shadow-[0_0_10px_rgba(216,129,116,0.4)]'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
+    <section id="phim" className="relative border-t border-zinc-900/60 bg-zinc-950 px-4 py-16 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl">
+        <header className="flex flex-col gap-5 border-b border-zinc-800/80 pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-brand-orange">
+              Khám phá điện ảnh
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-7 gap-y-3">
+              <button
+                type="button"
+                onClick={() => setActiveTab('NOW_SHOWING')}
+                className={`relative pb-2 text-lg font-black uppercase tracking-wide transition-colors md:text-xl ${
+                  activeTab === 'NOW_SHOWING'
+                    ? 'text-white after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-brand-orange'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Phim đang chiếu
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('UPCOMING')}
+                className={`relative pb-2 text-lg font-black uppercase tracking-wide transition-colors md:text-xl ${
+                  activeTab === 'UPCOMING'
+                    ? 'text-white after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-brand-orange'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Phim sắp chiếu
+              </button>
+            </div>
+          </div>
+          <Link
+            to={`/movies?status=${activeTab}`}
+            className="inline-flex items-center gap-2 text-sm font-bold text-zinc-400 transition-colors hover:text-brand-orange"
           >
-            Phim Đang Chiếu
-          </button>
-          <button
-            onClick={() => setActiveTab('UPCOMING')}
-            className={`text-lg md:text-xl font-black tracking-wider uppercase pb-2 transition-all duration-300 relative ${
-              activeTab === 'UPCOMING'
-                ? 'text-brand-orange border-b-2 border-brand-orange drop-shadow-[0_0_10px_rgba(216,129,116,0.4)]'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            Phim Sắp Chiếu
-          </button>
-        </div>
-      </div>
+            Xem tất cả phim <ArrowRight className="h-4 w-4" />
+          </Link>
+        </header>
 
-      {/* Main Content Workspace Framework */}
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 text-zinc-100 bg-zinc-950">
-        
         {loading ? (
           <MovieSectionSkeleton />
         ) : error ? (
-          /* Error State UI */
-          <div className="flex flex-col items-center justify-center py-16 text-center bg-zinc-950 border border-red-950/40 rounded-2xl max-w-lg mx-auto px-6 space-y-4 shadow-xl">
-            <div className="w-12 h-12 rounded-full bg-red-950/20 border border-red-500/20 flex items-center justify-center text-red-500">
-              <AlertCircle className="w-6 h-6 animate-pulse" />
+          <div className="mx-auto mt-10 flex max-w-lg flex-col items-center justify-center space-y-4 rounded-2xl border border-red-950/40 bg-zinc-950 px-6 py-16 text-center shadow-xl">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-red-500/20 bg-red-950/20 text-red-500">
+              <AlertCircle className="h-6 w-6" />
             </div>
-            <h3 className="text-base font-bold text-zinc-200">Không thể tải danh sách phim.</h3>
-            <p className="text-xs text-zinc-500 max-w-xs">
-              Đã xảy ra lỗi khi kết nối với máy chủ. Vui lòng thử lại sau.
-            </p>
+            <h3 className="text-base font-bold text-zinc-200">Không thể tải danh sách phim</h3>
+            <p className="max-w-xs text-xs text-zinc-500">Vui lòng kiểm tra kết nối và thử lại.</p>
             <button
+              type="button"
               onClick={retry}
-              className="flex items-center gap-2 bg-brand-orange hover:bg-orange-600 text-white font-medium py-2 px-6 rounded-full transition-all text-xs cursor-pointer shadow-md shadow-brand-orange/10"
+              className="flex items-center gap-2 rounded-full bg-brand-orange px-6 py-2 text-xs font-bold text-white transition-colors hover:bg-orange-600"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Thử lại
+              <RefreshCw className="h-3.5 w-3.5" /> Thử lại
             </button>
           </div>
-        ) : activeMovies.length === 0 ? (
-          /* Empty State UI */
-          <div className="flex flex-col items-center justify-center py-16 text-center bg-zinc-900/20 border border-zinc-900/60 rounded-2xl max-w-lg mx-auto px-6 space-y-4 shadow-xl">
-            <div className="w-12 h-12 rounded-full bg-zinc-800/80 flex items-center justify-center text-zinc-500">
-              <Ticket className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-semibold text-zinc-400">
-              {activeTab === 'NOW_SHOWING' ? 'Hiện chưa có phim đang chiếu.' : 'Hiện chưa có phim sắp chiếu.'}
+        ) : movies.length === 0 ? (
+          <div className="mx-auto mt-10 flex min-h-64 max-w-lg flex-col items-center justify-center rounded-2xl border border-zinc-900/60 bg-zinc-900/20 px-6 text-center">
+            <Ticket className="h-9 w-9 text-zinc-700" />
+            <p className="mt-3 text-sm font-semibold text-zinc-400">
+              {activeTab === 'NOW_SHOWING'
+                ? 'Hiện chưa có phim đang chiếu.'
+                : 'Hiện chưa có phim sắp chiếu.'}
             </p>
           </div>
         ) : (
-          /* Movie Grid View */
-          <>
-            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 px-6 md:px-12 py-10 transition-opacity duration-300 ${isRefreshing ? 'opacity-40 pointer-events-none' : ''}`}>
-              {activeMovies.map((movie) => {
-                const ratingMeta = getAgeRatingLabel(movie.ageRating);
-                const canBook = ['NOW_SHOWING', 'UPCOMING'].includes(movie.status)
-                  && movie.bookable === true;
-                return (
-                  <div
-                    key={movie.publicId || movie.id}
-                    role="link"
-                    tabIndex={0}
+          <div className={`grid grid-cols-1 gap-7 py-10 sm:grid-cols-2 lg:grid-cols-4 ${isRefreshing ? 'pointer-events-none opacity-50' : ''}`}>
+            {movies.map(movie => {
+              const rating = getAgeRatingLabel(movie.ageRating);
+              const canBook = ['NOW_SHOWING', 'UPCOMING'].includes(movie.status)
+                && movie.bookable === true;
+              const genres = compactGenres(movie.genres);
+              const metadata = [
+                rating.label,
+                movie.durationMinutes ? formatDuration(movie.durationMinutes) : null,
+                genres,
+              ].filter(Boolean).join(' · ');
+
+              return (
+                <article
+                  key={movie.publicId || movie.id}
+                  className="group relative aspect-[2/3] overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-brand-orange/50 hover:shadow-[0_24px_55px_-22px_rgba(255,122,26,0.48)]"
+                >
+                  <img
+                    src={movie.primaryPoster || movie.posterUrl || FALLBACK_POSTER}
+                    alt={movie.title}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                    onError={event => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = FALLBACK_POSTER;
+                    }}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.99)_0%,rgba(0,0,0,0.94)_33%,rgba(0,0,0,0.66)_52%,rgba(0,0,0,0.12)_76%,transparent_100%)]" />
+
+                  <button
+                    type="button"
                     aria-label={`Xem chi tiết phim ${movie.title}`}
-                    onClick={() => {
-                      const idToUse = movie.slug || movie.publicId;
-                      if (onSelectMovie) {
-                        onSelectMovie(idToUse);
-                      } else {
-                        navigate(`/movies/${idToUse}`);
-                      }
-                    }}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        navigate(`/movies/${movie.slug || movie.publicId}`);
-                      }
-                    }}
-                    className="group flex w-full cursor-pointer flex-col overflow-visible rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-4 focus-visible:ring-offset-zinc-950"
-                  >
-                    {/* The Dynamic Colored Glow Framework / Pop-out Card */}
-                    <div className="group relative aspect-[2/3] w-full cursor-pointer overflow-visible rounded-2xl border border-zinc-800/80 bg-zinc-900 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-amber-500/40 hover:shadow-[0_24px_50px_-18px_rgba(245,158,11,0.28)]">
-                      
-                      {/* Layer 1: The Background Frame */}
-                      <div className="z-10 absolute inset-0 rounded-2xl overflow-hidden bg-zinc-900">
-                        <img 
-                          src={movie.primaryPoster || movie.posterUrl || FALLBACK_POSTER} 
-                          alt={movie.title}
-                          loading="lazy"
-                          className="w-full h-full object-cover rounded-2xl transition-transform duration-500 group-hover:scale-[1.02]" 
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = FALLBACK_POSTER;
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Layer 2: The Dark Cinema Gradients Interceptor */}
-                      <div className="z-20 absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent opacity-90 rounded-2xl" />
-                      
-                      {/* Layer 3: The Extended Foreground Elements */}
-                      <div className="z-30 absolute bottom-0 left-0 w-full p-5 flex flex-col transform transition-transform duration-500 group-hover:scale-105 group-hover:translate-y-[-4px]">
-                        {/* Age Rating Badge */}
-                        <span className={`text-[10px] font-mono font-black uppercase tracking-widest border px-2 py-0.5 rounded shadow-sm w-fit mb-2 ${ratingMeta.bgClass}`}>
-                          {ratingMeta.label}
-                        </span>
-                        
-                        {/* Text Title */}
-                        <h3 className="text-sm md:text-base font-black text-white whitespace-normal break-words leading-tight drop-shadow-md mt-1 block">
-                          {movie.title}
-                        </h3>
-                        
-                        {/* Genre */}
-                        <p className="text-[10px] text-zinc-400 mt-1.5 truncate">
-                          {formatGenres(movie.genres)}
-                        </p>
+                    onClick={() => openMovie(movie)}
+                    className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-orange"
+                  />
 
-                        {/* Duration & Release Date */}
-                        <div className="flex items-center gap-2 mt-1 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
-                          <span>{formatDuration(movie.durationMinutes)}</span>
-                          <span>•</span>
-                          <span>{formatDate(movie.releaseDate)}</span>
-                        </div>
-                        {movie.priceFrom != null && (
-                          <p className="mt-2 text-xs font-bold text-amber-300">Từ {formatPrice(movie.priceFrom, movie.currency)}</p>
-                        )}
-                      </div>
+                  <span className={`pointer-events-none absolute left-4 top-4 z-20 rounded-md border px-2.5 py-1 text-xs font-black tracking-wider shadow-lg backdrop-blur ${rating.bgClass}`}>
+                    {rating.label}
+                  </span>
 
-                      {/* Animated Poster Hover Overlay Architecture */}
-                      <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-40 p-4 rounded-2xl">
-                        {/* Nút "Mua Vé" */}
-                        {canBook && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onBuyTicket) {
-                                onBuyTicket(movie.slug || movie.publicId);
-                              } else if (onNavigate) {
-                                onNavigate('movie-detail', { movieId: movie.slug || movie.publicId });
-                              } else {
-                                navigate(`/movies/${movie.slug || movie.publicId}`);
-                              }
-                            }}
-                            className="w-full max-w-[160px] bg-brand-orange hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-full flex items-center justify-center gap-2 transition-all text-sm shadow-md shadow-brand-orange/10 cursor-pointer"
-                          >
-                            <Ticket className="w-4 h-4" />
-                            {movie.status === 'UPCOMING' ? 'Đặt vé sớm' : 'Chọn suất'}
-                          </button>
-                        )}
-                        {movie.status === 'NOW_SHOWING' && movie.bookable === false && (
-                          <span className="w-full max-w-[160px] rounded-full border border-zinc-600 bg-zinc-900/80 px-4 py-2 text-center text-sm font-medium text-zinc-400">
-                            Tạm hết lịch
-                          </span>
-                        )}
-                        {movie.status === 'UPCOMING' && movie.bookable === false && (
-                          <span className="w-full max-w-[160px] rounded-full border border-amber-500/30 bg-zinc-900/80 px-4 py-2 text-center text-sm font-medium text-amber-200">
-                            Chưa mở bán
-                          </span>
-                        )}
+                  {movie.trailerUrl && (
+                    <button
+                      type="button"
+                      aria-label={`Xem trailer phim ${movie.title}`}
+                      onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(movie.trailerUrl))}
+                      className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/65 text-white opacity-0 backdrop-blur transition-all hover:border-brand-orange hover:text-brand-orange group-hover:opacity-100 focus-visible:opacity-100"
+                    >
+                      <Play className="h-4 w-4 fill-current" />
+                    </button>
+                  )}
 
-                        {/* Nút "Xem Trailer" */}
-                        {movie.trailerUrl && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveTrailerUrl(getYoutubeEmbedUrl(movie.trailerUrl));
-                            }}
-                            className="w-full max-w-[160px] bg-transparent border border-white hover:border-amber-400 hover:text-amber-400 text-white font-medium py-2 px-4 rounded-full flex items-center justify-center gap-2 transition-all text-sm cursor-pointer"
-                          >
-                            <Play className="w-4 h-4 fill-current text-white" />
-                            Xem Trailer
-                          </button>
-                        )}
-                      </div>
-
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-5">
+                    <h3 className="line-clamp-2 min-h-11 text-base font-black leading-snug text-white drop-shadow-lg md:text-lg">
+                      {movie.title}
+                    </h3>
+                    <p className="mt-2 line-clamp-2 min-h-10 text-[13px] font-semibold leading-5 text-zinc-300">
+                      {metadata}
+                    </p>
+                    {movie.status === 'UPCOMING' && movie.releaseDate && (
+                      <p className="mt-1 text-xs font-medium text-zinc-400">
+                        Khởi chiếu {formatDate(movie.releaseDate)}
+                      </p>
+                    )}
+                    {movie.priceFrom != null && (
+                      <p className="mt-2 text-sm font-black text-brand-orange">
+                        Từ {formatPrice(movie.priceFrom)}
+                      </p>
+                    )}
+                    <div className="pointer-events-auto mt-4">
+                      <button
+                        type="button"
+                        disabled={!canBook}
+                        onClick={() => openShowtimes(movie)}
+                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-white shadow-lg shadow-orange-950/30 transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800/90 disabled:text-zinc-500"
+                      >
+                        <Ticket className="h-4 w-4" />
+                        {canBook
+                          ? (movie.status === 'UPCOMING' ? 'Xem lịch chiếu' : 'Chọn suất')
+                          : (movie.status === 'UPCOMING' ? 'Chưa mở lịch' : 'Tạm hết lịch')}
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 mt-8">
-                <button
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={first || isRefreshing}
-                  className="p-2 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
-                  aria-label="Trang trước"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                
-                <div className="flex items-center gap-1.5">
-                  {Array.from({ length: totalPages }).map((_, idx) => (
-                    <button
-                      key={idx}
-                      disabled={isRefreshing}
-                      onClick={() => handlePageChange(idx)}
-                      className={`w-8 h-8 rounded-full text-xs font-bold transition-all duration-300 ${
-                        page === idx
-                          ? "bg-brand-orange text-white shadow-md shadow-brand-orange/20"
-                          : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700"
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      {idx + 1}
-                    </button>
-                  ))}
-                </div>
-                
-                <button
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={last || isRefreshing}
-                  className="p-2 rounded-full border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300"
-                  aria-label="Trang sau"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </>
+        {!loading && !error && movies.length > 0 && (
+          <div className="flex justify-center border-t border-zinc-900 pt-7">
+            <Link
+              to={`/movies?status=${activeTab}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-700 px-5 text-sm font-black text-zinc-200 transition-colors hover:border-brand-orange hover:text-brand-orange"
+            >
+              Xem tất cả {activeTab === 'NOW_SHOWING' ? 'phim đang chiếu' : 'phim sắp chiếu'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         )}
       </div>
 
-      {/* Full-Screen Cinematic Lightbox Pop-up Component */}
       {activeTrailerUrl && (
-        <div 
-          className="fixed inset-0 bg-zinc-950/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all animate-fade-in"
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/90 p-4 backdrop-blur-sm"
           onClick={() => setActiveTrailerUrl(null)}
         >
-          {/* Player Chassis Box */}
-          <div 
-            className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+          <div
+            className="relative aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-zinc-800 bg-black shadow-2xl"
+            onClick={event => event.stopPropagation()}
           >
-            {/* Dismissal Button Widget */}
             <button
+              type="button"
               onClick={() => setActiveTrailerUrl(null)}
-              className="absolute top-4 right-4 bg-zinc-900/80 text-zinc-400 hover:text-white p-2 rounded-full transition-colors z-20 cursor-pointer"
+              className="absolute right-4 top-4 z-20 rounded-full bg-zinc-900/80 p-2 text-zinc-400 transition-colors hover:text-white"
               aria-label="Đóng đoạn giới thiệu phim"
             >
-              <X className="w-5 h-5" />
+              <X className="h-5 w-5" />
             </button>
-
-            {/* Secure Video IFrame Instance */}
             <iframe
               src={`${activeTrailerUrl}?autoplay=1&rel=0&modestbranding=1`}
               title="Trình phát đoạn giới thiệu phim LoraFilm"
-              className="w-full h-full border-0"
+              className="h-full w-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
-            ></iframe>
+            />
           </div>
         </div>
       )}

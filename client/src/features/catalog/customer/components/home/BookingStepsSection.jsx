@@ -6,19 +6,19 @@ export default function BookingSteps() {
       id: 1,
       icon: Ticket,
       title: '1. CHỌN PHIM & SUẤT CHIẾU',
-      description: 'Tìm kiếm bộ phim yêu thích của bạn và chọn suất chiếu phù hợp nhất tại cụm rạp Lora.'
+      description: 'Tìm phim yêu thích và chọn suất chiếu phù hợp tại hệ thống rạp LoraFilm.'
     },
     {
       id: 2,
       icon: Armchair,
       title: '2. CHỌN GHẾ NGỒI & THỨC ĂN',
-      description: 'Lựa chọn vị trí ngồi đẹp nhất trong rạp cùng danh mục bắp nước, combo ưu đãi đi kèm.'
+      description: 'Giữ ghế bạn muốn và chọn thêm bắp nước hoặc combo phù hợp.'
     },
     {
       id: 3,
       icon: CreditCard,
       title: '3. THANH TOÁN AN TOÀN',
-      description: 'Thực hiện thanh toán trực tuyến bảo mật cao và nhận vé điện tử tức thì qua Email/SMS.'
+      description: 'Thanh toán an toàn và nhận vé điện tử ngay sau khi hoàn tất.'
     }
   ];
 
@@ -32,6 +32,9 @@ export default function BookingSteps() {
         <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-wide">
           MUA VÉ CHỈ VỚI 3 BƯỚC NHANH CHÓNG
         </h3>
+        <p className="mt-3 text-sm text-zinc-500">
+          Chọn suất, giữ ghế và thanh toán trong vài phút.
+        </p>
       </div>
 
       {/* Glassmorphism Steps Grid Wrapper */}
