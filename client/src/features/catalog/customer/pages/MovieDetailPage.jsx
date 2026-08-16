@@ -49,6 +49,17 @@ const companyNames = companies => (companies || []).map(company => company.name)
 const formatPrice = (value, currency = 'VND') => value == null
   ? null
   : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currency || 'VND' }).format(value);
+const tmdbProfileUrl = (imageUrl, size) => {
+  if (!imageUrl || typeof imageUrl !== 'string') return '';
+  try {
+    const parsed = new URL(imageUrl);
+    if (parsed.hostname !== 'image.tmdb.org') return imageUrl;
+    parsed.pathname = parsed.pathname.replace(/\/t\/p\/(?:original|w\d+)\//, `/t/p/${size}/`);
+    return parsed.toString();
+  } catch {
+    return imageUrl;
+  }
+};
 
 function InfoTile({ icon: Icon, label, value }) {
   return (
@@ -64,25 +75,55 @@ function InfoTile({ icon: Icon, label, value }) {
 function ActorCard({ actor }) {
   const presentation = actorPresentation(actor);
   const initial = presentation.name.trim().charAt(0).toUpperCase() || '?';
+  const profileImageSrcSet = actor.profileImageUrl
+    ? `${tmdbProfileUrl(actor.profileImageUrl, 'w185')} 1x, ${tmdbProfileUrl(actor.profileImageUrl, 'w342')} 2x`
+    : undefined;
   return (
-    <article className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-zinc-950/45 p-3">
-      <div className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-brand-orange/35 to-zinc-800 text-lg font-black text-white">
+    <article className="group flex min-w-0 items-center gap-4 rounded-2xl border border-white/10 bg-zinc-950/45 p-4 transition-colors hover:border-brand-orange/30 hover:bg-zinc-950/70">
+      <div className="relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-brand-orange/35 to-zinc-800 text-xl font-black text-white ring-1 ring-white/15">
         <span aria-hidden="true">{initial}</span>
         {actor.profileImageUrl && (
           <img
             src={actor.profileImageUrl}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
+            srcSet={profileImageSrcSet}
+            alt={`Ảnh chân dung ${presentation.name}`}
+            width="80"
+            height="80"
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={event => event.currentTarget.remove()}
           />
         )}
       </div>
       <div className="min-w-0">
-        <h3 className="truncate text-sm font-black text-white">{presentation.name}</h3>
-        <p className="mt-1 truncate text-xs text-zinc-400">{presentation.character || 'Vai diễn đang cập nhật'}</p>
-        <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-brand-orange">{presentation.role}</p>
+        <h3 className="truncate text-base font-black text-white">{presentation.name}</h3>
+        <p className="mt-1.5 truncate text-xs text-zinc-400">{presentation.character || 'Vai diễn đang cập nhật'}</p>
+        <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-brand-orange">{presentation.role}</p>
       </div>
     </article>
+  );
+}
+
+function RelatedMovieCard({ movie }) {
+  return (
+    <Link
+      to={`/movies/${encodeURIComponent(movie.slug || movie.publicId)}`}
+      className={`group grid min-h-32 grid-cols-[88px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/45 transition-colors hover:border-brand-orange/60 hover:bg-zinc-950/70 ${focus}`}
+    >
+      <img
+        src={movie.posterUrl || movie.primaryPoster || FALLBACK_POSTER}
+        alt={`Áp phích ${movie.title}`}
+        loading="lazy"
+        decoding="async"
+        className="h-full min-h-32 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        onError={event => { event.currentTarget.src = FALLBACK_POSTER; }}
+      />
+      <div className="flex min-w-0 flex-col justify-center p-4">
+        <h3 className="line-clamp-3 text-sm font-black leading-5 text-white group-hover:text-brand-orange">{movie.title}</h3>
+        <p className="mt-2 text-xs text-zinc-500">{formatDuration(movie.durationMinutes)} · {movie.ageRating || 'P'}</p>
+      </div>
+    </Link>
   );
 }
 
@@ -640,66 +681,60 @@ export default function MovieDetailPage() {
         </div>
       </section>
 
-      {actors.length > 0 && (
+      {(actors.length > 0 || relatedMovies.length > 0) && (
         <section className="mx-auto mt-10 max-w-7xl px-6">
-          <div className={`${surface} p-5 md:p-8`}>
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <div className="rounded-xl border border-brand-orange/30 bg-brand-orange/10 p-2.5 text-brand-orange">
-                  <Users size={20} />
+          <div className={`grid items-start gap-6 ${actors.length > 0 && relatedMovies.length > 0 ? 'lg:grid-cols-[minmax(0,1fr)_320px]' : ''}`}>
+            {actors.length > 0 && (
+              <div className={`${surface} p-5 md:p-8`} aria-labelledby="featured-cast-title">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="rounded-xl border border-brand-orange/30 bg-brand-orange/10 p-2.5 text-brand-orange">
+                      <Users size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Gương mặt trong phim</p>
+                      <h2 id="featured-cast-title" className="mt-2 text-2xl font-black leading-tight text-white">Diễn viên nổi bật</h2>
+                    </div>
+                  </div>
+                  <p className="text-xs text-zinc-500">Hiển thị {visibleActors.length}/{actors.length} người</p>
                 </div>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Gương mặt trong phim</p>
-                  <h2 className="mt-2 text-2xl font-black leading-tight text-white">Diễn viên nổi bật</h2>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  {visibleActors.map(actor => (
+                    <ActorCard key={actor.publicId || `${actor.fullName}-${actor.displayOrder}`} actor={actor} />
+                  ))}
                 </div>
+
+                {actors.length > ACTOR_PREVIEW_LIMIT && (
+                  <button
+                    type="button"
+                    aria-expanded={showAllActors}
+                    onClick={() => setShowAllActors(value => !value)}
+                    className={`mx-auto mt-6 flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-sm font-black text-zinc-200 hover:border-brand-orange hover:text-brand-orange ${focus}`}
+                  >
+                    {showAllActors ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {showAllActors ? 'Thu gọn danh sách' : `Xem toàn bộ ${actors.length} diễn viên`}
+                  </button>
+                )}
               </div>
-              <p className="text-xs text-zinc-500">Hiển thị {visibleActors.length}/{actors.length} người</p>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {visibleActors.map(actor => (
-                <ActorCard key={actor.publicId || `${actor.fullName}-${actor.displayOrder}`} actor={actor} />
-              ))}
-            </div>
-
-            {actors.length > ACTOR_PREVIEW_LIMIT && (
-              <button
-                type="button"
-                aria-expanded={showAllActors}
-                onClick={() => setShowAllActors(value => !value)}
-                className={`mx-auto mt-6 flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-sm font-black text-zinc-200 hover:border-brand-orange hover:text-brand-orange ${focus}`}
-              >
-                {showAllActors ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                {showAllActors ? 'Thu gọn danh sách' : `Xem toàn bộ ${actors.length} diễn viên`}
-              </button>
             )}
-          </div>
-        </section>
-      )}
 
-      {relatedMovies.length > 0 && (
-        <section className="mx-auto mt-10 max-w-7xl px-6">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Khám phá thêm</p>
-              <h2 className="mt-2 text-2xl font-black text-white">Phim liên quan</h2>
-            </div>
-            <Link to="/movies" className={`text-sm font-black text-zinc-400 hover:text-brand-orange ${focus}`}>Xem tất cả phim</Link>
-          </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {relatedMovies.map(item => (
-              <Link
-                key={item.publicId || item.slug}
-                to={`/movies/${encodeURIComponent(item.slug || item.publicId)}`}
-                className={`group overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/70 transition-colors hover:border-brand-orange/60 ${focus}`}
-              >
-                <img src={item.posterUrl || item.primaryPoster || FALLBACK_POSTER} alt="" className="aspect-[16/10] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                <div className="p-4">
-                  <h3 className="line-clamp-2 text-sm font-black text-white group-hover:text-brand-orange">{item.title}</h3>
-                  <p className="mt-2 text-xs text-zinc-500">{formatDuration(item.durationMinutes)} · {item.ageRating || 'P'}</p>
+            {relatedMovies.length > 0 && (
+              <aside className={`${surface} p-5 md:p-6 lg:sticky lg:top-24`} aria-labelledby="related-movies-title">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[.22em] text-brand-orange">Khám phá thêm</p>
+                    <h2 id="related-movies-title" className="mt-2 text-2xl font-black text-white">Phim liên quan</h2>
+                  </div>
+                  <Link to="/movies" className={`shrink-0 text-xs font-black text-zinc-400 hover:text-brand-orange ${focus}`}>Xem tất cả</Link>
                 </div>
-              </Link>
-            ))}
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  {relatedMovies.map(item => (
+                    <RelatedMovieCard key={item.publicId || item.slug} movie={item} />
+                  ))}
+                </div>
+              </aside>
+            )}
           </div>
         </section>
       )}

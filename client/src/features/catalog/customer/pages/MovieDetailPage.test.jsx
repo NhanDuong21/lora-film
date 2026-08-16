@@ -129,6 +129,9 @@ describe('MovieDetailPage cinema preview fallback', () => {
         publicId: `actor-${index + 1}`,
         fullName: `Diễn viên ${index + 1}`,
         characterName: `Nhân vật ${index + 1} (voice)`,
+        profileImageUrl: index === 0
+          ? 'https://image.tmdb.org/t/p/original/profile-1.jpg'
+          : null,
         displayOrder: index + 1
       }))
     });
@@ -150,6 +153,10 @@ describe('MovieDetailPage cinema preview fallback', () => {
     expect(screen.getByText('Nhân vật 1')).toBeInTheDocument();
     expect(screen.getAllByText('Lồng tiếng')).toHaveLength(8);
     expect(screen.queryByText('Diễn viên 9')).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Ảnh chân dung Diễn viên 1' })).toHaveAttribute(
+      'srcset',
+      'https://image.tmdb.org/t/p/w185/profile-1.jpg 1x, https://image.tmdb.org/t/p/w342/profile-1.jpg 2x'
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Xem toàn bộ 10 diễn viên' }));
 
