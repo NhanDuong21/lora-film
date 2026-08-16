@@ -79,15 +79,14 @@ export function AuthDivider({ children = 'Hoặc' }) {
 
 export default function AuthShell({ children, maxWidth = 'max-w-lg' }) {
   return (
-    <div className="relative flex min-h-[calc(100vh-5rem)] w-full items-center justify-center overflow-hidden bg-[#070708] px-4 py-8 text-white sm:px-6 sm:py-12">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-orange/[0.07] blur-[110px]" />
-        <div className="absolute -right-48 top-10 h-96 w-96 rounded-full bg-amber-800/[0.07] blur-[110px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.28)_72%,rgba(0,0,0,0.72)_100%)]" />
-        <div className="absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,.35)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.35)_1px,transparent_1px)] [background-size:48px_48px]" />
+    <div className="relative flex min-h-[calc(100vh-5rem)] w-full items-center justify-center overflow-hidden bg-[#070708] px-4 py-8 text-white sm:px-6 sm:py-12 lg:justify-end lg:px-12 xl:px-20 2xl:px-28">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 bottom-0 top-20">
+        <div className="absolute inset-0 bg-[url('/images/background_login_register.png')] bg-cover bg-[position:32%_center] bg-no-repeat lg:bg-center" />
+        <div className="absolute inset-0 bg-black/45 lg:bg-[linear-gradient(90deg,rgba(0,0,0,0.06)_0%,rgba(0,0,0,0.18)_48%,rgba(0,0,0,0.52)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_18%,rgba(0,0,0,0.18)_72%,rgba(0,0,0,0.55)_100%)]" />
       </div>
 
-      <section className={`relative z-10 w-full ${maxWidth} rounded-3xl border border-white/[0.09] bg-[#141417]/95 p-5 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-8`}>
+      <section className={`relative z-10 w-full ${maxWidth} rounded-3xl border border-white/[0.11] bg-[#111114]/95 p-5 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.98)] backdrop-blur-xl sm:p-8`}>
         {children}
       </section>
     </div>
