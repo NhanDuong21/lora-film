@@ -202,6 +202,14 @@ public class PayrollService {
             throw new BusinessException("Payroll creator cannot approve the same payroll",
                     "USER_PAYROLL_MAKER_CHECKER");
         }
+        int creditedMinutes = integerValue(payroll.getWorkedMinutes())
+                + integerValue(payroll.getPaidLeaveMinutes());
+        if (integerValue(payroll.getScheduledMinutes()) > 0 && creditedMinutes == 0
+                && (reason == null || reason.trim().length() < 10)) {
+            throw new BusinessException(
+                    "Payroll has no recorded attendance. A review reason of at least 10 characters is required",
+                    "USER_PAYROLL_ATTENDANCE_REVIEW_REQUIRED");
+        }
         payroll.setStatus(PayrollStatus.APPROVED);
         payroll.setApprovedBy(actorId);
         payroll.setApprovedAt(LocalDateTime.now());
@@ -209,6 +217,10 @@ public class PayrollService {
         auditService.log("PAYROLL_APPROVED", "PAYROLL", id, reason);
         eventService.record("PAYROLL_APPROVED", "PAYROLL", id, eventData(payroll));
         return get(id);
+    }
+
+    private int integerValue(Integer value) {
+        return value == null ? 0 : value;
     }
 
     @Transactional

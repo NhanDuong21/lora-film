@@ -47,6 +47,14 @@ const ERROR_MESSAGES = {
   CASH_REFUND_REQUIRES_MANUAL_SETTLEMENT: 'Hoàn tiền mặt cần được trả và xác nhận tại quầy.',
   CASH_REFUND_REFERENCE_REQUIRED: 'Vui lòng nhập mã biên nhận hoàn tiền tại quầy.',
   CASH_REFUND_NOTE_REQUIRED: 'Vui lòng ghi chú cách thức đã trả tiền cho khách.',
+  SETTLEMENT_BATCH_DUPLICATE: 'Mã lô settlement này đã được nhập trước đó.',
+  SETTLEMENT_MAKER_CHECKER: 'Người nhập lô không được tự khóa chính lô đó.',
+  SETTLEMENT_NOT_RECONCILED: 'Lô còn chênh lệch nên chưa thể khóa.',
+  CASH_SESSION_MAKER_CHECKER: 'Người thu tiền không được tự xác minh ca của mình.',
+  ACCOUNTING_PERIOD_HAS_OPEN_ITEMS: 'Kỳ vẫn còn công việc chưa hoàn tất nên chưa thể chốt.',
+  ACCOUNTING_PERIOD_MAKER_CHECKER: 'Người mở kỳ không được tự khóa kỳ.',
+  ACCOUNTING_VERSION_CONFLICT: 'Dữ liệu vừa thay đổi. Vui lòng tải lại trước khi tiếp tục.',
+  REFUND_MAKER_CHECKER: 'Người đề nghị hoàn tiền không được tự duyệt yêu cầu của mình.',
   MOCK_RESULT_INVALID: 'Kết quả thanh toán mô phỏng không hợp lệ.',
   VALIDATION_ERROR: 'Thông tin gửi lên chưa hợp lệ. Vui lòng kiểm tra lại.',
   INTERNAL_SERVER_ERROR: 'Hệ thống thanh toán đang bận. Vui lòng thử lại sau.',
@@ -163,6 +171,63 @@ export const resolveReconciliation = async (publicId, payload) =>
     `/api/admin/payments/reconciliations/${publicId}/resolve`,
     payload,
   ));
+
+export const getAccountingOverview = async params =>
+  unwrap(await apiClient.get('/api/admin/payments/accounting/overview', { params }));
+
+export const getSettlementBatches = async params =>
+  unwrap(await apiClient.get('/api/admin/payments/accounting/settlements', { params }));
+
+export const getSettlementBatch = async publicId =>
+  unwrap(await apiClient.get(`/api/admin/payments/accounting/settlements/${publicId}`));
+
+export const importSettlementBatch = async payload =>
+  unwrap(await apiClient.post('/api/admin/payments/accounting/settlements', payload));
+
+export const lockSettlementBatch = async (publicId, payload) =>
+  unwrap(await apiClient.post(
+    `/api/admin/payments/accounting/settlements/${publicId}/lock`, payload,
+  ));
+
+export const getAccountingCashSessions = async params =>
+  unwrap(await apiClient.get('/api/admin/payments/accounting/cash-sessions', { params }));
+
+export const verifyAccountingCashSession = async (publicId, payload) =>
+  unwrap(await apiClient.post(
+    `/api/admin/payments/accounting/cash-sessions/${publicId}/verify`, payload,
+  ));
+
+export const getAccountingPeriods = async params =>
+  unwrap(await apiClient.get('/api/admin/payments/accounting/periods', { params }));
+
+export const createAccountingPeriod = async payload =>
+  unwrap(await apiClient.post('/api/admin/payments/accounting/periods', payload));
+
+export const applyAccountingPeriodAction = async (publicId, payload) =>
+  unwrap(await apiClient.post(
+    `/api/admin/payments/accounting/periods/${publicId}/actions`, payload,
+  ));
+
+export const getAccountingAuditEvents = async params =>
+  unwrap(await apiClient.get('/api/admin/payments/accounting/audit-events', { params }));
+
+export const createAccountingRefundRequest = async (
+  paymentPublicId, payload, idempotencyKey, cinemaPublicId,
+) => unwrap(await apiClient.post(
+  `/api/admin/payments/accounting/refunds/${paymentPublicId}/requests`, payload,
+  {
+    params: cinemaPublicId ? { cinemaPublicId } : undefined,
+    headers: { 'Idempotency-Key': idempotencyKey },
+  },
+));
+
+export const reviewAccountingRefund = async (
+  refundPublicId, decision, note, cinemaPublicId,
+) => unwrap(await apiClient.post(
+  `/api/admin/payments/accounting/refunds/${refundPublicId}/${decision}`,
+  { note },
+  { params: cinemaPublicId ? { cinemaPublicId } : undefined },
+));
 
 export const exportAdminPayments = async params => {
   const response = await apiClient.get('/api/admin/payments/export', {

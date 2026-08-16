@@ -1,5 +1,6 @@
 import { useLocation, Link } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const routeNameMap = {
   'admin': 'Quản trị viên',
@@ -43,6 +44,10 @@ const routeNameMap = {
   'finance': 'Tài chính',
   'accounting': 'Bàn làm việc kế toán',
   'analytics': 'Báo cáo doanh thu',
+  'settlements': 'Đối soát ngân hàng',
+  'cash-control': 'Chốt ca & tiền mặt',
+  'accounting-periods': 'Kỳ kế toán',
+  'accounting-audit': 'Nhật ký kiểm soát',
   'concessions': 'Bắp nước',
   'concession-sales': 'Doanh thu bắp nước',
   'me': 'Tài khoản của tôi',
@@ -50,6 +55,7 @@ const routeNameMap = {
 
 export default function Breadcrumbs() {
   const location = useLocation();
+  const { user } = useAuth();
   const pathnames = location.pathname.split('/').filter(x => x);
 
   // If we are at root, no need for breadcrumb
@@ -66,7 +72,13 @@ export default function Breadcrumbs() {
         const to = `/${pathnames.slice(0, index + 1).join('/')}`;
         
         // Use mapping if available, else format nicely
-        let label = routeNameMap[value];
+        let label = value === 'admin' && String(user?.role || '').replace(/^ROLE_/, '') !== 'ADMIN'
+          && (user?.permissions || []).some(permission => [
+            'PAYMENT_RECONCILE', 'SETTLEMENT_IMPORT', 'SETTLEMENT_LOCK',
+            'CASH_CLOSE_VERIFY', 'ACCOUNTING_PERIOD_VIEW', 'AUDIT_VIEW',
+          ].includes(permission))
+          ? 'Kế toán vận hành'
+          : routeNameMap[value];
         if (!label) {
           // Check if it's a UUID or ID (e.g., number)
           if (value.length > 20 || !isNaN(value)) {

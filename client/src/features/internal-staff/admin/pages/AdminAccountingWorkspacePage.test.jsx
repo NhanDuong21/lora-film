@@ -89,9 +89,11 @@ describe('AdminAccountingWorkspacePage', () => {
     expect(screen.getByText('6', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText('Phim kiểm thử')).toBeInTheDocument();
     expect(screen.getByText('Nắm số doanh thu')).toBeInTheDocument();
-    expect(screen.getByText('Xử lý giao dịch chênh lệch')).toBeInTheDocument();
+    expect(screen.getByText('Khớp lô ngân hàng')).toBeInTheDocument();
+    expect(screen.getByText('Xác minh tiền mặt cuối ca')).toBeInTheDocument();
+    expect(screen.getByText('Xử lý chênh lệch & hoàn tiền')).toBeInTheDocument();
     expect(screen.getByText('Chốt quy trình bảng lương')).toBeInTheDocument();
-    expect(screen.getByText('Xuất số liệu bàn giao')).toBeInTheDocument();
+    expect(screen.getByText('Đối soát và khóa kỳ')).toBeInTheDocument();
 
     await waitFor(() => expect(getPaymentOperations).toHaveBeenCalledWith(
       'reconciliations',

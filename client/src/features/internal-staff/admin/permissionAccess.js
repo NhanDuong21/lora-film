@@ -34,7 +34,22 @@ export const ADMIN_AREA_PERMISSIONS = [
   'USER_AUDIT_VIEW',
   'PERM_VIEW_FINANCE',
   'PAYMENT_RECONCILE',
-  'ANALYTICS_VIEW'
+  'ANALYTICS_VIEW',
+  'ACCOUNTING_VIEW_ALL_CINEMAS',
+  'SETTLEMENT_IMPORT',
+  'SETTLEMENT_LOCK',
+  'CASH_CLOSE_VERIFY',
+  'REFUND_REQUEST',
+  'REFUND_APPROVE',
+  'ACCOUNTING_PERIOD_VIEW',
+  'ACCOUNTING_PERIOD_CREATE',
+  'ACCOUNTING_PERIOD_RECONCILE',
+  'ACCOUNTING_PERIOD_CLOSE',
+  'ACCOUNTING_EXPORT',
+  'AUDIT_VIEW',
+  'PAYROLL_SUBMIT_PAYMENT',
+  'PAYROLL_RECONCILE',
+  'PAYROLL_CANCEL',
 ];
 
 export const hasPermissionAccess = (role, permissions = [], ...requiredPermissions) => {
@@ -51,6 +66,9 @@ export const hasAdminAreaAccess = (role, permissions = []) =>
 const ADMIN_LANDING_ROUTES = [
   ['DASHBOARD_VIEW', '/admin'],
   ['PAYMENT_RECONCILE', '/admin/accounting'],
+  ['SETTLEMENT_IMPORT', '/admin/accounting'],
+  ['SETTLEMENT_LOCK', '/admin/accounting'],
+  ['CASH_CLOSE_VERIFY', '/admin/accounting'],
   ['ANALYTICS_VIEW', '/admin/accounting'],
   ['PERM_VIEW_FINANCE', '/admin/accounting'],
   ['CUSTOMER_VIEW', '/admin/members'],

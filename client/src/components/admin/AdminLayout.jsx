@@ -35,6 +35,10 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
     if (path.endsWith('/analytics')) return 'analytics';
     if (path.endsWith('/accounting')) return 'accounting';
+    if (path.endsWith('/settlements')) return 'settlements';
+    if (path.endsWith('/cash-control')) return 'cash-control';
+    if (path.endsWith('/accounting-periods')) return 'accounting-periods';
+    if (path.endsWith('/accounting-audit')) return 'accounting-audit';
     if (path.endsWith('/finance')) return 'finance';
     if (path.endsWith('/payments') || path.includes('/payments/')) return 'payments';
     if (path.endsWith('/bookings') || path.includes('/bookings/')) return 'bookings';

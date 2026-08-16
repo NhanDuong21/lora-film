@@ -6,6 +6,7 @@ import {
   getAdminRefunds,
   getPaymentOperations,
   replayPaymentOperation,
+  reviewAccountingRefund,
   retryAdminRefund,
   resolveReconciliation,
   searchAdminPayments,
@@ -47,6 +48,7 @@ vi.mock('../../services/paymentService', () => ({
   getAdminRefunds: vi.fn(),
   getPaymentOperations: vi.fn(),
   replayPaymentOperation: vi.fn(),
+  reviewAccountingRefund: vi.fn(),
   retryAdminRefund: vi.fn(),
 }));
 
@@ -99,6 +101,14 @@ const refundPage = {
   totalPages: 1,
   totalElements: 1,
 };
+const pendingRefundPage = {
+  ...refundPage,
+  content: [{
+    ...refundPage.content[0],
+    status: 'PENDING_APPROVAL',
+    requestedByAccountId: 42,
+  }],
+};
 
 describe('AdminPaymentsPage role operations', () => {
   beforeEach(() => {
@@ -110,20 +120,18 @@ describe('AdminPaymentsPage role operations', () => {
     getAdminRefunds.mockResolvedValue(refundPage);
     getPaymentOperations.mockResolvedValue(webhookPage);
     replayPaymentOperation.mockResolvedValue({});
+    reviewAccountingRefund.mockResolvedValue({});
     retryAdminRefund.mockResolvedValue({});
     assignReconciliation.mockResolvedValue({});
     resolveReconciliation.mockResolvedValue({});
   });
 
-  it('keeps ACCOUNTANT read-only while allowing transaction export', async () => {
+  it('keeps ACCOUNTANT away from technical tools while allowing transaction export', async () => {
     render(<AdminPaymentsPage />);
     await waitFor(() => expect(searchAdminPayments).toHaveBeenCalled());
 
     expect(screen.getByRole('button', { name: /Xuất danh sách/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Công cụ kỹ thuật' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Thông báo nhà cung cấp' }));
-    expect(await screen.findByText('Chưa chuyển được kết quả đến hệ thống đích'))
-      .toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Công cụ kỹ thuật' })).not.toBeInTheDocument();
     expect(screen.getByText(/Kế toán có quyền xem/)).toBeInTheDocument();
     expect(screen.queryByTitle('Xử lý lại tác vụ lỗi')).not.toBeInTheDocument();
   });
@@ -148,7 +156,7 @@ describe('AdminPaymentsPage role operations', () => {
     render(<AdminPaymentsPage />);
     await waitFor(() => expect(searchAdminPayments).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hoàn tiền' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Theo dõi hoàn tiền' }));
     expect(await screen.findByText('REF-20260729-000001')).toBeInTheDocument();
     expect(getAdminRefunds).toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Thử lại/ })).not.toBeInTheDocument();
@@ -159,12 +167,33 @@ describe('AdminPaymentsPage role operations', () => {
     render(<AdminPaymentsPage />);
     await waitFor(() => expect(searchAdminPayments).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hoàn tiền' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Theo dõi hoàn tiền' }));
     fireEvent.click(await screen.findByRole('button', { name: /Thử lại/ }));
 
     await waitFor(() => expect(context.triggerConfirm).toHaveBeenCalled());
     await waitFor(() => expect(retryAdminRefund)
       .toHaveBeenCalledWith('refund-public-id'));
+  });
+
+  it('lets an independent accounting controller review a refund request', async () => {
+    context.role = 'EMPLOYEE';
+    context.permissions = ['PAYMENT_VIEW', 'REFUND_APPROVE'];
+    getAdminRefunds.mockResolvedValue(pendingRefundPage);
+
+    render(<AdminPaymentsPage />);
+    await waitFor(() => expect(searchAdminPayments).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Theo dõi hoàn tiền' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Duyệt' }));
+    fireEvent.change(screen.getByLabelText(/Căn cứ quyết định/), {
+      target: { value: 'Đã kiểm tra giao dịch gốc và chứng từ.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận duyệt' }));
+
+    await waitFor(() => expect(reviewAccountingRefund).toHaveBeenCalledWith(
+      'refund-public-id',
+      'approve',
+      'Đã kiểm tra giao dịch gốc và chứng từ.',
+    ));
   });
 
   it('lets an accounting employee receive a reconciliation case without technical replay access', async () => {
@@ -194,6 +223,7 @@ describe('AdminPaymentsPage role operations', () => {
   });
 
   it('clears rows from the previous tab when an operation request fails', async () => {
+    context.role = 'ADMIN';
     searchAdminPayments.mockResolvedValueOnce(transactionPage);
     getPaymentOperations.mockRejectedValueOnce(new Error('operation request failed'));
 

@@ -75,7 +75,9 @@ public class PayrollController {
     @PostMapping("/{id}/actions")
     @PreAuthorize("hasRole('ADMIN') or (#request.type != null and ("
             + "(#request.type.name() == 'APPROVE' and hasAuthority('PAYROLL_APPROVE')) or "
-            + "(#request.type.name() != 'APPROVE' and hasAuthority('PAYROLL_UPDATE'))))")
+            + "(#request.type.name() == 'SUBMIT_PAYMENT' and hasAuthority('PAYROLL_SUBMIT_PAYMENT')) or "
+            + "(#request.type.name() == 'RECONCILE' and hasAuthority('PAYROLL_RECONCILE')) or "
+            + "(#request.type.name() == 'CANCEL' and hasAuthority('PAYROLL_CANCEL'))))")
     public ResponseEntity<ApiResponse<PayrollResponse>> action(@PathVariable Long id,
             @Valid @RequestBody PayrollActionRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Payroll action recorded",

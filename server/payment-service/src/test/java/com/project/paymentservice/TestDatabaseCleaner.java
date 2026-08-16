@@ -10,12 +10,17 @@ import java.util.List;
 @Component
 class TestDatabaseCleaner {
     private static final List<String> TABLES = List.of(
+            "accounting_audit_events",
+            "settlement_entries",
+            "settlement_batches",
+            "accounting_periods",
             "payment_refunds",
             "payment_outbox_events",
             "payment_reconciliation_cases",
             "payment_webhook_events",
             "payment_idempotency_records",
             "payment_analytics_snapshots",
+            "counter_cash_sessions",
             "cash_payment_details",
             "payment_logs",
             "booking_payment_guards",

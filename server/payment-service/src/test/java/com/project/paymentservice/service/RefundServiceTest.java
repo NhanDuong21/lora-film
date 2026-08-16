@@ -232,6 +232,28 @@ class RefundServiceTest {
     }
 
     @Test
+    void accountingRequesterCannotApproveOwnRefundRequest() {
+        when(refundRepository.sumReservedAmount(eq(payment.getId()), anyCollection()))
+                .thenReturn(BigDecimal.ZERO);
+        var created = service.createAccountingRefundRequest(
+                payment.getPublicId(), "accounting-refund-key", 31L, null,
+                request(RefundType.FULL, RefundComponent.FULL_ORDER, null));
+        assertEquals(RefundStatus.PENDING_APPROVAL.name(), created.getStatus());
+
+        PaymentRefund refund = captureLastSavedRefund();
+        when(refundRepository.findByPublicId(refund.getPublicId()))
+                .thenReturn(Optional.of(refund));
+        when(refundRepository.findByIdForUpdate(refund.getId()))
+                .thenReturn(Optional.of(refund));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.approve(refund.getPublicId(), null, 31L,
+                        "Self approval must be rejected"));
+        assertEquals("REFUND_MAKER_CHECKER", exception.getErrorCode());
+        verify(refundRepository, never()).save(refund);
+    }
+
+    @Test
     void employeeCannotCreateRefundForAnotherCinema() {
         PaymentAnalyticsSnapshot snapshot = new PaymentAnalyticsSnapshot();
         snapshot.setCinemaPublicId("cinema-b");

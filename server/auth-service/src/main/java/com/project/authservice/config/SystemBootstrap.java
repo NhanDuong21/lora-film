@@ -115,6 +115,23 @@ public class SystemBootstrap {
             new PermissionData("PAYROLL_UPDATE", "Update payroll", "Payroll Management"),
             new PermissionData("PAYROLL_DELETE", "Delete payroll", "Payroll Management"),
             new PermissionData("PAYROLL_APPROVE", "Approve payroll", "Payroll Management"),
+            new PermissionData("PAYROLL_SUBMIT_PAYMENT", "Submit payroll bank batch", "Payroll Management"),
+            new PermissionData("PAYROLL_RECONCILE", "Reconcile payroll payment", "Payroll Management"),
+            new PermissionData("PAYROLL_CANCEL", "Cancel pending payroll", "Payroll Management"),
+
+            // Accounting operations
+            new PermissionData("ACCOUNTING_VIEW_ALL_CINEMAS", "View all cinema accounting data", "Accounting Operations"),
+            new PermissionData("SETTLEMENT_IMPORT", "Import settlement batches", "Accounting Operations"),
+            new PermissionData("SETTLEMENT_LOCK", "Lock reconciled settlement batches", "Accounting Control"),
+            new PermissionData("CASH_CLOSE_VERIFY", "Verify counter cash close", "Accounting Operations"),
+            new PermissionData("REFUND_REQUEST", "Request payment refunds", "Accounting Operations"),
+            new PermissionData("REFUND_APPROVE", "Approve payment refunds", "Accounting Control"),
+            new PermissionData("ACCOUNTING_PERIOD_VIEW", "View accounting periods", "Accounting Operations"),
+            new PermissionData("ACCOUNTING_PERIOD_CREATE", "Open accounting periods", "Accounting Operations"),
+            new PermissionData("ACCOUNTING_PERIOD_RECONCILE", "Reconcile accounting periods", "Accounting Operations"),
+            new PermissionData("ACCOUNTING_PERIOD_CLOSE", "Reconcile and close accounting periods", "Accounting Control"),
+            new PermissionData("ACCOUNTING_EXPORT", "Export accounting evidence", "Accounting Operations"),
+            new PermissionData("AUDIT_VIEW", "View accounting audit trail", "Accounting Operations"),
             
             // Dashboard
             new PermissionData("DASHBOARD_VIEW", "View dashboard", "Dashboard"),

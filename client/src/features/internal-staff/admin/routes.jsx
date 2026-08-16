@@ -20,6 +20,7 @@ const AdminEmployeeDocumentPage = lazy(() => import('./pages/AdminEmployeeDocume
 const AdminAccountPage = lazy(() => import('./pages/AdminAccountPage'));
 const AdminAnalyticsPage = lazy(() => import('@/features/analytics/admin/pages/AdminAnalyticsPage'));
 const AdminAccountingWorkspacePage = lazy(() => import('./pages/AdminAccountingWorkspacePage'));
+const AdminAccountingOperationsPage = lazy(() => import('./pages/AdminAccountingOperationsPage'));
 const AdminMyAccountPage = lazy(() => import('./pages/AdminMyAccountPage'));
 
 const lazyPage = (element) => (
@@ -67,6 +68,32 @@ export const adminStaffRoutes = [
             'ANALYTICS_VIEW',
             'DASHBOARD_VIEW'
         )
+    },
+    {
+        path: 'settlements',
+        element: requirePermission(
+            <AdminAccountingOperationsPage />,
+            'PAYMENT_VIEW', 'PAYMENT_RECONCILE', 'SETTLEMENT_IMPORT', 'SETTLEMENT_LOCK'
+        )
+    },
+    {
+        path: 'cash-control',
+        element: requirePermission(
+            <AdminAccountingOperationsPage />,
+            'PAYMENT_VIEW', 'CASH_CLOSE_VERIFY'
+        )
+    },
+    {
+        path: 'accounting-periods',
+        element: requirePermission(
+            <AdminAccountingOperationsPage />,
+            'ACCOUNTING_PERIOD_VIEW', 'ACCOUNTING_PERIOD_CREATE',
+            'ACCOUNTING_PERIOD_RECONCILE', 'ACCOUNTING_PERIOD_CLOSE'
+        )
+    },
+    {
+        path: 'accounting-audit',
+        element: requirePermission(<AdminAccountingOperationsPage />, 'AUDIT_VIEW')
     },
     { path: 'members', element: requirePermission(<AdminMembersView />, 'CUSTOMER_VIEW') },
     { path: 'hr', element: requirePermission(<AdminHrCommandCenterPage />, 'EMPLOYEE_VIEW') },

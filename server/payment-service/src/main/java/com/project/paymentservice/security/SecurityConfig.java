@@ -42,7 +42,22 @@ public class SecurityConfig {
                 .requestMatchers("/internal/payments/refunds/**", "/internal/payments/emergency/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/admin/payments/**")
                     .hasAnyAuthority("ROLE_ADMIN", "ROLE_ACCOUNTANT", "PERM_VIEW_FINANCE",
-                            "PAYMENT_VIEW", "PAYMENT_RECONCILE")
+                            "PAYMENT_VIEW", "PAYMENT_RECONCILE", "AUDIT_VIEW")
+                .requestMatchers(HttpMethod.POST, "/api/admin/payments/accounting/settlements")
+                    .hasAnyAuthority("ROLE_ADMIN", "SETTLEMENT_IMPORT")
+                .requestMatchers(HttpMethod.POST, "/api/admin/payments/accounting/settlements/*/lock")
+                    .hasAnyAuthority("ROLE_ADMIN", "SETTLEMENT_LOCK")
+                .requestMatchers(HttpMethod.POST, "/api/admin/payments/accounting/cash-sessions/*/verify")
+                    .hasAnyAuthority("ROLE_ADMIN", "CASH_CLOSE_VERIFY")
+                .requestMatchers(HttpMethod.POST, "/api/admin/payments/accounting/refunds/*/requests")
+                    .hasAnyAuthority("ROLE_ADMIN", "REFUND_REQUEST")
+                .requestMatchers(HttpMethod.POST, "/api/admin/payments/accounting/refunds/*/approve",
+                        "/api/admin/payments/accounting/refunds/*/reject")
+                    .hasAnyAuthority("ROLE_ADMIN", "REFUND_APPROVE")
+                .requestMatchers(HttpMethod.POST, "/api/admin/payments/accounting/periods")
+                    .hasAnyAuthority("ROLE_ADMIN", "ACCOUNTING_PERIOD_CREATE")
+                .requestMatchers(HttpMethod.POST, "/api/admin/payments/accounting/periods/*/actions")
+                    .hasAnyAuthority("ROLE_ADMIN", "ACCOUNTING_PERIOD_RECONCILE", "ACCOUNTING_PERIOD_CLOSE")
                 .requestMatchers("/api/admin/payments/reconciliations/*/assign",
                         "/api/admin/payments/reconciliations/*/resolve")
                     .hasAnyAuthority("ROLE_ADMIN", "PAYMENT_RECONCILE")

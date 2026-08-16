@@ -33,6 +33,9 @@ import {
   Users,
   Zap,
   Armchair,
+  Landmark,
+  ClipboardCheck,
+  FileClock,
 } from 'lucide-react';
 import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
 import RoleAvatar from '@/components/common/RoleAvatar';
@@ -72,6 +75,13 @@ export default function AdminSidebar({
   // PAYMENT_VIEW is also required by box-office staff, so it cannot identify
   // an accounting workspace on its own.
   const hasAccountingAccess = can('PERM_VIEW_FINANCE', 'PAYMENT_RECONCILE', 'ANALYTICS_VIEW');
+  const canViewSettlements = can('PAYMENT_RECONCILE', 'SETTLEMENT_IMPORT', 'SETTLEMENT_LOCK');
+  const canViewCashControl = can('CASH_CLOSE_VERIFY', 'PAYMENT_VIEW');
+  const canViewAccountingPeriods = can(
+    'ACCOUNTING_PERIOD_VIEW', 'ACCOUNTING_PERIOD_CREATE',
+    'ACCOUNTING_PERIOD_RECONCILE', 'ACCOUNTING_PERIOD_CLOSE',
+  );
+  const canViewAccountingAudit = can('AUDIT_VIEW');
   const isAccountantOnly = hasAccountingAccess && !isFullAdmin
     && ['PAYMENT_RECONCILE', 'ANALYTICS_VIEW', 'PERM_VIEW_FINANCE']
       .some(permission => permissions.includes(permission));
@@ -144,6 +154,18 @@ export default function AdminSidebar({
           : []),
         ...(canViewPayments
           ? [{ key: 'payments', label: canReconcilePayments ? 'Giao dịch & đối soát' : 'Giao dịch thanh toán', path: '/admin/payments', icon: CreditCard }]
+          : []),
+        ...(canViewSettlements
+          ? [{ key: 'settlements', label: 'Đối soát ngân hàng', path: '/admin/settlements', icon: Landmark }]
+          : []),
+        ...(canViewCashControl
+          ? [{ key: 'cash-control', label: 'Chốt ca & tiền mặt', path: '/admin/cash-control', icon: ClipboardCheck }]
+          : []),
+        ...(canViewAccountingPeriods
+          ? [{ key: 'accounting-periods', label: 'Kỳ kế toán', path: '/admin/accounting-periods', icon: CalendarClock }]
+          : []),
+        ...(canViewAccountingAudit
+          ? [{ key: 'accounting-audit', label: 'Nhật ký kiểm soát', path: '/admin/accounting-audit', icon: FileClock }]
           : []),
         ...(canViewAnalytics
           ? [{ key: 'analytics', label: 'Báo cáo doanh thu', path: '/admin/analytics', icon: TrendingUp }]

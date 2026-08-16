@@ -16,6 +16,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import {
   completeCashRefund,
+  createAccountingRefundRequest,
   createAdminRefund,
   getAdminPayment,
   paymentErrorMessage,
@@ -39,9 +40,10 @@ const money = (value, currency = 'VND') =>
 export default function AdminPaymentDetailPage() {
   const { paymentPublicId } = useParams();
   const navigate = useNavigate();
-  const { userRole } = useAuth();
+  const { user, userRole } = useAuth();
   const { triggerAlert, triggerConfirm, triggerToast } = useOutletContext() || {};
   const isAdmin = (userRole || '').replace(/^ROLE_/, '') === 'ADMIN';
+  const canRequestRefund = isAdmin || user?.permissions?.includes('REFUND_REQUEST');
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -117,9 +119,12 @@ export default function AdminPaymentDetailPage() {
   const refunds = detail.refunds || [];
   const openReconciliation = reconciliationCases.find(item =>
     !['RESOLVED', 'IGNORED'].includes(item.status));
-  const canCreateRefund = isAdmin
-    && payment.status === 'SUCCESS'
-    && Number(payment.refundableAmount || 0) > 0;
+  const refundBlockedReason = payment.status !== 'SUCCESS'
+    ? 'Chỉ giao dịch thành công mới có thể đề nghị hoàn tiền.'
+    : Number(payment.refundableAmount || 0) <= 0
+      ? 'Giao dịch không còn số tiền có thể hoàn.'
+      : '';
+  const canCreateRefund = canRequestRefund && !refundBlockedReason;
 
   const openCreateRefund = () => {
     setRefundForm({
@@ -135,7 +140,7 @@ export default function AdminPaymentDetailPage() {
 
   const submitRefund = async event => {
     event.preventDefault();
-    if (!isAdmin || !refundAction) return;
+    if (!canRequestRefund || !refundAction) return;
     setSubmitting(true);
     try {
       if (refundAction.mode === 'cash') {
@@ -146,18 +151,22 @@ export default function AdminPaymentDetailPage() {
         triggerToast?.('Đã ghi nhận tiền mặt được trả lại cho khách.');
       } else {
         const isFull = refundForm.scope === 'FULL_ORDER';
-        await createAdminRefund(
-          payment.paymentPublicId,
-          {
-            refundType: isFull ? 'FULL' : 'PARTIAL',
-            refundComponent: refundForm.scope,
-            amount: isFull ? null : Number(refundForm.amount),
-            reasonCode: refundForm.reasonCode,
-            note: refundForm.note.trim(),
-          },
-          refundRequestKey,
-        );
-        triggerToast?.('Đã tiếp nhận yêu cầu hoàn tiền.');
+        const payload = {
+          refundType: isFull ? 'FULL' : 'PARTIAL',
+          refundComponent: refundForm.scope,
+          amount: isFull ? null : Number(refundForm.amount),
+          reasonCode: refundForm.reasonCode,
+          note: refundForm.note.trim(),
+        };
+        if (isAdmin) {
+          await createAdminRefund(payment.paymentPublicId, payload, refundRequestKey);
+          triggerToast?.('Đã tiếp nhận yêu cầu hoàn tiền.');
+        } else {
+          await createAccountingRefundRequest(
+            payment.paymentPublicId, payload, refundRequestKey,
+          );
+          triggerToast?.('Đã gửi đề nghị hoàn tiền. Một người kiểm soát khác phải duyệt trước khi thực hiện.');
+        }
       }
       setRefundAction(null);
       await load();
@@ -245,15 +254,18 @@ export default function AdminPaymentDetailPage() {
             <ShieldAlert className="h-4 w-4" /> Mở hồ sơ cần xử lý
           </button>
         )}
-        {canCreateRefund && (
+        {canRequestRefund && (
           <button
             type="button"
+            disabled={!canCreateRefund}
+            title={refundBlockedReason || undefined}
             onClick={openCreateRefund}
-            className="flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-2.5 text-xs font-black uppercase text-red-300 hover:bg-red-500/10"
+            className="flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-2.5 text-xs font-black uppercase text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
           >
-            <Banknote className="h-4 w-4" /> Tạo yêu cầu hoàn tiền
+            <Banknote className="h-4 w-4" /> {isAdmin ? 'Tạo yêu cầu hoàn tiền' : 'Đề nghị hoàn tiền'}
           </button>
         )}
+        {canRequestRefund && refundBlockedReason ? <span className="self-center text-xs text-zinc-500">{refundBlockedReason}</span> : null}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
@@ -350,7 +362,7 @@ export default function AdminPaymentDetailPage() {
         <BusinessTimeline items={detail.logs || []} />
       </section>
 
-      <details className="group rounded-3xl border border-zinc-800 bg-zinc-900">
+      {isAdmin ? <details className="group rounded-3xl border border-zinc-800 bg-zinc-900">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-6">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-black uppercase">
@@ -383,7 +395,7 @@ export default function AdminPaymentDetailPage() {
             <TechnicalTimeline title="Lịch sử hồ sơ đối soát" items={reconciliationCases} />
           </div>
         </div>
-      </details>
+      </details> : null}
 
       {refundAction && (
         <RefundModal
@@ -402,13 +414,13 @@ export default function AdminPaymentDetailPage() {
 }
 
 const REFUND_STATUS_LABELS = {
-  PENDING_APPROVAL: 'Chờ quản lý rạp duyệt',
+  PENDING_APPROVAL: 'Chờ người kiểm soát duyệt',
   REQUESTED: 'Đã tiếp nhận',
   PROCESSING: 'Đang hoàn qua nhà cung cấp',
   SUCCESS: 'Đã hoàn cho khách',
   FAILED: 'Hoàn tiền thất bại',
   REQUIRES_ACTION: 'Cần nhân viên xử lý',
-  REJECTED: 'Quản lý rạp đã từ chối',
+  REJECTED: 'Người kiểm soát đã từ chối',
   CANCELLED: 'Đã hủy yêu cầu',
 };
 

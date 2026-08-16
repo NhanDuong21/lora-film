@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AlertTriangle, Banknote, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, FilePlus2, RefreshCcw, Search, ShieldCheck, UserRound } from 'lucide-react';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   applyPayrollAction,
   createPayroll,
@@ -59,6 +60,7 @@ const PAYROLL_GUIDANCE = {
 
 export default function AdminPayrollPage() {
   const can = useAdminAccess();
+  const { user } = useAuth();
   const outlet = useOutletContext();
   const notify = outlet?.triggerToast || (() => undefined);
   const [query, setQuery] = useState({ month: currentMonth(), status: '', page: 0, size: 15 });
@@ -203,18 +205,29 @@ export default function AdminPayrollPage() {
     }
   };
 
-  const drawerActions = selected ? <div className="grid gap-2 sm:grid-cols-2">
-    {can('PAYROLL_UPDATE') && selected.status === 'PENDING_APPROVAL' ? <button type="button" onClick={() => openPayrollForm(selected)} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-zinc-200 hover:bg-white/5">Sửa số liệu</button> : null}
-    {can('PAYROLL_APPROVE') && selected.status === 'PENDING_APPROVAL' ? <button type="button" onClick={() => openAction('APPROVE')} className="rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black">Duyệt phiếu</button> : null}
-    {can('PAYROLL_UPDATE') && selected.status === 'APPROVED' ? <button type="button" onClick={() => openAction('SUBMIT_PAYMENT')} className="rounded-xl bg-blue-500 px-4 py-3 text-sm font-black text-white">Gửi lệnh thanh toán</button> : null}
-    {can('PAYROLL_UPDATE') && selected.status === 'PAYMENT_PENDING' ? <button type="button" onClick={() => openAction('RECONCILE')} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black">Đối soát thanh toán</button> : null}
-    {can('PAYROLL_UPDATE') && selected.status === 'PENDING_APPROVAL' ? <button type="button" onClick={() => openAction('CANCEL')} className="rounded-xl border border-red-500/30 px-4 py-3 text-sm font-black text-red-400">Hủy phiếu</button> : null}
-  </div> : null;
-
   const scheduledMinutes = Number(selected?.scheduledMinutes) || 0;
   const workedMinutes = Number(selected?.workedMinutes) || 0;
+  const paidLeaveMinutes = Number(selected?.paidLeaveMinutes) || 0;
   const missingMinutes = Math.max(0, scheduledMinutes - workedMinutes - (Number(selected?.paidLeaveMinutes) || 0));
   const attendancePercent = scheduledMinutes ? Math.min(100, Math.round((workedMinutes / scheduledMinutes) * 100)) : 0;
+  const isOwnPayroll = Boolean(selected?.createdBy && String(selected.createdBy) === String(user?.id));
+  const criticalAttendance = selected?.sourceType === 'TIMEKEEPING'
+    && scheduledMinutes > 0
+    && workedMinutes + paidLeaveMinutes === 0;
+
+  const drawerActions = selected ? <div className="space-y-2">
+    <div className="grid gap-2 sm:grid-cols-2">
+      {selected.status === 'PENDING_APPROVAL' ? <button type="button" disabled={!can('PAYROLL_UPDATE')} onClick={() => openPayrollForm(selected)} className="rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-35">Sửa số liệu</button> : null}
+      {selected.status === 'PENDING_APPROVAL' ? <button type="button" disabled={!can('PAYROLL_APPROVE') || isOwnPayroll} onClick={() => openAction('APPROVE')} className="rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-35">Duyệt phiếu</button> : null}
+      {selected.status === 'APPROVED' ? <button type="button" disabled={!can('PAYROLL_SUBMIT_PAYMENT')} onClick={() => openAction('SUBMIT_PAYMENT')} className="rounded-xl bg-blue-500 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-35">Gửi lệnh thanh toán</button> : null}
+      {selected.status === 'PAYMENT_PENDING' ? <button type="button" disabled={!can('PAYROLL_RECONCILE')} onClick={() => openAction('RECONCILE')} className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-35">Đối soát thanh toán</button> : null}
+      {selected.status === 'PENDING_APPROVAL' ? <button type="button" disabled={!can('PAYROLL_CANCEL')} onClick={() => openAction('CANCEL')} className="rounded-xl border border-red-500/30 px-4 py-3 text-sm font-black text-red-400 disabled:cursor-not-allowed disabled:opacity-35">Hủy phiếu</button> : null}
+    </div>
+    {selected.status === 'PENDING_APPROVAL' && !can('PAYROLL_APPROVE') ? <p className="text-xs leading-5 text-zinc-500">Bạn có thể chuẩn bị phiếu nhưng cần tài khoản kế toán kiểm soát có quyền duyệt.</p> : null}
+    {selected.status === 'PENDING_APPROVAL' && isOwnPayroll ? <p className="text-xs leading-5 text-amber-300">Bạn là người lập phiếu nên không thể tự duyệt. Hãy chuyển cho người kiểm soát độc lập.</p> : null}
+    {selected.status === 'APPROVED' && !can('PAYROLL_SUBMIT_PAYMENT') ? <p className="text-xs leading-5 text-zinc-500">Tài khoản chưa có quyền gửi lệnh thanh toán.</p> : null}
+    {selected.status === 'PAYMENT_PENDING' && !can('PAYROLL_RECONCILE') ? <p className="text-xs leading-5 text-zinc-500">Tài khoản chưa có quyền xác nhận chứng từ ngân hàng và bút toán.</p> : null}
+  </div> : null;
   const guidance = PAYROLL_GUIDANCE[selected?.status] || PAYROLL_GUIDANCE.DRAFT;
   const guidanceClass = {
     amber: 'border-amber-500/25 bg-amber-500/[0.07] text-amber-100',
@@ -292,7 +305,7 @@ export default function AdminPayrollPage() {
                   <div className="mb-2 flex items-center justify-between text-xs"><span className="font-bold text-zinc-500">Mức độ ghi nhận công</span><span className="font-black text-zinc-300">{attendancePercent}%</span></div>
                   <div className="h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-blue-500" style={{ width: attendancePercent + '%' }} /></div>
                 </div>
-                {missingMinutes > 0 ? <div className="mt-4 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-5 text-amber-200/80"><AlertTriangle className="mt-0.5 shrink-0" size={15} /><span>Còn <strong>{minutesLabel(missingMinutes)}</strong> chưa có dữ liệu chấm công so với lịch. Admin nên kiểm tra trước khi duyệt.</span></div> : <div className="mt-4 flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-xs leading-5 text-emerald-200/80"><CheckCircle2 className="mt-0.5 shrink-0" size={15} /><span>Dữ liệu chấm công đã đủ so với lịch làm việc.</span></div>}
+                {missingMinutes > 0 ? <div className="mt-4 flex gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-5 text-amber-200/80"><AlertTriangle className="mt-0.5 shrink-0" size={15} /><span>Còn <strong>{minutesLabel(missingMinutes)}</strong> chưa có dữ liệu chấm công so với lịch. Người kiểm soát cần rà soát trước khi duyệt.</span></div> : <div className="mt-4 flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-xs leading-5 text-emerald-200/80"><CheckCircle2 className="mt-0.5 shrink-0" size={15} /><span>Dữ liệu chấm công đã đủ so với lịch làm việc.</span></div>}
               </section>
             ) : (
               <section className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.05] p-4 text-xs leading-5 text-blue-100/70">Đây là phiếu điều chỉnh được lập thủ công cho trường hợp ngoại lệ, không lấy số giờ từ dữ liệu chấm công.</section>
@@ -324,10 +337,11 @@ export default function AdminPayrollPage() {
         <div className="grid gap-3 sm:grid-cols-2">{[['basicSalary', 'Lương cơ bản *'], ['allowance', 'Phụ cấp'], ['bonus', 'Thưởng'], ['deduction', 'Khấu trừ']].map(([key, label]) => <div key={key}><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">{label}</label><input required={key === 'basicSalary'} type="number" min={key === 'basicSalary' ? 1 : 0} value={payrollForm[key]} onChange={event => setPayrollForm(value => ({ ...value, [key]: event.target.value }))} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /></div>)}</div>
       </ActionModal>
 
-      <ActionModal open={actionOpen} onClose={() => setActionOpen(false)} title={ACTION_LABELS[actionForm.type]} description={actionForm.type === 'APPROVE' ? 'Người lập phiếu không thể tự duyệt. Hệ thống sẽ kiểm tra ở API.' : 'Hành động này được lưu cùng người thực hiện, thời điểm và version dữ liệu.'} onSubmit={submitAction} submitLabel={ACTION_LABELS[actionForm.type]} submitting={submitting} tone={actionForm.type === 'CANCEL' ? 'danger' : 'orange'}>
+      <ActionModal open={actionOpen} onClose={() => setActionOpen(false)} title={ACTION_LABELS[actionForm.type]} description={actionForm.type === 'APPROVE' ? 'Người lập phiếu không thể tự duyệt. Hệ thống kiểm tra lại quyền và người thực hiện trước khi lưu.' : 'Hành động này được lưu cùng người thực hiện, thời điểm và phiên bản dữ liệu.'} onSubmit={submitAction} submitLabel={ACTION_LABELS[actionForm.type]} submitting={submitting} tone={actionForm.type === 'CANCEL' ? 'danger' : 'orange'}>
+        {actionForm.type === 'APPROVE' && criticalAttendance ? <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3 text-sm leading-6 text-amber-200"><strong className="block">Cần kiểm tra bất thường chấm công</strong>Nhân viên có lịch làm nhưng không có giờ công hoặc nghỉ phép được trả lương. Backend chỉ chấp nhận khi căn cứ duyệt có ít nhất 10 ký tự.</div> : null}
         {actionForm.type === 'SUBMIT_PAYMENT' ? <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Mã lô ngân hàng *</label><input required maxLength={100} value={actionForm.bankBatchReference} onChange={event => setActionForm(value => ({ ...value, bankBatchReference: event.target.value }))} placeholder="BANK-BATCH-2026-08-001" className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /></div> : null}
         {actionForm.type === 'RECONCILE' ? <><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-black uppercase text-zinc-500">Mã giao dịch ngân hàng *<input required maxLength={100} value={actionForm.paymentReference} onChange={event => setActionForm(value => ({ ...value, paymentReference: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm" /></label><label className="text-xs font-black uppercase text-zinc-500">Mã bút toán kế toán *<input required maxLength={100} value={actionForm.accountingReference} onChange={event => setActionForm(value => ({ ...value, accountingReference: event.target.value }))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm" /></label></div><label className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-sm font-bold"><input type="checkbox" checked={actionForm.reconciliationMatched} onChange={event => setActionForm(value => ({ ...value, reconciliationMatched: event.target.checked }))} /> Chứng từ ngân hàng khớp bút toán kế toán</label></> : null}
-        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lý do / căn cứ *</label><textarea required minLength={5} maxLength={500} rows={4} value={actionForm.reason} onChange={event => setActionForm(value => ({ ...value, reason: event.target.value }))} placeholder="Căn cứ duyệt, đối soát hoặc lý do hủy…" className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm leading-6 outline-none focus:border-brand-orange" /></div>
+        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lý do / căn cứ *</label><textarea required minLength={actionForm.type === 'APPROVE' && criticalAttendance ? 10 : 5} maxLength={500} rows={4} value={actionForm.reason} onChange={event => setActionForm(value => ({ ...value, reason: event.target.value }))} placeholder={actionForm.type === 'APPROVE' && criticalAttendance ? 'Nêu rõ chứng từ hoặc lý do chấp nhận phiếu không có giờ công…' : 'Căn cứ duyệt, đối soát hoặc lý do hủy…'} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm leading-6 outline-none focus:border-brand-orange" /></div>
       </ActionModal>
     </section>
   );

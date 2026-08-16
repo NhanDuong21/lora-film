@@ -5,6 +5,7 @@ import com.project.paymentservice.dto.request.OpenCounterCashSessionRequest;
 import com.project.paymentservice.dto.response.CounterCashSessionResponse;
 import com.project.paymentservice.entity.CounterCashSession;
 import com.project.paymentservice.enumtype.CounterCashSessionStatus;
+import com.project.paymentservice.enumtype.CashVerificationStatus;
 import com.project.paymentservice.exception.BusinessException;
 import com.project.paymentservice.repository.CashPaymentDetailRepository;
 import com.project.paymentservice.repository.CounterCashSessionRepository;
@@ -100,6 +101,9 @@ public class CounterCashSessionService {
         session.setExpectedCash(snapshot.expected());
         session.setCountedCash(countedCash);
         session.setVarianceAmount(countedCash.subtract(snapshot.expected()).setScale(2, RoundingMode.HALF_UP));
+        session.setVerificationStatus(session.getVarianceAmount().compareTo(BigDecimal.ZERO) == 0
+                ? CashVerificationStatus.PENDING_VERIFICATION
+                : CashVerificationStatus.DISCREPANCY_REVIEW);
         session.setClosingNoteSanitized(sanitize(request.note(), 1000));
         session.setClosedAt(closedAt);
         session.setStatus(CounterCashSessionStatus.CLOSED);

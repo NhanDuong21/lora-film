@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { Check, CreditCard, Umbrella, X } from 'lucide-react';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
+import { useAuth } from '@/contexts/AuthContext';
 import { applyLeaveRequestAction, applyPayrollAction, getLeaveRequests, getPayrolls } from '../services/userAdminService';
 import useAdminAccess from '../hooks/useAdminAccess';
 import { ActionModal } from '../components/OperationsConsole';
@@ -28,6 +29,7 @@ const money = value => new Intl.NumberFormat('vi-VN', { style: 'currency', curre
 
 export default function AdminApprovalInboxPage() {
   const can = useAdminAccess();
+  const { accountId } = useAuth();
   const notify = useOutletContext()?.triggerToast || (() => undefined);
   const [params, setParams] = useSearchParams();
   const tab = params.get('type') === 'payroll' ? 'payroll' : 'leave';
@@ -106,7 +108,7 @@ export default function AdminApprovalInboxPage() {
             <article key={item.id} className="grid gap-5 rounded-2xl border border-white/10 bg-[#0b0b0e] p-5 lg:grid-cols-[minmax(220px,.7fr)_minmax(300px,1.3fr)_auto] lg:items-center">
               <div className="flex items-center gap-3"><PersonAvatar name={item.employeeName} size="lg" /><div><p className="font-black">{item.employeeName}</p><p className="mt-1 text-xs text-zinc-500">{item.employeeCode} · Kỳ {String(item.salaryMonth).slice(0, 7)}</p></div></div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><div><p className="text-[10px] font-black uppercase text-zinc-600">Lương cơ bản</p><p className="mt-1 text-sm font-bold">{money(item.basicSalary)}</p></div><div><p className="text-[10px] font-black uppercase text-zinc-600">Phụ cấp</p><p className="mt-1 text-sm font-bold">{money(item.allowance)}</p></div><div><p className="text-[10px] font-black uppercase text-zinc-600">Khấu trừ</p><p className="mt-1 text-sm font-bold">{money(item.deduction)}</p></div><div><p className="text-[10px] font-black uppercase text-orange-400">Thực nhận</p><p className="mt-1 text-sm font-black text-orange-300">{money(item.totalSalary)}</p></div></div>
-              <div className="flex items-center gap-3 lg:justify-end"><StatusBadge status={item.status} label="Chờ duyệt" />{can('PAYROLL_APPROVE') ? <button type="button" onClick={() => open('payroll', item, 'APPROVE')} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black"><Check size={16} /> Duyệt phiếu</button> : null}</div>
+              <div className="flex flex-col items-start gap-2 lg:items-end"><div className="flex items-center gap-3"><StatusBadge status={item.status} label="Chờ duyệt" /><button type="button" disabled={!can('PAYROLL_APPROVE') || String(item.createdBy) === String(accountId)} onClick={() => open('payroll', item, 'APPROVE')} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-35"><Check size={16} /> Duyệt phiếu</button></div>{!can('PAYROLL_APPROVE') ? <p className="max-w-56 text-right text-xs leading-5 text-zinc-600">Cần tài khoản kế toán kiểm soát có quyền duyệt.</p> : String(item.createdBy) === String(accountId) ? <p className="max-w-56 text-right text-xs leading-5 text-amber-300">Bạn là người lập phiếu nên không thể tự duyệt.</p> : null}</div>
             </article>
           ))}
         </div>

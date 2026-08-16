@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
+import org.springframework.http.MediaType;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.ActiveProfiles;
@@ -25,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -93,6 +95,26 @@ class EmployeePermissionSecurityTest {
         mockMvc.perform(get("/api/users/payrolls/me")
                         .header("Authorization", bearer(
                                 "EMPLOYEE", List.of("EMPLOYEE_PAYROLL_VIEW"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void payrollPaymentSubmissionNeedsItsDedicatedPermission() throws Exception {
+        String body = "{\"type\":\"SUBMIT_PAYMENT\",\"reason\":\"Checked payroll batch\","
+                + "\"bankBatchReference\":\"BANK-BATCH-001\",\"expectedVersion\":0}";
+
+        mockMvc.perform(post("/api/users/payrolls/9/actions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .header("Authorization", bearer(
+                                "EMPLOYEE", List.of("PAYROLL_UPDATE"))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/users/payrolls/9/actions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .header("Authorization", bearer(
+                                "EMPLOYEE", List.of("PAYROLL_SUBMIT_PAYMENT"))))
                 .andExpect(status().isOk());
     }
 

@@ -213,6 +213,41 @@ public class PaymentSecurityTest {
     }
 
     @Test
+    void accountingOperatorPermissionsDoNotGrantControllerActions() throws Exception {
+        String operator = generateJwt(51L, "operator@test.com", "EMPLOYEE",
+                List.of("PAYMENT_VIEW", "ACCOUNTING_VIEW_ALL_CINEMAS",
+                        "SETTLEMENT_IMPORT", "REFUND_REQUEST", "ACCOUNTING_PERIOD_CREATE",
+                        "ACCOUNTING_PERIOD_RECONCILE"));
+
+        mockMvc.perform(post("/api/admin/payments/accounting/periods")
+                .header("Authorization", "Bearer " + operator)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"periodCode\":\"2026-08\",\"periodStart\":\"2026-08-01\","
+                        + "\"periodEnd\":\"2026-08-31\",\"note\":\"Monthly close preparation\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.periodCode").value("2026-08"))
+                .andExpect(jsonPath("$.data.blockers").isArray());
+
+        mockMvc.perform(post("/api/admin/payments/accounting/settlements/missing/lock")
+                .header("Authorization", "Bearer " + operator)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"note\":\"Checked settlement evidence\",\"expectedVersion\":0}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/payments/accounting/refunds/missing/approve")
+                .header("Authorization", "Bearer " + operator)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"note\":\"Checked original payment\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/payments/accounting/periods/missing/actions")
+                .header("Authorization", "Bearer " + operator)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"action\":\"RECONCILE\",\"note\":\"Checked all blockers\",\"expectedVersion\":0}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void adminCanAccessPaymentOperations() throws Exception {
         String token = generateJwt(1L, "admin@test.com", "ADMIN");
 

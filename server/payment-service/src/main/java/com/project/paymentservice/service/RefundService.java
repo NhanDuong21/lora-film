@@ -120,6 +120,58 @@ public class RefundService {
     }
 
     @Transactional
+    public RefundResponse createAccountingRefundRequest(
+            String paymentPublicId,
+            String idempotencyKey,
+            Long accountingAccountId,
+            String cinemaPublicId,
+            CreateRefundRequest request) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BusinessException(
+                    "REFUND_IDEMPOTENCY_KEY_REQUIRED",
+                    "Yêu cầu hoàn tiền phải có mã chống xử lý trùng.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        Payment payment = paymentRepository.findByPublicIdForUpdate(paymentPublicId)
+                .orElseThrow(() -> paymentNotFound(paymentPublicId));
+        if (cinemaPublicId != null && !cinemaPublicId.isBlank()) {
+            requirePaymentCinema(payment, cinemaPublicId);
+        }
+        PaymentRefund existing = refundRepository
+                .findByPaymentIdAndRequestKey(payment.getId(), normalizeKey(idempotencyKey))
+                .orElse(null);
+        if (existing != null) {
+            verifyReplay(existing, request);
+            return RefundResponse.from(existing);
+        }
+        validateRefundablePayment(payment);
+        validateAdminRequest(request);
+        BigDecimal remaining = refundableRemaining(payment);
+        BigDecimal amount = request.getRefundType() == RefundType.FULL
+                ? remaining : request.getAmount();
+        requireAvailableAmount(amount, remaining);
+        if (request.getRefundComponent() == RefundComponent.CONCESSION) {
+            PaymentAnalyticsSnapshot snapshot = snapshotRepository.findByPaymentId(payment.getId())
+                    .orElseThrow(() -> new BusinessException(
+                            "PAYMENT_SNAPSHOT_MISSING",
+                            "Không tìm thấy dữ liệu bắp nước của đơn.",
+                            HttpStatus.CONFLICT));
+            BigDecimal reserved = refundRepository.sumReservedAmountByComponent(
+                    payment.getId(), RefundComponent.CONCESSION, RESERVED_STATUSES);
+            requireAvailableAmount(amount, snapshot.getFoodAmount().subtract(reserved));
+        }
+        RefundType providerOperation = request.getRefundType() == RefundType.FULL
+                && amount.compareTo(payment.getAmount()) < 0
+                ? RefundType.PARTIAL : request.getRefundType();
+        PaymentRefund refund = newRefund(
+                payment, normalizeKey(idempotencyKey), providerOperation,
+                request.getRefundComponent(), normalizeCode(request.getReasonCode()),
+                sanitize(request.getNote(), 2000), amount, false,
+                ActorType.EMPLOYEE, accountingAccountId, true);
+        return RefundResponse.from(refundRepository.saveAndFlush(refund));
+    }
+
+    @Transactional
     public RefundResponse createEmployeeRefundRequest(
             String paymentPublicId,
             String idempotencyKey,
@@ -270,6 +322,7 @@ public class RefundService {
             Long managerAccountId,
             String note) {
         PaymentRefund refund = refundForDecision(refundPublicId, cinemaPublicId);
+        requireIndependentReviewer(refund, managerAccountId);
         Instant now = Instant.now();
         refund.setReviewedByAccountId(managerAccountId);
         refund.setReviewedAt(now);
@@ -294,6 +347,7 @@ public class RefundService {
             Long managerAccountId,
             String note) {
         PaymentRefund refund = refundForDecision(refundPublicId, cinemaPublicId);
+        requireIndependentReviewer(refund, managerAccountId);
         refund.setStatus(RefundStatus.REJECTED);
         refund.setReviewedByAccountId(managerAccountId);
         refund.setReviewedAt(Instant.now());
@@ -626,7 +680,9 @@ public class RefundService {
                 .orElseThrow(() -> refundNotFound(refundPublicId));
         PaymentRefund refund = refundRepository.findByIdForUpdate(existing.getId())
                 .orElseThrow(() -> refundNotFound(refundPublicId));
-        requirePaymentCinema(refund.getPayment(), cinemaPublicId);
+        if (cinemaPublicId != null && !cinemaPublicId.isBlank()) {
+            requirePaymentCinema(refund.getPayment(), cinemaPublicId);
+        }
         if (refund.getStatus() != RefundStatus.PENDING_APPROVAL) {
             throw new BusinessException(
                     "REFUND_ALREADY_REVIEWED",
@@ -634,6 +690,16 @@ public class RefundService {
                     HttpStatus.CONFLICT);
         }
         return refund;
+    }
+
+    private void requireIndependentReviewer(PaymentRefund refund, Long reviewerAccountId) {
+        if (reviewerAccountId != null
+                && reviewerAccountId.equals(refund.getRequestedByAccountId())) {
+            throw new BusinessException(
+                    "REFUND_MAKER_CHECKER",
+                    "Người đề nghị hoàn tiền không được tự duyệt yêu cầu của mình.",
+                    HttpStatus.CONFLICT);
+        }
     }
 
     private void requirePaymentCinema(Payment payment, String cinemaPublicId) {

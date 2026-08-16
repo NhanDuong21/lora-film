@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom
 import {
   ChevronLeft,
   ChevronRight,
+  Check,
   Download,
   Eye,
   RefreshCw,
@@ -10,6 +11,7 @@ import {
   Search,
   ShieldCheck,
   Wrench,
+  XCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -19,6 +21,7 @@ import {
   getPaymentOperations,
   paymentErrorMessage,
   replayPaymentOperation,
+  reviewAccountingRefund,
   retryAdminRefund,
   resolveReconciliation,
   searchAdminPayments,
@@ -39,7 +42,7 @@ import {
 
 const BUSINESS_TABS = [
   { key: 'transactions', label: 'Giao dịch thanh toán' },
-  { key: 'refunds', label: 'Hoàn tiền' },
+  { key: 'refunds', label: 'Theo dõi hoàn tiền' },
   { key: 'reconciliations', label: 'Cần xử lý' },
 ];
 
@@ -81,6 +84,35 @@ const operationDescription = item => {
   return 'Không có ghi chú lỗi.';
 };
 
+const localDateValue = value => [
+  value.getFullYear(),
+  String(value.getMonth() + 1).padStart(2, '0'),
+  String(value.getDate()).padStart(2, '0'),
+].join('-');
+
+const defaultTransactionFilters = query => {
+  const now = new Date();
+  return {
+    query: query || '',
+    status: '',
+    provider: '',
+    reconciliationStatus: '',
+    fromDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+    toDate: localDateValue(now),
+  };
+};
+
+const startOfLocalDate = value => value
+  ? new Date(`${value}T00:00:00`).toISOString()
+  : undefined;
+
+const endOfLocalDate = value => {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + 1);
+  return date.toISOString();
+};
+
 export default function AdminPaymentsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -88,6 +120,7 @@ export default function AdminPaymentsPage() {
   const { triggerToast, triggerConfirm, triggerAlert } = useOutletContext() || {};
   const isAdmin = (userRole || '').replace(/^ROLE_/, '') === 'ADMIN';
   const canReconcile = isAdmin || (user?.permissions || []).includes('PAYMENT_RECONCILE');
+  const canApproveRefund = isAdmin || (user?.permissions || []).includes('REFUND_APPROVE');
   const requestedTab = searchParams.get('tab');
   const initialTab = [...BUSINESS_TABS, ...TECHNICAL_TABS].some(tab => tab.key === requestedTab)
     ? requestedTab
@@ -100,17 +133,15 @@ export default function AdminPaymentsPage() {
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ number: 0, totalPages: 0, totalElements: 0 });
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    query: searchParams.get('query') || '',
-    status: '',
-    provider: '',
-    reconciliationStatus: '',
-  });
+  const [filters, setFilters] = useState(() => defaultTransactionFilters(
+    searchParams.get('query'),
+  ));
   const [reconciliationAction, setReconciliationAction] = useState(null);
   const [resolutionForm, setResolutionForm] = useState({
     resolutionCode: '',
     note: '',
   });
+  const [refundReview, setRefundReview] = useState(null);
   const requestSequence = useRef(0);
 
   const params = useMemo(() => ({
@@ -122,6 +153,8 @@ export default function AdminPaymentsPage() {
     ...(filters.reconciliationStatus && {
       reconciliationStatus: filters.reconciliationStatus,
     }),
+    ...(filters.fromDate && { from: startOfLocalDate(filters.fromDate) }),
+    ...(filters.toDate && { to: endOfLocalDate(filters.toDate) }),
   }), [filters, page]);
 
   const load = useCallback(async () => {
@@ -175,7 +208,7 @@ export default function AdminPaymentsPage() {
   const resetFilters = () => {
     setItems([]);
     setPageInfo({ number: 0, totalPages: 0, totalElements: 0 });
-    setFilters({ query: '', status: '', provider: '', reconciliationStatus: '' });
+    setFilters(defaultTransactionFilters(''));
     setPage(0);
   };
 
@@ -236,6 +269,29 @@ export default function AdminPaymentsPage() {
       }
       setReconciliationAction(null);
       setResolutionForm({ resolutionCode: '', note: '' });
+      await load();
+    } catch (error) {
+      triggerAlert?.(paymentErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitRefundReview = async event => {
+    event.preventDefault();
+    if (!refundReview || !canApproveRefund
+        || String(refundReview.item.requestedByAccountId) === String(accountId)) return;
+    setLoading(true);
+    try {
+      await reviewAccountingRefund(
+        refundReview.item.refundPublicId,
+        refundReview.decision,
+        refundReview.note.trim(),
+      );
+      triggerToast?.(refundReview.decision === 'approve'
+        ? 'Đã duyệt đề nghị hoàn tiền và chuyển sang bước thực hiện.'
+        : 'Đã từ chối đề nghị hoàn tiền và lưu căn cứ.');
+      setRefundReview(null);
       await load();
     } catch (error) {
       triggerAlert?.(paymentErrorMessage(error));
@@ -331,7 +387,7 @@ export default function AdminPaymentsPage() {
               />
             ))}
           </nav>
-          <button
+          {isAdmin ? <button
             type="button"
             onClick={() => setTechnicalOpen(value => !value)}
             className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition ${
@@ -342,9 +398,9 @@ export default function AdminPaymentsPage() {
           >
             <Wrench className="h-4 w-4" />
             Công cụ kỹ thuật
-          </button>
+          </button> : null}
         </div>
-        {technicalOpen && (
+        {isAdmin && technicalOpen && (
           <div className="mt-2 flex flex-wrap gap-2 border-t border-zinc-800 pt-2">
             <p className="w-full px-3 pb-1 text-xs text-zinc-500">
               Chỉ dùng khi điều tra callback hoặc tác vụ giao nhận bị lỗi.
@@ -378,8 +434,8 @@ export default function AdminPaymentsPage() {
               Xóa bộ lọc
             </button>
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="relative">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+            <div className="relative xl:col-span-2">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               <input
                 value={filters.query}
@@ -423,7 +479,32 @@ export default function AdminPaymentsPage() {
                   <option key={value} value={value}>{label}</option>
                 ))}
             </select>
+            <label className="text-xs font-bold text-zinc-500">
+              Từ ngày giao dịch
+              <input
+                aria-label="Từ ngày giao dịch"
+                type="date"
+                max={filters.toDate || undefined}
+                value={filters.fromDate}
+                onChange={event => updateFilter('fromDate', event.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm font-normal text-zinc-200"
+              />
+            </label>
+            <label className="text-xs font-bold text-zinc-500">
+              Đến ngày giao dịch
+              <input
+                aria-label="Đến ngày giao dịch"
+                type="date"
+                min={filters.fromDate || undefined}
+                value={filters.toDate}
+                onChange={event => updateFilter('toDate', event.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm font-normal text-zinc-200"
+              />
+            </label>
           </div>
+          <p className="mt-3 text-xs text-zinc-600">
+            Cơ sở ngày: thời điểm giao dịch được tạo. Lô settlement và ngày ngân hàng ghi có được kiểm tra riêng tại “Đối soát ngân hàng”.
+          </p>
         </section>
       )}
 
@@ -444,7 +525,7 @@ export default function AdminPaymentsPage() {
           {!isAdmin && (
             <span className="text-xs text-zinc-500">
               {canReconcile
-                ? 'Kế toán được tiếp nhận và kết luận hồ sơ đối soát; không được hoàn tiền hoặc chạy lại tác vụ kỹ thuật.'
+                ? 'Kế toán được tiếp nhận và kết luận hồ sơ đối soát. Đề nghị hoàn tiền phải qua người kiểm soát độc lập; công cụ kỹ thuật chỉ dành cho quản trị viên.'
                 : 'Kế toán có quyền xem và xuất danh sách, không có quyền xử lý lại.'}
             </span>
           )}
@@ -463,6 +544,9 @@ export default function AdminPaymentsPage() {
                     items={items}
                     navigate={navigate}
                     isAdmin={isAdmin}
+                    accountId={accountId}
+                    canApprove={canApproveRefund}
+                    onReview={(decision, item) => setRefundReview({ decision, item, note: '' })}
                     onRetry={retryRefund}
                   />
                 )
@@ -575,6 +659,16 @@ export default function AdminPaymentsPage() {
           </form>
         </div>
       )}
+
+      {refundReview ? <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-sm">
+        <form onSubmit={submitRefundReview} className="w-full max-w-lg rounded-3xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+          <h2 className="text-xl font-black">{refundReview.decision === 'approve' ? 'Duyệt đề nghị hoàn tiền' : 'Từ chối đề nghị hoàn tiền'}</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">Kiểm tra giao dịch gốc, số tiền, lý do và chứng từ. Người gửi đề nghị không thể tự duyệt.</p>
+          <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm"><strong>{refundReview.item.refundCode}</strong><span className="mt-1 block text-zinc-500">{money(refundReview.item.amount, refundReview.item.currency)} · {reasonLabel(refundReview.item.reasonCode)}</span></div>
+          <label className="mt-5 block text-xs font-black uppercase text-zinc-500">Căn cứ quyết định *<textarea required minLength={5} maxLength={1000} rows={4} value={refundReview.note} onChange={event => setRefundReview(value => ({ ...value, note: event.target.value }))} placeholder="Đã kiểm tra giao dịch gốc và chứng từ khách hàng…" className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-sm font-normal normal-case text-white outline-none focus:border-brand-orange" /></label>
+          <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setRefundReview(null)} className="rounded-xl border border-zinc-700 px-5 py-2.5 text-xs font-black uppercase">Quay lại</button><button disabled={loading} className={`rounded-xl px-5 py-2.5 text-xs font-black uppercase disabled:opacity-50 ${refundReview.decision === 'approve' ? 'bg-brand-orange text-black' : 'bg-red-500 text-white'}`}>{loading ? 'Đang lưu…' : refundReview.decision === 'approve' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}</button></div>
+        </form>
+      </div> : null}
     </div>
   );
 }
@@ -635,13 +729,13 @@ function EmptyState({ activeTab }) {
 }
 
 const REFUND_STATUS_LABELS = {
-  PENDING_APPROVAL: 'Chờ quản lý rạp duyệt',
+  PENDING_APPROVAL: 'Chờ người kiểm soát duyệt',
   REQUESTED: 'Đã tiếp nhận',
   PROCESSING: 'Đang hoàn qua nhà cung cấp',
   SUCCESS: 'Đã hoàn cho khách',
   FAILED: 'Hoàn tiền thất bại',
   REQUIRES_ACTION: 'Cần nhân viên xử lý',
-  REJECTED: 'Quản lý rạp đã từ chối',
+  REJECTED: 'Người kiểm soát đã từ chối',
   CANCELLED: 'Đã hủy yêu cầu',
 };
 
@@ -652,7 +746,7 @@ const REFUND_COMPONENT_LABELS = {
   OPERATIONAL_ADJUSTMENT: 'Điều chỉnh nghiệp vụ',
 };
 
-function RefundTable({ items, navigate, isAdmin, onRetry }) {
+function RefundTable({ items, navigate, isAdmin, accountId, canApprove, onReview, onRetry }) {
   return (
     <table className="w-full min-w-[1120px] text-left text-sm">
       <thead className="bg-zinc-950/60 text-[10px] uppercase tracking-wider text-zinc-500">
@@ -706,6 +800,13 @@ function RefundTable({ items, navigate, isAdmin, onRetry }) {
             </td>
             <td className="text-xs text-zinc-400">{formatTime(item.requestedAt)}</td>
             <td>
+              {item.status === 'PENDING_APPROVAL' ? <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button type="button" disabled={!canApprove || String(item.requestedByAccountId) === String(accountId)} onClick={() => onReview('approve', item)} className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-2 text-[10px] font-black uppercase text-black disabled:cursor-not-allowed disabled:opacity-30"><Check size={13} /> Duyệt</button>
+                  <button type="button" disabled={!canApprove || String(item.requestedByAccountId) === String(accountId)} onClick={() => onReview('reject', item)} className="inline-flex items-center gap-1 rounded-lg border border-red-500/35 px-2.5 py-2 text-[10px] font-black uppercase text-red-300 disabled:cursor-not-allowed disabled:opacity-30"><XCircle size={13} /> Từ chối</button>
+                </div>
+                {!canApprove ? <span className="block max-w-48 text-[10px] leading-4 text-zinc-600">Cần tài khoản kế toán kiểm soát có quyền duyệt.</span> : String(item.requestedByAccountId) === String(accountId) ? <span className="block max-w-48 text-[10px] leading-4 text-amber-300">Bạn là người gửi nên không thể tự duyệt.</span> : null}
+              </div> : null}
               {isAdmin
                 && ['FAILED', 'REQUIRES_ACTION'].includes(item.status)
                 && item.provider !== 'CASH' && (

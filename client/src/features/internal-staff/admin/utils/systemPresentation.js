@@ -61,6 +61,9 @@ const PERMISSION_LABELS = {
   PAYROLL_UPDATE: 'Điều chỉnh bảng lương',
   PAYROLL_DELETE: 'Xóa bảng lương',
   PAYROLL_APPROVE: 'Duyệt bảng lương',
+  PAYROLL_SUBMIT_PAYMENT: 'Gửi lệnh thanh toán lương',
+  PAYROLL_RECONCILE: 'Đối soát thanh toán lương',
+  PAYROLL_CANCEL: 'Hủy phiếu lương',
   DASHBOARD_VIEW: 'Xem tổng quan quản trị',
   ROLE_VIEW: 'Xem vai trò hệ thống',
   ROLE_CREATE: 'Tạo vai trò hệ thống',
@@ -97,6 +100,18 @@ const PERMISSION_LABELS = {
   NOTIFICATION_MANAGE: 'Quản lý thông báo',
   PAYMENT_REFUND: 'Hoàn tiền giao dịch',
   PAYMENT_RECONCILE: 'Đối soát giao dịch',
+  ACCOUNTING_VIEW_ALL_CINEMAS: 'Xem nghiệp vụ kế toán toàn hệ thống',
+  SETTLEMENT_IMPORT: 'Nhập lô đối soát ngân hàng',
+  SETTLEMENT_LOCK: 'Khóa lô đối soát ngân hàng',
+  CASH_CLOSE_VERIFY: 'Xác minh biên bản chốt ca tiền mặt',
+  REFUND_REQUEST: 'Gửi đề nghị hoàn tiền',
+  REFUND_APPROVE: 'Duyệt đề nghị hoàn tiền',
+  ACCOUNTING_PERIOD_VIEW: 'Xem kỳ kế toán',
+  ACCOUNTING_PERIOD_CREATE: 'Mở kỳ kế toán',
+  ACCOUNTING_PERIOD_RECONCILE: 'Xác nhận kỳ đã đối soát',
+  ACCOUNTING_PERIOD_CLOSE: 'Khóa kỳ kế toán',
+  ACCOUNTING_EXPORT: 'Xuất dữ liệu kế toán',
+  AUDIT_VIEW: 'Xem nhật ký kiểm soát kế toán',
 };
 
 const PERMISSION_GROUPS = {
@@ -104,6 +119,7 @@ const PERMISSION_GROUPS = {
   EMPLOYEE_SELF: 'Quyền cá nhân dùng chung',
   BOOKING: 'Vé và đặt chỗ',
   PAYMENT: 'Thanh toán và đối soát',
+  ACCOUNTING: 'Kiểm soát kế toán',
   MOVIE: 'Phim, suất chiếu và giá vé',
   CINEMA: 'Rạp, phòng chiếu và ghế',
   CUSTOMER: 'Khách hàng và thành viên',
@@ -161,6 +177,7 @@ export const getPermissionGroupKey = permission => {
   if (code.startsWith('AUTH_') || module.includes('AUTH')) return 'AUTH';
   if (code.startsWith('EMPLOYEE_') && ['EMPLOYEE_DASHBOARD_VIEW', 'EMPLOYEE_SCHEDULE_VIEW', 'EMPLOYEE_LEAVE_CREATE', 'EMPLOYEE_ATTENDANCE_VIEW', 'EMPLOYEE_ATTENDANCE_UPDATE', 'EMPLOYEE_PAYROLL_VIEW'].includes(code)) return 'EMPLOYEE_SELF';
   if (code.includes('BOOKING') || code.includes('TICKET')) return 'BOOKING';
+  if (code.startsWith('ACCOUNTING_') || code.startsWith('SETTLEMENT_') || code.startsWith('CASH_CLOSE_') || code.startsWith('REFUND_') || code === 'AUDIT_VIEW') return 'ACCOUNTING';
   if (code.includes('PAYMENT') || module.includes('PAYMENT')) return 'PAYMENT';
   if (code.includes('MOVIE') || code.includes('SHOWTIME') || code.includes('PRICING')) return 'MOVIE';
   if (code.includes('CINEMA') || code.includes('ROOM') || code.includes('SEAT')) return 'CINEMA';

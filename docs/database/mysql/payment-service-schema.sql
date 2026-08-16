@@ -300,6 +300,11 @@ CREATE TABLE `counter_cash_sessions` (
   `expected_cash` decimal(12,2) NULL,
   `counted_cash` decimal(12,2) NULL,
   `variance_amount` decimal(12,2) NULL,
+  `verification_status` varchar(30) CHARACTER SET ascii COLLATE ascii_bin
+      NOT NULL DEFAULT 'NOT_SUBMITTED',
+  `verified_by_account_id` bigint NULL,
+  `verified_at` datetime(6) NULL,
+  `verification_note_sanitized` varchar(1000) NULL,
   `opening_note_sanitized` varchar(500) NULL,
   `closing_note_sanitized` varchar(1000) NULL,
   `opened_at` datetime(6) NOT NULL,
@@ -314,6 +319,9 @@ CREATE TABLE `counter_cash_sessions` (
   CONSTRAINT `chk_counter_cash_sessions_status` CHECK (`status` IN ('OPEN', 'CLOSED')),
   CONSTRAINT `chk_counter_cash_sessions_opening_float` CHECK (`opening_float` >= 0),
   CONSTRAINT `chk_counter_cash_sessions_counted_cash` CHECK (`counted_cash` IS NULL OR `counted_cash` >= 0),
+  CONSTRAINT `chk_counter_cash_sessions_verification_status` CHECK (`verification_status` IN (
+    'NOT_SUBMITTED', 'PENDING_VERIFICATION', 'DISCREPANCY_REVIEW', 'VERIFIED'
+  )),
   CONSTRAINT `chk_counter_cash_sessions_closed_fields` CHECK (
     (`status` = 'OPEN' AND `closed_at` IS NULL)
     OR (`status` = 'CLOSED' AND `closed_at` IS NOT NULL
@@ -324,10 +332,121 @@ CREATE TABLE `counter_cash_sessions` (
   INDEX `idx_counter_cash_sessions_employee_opened`
       (`employee_account_id`, `opened_at`),
   INDEX `idx_counter_cash_sessions_cinema_status`
-      (`cinema_public_id`, `status`, `opened_at`)
+      (`cinema_public_id`, `status`, `opened_at`),
+  INDEX `idx_counter_cash_sessions_verification`
+      (`verification_status`, `closed_at`)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- TABLES: settlement_batches, settlement_entries
+-- PURPOSE:
+--   Imports provider/bank settlement evidence and preserves the three-way
+--   comparison between LoraFilm, the provider and the bank.
+-- ============================================================================
+CREATE TABLE `settlement_batches` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `public_id` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `provider_code` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `batch_code` varchar(100) COLLATE utf8mb4_bin NOT NULL,
+  `cinema_public_id` char(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  `period_start` date NOT NULL,
+  `period_end` date NOT NULL,
+  `source_file_name` varchar(255) NULL,
+  `status` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'IMPORTED',
+  `entry_count` int NOT NULL DEFAULT 0,
+  `matched_count` int NOT NULL DEFAULT 0,
+  `mismatch_count` int NOT NULL DEFAULT 0,
+  `gross_amount` decimal(15,2) NOT NULL DEFAULT 0,
+  `fee_amount` decimal(15,2) NOT NULL DEFAULT 0,
+  `provider_net_amount` decimal(15,2) NOT NULL DEFAULT 0,
+  `bank_credit_amount` decimal(15,2) NOT NULL DEFAULT 0,
+  `created_by_account_id` bigint NOT NULL,
+  `locked_by_account_id` bigint NULL,
+  `locked_at` datetime(6) NULL,
+  `note_sanitized` varchar(1000) NULL,
+  `version` int NOT NULL DEFAULT 0,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  CONSTRAINT `uk_settlement_batches_public_id` UNIQUE (`public_id`),
+  CONSTRAINT `uk_settlement_provider_batch` UNIQUE (`provider_code`, `batch_code`),
+  CONSTRAINT `chk_settlement_batch_status` CHECK (`status` IN ('IMPORTED','NEEDS_REVIEW','RECONCILED','LOCKED')),
+  CONSTRAINT `chk_settlement_batch_range` CHECK (`period_start` <= `period_end`),
+  INDEX `idx_settlement_batch_queue` (`status`, `period_end`),
+  INDEX `idx_settlement_batch_cinema` (`cinema_public_id`, `period_end`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `settlement_entries` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `settlement_batch_id` bigint NOT NULL,
+  `payment_id` bigint NULL,
+  `payment_transaction_code` varchar(100) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `provider_transaction_id` varchar(150) COLLATE utf8mb4_bin NOT NULL,
+  `bank_credit_reference` varchar(150) COLLATE utf8mb4_bin NULL,
+  `provider_gross_amount` decimal(15,2) NOT NULL,
+  `provider_fee_amount` decimal(15,2) NOT NULL,
+  `provider_net_amount` decimal(15,2) NOT NULL,
+  `bank_credit_amount` decimal(15,2) NOT NULL,
+  `status` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `mismatch_reason_sanitized` varchar(1000) NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  CONSTRAINT `uk_settlement_entry_provider_transaction`
+      UNIQUE (`settlement_batch_id`, `provider_transaction_id`),
+  CONSTRAINT `fk_settlement_entries_batch` FOREIGN KEY (`settlement_batch_id`)
+      REFERENCES `settlement_batches` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_settlement_entries_payment` FOREIGN KEY (`payment_id`)
+      REFERENCES `payments` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `chk_settlement_entry_status` CHECK (`status` IN ('MATCHED','MISMATCH','UNMATCHED')),
+  INDEX `idx_settlement_entries_payment` (`payment_id`),
+  INDEX `idx_settlement_entries_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- TABLES: accounting_periods, accounting_audit_events
+-- PURPOSE:
+--   Controls period close and stores append-only operational accounting audit.
+-- ============================================================================
+CREATE TABLE `accounting_periods` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `public_id` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `period_code` varchar(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `scope_key` varchar(50) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `cinema_public_id` char(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  `period_start` date NOT NULL,
+  `period_end` date NOT NULL,
+  `status` varchar(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'OPEN',
+  `created_by_account_id` bigint NOT NULL,
+  `reconciled_by_account_id` bigint NULL,
+  `reconciled_at` datetime(6) NULL,
+  `locked_by_account_id` bigint NULL,
+  `locked_at` datetime(6) NULL,
+  `note_sanitized` varchar(1000) NULL,
+  `version` int NOT NULL DEFAULT 0,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  CONSTRAINT `uk_accounting_period_public_id` UNIQUE (`public_id`),
+  CONSTRAINT `uk_accounting_period_scope` UNIQUE (`period_code`, `scope_key`),
+  CONSTRAINT `chk_accounting_period_status` CHECK (`status` IN ('OPEN','RECONCILED','LOCKED','ADJUSTMENT')),
+  CONSTRAINT `chk_accounting_period_range` CHECK (`period_start` <= `period_end`),
+  INDEX `idx_accounting_period_status` (`status`, `period_end`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `accounting_audit_events` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `action_code` varchar(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `aggregate_type` varchar(50) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `aggregate_public_id` varchar(100) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `actor_account_id` bigint NOT NULL,
+  `detail_sanitized` varchar(2000) NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  INDEX `idx_accounting_audit_aggregate` (`aggregate_type`, `aggregate_public_id`, `created_at`),
+  INDEX `idx_accounting_audit_actor` (`actor_account_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
 -- TABLE: payment_analytics_snapshots

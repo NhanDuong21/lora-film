@@ -10,6 +10,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 vi.mock('../../services/paymentService', () => ({
   completeCashRefund: vi.fn(),
+  createAccountingRefundRequest: vi.fn(),
   createAdminRefund: vi.fn(),
   getAdminPayment: vi.fn(),
   paymentErrorMessage: () => 'Không thể tải giao dịch thử nghiệm.',

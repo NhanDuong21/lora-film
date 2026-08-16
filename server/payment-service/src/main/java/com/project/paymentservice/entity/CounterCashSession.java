@@ -1,6 +1,7 @@
 package com.project.paymentservice.entity;
 
 import com.project.paymentservice.enumtype.CounterCashSessionStatus;
+import com.project.paymentservice.enumtype.CashVerificationStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -58,6 +59,19 @@ public class CounterCashSession {
     @Column(name = "variance_amount", precision = 12, scale = 2)
     private BigDecimal varianceAmount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verification_status", nullable = false, length = 30)
+    private CashVerificationStatus verificationStatus = CashVerificationStatus.NOT_SUBMITTED;
+
+    @Column(name = "verified_by_account_id")
+    private Long verifiedByAccountId;
+
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
+    @Column(name = "verification_note_sanitized", length = 1000)
+    private String verificationNoteSanitized;
+
     @Column(name = "opening_note_sanitized", length = 500)
     private String openingNoteSanitized;
 
@@ -106,6 +120,14 @@ public class CounterCashSession {
     public void setCountedCash(BigDecimal countedCash) { this.countedCash = countedCash; }
     public BigDecimal getVarianceAmount() { return varianceAmount; }
     public void setVarianceAmount(BigDecimal varianceAmount) { this.varianceAmount = varianceAmount; }
+    public CashVerificationStatus getVerificationStatus() { return verificationStatus; }
+    public void setVerificationStatus(CashVerificationStatus value) { this.verificationStatus = value; }
+    public Long getVerifiedByAccountId() { return verifiedByAccountId; }
+    public void setVerifiedByAccountId(Long value) { this.verifiedByAccountId = value; }
+    public Instant getVerifiedAt() { return verifiedAt; }
+    public void setVerifiedAt(Instant value) { this.verifiedAt = value; }
+    public String getVerificationNoteSanitized() { return verificationNoteSanitized; }
+    public void setVerificationNoteSanitized(String value) { this.verificationNoteSanitized = value; }
     public String getOpeningNoteSanitized() { return openingNoteSanitized; }
     public void setOpeningNoteSanitized(String openingNoteSanitized) { this.openingNoteSanitized = openingNoteSanitized; }
     public String getClosingNoteSanitized() { return closingNoteSanitized; }

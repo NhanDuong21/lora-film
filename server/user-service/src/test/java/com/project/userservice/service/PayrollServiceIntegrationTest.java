@@ -217,6 +217,32 @@ class PayrollServiceIntegrationTest {
         assertThat(payroll.sourceChecksum()).hasSize(64);
     }
 
+    @Test
+    void zeroAttendancePayrollRequiresExplicitReviewReason() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(77L, null, List.of()));
+        LocalDateTime start = LocalDateTime.of(2026, 9, 10, 8, 0);
+        workforceTimeService.createShift(
+                new WorkShiftRequest(9001L, start, start.plusHours(8), "Cinema Test", null));
+        var outcome = payrollService.generateFromTimekeeping(new PayrollGenerationRequest("2026-09"));
+        PayrollResponse payroll = payrollService.get(outcome.payrollIds().getFirst());
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(88L, null, List.of()));
+        assertThatThrownBy(() -> payrollService.applyAction(payroll.id(),
+                new PayrollActionRequest(PayrollActionType.APPROVE, "Too short",
+                        null, null, null, null, payroll.version())))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo("USER_PAYROLL_ATTENDANCE_REVIEW_REQUIRED");
+
+        PayrollResponse approved = payrollService.applyAction(payroll.id(),
+                new PayrollActionRequest(PayrollActionType.APPROVE,
+                        "Verified missing attendance evidence",
+                        null, null, null, null, payroll.version()));
+        assertThat(approved.status()).isEqualTo(PayrollStatus.APPROVED);
+    }
+
     private PayrollRequest request(String month) {
         return new PayrollRequest(9001L, month, new BigDecimal("10000000"),
                 new BigDecimal("500000"), new BigDecimal("1000000"),

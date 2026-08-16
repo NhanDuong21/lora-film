@@ -47,7 +47,8 @@ const DATE_RANGE_OPTIONS = [
   { days: 1, label: 'Hôm nay' },
   { days: 7, label: '7 ngày' },
   { days: 30, label: '30 ngày' },
-  { days: 90, label: '90 ngày' }
+  { days: 90, label: '90 ngày' },
+  { days: 'custom', label: 'Tùy chọn' }
 ];
 
 const DECISION_VIEWS = [
@@ -460,7 +461,19 @@ export default function AdminAnalyticsPage() {
   const normalizedRole = String(userRole || user?.role || '').replace(/^ROLE_/, '');
   const canManageInsights = ['ADMIN', 'MANAGER'].includes(normalizedRole)
     || (user?.permissions || []).includes('ANALYTICS_MANAGE');
+  const isAccountingUser = normalizedRole === 'EMPLOYEE'
+    && (user?.permissions || []).some(permission => [
+      'PERM_VIEW_FINANCE', 'PAYMENT_RECONCILE', 'SETTLEMENT_IMPORT',
+    ].includes(permission));
   const [days, setDays] = useState(30);
+  const initialCustomPeriod = useMemo(() => {
+    const today = new Date();
+    return {
+      startDate: formatIsoDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+      endDate: formatIsoDate(today),
+    };
+  }, []);
+  const [customPeriod, setCustomPeriod] = useState(initialCustomPeriod);
   const [view, setView] = useState('happened');
   const [selectedCinemaKey, setSelectedCinemaKey] = useState('');
   const [cinemaKpis, setCinemaKpis] = useState([]);
@@ -477,7 +490,7 @@ export default function AdminAnalyticsPage() {
     else setLoading(true);
     setError('');
     try {
-      const period = dateRangeFor(days);
+      const period = days === 'custom' ? customPeriod : dateRangeFor(days);
       const [dashboardData, cinemas] = await Promise.all([
         getAnalyticsDashboard({
           ...period,
@@ -501,7 +514,7 @@ export default function AdminAnalyticsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [days, selectedCinemaKey]);
+  }, [customPeriod, days, selectedCinemaKey]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -608,11 +621,13 @@ export default function AdminAnalyticsPage() {
       <header className="flex flex-col justify-between gap-5 border-b border-zinc-800 pb-6 xl:flex-row xl:items-end">
         <div>
           <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-400">
-            <Activity className="h-4 w-4" /> Báo cáo và phân tích kinh doanh
+            <Activity className="h-4 w-4" /> {isAccountingUser ? 'Báo cáo kế toán' : 'Báo cáo và phân tích kinh doanh'}
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">Trung tâm điều hành kinh doanh</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">{isAccountingUser ? 'Doanh thu & số liệu bàn giao' : 'Trung tâm điều hành kinh doanh'}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            Theo dõi kết quả kinh doanh, tìm nguyên nhân thay đổi và xem những việc cần xử lý tiếp theo.
+            {isAccountingUser
+              ? 'Chọn đúng phạm vi ngày và rạp để kiểm tra doanh thu, khoản hoàn và số liệu trước khi đối soát hoặc khóa kỳ.'
+              : 'Theo dõi kết quả kinh doanh, tìm nguyên nhân thay đổi và xem những việc cần xử lý tiếp theo.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -650,6 +665,14 @@ export default function AdminAnalyticsPage() {
               </button>
             ))}
           </div>
+          {days === 'custom' ? <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-1.5">
+            <label className="text-[10px] font-semibold uppercase text-zinc-600">Từ ngày
+              <input type="date" value={customPeriod.startDate} max={customPeriod.endDate} onChange={event => setCustomPeriod(value => ({ ...value, startDate: event.target.value }))} className="ml-2 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs font-normal text-zinc-300" />
+            </label>
+            <label className="text-[10px] font-semibold uppercase text-zinc-600">Đến ngày
+              <input type="date" value={customPeriod.endDate} min={customPeriod.startDate} max={formatIsoDate(new Date())} onChange={event => setCustomPeriod(value => ({ ...value, endDate: event.target.value }))} className="ml-2 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs font-normal text-zinc-300" />
+            </label>
+          </div> : null}
           <button
             type="button"
             onClick={() => load(true)}
@@ -742,7 +765,9 @@ export default function AdminAnalyticsPage() {
               description="Số tiền thực nhận sau khi trừ giảm giá và hoàn tiền"
               aside={(
                 <span className="flex items-center gap-2 text-xs text-zinc-600">
-                  <CalendarDays className="h-4 w-4" /> {days === 1 ? 'Trong ngày' : `${days} ngày`}
+                  <CalendarDays className="h-4 w-4" /> {days === 'custom'
+                    ? `${formatDisplayDate(customPeriod.startDate)} – ${formatDisplayDate(customPeriod.endDate)}`
+                    : days === 1 ? 'Trong ngày' : `${days} ngày`}
                 </span>
               )}
             />
