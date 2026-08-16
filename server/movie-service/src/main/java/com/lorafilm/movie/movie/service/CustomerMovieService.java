@@ -120,11 +120,24 @@ public class CustomerMovieService {
                                 media -> media.getMovie().getId(),
                                 media -> media.getUrl(),
                                 (first, ignored) -> first));
+        Map<Long, String> primaryTrailers = movieIds.isEmpty()
+                ? Map.of()
+                : movieMediaRepository
+                        .findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                                movieIds,
+                                MovieMediaType.TRAILER,
+                                ActiveStatus.ACTIVE)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                media -> media.getMovie().getId(),
+                                media -> media.getUrl(),
+                                (first, ignored) -> first));
 
         Map<Long, Availability> availability = loadAvailability(movieIds);
         List<MovieDto> content = moviePage.getContent().stream()
                 .map(movie -> {
                     MovieDto dto = mapToDto(movie, primaryPosters.get(movie.getId()));
+                    dto.setTrailerUrl(primaryTrailers.get(movie.getId()));
                     applyAvailability(dto, availability.get(movie.getId()));
                     return dto;
                 })

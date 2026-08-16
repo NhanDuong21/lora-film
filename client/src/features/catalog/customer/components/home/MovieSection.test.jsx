@@ -29,6 +29,7 @@ describe('MovieSection homepage discovery', () => {
           ageRating: 'T16',
           durationMinutes: 120,
           priceFrom: 60000,
+          trailerUrl: 'https://www.youtube.com/watch?v=abc123',
           genres: [
             { genreName: 'Phim Hành Động' },
             { genreName: 'Phim Chính Kịch' },
@@ -58,7 +59,8 @@ describe('MovieSection homepage discovery', () => {
     expect(screen.getByText('T16 · 120 phút · Hành Động, Chính Kịch')).toBeInTheDocument();
     expect(screen.queryByText(/Phiêu Lưu/)).not.toBeInTheDocument();
     expect(screen.getByText('Từ 60.000đ')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Chọn suất' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Mua vé' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Xem trailer' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Trang sau' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /Xem tất cả/ })).toHaveLength(2);
   });
@@ -73,7 +75,27 @@ describe('MovieSection homepage discovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Phim sắp chiếu' }));
 
     expect(screen.getByText('Phim Sắp Chiếu')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Xem lịch chiếu' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Mua vé' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Xem trailer' })).not.toBeInTheDocument();
     expect(screen.getByText('Khởi chiếu 01/09/2026')).toBeInTheDocument();
+  });
+
+  it('opens and closes the trailer modal from the hover action', () => {
+    render(
+      <MemoryRouter>
+        <MovieSection />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trailer' }));
+
+    expect(screen.getByRole('dialog', { name: 'Một tựa phim có tên khá dài để kiểm tra card' })).toBeInTheDocument();
+    expect(screen.getByTitle('Trailer phim Một tựa phim có tên khá dài để kiểm tra card')).toHaveAttribute(
+      'src',
+      'https://www.youtube.com/embed/abc123?autoplay=1&rel=0&modestbranding=1',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng trailer' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

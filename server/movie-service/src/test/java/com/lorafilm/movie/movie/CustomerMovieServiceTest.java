@@ -6,6 +6,8 @@ import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.movie.domain.entity.Genre;
 import com.lorafilm.movie.movie.domain.entity.Movie;
 import com.lorafilm.movie.movie.domain.entity.MovieGenre;
+import com.lorafilm.movie.movie.domain.entity.MovieMedia;
+import com.lorafilm.movie.movie.domain.enums.MovieMediaType;
 import com.lorafilm.movie.movie.domain.enums.MovieStatus;
 import com.lorafilm.movie.movie.dto.MovieDto;
 import com.lorafilm.movie.movie.dto.MovieMapper;
@@ -16,6 +18,7 @@ import com.lorafilm.movie.movie.service.CustomerMovieService;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
+import com.lorafilm.movie.common.enums.ActiveStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -104,6 +107,37 @@ public class CustomerMovieServiceTest {
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
         assertEquals("movie-1", response.getContent().get(0).getPublicId());
+    }
+
+    @Test
+    void getMoviesByStatus_IncludesPrimaryTrailerForHomepageCard() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Movie> moviePage = new PageImpl<>(List.of(activeMovie), pageable, 1);
+        MovieMedia trailer = new MovieMedia();
+        trailer.setMovie(activeMovie);
+        trailer.setUrl("https://www.youtube.com/watch?v=trailer-1");
+
+        when(movieRepository.findAll(
+                any(org.springframework.data.jpa.domain.Specification.class),
+                eq(pageable))).thenReturn(moviePage);
+        when(movieGenreRepository.findByMovieId(1L)).thenReturn(Collections.emptyList());
+        when(movieMediaRepository
+                .findByMovieIdInAndMediaTypeAndIsPrimaryTrueAndStatusAndDeletedAtIsNull(
+                        eq(List.of(1L)), any(MovieMediaType.class), eq(ActiveStatus.ACTIVE)))
+                .thenAnswer(invocation -> invocation.getArgument(1) == MovieMediaType.TRAILER
+                        ? List.of(trailer)
+                        : Collections.emptyList());
+
+        MovieDto dto = new MovieDto();
+        dto.setPublicId("movie-1");
+        when(movieMapper.toDto(eq(activeMovie), any(), any())).thenReturn(dto);
+
+        PageResponse<MovieDto> response = customerMovieService
+                .getMoviesByStatus("now-showing", null, pageable);
+
+        assertEquals(
+                "https://www.youtube.com/watch?v=trailer-1",
+                response.getContent().get(0).getTrailerUrl());
     }
 
     @Test

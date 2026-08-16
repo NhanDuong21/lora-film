@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -43,7 +43,7 @@ export default function MovieSection({
 }) {
   const navigate = useNavigate();
   const [localActiveTab, setLocalActiveTab] = useState('NOW_SHOWING');
-  const [activeTrailerUrl, setActiveTrailerUrl] = useState(null);
+  const [activeTrailer, setActiveTrailer] = useState(null);
   const activeTab = propActiveTab ?? localActiveTab;
   const setActiveTab = onChangeActiveTab ?? setLocalActiveTab;
 
@@ -78,6 +78,20 @@ export default function MovieSection({
     else if (onNavigate) onNavigate('movie-detail', { movieId: identifier });
     else navigate(`/movies/${identifier}`);
   };
+
+  useEffect(() => {
+    if (!activeTrailer) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setActiveTrailer(null);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [activeTrailer]);
 
   return (
     <section id="phim" className="relative border-t border-zinc-900/60 bg-zinc-950 px-4 py-16 sm:px-6 lg:px-8">
@@ -174,7 +188,7 @@ export default function MovieSection({
                       event.currentTarget.src = FALLBACK_POSTER;
                     }}
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.99)_0%,rgba(0,0,0,0.94)_33%,rgba(0,0,0,0.66)_52%,rgba(0,0,0,0.12)_76%,transparent_100%)]" />
+                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.99)_0%,rgba(0,0,0,0.94)_33%,rgba(0,0,0,0.66)_52%,rgba(0,0,0,0.12)_76%,transparent_100%)] transition-opacity duration-300 group-hover:opacity-30 group-focus-within:opacity-30" />
 
                   <button
                     type="button"
@@ -183,22 +197,11 @@ export default function MovieSection({
                     className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-orange"
                   />
 
-                  <span className={`pointer-events-none absolute left-4 top-4 z-20 rounded-md border px-2.5 py-1 text-xs font-black tracking-wider shadow-lg backdrop-blur ${rating.bgClass}`}>
+                  <span className={`pointer-events-none absolute left-4 top-4 z-40 rounded-md border px-2.5 py-1 text-xs font-black tracking-wider shadow-lg backdrop-blur ${rating.bgClass}`}>
                     {rating.label}
                   </span>
 
-                  {movie.trailerUrl && (
-                    <button
-                      type="button"
-                      aria-label={`Xem trailer phim ${movie.title}`}
-                      onClick={() => setActiveTrailerUrl(getYoutubeEmbedUrl(movie.trailerUrl))}
-                      className="absolute right-4 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/65 text-white opacity-0 backdrop-blur transition-all hover:border-brand-orange hover:text-brand-orange group-hover:opacity-100 focus-visible:opacity-100"
-                    >
-                      <Play className="h-4 w-4 fill-current" />
-                    </button>
-                  )}
-
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-5">
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-5 transition-all duration-300 group-hover:translate-y-3 group-hover:opacity-0 group-focus-within:translate-y-3 group-focus-within:opacity-0">
                     <h3 className="line-clamp-2 min-h-11 text-base font-black leading-snug text-white drop-shadow-lg md:text-lg">
                       {movie.title}
                     </h3>
@@ -215,18 +218,35 @@ export default function MovieSection({
                         Từ {formatPrice(movie.priceFrom)}
                       </p>
                     )}
-                    <div className="pointer-events-auto mt-4">
+                  </div>
+
+                  <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6 opacity-0 backdrop-blur-[1px] transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100">
+                    <div className="flex w-full max-w-48 flex-col gap-3">
                       <button
                         type="button"
                         disabled={!canBook}
                         onClick={() => openShowtimes(movie)}
-                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-white shadow-lg shadow-orange-950/30 transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800/90 disabled:text-zinc-500"
+                        className="pointer-events-auto inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange px-4 text-sm font-black text-white shadow-lg shadow-orange-950/40 transition-all hover:bg-orange-600 hover:shadow-orange-900/50 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
                       >
                         <Ticket className="h-4 w-4" />
                         {canBook
-                          ? (movie.status === 'UPCOMING' ? 'Xem lịch chiếu' : 'Chọn suất')
+                          ? 'Mua vé'
                           : (movie.status === 'UPCOMING' ? 'Chưa mở lịch' : 'Tạm hết lịch')}
                       </button>
+
+                      {movie.trailerUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTrailer({
+                            title: movie.title,
+                            url: getYoutubeEmbedUrl(movie.trailerUrl),
+                          })}
+                          className="pointer-events-auto inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/80 bg-black/20 px-4 text-sm font-black text-white transition-all hover:border-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange"
+                        >
+                          <Play className="h-4 w-4 fill-current" />
+                          Xem trailer
+                        </button>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -248,30 +268,43 @@ export default function MovieSection({
         )}
       </div>
 
-      {activeTrailerUrl && (
+      {activeTrailer && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="trailer-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/90 p-4 backdrop-blur-sm"
-          onClick={() => setActiveTrailerUrl(null)}
+          onClick={() => setActiveTrailer(null)}
         >
           <div
-            className="relative aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-zinc-800 bg-black shadow-2xl"
+            className="w-full max-w-4xl overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl"
             onClick={event => event.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setActiveTrailerUrl(null)}
-              className="absolute right-4 top-4 z-20 rounded-full bg-zinc-900/80 p-2 text-zinc-400 transition-colors hover:text-white"
-              aria-label="Đóng đoạn giới thiệu phim"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <iframe
-              src={`${activeTrailerUrl}?autoplay=1&rel=0&modestbranding=1`}
-              title="Trình phát đoạn giới thiệu phim LoraFilm"
-              className="h-full w-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            <header className="flex items-center justify-between gap-4 border-b border-zinc-800 px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-orange">Trailer phim</p>
+                <h2 id="trailer-modal-title" className="mt-1 truncate text-base font-black text-white sm:text-lg">
+                  {activeTrailer.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTrailer(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                aria-label="Đóng trailer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="aspect-video bg-black">
+              <iframe
+                src={`${activeTrailer.url}${activeTrailer.url.includes('?') ? '&' : '?'}autoplay=1&rel=0&modestbranding=1`}
+                title={`Trailer phim ${activeTrailer.title}`}
+                className="h-full w-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
           </div>
         </div>
       )}

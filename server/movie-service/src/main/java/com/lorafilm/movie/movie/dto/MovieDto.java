@@ -22,6 +22,7 @@ public class MovieDto {
     private LocalDate endDate;
     private List<String> genres;
     private String primaryPoster;
+    private String trailerUrl;
     private MovieStatus status;
     private String activeSlug;
     private String country;
@@ -138,6 +139,14 @@ public class MovieDto {
 
     public void setPrimaryPoster(String primaryPoster) {
         this.primaryPoster = primaryPoster;
+    }
+
+    public String getTrailerUrl() {
+        return trailerUrl;
+    }
+
+    public void setTrailerUrl(String trailerUrl) {
+        this.trailerUrl = trailerUrl;
     }
 
     public MovieStatus getStatus() {
