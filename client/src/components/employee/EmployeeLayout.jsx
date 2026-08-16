@@ -6,6 +6,7 @@ import {
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   EMPLOYEE_PERMISSIONS,
+  getEmployeeJobLabel,
   hasEmployeeAccess,
 } from '@/features/internal-staff/employee/employeeAccess';
 import RoleAvatar from '@/components/common/RoleAvatar';
@@ -86,6 +87,7 @@ export default function EmployeeLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const permissions = user?.permissions || [];
+  const employeeJobLabel = getEmployeeJobLabel(permissions);
   const visibleGroups = EMPLOYEE_MENU_GROUPS.map(group => ({
     ...group,
     label: group.id === 'operations' && permissions.includes(EMPLOYEE_PERMISSIONS.TICKET_SCAN)
@@ -143,7 +145,7 @@ export default function EmployeeLayout() {
               user={user}
               className="h-8 w-8 border border-amber-500/30"
             />
-            <div className="min-w-0"><p className="text-[10px] font-black uppercase text-zinc-500">Nhân viên</p><p className="truncate text-xs font-bold text-white">{user?.fullName || user?.name || 'Employee'}</p></div>
+            <div className="min-w-0"><p className="truncate text-[10px] font-black uppercase text-zinc-500">{employeeJobLabel}</p><p className="truncate text-xs font-bold text-white">{user?.fullName || user?.name || 'Nhân viên LoraFilm'}</p></div>
           </div>
           <button type="button" onClick={() => navigate('/')} className="flex w-full items-center justify-center rounded-xl py-2.5 text-xs text-zinc-400 hover:bg-zinc-800 md:justify-start md:px-5"><Home className="h-4 w-4 md:mr-3" /><span className="hidden md:inline">Trang chủ</span></button>
           <button type="button" onClick={handleLogout} className="flex w-full items-center justify-center rounded-xl py-2.5 text-xs text-red-400 hover:bg-red-950/20 md:justify-start md:px-5"><LogOut className="h-4 w-4 md:mr-3" /><span className="hidden md:inline">Đăng xuất</span></button>

@@ -10,7 +10,27 @@ export const EMPLOYEE_PERMISSIONS = Object.freeze({
   BOOKING_MANAGE: 'BOOKING_MANAGE',
   MOVIE_VIEW: 'MOVIE_VIEW',
   TICKET_SCAN: 'TICKET_SCAN',
+  CUSTOMER_VIEW: 'CUSTOMER_VIEW',
+  SCORE_MANAGE: 'SCORE_MANAGE',
 });
+
+export const getEmployeeJobLabel = (permissions = []) => {
+  if (permissions.includes(EMPLOYEE_PERMISSIONS.TICKET_SCAN)) {
+    return 'Nhân viên soát vé';
+  }
+  if (permissions.includes(EMPLOYEE_PERMISSIONS.BOOKING_MANAGE)
+      && permissions.includes(EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT)) {
+    return 'Nhân viên bán vé';
+  }
+  if (permissions.includes(EMPLOYEE_PERMISSIONS.CUSTOMER_VIEW)
+      || permissions.includes(EMPLOYEE_PERMISSIONS.SCORE_MANAGE)) {
+    return 'Nhân viên chăm sóc khách hàng';
+  }
+  if (permissions.includes(EMPLOYEE_PERMISSIONS.CASH_PAYMENT_COLLECT)) {
+    return 'Nhân viên thu ngân';
+  }
+  return 'Nhân viên vận hành';
+};
 
 export const hasEmployeeAccess = (
   role,

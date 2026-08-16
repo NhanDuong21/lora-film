@@ -43,6 +43,7 @@ describe('EmployeeLayout permission menu', () => {
     expect(screen.getByText('Phiếu lương')).toBeInTheDocument();
     expect(screen.getByText('Vận hành tại quầy')).toBeInTheDocument();
     expect(screen.getByText('Cá nhân')).toBeInTheDocument();
+    expect(screen.getByText('Nhân viên vận hành')).toBeInTheDocument();
     expect(screen.queryByText('Chấm công')).not.toBeInTheDocument();
     expect(screen.queryByText('Thu tiền tại quầy')).not.toBeInTheDocument();
     expect(screen.queryByText('Bán vé tại quầy')).not.toBeInTheDocument();
@@ -66,6 +67,7 @@ describe('EmployeeLayout permission menu', () => {
     expect(screen.getByText('Đơn tại quầy')).toBeInTheDocument();
     expect(screen.getByText('Hỗ trợ & hoàn tiền')).toBeInTheDocument();
     expect(screen.getByText('Chốt ca & bàn giao')).toBeInTheDocument();
+    expect(screen.getByText('Nhân viên bán vé')).toBeInTheDocument();
     expect(screen.queryByText('Thu tiền tại quầy')).not.toBeInTheDocument();
   });
 
@@ -118,6 +120,7 @@ describe('EmployeeLayout permission menu', () => {
     expect(screen.getByText('Suất chiếu & cửa phòng')).toBeInTheDocument();
     expect(screen.getByText('Lịch sử soát & sự cố')).toBeInTheDocument();
     expect(screen.getByText('Bàn giao ca soát vé')).toBeInTheDocument();
+    expect(screen.getByText('Nhân viên soát vé')).toBeInTheDocument();
     expect(screen.queryByText('Bán vé tại quầy')).not.toBeInTheDocument();
   });
 });
