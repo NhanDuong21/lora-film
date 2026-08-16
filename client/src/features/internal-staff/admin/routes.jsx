@@ -54,7 +54,6 @@ export const adminStaffRoutes = [
         element: requirePermission(
             <AdminAccountingWorkspacePage />,
             'PERM_VIEW_FINANCE',
-            'PAYMENT_VIEW',
             'PAYMENT_RECONCILE',
             'ANALYTICS_VIEW'
         )

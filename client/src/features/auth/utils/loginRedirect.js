@@ -17,14 +17,18 @@ const isCustomerSafeDestination = pathname => Boolean(pathname)
   && !pathname.startsWith('/manager');
 
 export const resolvePostLoginPath = ({ role, permissions = [], from }) => {
+  const normalizedRole = String(role || '').replace(/^ROLE_/, '');
+
+  // Managers own a separate, cinema-scoped workspace. Some manager permissions
+  // overlap with finance/admin permissions, so role routing must win here.
+  if (normalizedRole === 'MANAGER') {
+    return '/manager';
+  }
+
   if (hasAdminAreaAccess(role, permissions)) {
     return getAdminLandingPath(role, permissions);
   }
 
-  const normalizedRole = String(role || '').replace(/^ROLE_/, '');
-  if (normalizedRole === 'MANAGER') {
-    return '/manager';
-  }
   if (normalizedRole === 'EMPLOYEE') {
     return '/employee';
   }

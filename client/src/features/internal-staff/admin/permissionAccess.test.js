@@ -15,6 +15,7 @@ describe('admin permission access', () => {
     expect(hasPermissionAccess('CUSTOM_ROLE', ['CUSTOMER_VIEW'], 'CUSTOMER_VIEW')).toBe(true);
     expect(hasPermissionAccess('CUSTOM_ROLE', ['CUSTOMER_VIEW'], 'EMPLOYEE_VIEW')).toBe(false);
     expect(hasAdminAreaAccess('CUSTOM_ROLE', ['CUSTOMER_VIEW'])).toBe(true);
+    expect(hasAdminAreaAccess('EMPLOYEE', ['PAYMENT_VIEW'])).toBe(false);
   });
 
   it('selects a usable landing page for limited operational roles', () => {
@@ -23,6 +24,7 @@ describe('admin permission access', () => {
     expect(getAdminLandingPath('ACCOUNTANT', ['PERM_VIEW_FINANCE'])).toBe('/admin/accounting');
     expect(getAdminLandingPath('EMPLOYEE', ['PAYMENT_RECONCILE', 'PAYROLL_VIEW']))
       .toBe('/admin/accounting');
+    expect(getAdminLandingPath('EMPLOYEE', ['PAYMENT_VIEW'])).toBe('/403');
     expect(getAdminLandingPath('ROLE_ADMIN', [])).toBe('/admin');
     expect(getAdminLandingPath('CUSTOM_ROLE', [])).toBe('/403');
   });

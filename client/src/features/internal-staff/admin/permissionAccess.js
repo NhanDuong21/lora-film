@@ -33,7 +33,6 @@ export const ADMIN_AREA_PERMISSIONS = [
   'SYSTEM_CONFIGURATION',
   'USER_AUDIT_VIEW',
   'PERM_VIEW_FINANCE',
-  'PAYMENT_VIEW',
   'PAYMENT_RECONCILE',
   'ANALYTICS_VIEW'
 ];
@@ -52,7 +51,6 @@ export const hasAdminAreaAccess = (role, permissions = []) =>
 const ADMIN_LANDING_ROUTES = [
   ['DASHBOARD_VIEW', '/admin'],
   ['PAYMENT_RECONCILE', '/admin/accounting'],
-  ['PAYMENT_VIEW', '/admin/accounting'],
   ['ANALYTICS_VIEW', '/admin/accounting'],
   ['PERM_VIEW_FINANCE', '/admin/accounting'],
   ['CUSTOMER_VIEW', '/admin/members'],

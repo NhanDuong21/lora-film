@@ -20,6 +20,20 @@ describe('resolvePostLoginPath', () => {
     expect(resolvePostLoginPath({ role: 'ROLE_EMPLOYEE' })).toBe('/employee');
   });
 
+  it('keeps box-office employees out of accounting when PAYMENT_VIEW is shared', () => {
+    expect(resolvePostLoginPath({
+      role: 'ROLE_EMPLOYEE',
+      permissions: [
+        'BOOKING_MANAGE',
+        'BOOKING_VIEW',
+        'MOVIE_VIEW',
+        'PAYMENT_CASH_COLLECT',
+        'PAYMENT_VIEW',
+        'USER_VIEW',
+      ],
+    })).toBe('/employee');
+  });
+
   it('opens the accounting workspace for an EMPLOYEE with accounting permissions', () => {
     expect(resolvePostLoginPath({
       role: 'ROLE_EMPLOYEE',
@@ -28,7 +42,10 @@ describe('resolvePostLoginPath', () => {
   });
 
   it('keeps MANAGER inside the assigned-cinema workspace', () => {
-    expect(resolvePostLoginPath({ role: 'ROLE_MANAGER' })).toBe('/manager');
+    expect(resolvePostLoginPath({
+      role: 'ROLE_MANAGER',
+      permissions: ['ANALYTICS_VIEW', 'PAYMENT_VIEW', 'SHOWTIME_MANAGE'],
+    })).toBe('/manager');
   });
 
   it('does not treat the retired STAFF role as an employee identity', () => {

@@ -103,9 +103,11 @@ export default function AdminSidebar({
   const canViewPayments = can('PERM_VIEW_FINANCE', 'PAYMENT_VIEW', 'PAYMENT_RECONCILE');
   const canReconcilePayments = can('PAYMENT_RECONCILE');
   const canViewAnalytics = can('PERM_VIEW_FINANCE', 'ANALYTICS_VIEW');
-  const hasAccountingAccess = canViewPayments || canViewAnalytics;
+  // PAYMENT_VIEW is also required by box-office staff, so it cannot identify
+  // an accounting workspace on its own.
+  const hasAccountingAccess = can('PERM_VIEW_FINANCE', 'PAYMENT_RECONCILE', 'ANALYTICS_VIEW');
   const isAccountantOnly = hasAccountingAccess && !isFullAdmin
-    && ['PAYMENT_VIEW', 'PAYMENT_RECONCILE', 'ANALYTICS_VIEW', 'PERM_VIEW_FINANCE']
+    && ['PAYMENT_RECONCILE', 'ANALYTICS_VIEW', 'PERM_VIEW_FINANCE']
       .some(permission => permissions.includes(permission));
   const canManageCustomers = can('CUSTOMER_VIEW');
   const canManageEmployees = can('EMPLOYEE_VIEW');

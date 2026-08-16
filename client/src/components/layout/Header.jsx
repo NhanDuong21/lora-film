@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { resolvePostLoginPath } from '@/features/auth/utils/loginRedirect';
 import { getCinemas } from '@/features/catalog/customer/services/movieService';
 import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
 import { getOptimizedImageUrl } from '@/utils/imageOptimization';
@@ -97,6 +98,10 @@ export default function Header() {
   const normalizedRole = (userRole || '').replace(/^ROLE_/, '');
   const isCustomer = normalizedRole === 'CUSTOMER';
   const brandPath = isAuthenticated && normalizedRole === 'ADMIN' ? '/admin' : '/';
+  const managementPath = resolvePostLoginPath({
+    role: userRole,
+    permissions: user?.permissions || [],
+  });
 
   const avatarLoadFailed = Boolean(user?.avatarUrl && failedAvatarUrl === user.avatarUrl);
 
@@ -441,7 +446,7 @@ export default function Header() {
                             type="button"
                             onClick={() => {
                               setProfileDropdownOpen(false);
-                              navigate(normalizedRole === 'EMPLOYEE' ? '/employee' : '/admin');
+                              navigate(managementPath);
                             }}
                             className={`${dropdownItemClass} text-brand-orange`}
                           >
