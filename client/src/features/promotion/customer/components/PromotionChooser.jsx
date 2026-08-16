@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Gift,
   Loader2,
-  RefreshCw,
   Search,
   WalletCards,
   X,
@@ -264,6 +263,24 @@ const contextualReason = (evaluation, bookingContext = {}) => {
   return evaluation?.reason;
 };
 
+const actionableReason = (evaluation, promotion, bookingAmount) => {
+  const conditions = jsonValue(promotion?.conditionsJson);
+  const minimum = Number(
+    conditions?.minimumOrderAmount ??
+      conditions?.minOrderAmount ??
+      promotion?.minimumOrderAmount,
+  );
+  const currentAmount = Number(bookingAmount || 0);
+  if (
+    !evaluation?.eligible &&
+    Number.isFinite(minimum) &&
+    minimum > currentAmount
+  ) {
+    return `Cần thêm ${currency(minimum - currentAmount)} để sử dụng voucher này`;
+  }
+  return evaluation?.reason || "Chưa đủ điều kiện sử dụng";
+};
+
 const isCustomerSelectableVoucher = (promotion) =>
   !["AUTO", "COUPON"].includes(promotion?.promotionType);
 
@@ -303,12 +320,12 @@ export default function PromotionChooser({
   selectedPromotionId = "",
   backendAppliedIds = [],
   promotionEvaluations = [],
+  bookingAmount = 0,
   bookingContext = {},
   onSelect,
   onClaim,
   onClear,
   onClose,
-  onRefresh,
 }) {
   const [query, setQuery] = useState("");
   const [claimingId, setClaimingId] = useState("");
@@ -450,16 +467,15 @@ export default function PromotionChooser({
   }, [bookingContext, evaluationMap, loading, query, scopeLabels, vouchers]);
 
   const grouped = useMemo(() => {
-    const visible = catalog
-      .sort(
-        (first, second) =>
-          Number(second.evaluation.eligible) -
-            Number(first.evaluation.eligible) ||
-          second.estimatedDiscount - first.estimatedDiscount ||
-          String(first.promotion.validTo || "").localeCompare(
-            String(second.promotion.validTo || ""),
-          ),
-      );
+    const visible = catalog.sort(
+      (first, second) =>
+        Number(second.evaluation.eligible) -
+          Number(first.evaluation.eligible) ||
+        second.estimatedDiscount - first.estimatedDiscount ||
+        String(first.promotion.validTo || "").localeCompare(
+          String(second.promotion.validTo || ""),
+        ),
+    );
     return ["wallet", "claimable", "unavailable"]
       .map((key) => ({
         key,
@@ -477,6 +493,10 @@ export default function PromotionChooser({
       }))
       .filter((group) => group.items.length > 0);
   }, [catalog]);
+  const eligibleCount = catalog.filter(
+    (item) => item.evaluation.eligible,
+  ).length;
+  const showSearch = catalog.length > 6;
 
   const claimAndSelect = async (promotion) => {
     if (!onClaim) return;
@@ -517,23 +537,12 @@ export default function PromotionChooser({
                 Chọn ưu đãi
               </h2>
               <p className="mt-1 text-xs text-zinc-500">
-                Chọn tối đa 1 trong {catalog.length} voucher khả dụng
+                {eligibleCount} trong {catalog.length} voucher phù hợp với đơn
+                hiện tại
               </p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              title="Tải lại ưu đãi"
-              aria-label="Tải lại ưu đãi"
-              disabled={loading}
-              onClick={onRefresh}
-              className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              />
-            </button>
             <button
               type="button"
               aria-label="Đóng"
@@ -545,20 +554,22 @@ export default function PromotionChooser({
           </div>
         </header>
 
-        <div className="border-b border-zinc-800 px-5 py-3">
-          <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-            <input
-              ref={searchRef}
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm theo tên hoặc mã"
-              aria-label="Tìm ưu đãi"
-              className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 pl-10 pr-3 text-xs font-semibold text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-emerald-500"
-            />
-          </label>
-        </div>
+        {showSearch && (
+          <div className="border-b border-zinc-800 px-5 py-3">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Tìm theo tên hoặc mã"
+                aria-label="Tìm ưu đãi"
+                className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 pl-10 pr-3 text-xs font-semibold text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-emerald-500"
+              />
+            </label>
+          </div>
+        )}
 
         <div className="min-h-48 flex-1 overflow-y-auto p-5">
           {error && (
@@ -568,6 +579,17 @@ export default function PromotionChooser({
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+          {!loading && !query && catalog.length > 0 && eligibleCount === 0 && (
+            <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+              <p className="text-sm font-black text-amber-200">
+                Chưa có ưu đãi phù hợp
+              </p>
+              <p className="mt-1 text-xs leading-5 text-zinc-400">
+                Bạn đang có {catalog.length} voucher nhưng đơn hàng hiện tại
+                chưa đủ điều kiện sử dụng.
+              </p>
             </div>
           )}
           {loading && vouchers.length === 0 ? (
@@ -620,12 +642,10 @@ export default function PromotionChooser({
                             <article
                               key={id}
                               aria-disabled={!evaluation.eligible}
-                              className={`rounded-xl border px-4 py-4 transition-opacity ${
+                              className={`rounded-xl border px-4 py-4 ${
                                 active
                                   ? "border-emerald-500/35 bg-emerald-500/[0.06]"
                                   : "border-zinc-800 bg-zinc-950/25"
-                              } ${
-                                evaluation.eligible ? "" : "opacity-40"
                               }`}
                             >
                               <div className="flex items-start justify-between gap-3">
@@ -697,7 +717,12 @@ export default function PromotionChooser({
                                       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                                     )}
                                     <span>
-                                      {evaluation.reason} · Hết hạn{" "}
+                                      {actionableReason(
+                                        evaluation,
+                                        promotion,
+                                        bookingAmount,
+                                      )}{" "}
+                                      · Hết hạn{" "}
                                       {formatDateTime(promotion.validTo)}
                                     </span>
                                   </p>
@@ -753,8 +778,8 @@ export default function PromotionChooser({
             <p className="flex min-w-0 gap-2 text-[10px] leading-4 text-zinc-500">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
-                AUTO được hệ thống áp dụng riêng. Chỉ cộng với voucher đã chọn
-                khi chính sách của cả hai chương trình cho phép.
+                Một số ưu đãi tự động có thể được cộng thêm nếu điều kiện chương
+                trình cho phép.
               </span>
             </p>
             {selectedPromotionId && (

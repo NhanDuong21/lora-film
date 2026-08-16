@@ -81,7 +81,7 @@ describe("PromotionChooser", () => {
     );
 
     expect(
-      screen.getByText(/chưa đủ giá trị đơn hàng tối thiểu/i),
+      screen.getByText(/cần thêm .* để sử dụng voucher này/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /không khả dụng/i }),
@@ -154,7 +154,9 @@ describe("PromotionChooser", () => {
     expect(
       screen.queryByRole("button", { name: /voucher hệ thống/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/AUTO được hệ thống áp dụng riêng/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/một số ưu đãi tự động có thể được cộng thêm/i),
+    ).toBeInTheDocument();
     expect(onSelect).not.toHaveBeenCalled();
   });
 
@@ -491,11 +493,17 @@ describe("PromotionChooser", () => {
       />,
     );
 
-    expect(screen.queryByText("Voucher su kien da dung")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Voucher su kien da dung"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Voucher chua du don")).toBeInTheDocument();
     expect(screen.getByText("Voucher dung duoc")).toBeInTheDocument();
 
-    expect(screen.queryByText("Voucher he thong da dung")).not.toBeInTheDocument();
-    expect(screen.queryByText("Voucher he thong dung duoc")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Voucher he thong da dung"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Voucher he thong dung duoc"),
+    ).not.toBeInTheDocument();
   });
 });

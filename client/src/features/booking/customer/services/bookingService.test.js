@@ -23,6 +23,7 @@ describe("bookingService customer history normalization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    localStorage.clear();
   });
 
   it("maps immutable presentation and food data for history cards", async () => {
@@ -104,6 +105,11 @@ describe("bookingService customer history normalization", () => {
 
     expect(sessionStorage.getItem("booking:create:showtime-1")).toBeNull();
     expect(sessionStorage.getItem("booking:create:showtime-2")).toBeNull();
+    expect(
+      JSON.parse(localStorage.getItem("lorafilm:booking-sync")),
+    ).toMatchObject({
+      detail: { action: "CANCELLED", publicId: "booking-1" },
+    });
   });
 
   it("reads the server-authoritative active booking for one showtime", async () => {

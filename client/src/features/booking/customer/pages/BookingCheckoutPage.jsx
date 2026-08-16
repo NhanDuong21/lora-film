@@ -15,6 +15,9 @@ import {
   ShieldCheck,
   CreditCard,
   Gift,
+  Minus,
+  Plus,
+  CheckCircle2,
   X,
 } from "lucide-react";
 import {
@@ -53,6 +56,7 @@ import {
 } from "@/features/payment/services/paymentService";
 import { getOptimizedImageUrl } from "@/utils/imageOptimization";
 import { promotionDecision } from "../utils/promotionDecision";
+import { formatAuditoriumLabel } from "@/features/catalog/customer/utils/movieDetailPresentation";
 
 const FALLBACK_POSTER =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='750' viewBox='0 0 500 750'><rect width='500' height='750' fill='%2309090b'/><text x='50%25' y='48%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-weight='bold' font-size='32' fill='%2352525b'>LORA FILM</text><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='17' fill='%233f3f46'>Chưa có áp phích</text></svg>";
@@ -61,16 +65,83 @@ const MOMO_LOGO_URL =
   "https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg";
 const MOMO_LOGO_FALLBACK_URL =
   "https://res.cloudinary.com/dqc4hufot/image/upload/f_auto,q_auto,w_96/logo_jg9h5v.png";
-const CONCESSION_PAGE_SIZE = 12;
 const CHECKOUT_PHASE = Object.freeze({
   ADD_ONS: "ADD_ONS",
   PAYMENT: "PAYMENT",
 });
 const CATEGORY_LABELS = {
   ALL: "Tất cả",
-  FOOD: "Đồ ăn",
+  FOOD: "Bắp rang",
   DRINK: "Nước uống",
   COMBO: "Combo",
+};
+
+const CONCESSION_PRESENTATION = {
+  "Popcorn Size S": {
+    name: "Bắp rang bơ cỡ nhỏ",
+    detail: "Cỡ nhỏ",
+  },
+  "Popcorn Size L": {
+    name: "Bắp rang bơ cỡ lớn",
+    detail: "Cỡ lớn",
+  },
+  "Caramel Popcorn": {
+    name: "Bắp caramel",
+    detail: "Vị caramel",
+  },
+  "Cheese Popcorn": {
+    name: "Bắp phô mai",
+    detail: "Vị phô mai",
+  },
+  "Mineral Water": {
+    name: "Nước suối",
+    detail: "Chai 500 ml",
+  },
+  "Pepsi Size L": {
+    name: "Pepsi cỡ lớn",
+    detail: "Cỡ lớn",
+  },
+  "Coca-Cola Size L": {
+    name: "Coca-Cola cỡ lớn",
+    detail: "Cỡ lớn",
+  },
+  "Lemon Tea": {
+    name: "Trà chanh",
+  },
+  "Combo Date": {
+    name: "Combo Hẹn Hò",
+    detail: "1 bắp lớn + 2 nước lớn",
+  },
+  "Combo Family": {
+    name: "Combo Gia Đình",
+    detail: "2 bắp lớn + 4 nước lớn",
+  },
+  "Combo Kids": {
+    name: "Combo Trẻ Em",
+    detail: "1 bắp nhỏ + 1 nước",
+  },
+};
+
+const concessionPresentation = (item = {}) => {
+  const localized = CONCESSION_PRESENTATION[item.name] || {};
+  return {
+    name: localized.name || item.name || "Bắp nước",
+    detail: localized.detail || item.description || "",
+  };
+};
+
+const formatShowtime = (value) => {
+  if (!value) return "Chưa có thông tin";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa có thông tin";
+  const time = date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const weekday = date.toLocaleDateString("vi-VN", { weekday: "long" });
+  const calendarDate = date.toLocaleDateString("vi-VN");
+  return `${time} · ${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${calendarDate}`;
 };
 
 const formatCurrency = (value) =>
@@ -179,26 +250,47 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
   disabled,
   onQuantityChange,
 }) {
+  const presentation = concessionPresentation(item);
   const imageUrl = getOptimizedImageUrl(item.imageUrl, {
     width: 192,
     height: 192,
   });
+  const status = String(item.status || "").toUpperCase();
+  const availableQuantity = Number(
+    item.availableQuantity ?? item.stockQuantity ?? item.stock,
+  );
+  const soldOut =
+    item.available === false ||
+    ["SOLD_OUT", "OUT_OF_STOCK", "INACTIVE"].includes(status) ||
+    (Number.isFinite(availableQuantity) && availableQuantity <= 0);
+  const atLimit =
+    Number.isFinite(availableQuantity) && quantity >= availableQuantity;
+  const controlsDisabled = disabled || soldOut;
 
   return (
     <article
-      className="relative flex min-h-40 gap-4 overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900 p-4 transition-colors hover:border-zinc-700/80"
+      className={`relative flex min-h-44 gap-4 overflow-hidden rounded-2xl border p-4 transition-all ${
+        quantity > 0
+          ? "border-brand-orange/45 bg-brand-orange/[0.06] shadow-[0_0_0_1px_rgba(255,122,0,0.06)]"
+          : "border-zinc-800/80 bg-zinc-900 hover:border-zinc-700/80"
+      }`}
       style={{ contentVisibility: "auto", containIntrinsicSize: "160px" }}
     >
-      <div className="relative flex aspect-square w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/60">
+      {quantity > 0 && (
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-brand-orange/25 bg-brand-orange/10 px-2 py-1 text-[8px] font-black uppercase tracking-wider text-brand-orange">
+          <CheckCircle2 className="h-3 w-3" /> Đã chọn
+        </span>
+      )}
+      <div className="relative flex aspect-square w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/60">
         <span className="px-2 text-center text-[8px] font-bold text-zinc-600">
           Chưa có ảnh
         </span>
         {imageUrl && (
           <img
             src={imageUrl}
-            alt={item.name}
-            width="80"
-            height="80"
+            alt={presentation.name}
+            width="96"
+            height="96"
             loading="lazy"
             decoding="async"
             fetchPriority="low"
@@ -217,11 +309,11 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
               item.type ||
               "Combo"}
           </span>
-          <h4 className="line-clamp-1 text-xs font-black leading-snug text-white">
-            {item.name}
+          <h4 className="line-clamp-2 pr-16 text-sm font-black leading-snug text-white">
+            {presentation.name}
           </h4>
-          <p className="line-clamp-2 text-[9px] leading-normal text-zinc-500">
-            {item.description}
+          <p className="line-clamp-2 text-[10px] leading-4 text-zinc-400">
+            {presentation.detail}
           </p>
         </div>
 
@@ -229,38 +321,55 @@ const ConcessionProductCard = memo(function ConcessionProductCard({
           <span className="text-xs font-black text-brand-orange">
             {formatCurrency(item.price)}
           </span>
-          <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-1">
-            <button
-              type="button"
-              aria-label={`Giảm số lượng ${item.name}`}
-              disabled={quantity === 0 || isUpdating || disabled}
-              onClick={() => onQuantityChange(item, false, quantity)}
-              className={`flex h-6 w-6 items-center justify-center rounded text-xs font-black transition-colors ${
-                quantity > 0 && !isUpdating && !disabled
-                  ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                  : "cursor-not-allowed text-zinc-700"
-              }`}
-            >
-              -
-            </button>
-            <span className="w-5 text-center text-xs font-bold text-zinc-200">
-              {isUpdating ? "..." : quantity}
+          {soldOut ? (
+            <span className="rounded-lg border border-zinc-700 px-3 py-2 text-[10px] font-black uppercase text-zinc-500">
+              Tạm hết
             </span>
+          ) : quantity === 0 ? (
             <button
               type="button"
-              aria-label={`Tăng số lượng ${item.name}`}
-              disabled={isUpdating || disabled}
+              aria-label={`Thêm ${presentation.name}`}
+              disabled={isUpdating || controlsDisabled}
               onClick={() => onQuantityChange(item, true, quantity)}
-              className={`flex h-6 w-6 items-center justify-center rounded text-xs font-black transition-colors ${
-                !isUpdating && !disabled
-                  ? "bg-brand-orange text-white hover:bg-opacity-90"
-                  : "cursor-not-allowed text-zinc-700"
-              }`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-orange px-3 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
             >
-              +
+              <Plus className="h-3.5 w-3.5" />
+              {isUpdating ? "Đang thêm..." : "Thêm"}
             </button>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 p-1">
+              <button
+                type="button"
+                aria-label={`Giảm số lượng ${presentation.name}`}
+                disabled={isUpdating || controlsDisabled}
+                onClick={() => onQuantityChange(item, false, quantity)}
+                className="flex h-7 w-7 items-center justify-center rounded bg-zinc-800 text-zinc-300 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-700"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <span className="w-5 text-center text-xs font-black text-zinc-100">
+                {isUpdating ? "…" : quantity}
+              </span>
+              <button
+                type="button"
+                aria-label={`Tăng số lượng ${presentation.name}`}
+                disabled={isUpdating || controlsDisabled || atLimit}
+                onClick={() => onQuantityChange(item, true, quantity)}
+                className="flex h-7 w-7 items-center justify-center rounded bg-brand-orange text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
+        {quantity > 0 && (
+          <p className="text-right text-[9px] font-bold text-zinc-500">
+            {quantity} × {formatCurrency(item.price)} ={" "}
+            <span className="text-zinc-300">
+              {formatCurrency(quantity * Number(item.price || 0))}
+            </span>
+          </p>
+        )}
       </div>
     </article>
   );
@@ -350,7 +459,6 @@ export default function BookingCheckoutPage() {
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [catalogPage, setCatalogPage] = useState(1);
   const [catalogExpanded, setCatalogExpanded] = useState(false);
 
   // Terms agreement state for payment step
@@ -358,7 +466,6 @@ export default function BookingCheckoutPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("VNPAY");
   const selectedPaymentMethodRef = useRef("VNPAY");
   const [userScore, setUserScore] = useState(null);
-  const [scorePointsInput, setScorePointsInput] = useState("");
   const [scorePreview, setScorePreview] = useState(null);
   const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
   const [scorePreviewError, setScorePreviewError] = useState("");
@@ -382,18 +489,18 @@ export default function BookingCheckoutPage() {
     setPromotionError("");
     try {
       const [walletResult, publicResult] = await Promise.allSettled([
-          customerPromotionService.getMyVouchers({
-            page: 0,
-            size: 100,
-            sort: "validTo,asc",
-            status: "ALL",
-          }),
-          customerPromotionService.getPublicPromotions({
-            page: 0,
-            size: 100,
-            sort: "priority,asc",
-          }),
-        ]);
+        customerPromotionService.getMyVouchers({
+          page: 0,
+          size: 100,
+          sort: "validTo,asc",
+          status: "ALL",
+        }),
+        customerPromotionService.getPublicPromotions({
+          page: 0,
+          size: 100,
+          sort: "priority,asc",
+        }),
+      ]);
       if (
         [walletResult, publicResult].every(
           (result) => result.status === "rejected",
@@ -500,7 +607,6 @@ export default function BookingCheckoutPage() {
         }
       }
       if (Number(bookingData.scorePointsUsed || 0) > 0) {
-        setScorePointsInput(String(bookingData.scorePointsUsed));
         setScorePreview({
           eligible: true,
           requestedPoints: Number(bookingData.scorePointsUsed),
@@ -644,8 +750,15 @@ export default function BookingCheckoutPage() {
       .trim()
       .toLocaleLowerCase("vi-VN");
     return concessions.filter((c) => {
+      const presentation = concessionPresentation(c);
       const matchSearch =
         (c.name || "").toLocaleLowerCase("vi-VN").includes(normalizedSearch) ||
+        presentation.name
+          .toLocaleLowerCase("vi-VN")
+          .includes(normalizedSearch) ||
+        presentation.detail
+          .toLocaleLowerCase("vi-VN")
+          .includes(normalizedSearch) ||
         (c.description || "")
           .toLocaleLowerCase("vi-VN")
           .includes(normalizedSearch);
@@ -655,18 +768,8 @@ export default function BookingCheckoutPage() {
       return matchSearch && matchCat;
     });
   }, [concessions, deferredSearchQuery, selectedCategory]);
-
-  const catalogTotalPages = Math.max(
-    1,
-    Math.ceil(filteredConcessions.length / CONCESSION_PAGE_SIZE),
-  );
-  const currentCatalogPage = Math.min(catalogPage, catalogTotalPages);
-  const pagedConcessions = useMemo(() => {
-    const start = (currentCatalogPage - 1) * CONCESSION_PAGE_SIZE;
-    return filteredConcessions.slice(start, start + CONCESSION_PAGE_SIZE);
-  }, [currentCatalogPage, filteredConcessions]);
   const visibleConcessions = catalogExpanded
-    ? pagedConcessions
+    ? filteredConcessions
     : filteredConcessions.slice(0, 4);
 
   const foodOrderItems = booking?.foodOrder?.items;
@@ -787,8 +890,8 @@ export default function BookingCheckoutPage() {
     [bookingId, cartItemsByProductId, promotionWallet, selectedPaymentMethod],
   );
 
-  const handlePreviewScore = async () => {
-    const points = Number(scorePointsInput);
+  const handlePreviewScore = async (pointsOverride) => {
+    const points = Number(pointsOverride);
     if (!Number.isInteger(points) || points <= 0) {
       setScorePreview(null);
       setScorePreviewError("Vui lòng nhập số điểm nguyên lớn hơn 0.");
@@ -825,7 +928,6 @@ export default function BookingCheckoutPage() {
 
   const clearScoreSelection = () => {
     setScorePreview(null);
-    setScorePointsInput("");
     setScorePreviewError("");
   };
 
@@ -947,34 +1049,6 @@ export default function BookingCheckoutPage() {
     }
   };
 
-  const refreshPromotionOptions = async () => {
-    const inventory = await loadPromotionWallet();
-    try {
-      const quote = await previewBookingPromotions(
-        bookingId,
-        promotionPreviewSelection(inventory, selectedPaymentMethod, {
-          ...promotionRequestSelection(selectedPromotion),
-          couponCode: appliedCouponCode || null,
-        }),
-      );
-      const decision = promotionDecision(quote, {
-        promotion: selectedPromotion,
-        couponCode: appliedCouponCode,
-      });
-      if (!decision.applied && decision.notice) {
-        setSelectedPromotion(null);
-        setAppliedCouponCode("");
-        setCouponInput("");
-      }
-      setPromotionPreview(quote);
-      setPromotionNotice(decision.notice);
-      setPromotionError("");
-    } catch {
-      setPromotionNotice(null);
-      setPromotionError("Không thể kiểm tra điều kiện ưu đãi lúc này.");
-    }
-  };
-
   const handleApplyCoupon = async () => {
     const code = couponInput.trim().toUpperCase();
     if (!code) return;
@@ -989,7 +1063,9 @@ export default function BookingCheckoutPage() {
       });
       const decision = promotionDecision(quote, { couponCode: code });
       if (!decision.applied && !decision.notice) {
-        throw new Error("Coupon chưa tạo ra mức giảm cho đơn hàng hiện tại.");
+        throw new Error(
+          "Mã ưu đãi chưa tạo ra mức giảm cho đơn hàng hiện tại.",
+        );
       }
       setSelectedPromotion(null);
       setAppliedCouponCode(decision.applied ? code : "");
@@ -1003,7 +1079,7 @@ export default function BookingCheckoutPage() {
       setPromotionError(
         getBookingErrorMessage(
           requestError,
-          "Mã coupon không hợp lệ hoặc chưa đủ điều kiện.",
+          "Mã ưu đãi không hợp lệ hoặc chưa đủ điều kiện.",
         ),
       );
     } finally {
@@ -1209,6 +1285,8 @@ export default function BookingCheckoutPage() {
     ? booking.foodOrder.items
     : [];
   const showtimeStart = snapshot?.showtimeStart || snapshot?.startTime;
+  const showtimePublicId =
+    snapshot?.showtimePublicId || booking.showtimePublicId || "";
   const movie = snapshot?.movie || {};
   const cinema = snapshot?.cinema || {};
   const auditorium = snapshot?.auditorium || {};
@@ -1229,7 +1307,11 @@ export default function BookingCheckoutPage() {
   const seatLabel = (seat) =>
     seat.label || seat.seatLabel || seat.seatCode || "Chưa rõ";
   const seatType = (seat) => seat.type || seat.seatType;
-  const foodItemName = (item) => item.productName || item.name || "Bắp nước";
+  const foodItemName = (item) =>
+    concessionPresentation({
+      ...item,
+      name: item.productName || item.name,
+    }).name;
   const foodItemAmount = (item) =>
     item.finalAmount ??
     item.totalAmount ??
@@ -1247,6 +1329,21 @@ export default function BookingCheckoutPage() {
   const promotionDiscountTotal =
     Number(booking.promotionDiscount || 0) +
     Number(promotionPreview?.discountAmount ?? booking.voucherDiscount ?? 0);
+  const voucherInventoryCount = promotionWallet.filter(
+    (item) => !["AUTO", "COUPON"].includes(item?.promotionType),
+  ).length;
+  const eligibleVoucherCount = new Set(
+    (promotionPreview?.promotionEvaluations || [])
+      .filter(
+        (item) =>
+          item?.eligible && !["AUTO", "COUPON"].includes(item?.promotionType),
+      )
+      .map(
+        (item) =>
+          item.userPromotionPublicId || item.promotionPublicId || item.code,
+      )
+      .filter(Boolean),
+  ).size;
   const { selectedUserPromotionPublicIds: selectedWalletPromotionIds } =
     promotionRequestSelection(selectedPromotion);
   const selectedPromotionId = promotionSelectionId(selectedPromotion);
@@ -1331,9 +1428,16 @@ export default function BookingCheckoutPage() {
     ),
   );
   const isPaymentPhase = phase === CHECKOUT_PHASE.PAYMENT;
+  const addOnsSubtotal = Number(
+    booking.finalAmount ||
+      Number(booking.ticketAmount || 0) + Number(foodAmount || 0),
+  );
+  const auditoriumLabel = formatAuditoriumLabel(
+    snapshot?.auditoriumName || auditorium?.name || "Chưa có thông tin phòng",
+  );
 
   return (
-    <div className="min-h-screen bg-zinc-950 px-4 pb-12 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 md:px-8">
+    <div className="min-h-screen bg-zinc-950 px-4 pb-28 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 md:px-8 lg:pb-12">
       {notice && (
         <BookingNoticeModal
           title={notice.title}
@@ -1350,6 +1454,7 @@ export default function BookingCheckoutPage() {
       {cancelModalOpen && (
         <BookingCancellationModal
           bookingCode={booking.bookingCode}
+          seatLabels={visibleSeats.map(seatLabel).join(", ")}
           error={cancelError}
           pending={cancelling}
           onClose={() => {
@@ -1382,22 +1487,25 @@ export default function BookingCheckoutPage() {
           setPromotionChooserOpen(false);
         }}
         onClose={() => setPromotionChooserOpen(false)}
-        onRefresh={refreshPromotionOptions}
       />
 
       <div className="max-w-7xl mx-auto w-full">
         {/* Booking Stepper */}
-        <BookingStepper currentStep={3} />
+        <BookingStepper currentStep={isPaymentPhase ? 4 : 3} />
 
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+        <div
+          className={`grid grid-cols-1 items-start gap-5 ${
+            isPaymentPhase ? "lg:grid-cols-1" : "lg:grid-cols-3"
+          }`}
+        >
           {/* Left panel: F&B selection OR payment selection */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className={`${isPaymentPhase ? "" : "lg:col-span-2"} space-y-8`}>
             {/* Countdown notice on mobile */}
             <div className="lg:hidden bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-500 shrink-0" />
                 <span className="text-xs text-zinc-400 font-bold">
-                  Thời gian giao dịch còn lại
+                  Giữ ghế còn
                 </span>
               </div>
               <BookingCountdown
@@ -1460,27 +1568,29 @@ export default function BookingCheckoutPage() {
                         Thêm bắp nước?
                       </h2>
                       <span className="rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-zinc-400">
-                        Không bắt buộc
+                        Tùy chọn
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-zinc-500">
-                      Chọn nhanh món yêu thích hoặc bỏ qua để thanh toán vé.
+                      Chọn món yêu thích hoặc tiếp tục ngay với vé đang giữ.
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCatalogExpanded((value) => !value)}
-                      className="rounded-xl border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
-                    >
-                      {catalogExpanded ? "Thu gọn" : "Xem tất cả"}
-                    </button>
+                    {!catalogExpanded && (
+                      <button
+                        type="button"
+                        onClick={() => setCatalogExpanded(true)}
+                        className="rounded-xl border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                      >
+                        Xem toàn bộ thực đơn
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
-                      className="rounded-xl bg-zinc-800 px-3 py-2 text-xs font-black text-white transition-colors hover:bg-zinc-700"
+                      className="px-2 py-2 text-xs font-bold text-zinc-400 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-white"
                     >
-                      Bỏ qua
+                      Không mua bắp nước
                     </button>
                   </div>
                 </div>
@@ -1493,7 +1603,6 @@ export default function BookingCheckoutPage() {
                           key={cat}
                           onClick={() => {
                             setSelectedCategory(cat);
-                            setCatalogPage(1);
                           }}
                           className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition-all ${
                             selectedCategory === cat
@@ -1512,10 +1621,7 @@ export default function BookingCheckoutPage() {
                         aria-label="Tìm bắp nước"
                         placeholder="Tìm món..."
                         value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
-                          setCatalogPage(1);
-                        }}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 pl-11 pr-4 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-brand-orange focus:outline-none"
                       />
                     </div>
@@ -1523,8 +1629,18 @@ export default function BookingCheckoutPage() {
                 )}
 
                 {/* Grid of concession items */}
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-black uppercase tracking-[0.16em] text-zinc-400">
+                    {catalogExpanded
+                      ? CATEGORY_LABELS[selectedCategory] || "Thực đơn"
+                      : "Gợi ý được chọn nhiều"}
+                  </h3>
+                  <span className="text-[10px] font-bold text-zinc-600">
+                    {filteredConcessions.length} món
+                  </span>
+                </div>
                 {filteredConcessions.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {visibleConcessions.map((item) => {
                       const { quantity = 0 } =
                         cartItemsByProductId.get(item.id) || {};
@@ -1548,38 +1664,6 @@ export default function BookingCheckoutPage() {
                       Không tìm thấy bắp nước phù hợp...
                     </span>
                   </div>
-                )}
-                {catalogExpanded && catalogTotalPages > 1 && (
-                  <nav
-                    className="flex items-center justify-center gap-3 border-t border-zinc-800 pt-5"
-                    aria-label="Phân trang bắp nước"
-                  >
-                    <button
-                      type="button"
-                      disabled={currentCatalogPage === 1}
-                      onClick={() =>
-                        setCatalogPage((value) => Math.max(1, value - 1))
-                      }
-                      className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Trang trước
-                    </button>
-                    <span className="text-xs font-bold text-zinc-400">
-                      {currentCatalogPage}/{catalogTotalPages}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={currentCatalogPage === catalogTotalPages}
-                      onClick={() =>
-                        setCatalogPage((value) =>
-                          Math.min(catalogTotalPages, value + 1),
-                        )
-                      }
-                      className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Trang sau
-                    </button>
-                  </nav>
                 )}
               </div>
             ) : (
@@ -1672,13 +1756,29 @@ export default function BookingCheckoutPage() {
           </div>
 
           {/* Right panel: Sticky order info sidebar / Food summary */}
-          <aside className="sticky top-20 space-y-3 rounded-3xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl lg:col-span-1 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto">
+          <aside
+            className={`space-y-3 rounded-3xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl ${
+              isPaymentPhase
+                ? "lg:static lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0"
+                : "lg:sticky lg:top-20 lg:col-span-1"
+            }`}
+          >
+            {isPaymentPhase && (
+              <div className="border-b border-zinc-800 pb-4 lg:col-span-2">
+                <h2 className="text-lg font-black text-white">
+                  Xác nhận đơn hàng
+                </h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Kiểm tra lại vé, bắp nước và ưu đãi trước khi thanh toán.
+                </p>
+              </div>
+            )}
             {/* Desktop Countdown Timer */}
-            <div className="hidden items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-2.5 shadow-inner lg:flex">
+            <div className="hidden items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-2.5 shadow-inner lg:col-span-2 lg:flex">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-500" />
                 <span className="text-[10px] text-zinc-500 font-black uppercase tracking-wider block">
-                  Thời gian còn lại
+                  Giữ ghế còn
                 </span>
               </div>
               <BookingCountdown
@@ -1719,7 +1819,7 @@ export default function BookingCheckoutPage() {
             {/* Booking Details */}
             <div className="space-y-2 border-b border-zinc-800 py-2 text-[11px]">
               <div className="flex justify-between">
-                <span className="text-zinc-500 font-medium">Cụm rạp</span>
+                <span className="text-zinc-500 font-medium">Rạp</span>
                 <span className="text-white font-bold text-right">
                   {snapshot?.cinemaName ||
                     cinema?.name ||
@@ -1731,26 +1831,37 @@ export default function BookingCheckoutPage() {
                   Phòng chiếu
                 </span>
                 <span className="text-right font-bold text-zinc-200">
-                  {snapshot?.auditoriumName ||
-                    auditorium?.name ||
-                    "Chưa có thông tin phòng"}
+                  {auditoriumLabel}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 font-medium">Suất chiếu</span>
                 <span className="text-white font-bold text-right">
-                  {showtimeStart
-                    ? `${new Date(showtimeStart).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} · ${new Date(showtimeStart).toLocaleDateString("vi-VN")}`
-                    : "Chưa có thông tin"}
+                  {formatShowtime(showtimeStart)}
                 </span>
               </div>
             </div>
 
             {/* Selected Seats */}
             <div className="space-y-2 border-b border-zinc-800 py-2">
-              <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">
-                Các vị trí ghế
-              </span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                  Ghế đang giữ
+                </span>
+                {showtimePublicId && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/seat-selection?showtimeId=${encodeURIComponent(showtimePublicId)}`,
+                      )
+                    }
+                    className="text-[10px] font-black text-brand-orange transition-colors hover:text-orange-300"
+                  >
+                    Thay đổi
+                  </button>
+                )}
+              </div>
               {visibleSeats.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {visibleSeats.map((seat, index) => (
@@ -1774,12 +1885,23 @@ export default function BookingCheckoutPage() {
 
             {/* Food items breakdown */}
             <div className="space-y-2 border-b border-zinc-800 py-2">
-              <span className="text-zinc-500 text-[10px] font-black uppercase tracking-wider block">
-                Bắp nước đã chọn
-              </span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                  Bắp nước
+                </span>
+                {isPaymentPhase && (
+                  <button
+                    type="button"
+                    onClick={() => setPhase(CHECKOUT_PHASE.ADD_ONS)}
+                    className="text-[10px] font-black text-brand-orange transition-colors hover:text-orange-300"
+                  >
+                    Chỉnh sửa
+                  </button>
+                )}
+              </div>
               {selectedFoodItems.length > 0 ? (
-                <div className="max-h-24 space-y-1.5 overflow-y-auto pr-1">
-                  {selectedFoodItems.map((item, index) => (
+                <div className="space-y-1.5">
+                  {selectedFoodItems.slice(0, 3).map((item, index) => (
                     <div
                       key={
                         item.id ||
@@ -1792,365 +1914,361 @@ export default function BookingCheckoutPage() {
                         className="truncate text-zinc-300"
                         title={foodItemName(item)}
                       >
-                        {foodItemName(item)}
+                        {item.quantity} × {foodItemName(item)}
                       </span>
-                      <span className="text-center font-bold text-zinc-500">
-                        x{item.quantity}
-                      </span>
+                      <span aria-hidden="true" />
                       <span className="text-right font-bold text-zinc-100">
                         {formatCurrency(foodItemAmount(item))}
                       </span>
                     </div>
                   ))}
+                  {selectedFoodItems.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setPhase(CHECKOUT_PHASE.ADD_ONS)}
+                      className="text-[10px] font-bold text-zinc-400 hover:text-white"
+                    >
+                      {selectedFoodItems.length} món đã chọn · Xem chi tiết
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="text-[11px] text-zinc-650 italic">
-                  Chưa chọn bắp nước đi kèm
+                  Chưa chọn
                 </div>
               )}
             </div>
 
             {/* Pricing breakdown */}
-            <div className="space-y-2.5 border-b border-zinc-800 py-2 text-xs">
+            <div className="space-y-2.5 border-b border-zinc-800 py-2 text-xs lg:col-span-2">
               <div className="flex justify-between items-center text-zinc-300">
-                <span className="font-bold">
-                  Tiền vé ({visibleSeats.length} ghế):
-                </span>
+                <span className="font-bold">Tiền vé</span>
                 <span className="font-black text-sm">
                   {formatCurrency(booking.ticketAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-zinc-300">
-                <span className="font-bold">Tiền bắp nước:</span>
+                <span className="font-bold">Tiền bắp nước</span>
                 <span className="font-black text-sm">
                   {formatCurrency(foodAmount)}
                 </span>
               </div>
-              {promotionDiscountTotal > 0 && (
+              {isPaymentPhase && promotionDiscountTotal > 0 && (
                 <div className="flex justify-between items-center text-emerald-400 font-bold bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
-                  <span>Khuyến mãi / Giảm giá:</span>
+                  <span>Ưu đãi</span>
                   <span>-{formatCurrency(promotionDiscountTotal)}</span>
                 </div>
               )}
-              <div className="flex justify-between pt-1 text-[10px] text-zinc-500">
-                <span>Thuế GTGT (VAT) đã bao gồm:</span>
-                <span>10%</span>
-              </div>
-            </div>
-
-            <div className="min-w-0 space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Gift className="h-4 w-4 shrink-0 text-emerald-400" />
-                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-200">
-                    Ưu đãi
-                  </span>
+              {isPaymentPhase && selectedScoreDiscount > 0 && (
+                <div className="flex items-center justify-between font-bold text-brand-orange">
+                  <span>Điểm thành viên</span>
+                  <span>-{formatCurrency(selectedScoreDiscount)}</span>
                 </div>
-                <span className="whitespace-nowrap text-[10px] font-black text-emerald-400">
-                  {promotionLoading
-                    ? "Đang tải..."
-                    : `${promotionWallet.length} ưu đãi khả dụng`}
+              )}
+              <div className="flex items-center justify-between border-t border-zinc-800 pt-2.5 text-zinc-100">
+                <span className="font-black">
+                  {isPaymentPhase ? "Tổng thanh toán" : "Tạm tính"}
                 </span>
-              </div>
-
-              {selectedPromotion ? (
-                <div className="min-w-0 space-y-3">
-                  <div className="flex min-w-0 items-start gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                        <p className="min-w-0 break-words text-xs font-black text-white">
-                          {selectedPromotion.name || "Voucher LoraFilm"}
-                        </p>
-                        <span className="shrink-0 text-xs font-black text-emerald-400">
-                          {promotionPreview?.appliedPromotions?.length > 1
-                            ? `Tổng -${formatCurrency(promotionPreview.discountAmount)}`
-                            : voucherDiscountSummary(selectedPromotion)}
-                        </span>
-                      </div>
-                      {selectedPromotion.code && (
-                        <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
-                          {selectedPromotion.code}
-                        </p>
-                      )}
-                      {promotionPreview?.appliedPromotions?.length > 1 && (
-                        <div className="mt-2 space-y-1 border-t border-emerald-500/10 pt-2 text-[10px] text-emerald-200">
-                          {promotionPreview.appliedPromotions.map((item) => (
-                            <div
-                              key={item.promotionPublicId}
-                              className="flex items-start justify-between gap-2"
-                            >
-                              <span className="min-w-0 break-words">
-                                {item.name}
-                              </span>
-                              <span className="shrink-0 font-black">
-                                -{formatCurrency(item.discountAmount)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void clearPromotionSelection()}
-                      disabled={promotionLoading}
-                      aria-label="Bỏ chọn voucher"
-                      className="-mr-1 -mt-1 shrink-0 rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    {promotionPreview?.discountAmount > 0 && (
-                      <p className="text-[10px] font-bold text-emerald-300">
-                        Engine xác nhận giảm{" "}
-                        {formatCurrency(promotionPreview.discountAmount)}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setPromotionChooserOpen(true)}
-                      disabled={isExpired || promotionLoading}
-                      className="h-9 rounded-lg border border-zinc-700 px-3 text-[10px] font-black uppercase text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
-                    >
-                      Chỉnh voucher
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {appliedCouponCode ? (
-                    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
-                      <div className="min-w-0">
-                        <p className="font-mono text-xs font-black text-white">
-                          {appliedCouponCode}
-                        </p>
-                        <p className="mt-1 text-[10px] font-bold text-emerald-300">
-                          Tổng giảm{" "}
-                          {formatCurrency(
-                            promotionPreview?.discountAmount || 0,
-                          )}
-                        </p>
-                        {promotionPreview?.appliedPromotions?.length > 1 && (
-                          <p className="mt-1 text-[9px] leading-4 text-zinc-400">
-                            {promotionPreview.appliedPromotions
-                              .map((item) => item.name)
-                              .filter(Boolean)
-                              .join(" + ")}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void clearPromotionSelection()}
-                        aria-label="Bỏ coupon"
-                        className="p-2 text-zinc-500 hover:text-white"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : promotionPreview?.appliedPromotions?.length > 0 ? (
-                    <div className="min-w-0 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
-                      <p className="break-words text-xs font-black text-white">
-                        {promotionPreview.appliedPromotions
-                          .map((item) => item.name)
-                          .join(", ")}
-                      </p>
-                      <p className="mt-1 text-[10px] font-bold text-emerald-300">
-                        Ưu đãi giảm{" "}
-                        {formatCurrency(promotionPreview.discountAmount)}
-                      </p>
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setPromotionChooserOpen(true)}
-                    disabled={isExpired}
-                    className="w-full rounded-lg bg-emerald-500 py-2.5 text-[10px] font-black uppercase tracking-wider text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
-                  >
-                    Chọn ưu đãi
-                  </button>
-                </>
-              )}
-
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
-                <input
-                  value={couponInput}
-                  onChange={(event) =>
-                    setCouponInput(event.target.value.toUpperCase())
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleApplyCoupon();
-                    }
-                  }}
-                  disabled={isExpired || promotionLoading}
-                  placeholder="Mã coupon"
-                  aria-label="Mã coupon"
-                  className="min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 font-mono text-xs font-bold text-white outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleApplyCoupon()}
-                  disabled={
-                    !couponInput.trim() || isExpired || promotionLoading
-                  }
-                  className="rounded-lg bg-zinc-100 px-3 text-[10px] font-black uppercase text-zinc-950 disabled:opacity-40"
-                >
-                  Áp dụng
-                </button>
-              </div>
-
-              {promotionError && !promotionChooserOpen && (
-                <p role="alert" className="text-[10px] leading-4 text-red-400">
-                  {promotionError}
-                </p>
-              )}
-              {promotionNotice && !promotionChooserOpen && (
-                <p
-                  role="status"
-                  className={`rounded-lg border px-3 py-2 text-[10px] leading-4 ${
-                    promotionNotice.variant === "stacked"
-                      ? "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200"
-                      : "border-amber-500/20 bg-amber-500/[0.06] text-amber-200"
+                <span
+                  className={`font-black ${
+                    isPaymentPhase
+                      ? "text-xl text-brand-orange"
+                      : "text-base text-white"
                   }`}
                 >
-                  {promotionNotice.message}
-                </p>
-              )}
-            </div>
-
-            {/* Score redemption is available before Payment handoff on both checkout steps. */}
-            <div className="rounded-2xl border border-brand-orange/25 bg-brand-orange/[0.06] p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <ShieldCheck className="h-4 w-4 shrink-0 text-brand-orange" />
-                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-200">
-                    Dùng điểm thành viên
-                  </span>
-                </div>
-                <span className="text-[10px] font-black text-brand-orange whitespace-nowrap">
-                  {availableScorePoints.toLocaleString("vi-VN")} điểm
-                </span>
-              </div>
-
-              {userScore ? (
-                <>
-                  <p className="text-[10px] leading-relaxed text-zinc-500">
-                    1 điểm = 1.000đ. Điểm được giữ khi chốt đơn và chỉ bị trừ
-                    sau khi thanh toán thành công.
-                  </p>
-                  {scorePreview?.eligible ? (
-                    <div className="space-y-2">
-                      <div className="flex justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-[11px] font-bold text-emerald-400">
-                        <span>
-                          Đã chọn{" "}
-                          {Number(scorePreview.requestedPoints).toLocaleString(
-                            "vi-VN",
-                          )}{" "}
-                          điểm
-                        </span>
-                        <span>-{formatCurrency(selectedScoreDiscount)}</span>
-                      </div>
-                      {scorePreview.locked ? (
-                        <p className="text-center text-[9px] font-bold uppercase tracking-wider text-zinc-500">
-                          Điểm đã được khóa theo đơn
-                        </p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={clearScoreSelection}
-                          className="w-full rounded-xl border border-zinc-700 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-500 hover:text-white"
-                        >
-                          Bỏ dùng điểm
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          min="1"
-                          max={maxScorePoints || undefined}
-                          step="1"
-                          value={scorePointsInput}
-                          onChange={(event) => {
-                            setScorePointsInput(event.target.value);
-                            setScorePreviewError("");
-                          }}
-                          placeholder={
-                            maxScorePoints > 0
-                              ? `Tối đa ${maxScorePoints}`
-                              : "Không đủ điểm"
-                          }
-                          disabled={maxScorePoints <= 0 || isExpired}
-                          aria-label="Số điểm muốn dùng"
-                          className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs font-bold text-white outline-none transition-colors placeholder:text-zinc-700 focus:border-brand-orange disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                        <button
-                          type="button"
-                          onClick={handlePreviewScore}
-                          disabled={
-                            scorePreviewLoading ||
-                            maxScorePoints <= 0 ||
-                            isExpired
-                          }
-                          className="shrink-0 rounded-xl bg-brand-orange px-3 py-2.5 text-[10px] font-black uppercase tracking-wider text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {scorePreviewLoading
-                            ? "Đang kiểm tra..."
-                            : "Dùng điểm"}
-                        </button>
-                      </div>
-                      {maxScorePoints > 0 && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setScorePointsInput(String(maxScorePoints))
-                          }
-                          className="text-[9px] font-bold uppercase tracking-wider text-brand-orange hover:underline"
-                        >
-                          Chọn số điểm tối đa
-                        </button>
-                      )}
-                      {scorePreviewError && (
-                        <p
-                          role="alert"
-                          className="text-[10px] leading-relaxed text-red-400"
-                        >
-                          {scorePreviewError}
-                        </p>
-                      )}
-                    </div>
+                  {formatCurrency(
+                    isPaymentPhase ? displayFinalAmount : addOnsSubtotal,
                   )}
-                </>
-              ) : (
-                <p className="text-[10px] leading-relaxed text-zinc-500">
-                  Điểm thành viên đang tạm thời không khả dụng. Bạn vẫn có thể
-                  thanh toán bình thường.
-                </p>
-              )}
-            </div>
-
-            {/* Grand Total box */}
-            <div className="flex items-center justify-between rounded-2xl border border-brand-orange/30 bg-zinc-950/80 px-4 py-3 shadow-[0_0_15px_rgba(255,122,0,0.1)]">
-              <div>
-                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-wider block mb-0.5">
-                  Tổng số tiền
-                </span>
-                <span className="text-[9px] text-brand-orange/80 font-bold uppercase">
-                  Đã bao gồm VAT
                 </span>
               </div>
-              <span className="text-2xl font-black tracking-tight text-brand-orange">
-                {formatCurrency(displayFinalAmount)}
-              </span>
+              <div className="pt-0.5 text-[10px] text-zinc-500">
+                Giá đã bao gồm VAT
+              </div>
             </div>
 
             {isPaymentPhase && (
-              <label className="flex cursor-pointer select-none items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+              <>
+                <div className="min-w-0 space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Gift className="h-4 w-4 shrink-0 text-emerald-400" />
+                      <span className="text-[10px] font-black uppercase tracking-wider text-zinc-200">
+                        Ưu đãi
+                      </span>
+                    </div>
+                    <span className="whitespace-nowrap text-[10px] font-black text-emerald-400">
+                      {promotionLoading
+                        ? "Đang tải..."
+                        : `${eligibleVoucherCount} phù hợp · ${voucherInventoryCount} trong ví`}
+                    </span>
+                  </div>
+
+                  {selectedPromotion ? (
+                    <div className="min-w-0 space-y-3">
+                      <div className="flex min-w-0 items-start gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                            <p className="min-w-0 break-words text-xs font-black text-white">
+                              {selectedPromotion.name || "Voucher LoraFilm"}
+                            </p>
+                            <span className="shrink-0 text-xs font-black text-emerald-400">
+                              {promotionPreview?.appliedPromotions?.length > 1
+                                ? `Tổng -${formatCurrency(promotionPreview.discountAmount)}`
+                                : voucherDiscountSummary(selectedPromotion)}
+                            </span>
+                          </div>
+                          {selectedPromotion.code && (
+                            <p className="mt-1 break-all font-mono text-[9px] font-bold text-zinc-500">
+                              {selectedPromotion.code}
+                            </p>
+                          )}
+                          {promotionPreview?.appliedPromotions?.length > 1 && (
+                            <div className="mt-2 space-y-1 border-t border-emerald-500/10 pt-2 text-[10px] text-emerald-200">
+                              {promotionPreview.appliedPromotions.map(
+                                (item) => (
+                                  <div
+                                    key={item.promotionPublicId}
+                                    className="flex items-start justify-between gap-2"
+                                  >
+                                    <span className="min-w-0 break-words">
+                                      {item.name}
+                                    </span>
+                                    <span className="shrink-0 font-black">
+                                      -{formatCurrency(item.discountAmount)}
+                                    </span>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void clearPromotionSelection()}
+                          disabled={promotionLoading}
+                          aria-label="Bỏ chọn voucher"
+                          className="-mr-1 -mt-1 shrink-0 rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-40"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        {promotionPreview?.discountAmount > 0 && (
+                          <p className="text-[10px] font-bold text-emerald-300">
+                            Đơn hàng được giảm{" "}
+                            {formatCurrency(promotionPreview.discountAmount)}
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setPromotionChooserOpen(true)}
+                          disabled={isExpired || promotionLoading}
+                          className="h-9 rounded-lg border border-zinc-700 px-3 text-[10px] font-black uppercase text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
+                        >
+                          Đổi ưu đãi
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {appliedCouponCode ? (
+                        <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                          <div className="min-w-0">
+                            <p className="font-mono text-xs font-black text-white">
+                              {appliedCouponCode}
+                            </p>
+                            <p className="mt-1 text-[10px] font-bold text-emerald-300">
+                              Tổng giảm{" "}
+                              {formatCurrency(
+                                promotionPreview?.discountAmount || 0,
+                              )}
+                            </p>
+                            {promotionPreview?.appliedPromotions?.length >
+                              1 && (
+                              <p className="mt-1 text-[9px] leading-4 text-zinc-400">
+                                {promotionPreview.appliedPromotions
+                                  .map((item) => item.name)
+                                  .filter(Boolean)
+                                  .join(" + ")}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void clearPromotionSelection()}
+                            aria-label="Bỏ coupon"
+                            className="p-2 text-zinc-500 hover:text-white"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : promotionPreview?.appliedPromotions?.length > 0 ? (
+                        <div className="min-w-0 rounded-xl border border-emerald-500/20 bg-zinc-950/35 p-3">
+                          <p className="break-words text-xs font-black text-white">
+                            {promotionPreview.appliedPromotions
+                              .map((item) => item.name)
+                              .join(", ")}
+                          </p>
+                          <p className="mt-1 text-[10px] font-bold text-emerald-300">
+                            Ưu đãi giảm{" "}
+                            {formatCurrency(promotionPreview.discountAmount)}
+                          </p>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setPromotionChooserOpen(true)}
+                        disabled={isExpired}
+                        className="w-full rounded-lg bg-emerald-500 py-2.5 text-[10px] font-black uppercase tracking-wider text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                      >
+                        {eligibleVoucherCount > 0
+                          ? "Chọn ưu đãi"
+                          : `Xem ${voucherInventoryCount} voucher trong ví`}
+                      </button>
+                    </>
+                  )}
+
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+                    <input
+                      value={couponInput}
+                      onChange={(event) =>
+                        setCouponInput(event.target.value.toUpperCase())
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleApplyCoupon();
+                        }
+                      }}
+                      disabled={isExpired || promotionLoading}
+                      placeholder="Nhập mã ưu đãi"
+                      aria-label="Nhập mã ưu đãi"
+                      className="min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 font-mono text-xs font-bold text-white outline-none focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleApplyCoupon()}
+                      disabled={
+                        !couponInput.trim() || isExpired || promotionLoading
+                      }
+                      className="rounded-lg bg-zinc-100 px-3 text-[10px] font-black uppercase text-zinc-950 disabled:opacity-40"
+                    >
+                      Áp dụng
+                    </button>
+                  </div>
+
+                  {promotionError && !promotionChooserOpen && (
+                    <p
+                      role="alert"
+                      className="text-[10px] leading-4 text-red-400"
+                    >
+                      {promotionError}
+                    </p>
+                  )}
+                  {promotionNotice && !promotionChooserOpen && (
+                    <p
+                      role="status"
+                      className={`rounded-lg border px-3 py-2 text-[10px] leading-4 ${
+                        promotionNotice.variant === "stacked"
+                          ? "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200"
+                          : "border-amber-500/20 bg-amber-500/[0.06] text-amber-200"
+                      }`}
+                    >
+                      {promotionNotice.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-brand-orange/25 bg-brand-orange/[0.06] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ShieldCheck className="h-4 w-4 shrink-0 text-brand-orange" />
+                      <span className="text-[10px] font-black uppercase tracking-wider text-zinc-200">
+                        Dùng điểm thành viên
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-black text-brand-orange whitespace-nowrap">
+                      {availableScorePoints.toLocaleString("vi-VN")} điểm
+                    </span>
+                  </div>
+
+                  {userScore ? (
+                    <>
+                      <p className="text-[10px] leading-relaxed text-zinc-500">
+                        1 điểm = 1.000đ. Điểm chỉ được trừ sau khi thanh toán
+                        thành công.
+                      </p>
+                      {scorePreview?.eligible ? (
+                        <div className="space-y-2">
+                          <div className="flex justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-[11px] font-bold text-emerald-400">
+                            <span>
+                              Đã chọn{" "}
+                              {Number(
+                                scorePreview.requestedPoints,
+                              ).toLocaleString("vi-VN")}{" "}
+                              điểm
+                            </span>
+                            <span>
+                              -{formatCurrency(selectedScoreDiscount)}
+                            </span>
+                          </div>
+                          {scorePreview.locked ? (
+                            <p className="text-center text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                              Điểm đã được áp dụng cho đơn
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={clearScoreSelection}
+                              className="w-full rounded-xl border border-zinc-700 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-500 hover:text-white"
+                            >
+                              Bỏ dùng điểm
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handlePreviewScore(maxScorePoints);
+                            }}
+                            disabled={
+                              scorePreviewLoading ||
+                              maxScorePoints <= 0 ||
+                              isExpired
+                            }
+                            className="w-full rounded-xl bg-brand-orange px-3 py-3 text-[10px] font-black uppercase tracking-wider text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                          >
+                            {scorePreviewLoading
+                              ? "Đang kiểm tra..."
+                              : maxScorePoints > 0
+                                ? `Dùng ${maxScorePoints.toLocaleString("vi-VN")} điểm · Giảm ${formatCurrency(maxScorePoints * 1000)}`
+                                : "Chưa đủ điểm để áp dụng"}
+                          </button>
+                          {scorePreviewError && (
+                            <p
+                              role="alert"
+                              className="text-[10px] leading-relaxed text-red-400"
+                            >
+                              {scorePreviewError}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-[10px] leading-relaxed text-zinc-500">
+                      Điểm thành viên đang tạm thời không khả dụng. Bạn vẫn có
+                      thể thanh toán bình thường.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {isPaymentPhase && (
+              <label className="flex cursor-pointer select-none items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 lg:col-span-2">
                 <input
                   type="checkbox"
                   checked={termsAgreed}
@@ -2167,18 +2285,18 @@ export default function BookingCheckoutPage() {
               </label>
             )}
 
-            <div className="sticky bottom-0 -mx-1 space-y-2 border-t border-zinc-800 bg-zinc-900/95 px-1 pt-3 backdrop-blur">
+            <div className="-mx-1 space-y-2 border-t border-zinc-800 bg-zinc-900/95 px-1 pt-3 backdrop-blur lg:col-span-2">
               {!isPaymentPhase ? (
                 <button
                   disabled={isExpired}
                   onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
-                  className={`w-full rounded-2xl py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition-all ${
+                  className={`hidden w-full rounded-2xl py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition-all lg:block ${
                     !isExpired
                       ? "cursor-pointer bg-brand-orange text-white shadow-brand-orange/25 hover:bg-orange-600"
                       : "cursor-not-allowed border border-zinc-800 bg-zinc-850 text-zinc-500"
                   }`}
                 >
-                  Tiếp tục thanh toán · {formatCurrency(displayFinalAmount)}
+                  Tiếp tục đến thanh toán · {formatCurrency(addOnsSubtotal)}
                 </button>
               ) : (
                 <>
@@ -2216,16 +2334,43 @@ export default function BookingCheckoutPage() {
                 }}
                 className="block w-full cursor-pointer py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-zinc-600 transition-colors hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Hủy giao dịch
+                Hủy đơn và trả ghế
               </button>
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-[9px] font-bold uppercase text-zinc-650">
+            <div className="flex items-center justify-center gap-2 text-[9px] font-bold uppercase text-zinc-650 lg:col-span-2">
               <ShieldCheck className="h-4 w-4 text-zinc-600" />
               <span>Thanh toán an toàn bảo mật</span>
             </div>
           </aside>
         </div>
+
+        {!isPaymentPhase && !isExpired && (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-800 bg-zinc-950/95 px-4 py-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl lg:hidden">
+            <div className="mx-auto flex max-w-xl items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500">
+                  <Clock className="h-3.5 w-3.5 text-amber-400" /> Còn
+                  <BookingCountdown
+                    expiresAt={booking.expiresAt}
+                    onExpire={handleDeadlineExpired}
+                    className="font-black tracking-wider"
+                  />
+                </div>
+                <p className="mt-0.5 truncate text-sm font-black text-white">
+                  Tạm tính {formatCurrency(addOnsSubtotal)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
+                className="shrink-0 rounded-xl bg-brand-orange px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white"
+              >
+                Tiếp tục
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

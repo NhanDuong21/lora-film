@@ -1,33 +1,34 @@
-import { useEffect, useRef } from 'react';
-import { AlertTriangle, LoaderCircle, TicketX, X } from 'lucide-react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef } from "react";
+import { AlertTriangle, LoaderCircle, TicketX, X } from "lucide-react";
+import { createPortal } from "react-dom";
 
 export default function BookingCancellationModal({
   bookingCode,
+  seatLabels,
   error,
   pending = false,
   onClose,
-  onConfirm
+  onConfirm,
 }) {
   const keepButtonRef = useRef(null);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     keepButtonRef.current?.focus();
 
-    const handleKeyDown = event => {
-      if (event.key === 'Escape' && !pending) onClose();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !pending) onClose();
     };
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose, pending]);
 
-  const handleSubmit = event => {
+  const handleSubmit = (event) => {
     event.preventDefault();
     if (!pending) onConfirm();
   };
@@ -35,7 +36,7 @@ export default function BookingCancellationModal({
   return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      onMouseDown={event => {
+      onMouseDown={(event) => {
         if (event.target === event.currentTarget && !pending) onClose();
       }}
     >
@@ -53,11 +54,16 @@ export default function BookingCancellationModal({
                 <TicketX className="h-6 w-6" />
               </div>
               <div>
-                <h2 id="booking-cancel-title" className="text-lg font-black text-white">
-                  Xác nhận hủy giữ ghế
+                <h2
+                  id="booking-cancel-title"
+                  className="text-lg font-black text-white"
+                >
+                  Hủy đơn đang giữ?
                 </h2>
                 <p className="mt-1 text-xs font-semibold text-zinc-500">
-                  {bookingCode ? `Đơn ${bookingCode}` : 'Đơn đang chờ thanh toán'}
+                  {bookingCode
+                    ? `Đơn ${bookingCode}`
+                    : "Đơn đang chờ thanh toán"}
                 </p>
               </div>
             </div>
@@ -81,7 +87,9 @@ export default function BookingCancellationModal({
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
                 <div>
                   <p className="text-sm font-black text-amber-200">
-                    Ghế sẽ được trả lại ngay cho khách hàng khác
+                    {seatLabels
+                      ? `Ghế ${seatLabels} sẽ được trả lại ngay`
+                      : "Ghế sẽ được trả lại ngay cho khách hàng khác"}
                   </p>
                   <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-zinc-400">
                     <li>Bạn không thể tiếp tục thanh toán đơn này.</li>
@@ -118,12 +126,12 @@ export default function BookingCancellationModal({
               className="flex items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-colors hover:bg-red-600 disabled:cursor-wait disabled:opacity-70"
             >
               {pending && <LoaderCircle className="h-4 w-4 animate-spin" />}
-              {pending ? 'Đang hủy...' : 'Xác nhận hủy'}
+              {pending ? "Đang hủy..." : "Xác nhận hủy"}
             </button>
           </div>
         </form>
       </section>
     </div>,
-    document.body
+    document.body,
   );
 }

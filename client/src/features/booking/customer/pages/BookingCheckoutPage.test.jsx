@@ -241,13 +241,15 @@ describe("BookingCheckoutPage cancellation", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: /hủy giao dịch/i }),
+      await screen.findByRole("button", { name: /hủy đơn và trả ghế/i }),
     );
     const cancellationDialog = screen.getByRole("dialog", {
-      name: /xác nhận hủy giữ ghế/i,
+      name: /hủy đơn đang giữ/i,
     });
     expect(cancellationDialog).toBeInTheDocument();
-    expect(screen.getByText(/ghế sẽ được trả lại ngay/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/ghế D6, D7 sẽ được trả lại ngay/i),
+    ).toBeInTheDocument();
 
     expect(
       within(cancellationDialog).queryByRole("textbox"),
@@ -275,7 +277,7 @@ describe("BookingCheckoutPage cancellation", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: /tiếp tục thanh toán/i,
+        name: /tiếp tục đến thanh toán/i,
       }),
     );
     const momoLogo = screen.getByRole("img", { name: "Logo MoMo" });
@@ -320,6 +322,9 @@ describe("BookingCheckoutPage cancellation", () => {
   });
 
   it("lets the customer apply Score points and sends the selection while finalizing", async () => {
+    scoreCustomerService.getScoreBalance.mockResolvedValue({
+      data: { currentPoints: 50, heldPoints: 0 },
+    });
     scoreCustomerService.redeemPreview.mockResolvedValue({
       data: {
         eligible: true,
@@ -339,13 +344,14 @@ describe("BookingCheckoutPage cancellation", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(
-      await screen.findByRole("spinbutton", {
-        name: /số điểm muốn dùng/i,
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /tiếp tục đến thanh toán/i,
       }),
-      { target: { value: "50" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: /^dùng điểm$/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /dùng 50 điểm/i }),
+    );
 
     expect(await screen.findByText(/đã chọn 50 điểm/i)).toBeInTheDocument();
     expect(scoreCustomerService.redeemPreview).toHaveBeenCalledWith({
@@ -353,11 +359,6 @@ describe("BookingCheckoutPage cancellation", () => {
       points: 50,
     });
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /tiếp tục thanh toán/i,
-      }),
-    );
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(
       screen.getByRole("button", {
@@ -419,7 +420,7 @@ describe("BookingCheckoutPage cancellation", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: /tiếp tục thanh toán/i,
+        name: /tiếp tục đến thanh toán/i,
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: /momo/i }));
@@ -511,14 +512,14 @@ describe("BookingCheckoutPage cancellation", () => {
     ).toHaveAttribute("src", expect.stringContaining("data:image/gif"));
     expect(screen.getByText(/D6 · VIP/)).toBeInTheDocument();
     expect(screen.getByText(/D7 · VIP/)).toBeInTheDocument();
-    expect(screen.getByText("Tiền vé (2 ghế):")).toBeInTheDocument();
-    expect(screen.getByText("Bắp rang lớn")).toBeInTheDocument();
+    expect(screen.getByText("Tiền vé")).toBeInTheDocument();
+    expect(screen.getByText(/1 × Bắp rang lớn/)).toBeInTheDocument();
     expect(screen.getAllByText("50.000đ")).toHaveLength(2);
-    expect(screen.getByText("335.000đ")).toBeInTheDocument();
+    expect(screen.getAllByText("335.000đ").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Tiền vé \(0 ghế\)/)).not.toBeInTheDocument();
   });
 
-  it("paginates the catalog and requests thumbnail-sized lazy images", async () => {
+  it("shows the full catalog without pagination and requests optimized lazy images", async () => {
     getConcessions.mockResolvedValue(
       Array.from({ length: 13 }, (_, index) => ({
         id: index + 1,
@@ -549,10 +550,14 @@ describe("BookingCheckoutPage cancellation", () => {
     expect(firstThumbnail.getAttribute("src")).toContain("h=192");
     expect(screen.queryByText("Bắp nước 13")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Xem tất cả" }));
-    fireEvent.click(screen.getByRole("button", { name: "Trang sau" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Xem toàn bộ thực đơn" }),
+    );
     expect(await screen.findByText("Bắp nước 13")).toBeInTheDocument();
-    expect(screen.queryByText("Bắp nước 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Bắp nước 1")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Trang sau" }),
+    ).not.toBeInTheDocument();
   });
 
   it("applies AUTO in preview without exposing it as a selectable voucher", async () => {
@@ -656,6 +661,11 @@ describe("BookingCheckoutPage cancellation", () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /tiếp tục đến thanh toán/i,
+      }),
+    );
     expect(await screen.findByText("Ưu đãi tự động 30K")).toBeInTheDocument();
     expect(customerPromotionService.getMyVouchers).toHaveBeenCalledWith({
       page: 0,
@@ -691,7 +701,7 @@ describe("BookingCheckoutPage cancellation", () => {
       within(dialog).queryByRole("button", { name: /voucher hệ thống/i }),
     ).not.toBeInTheDocument();
     expect(
-      within(dialog).getByText(/AUTO được hệ thống áp dụng riêng/i),
+      within(dialog).getByText(/một số ưu đãi tự động có thể được cộng thêm/i),
     ).toBeInTheDocument();
 
     expect(finalizeCheckout).not.toHaveBeenCalled();

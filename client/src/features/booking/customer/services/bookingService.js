@@ -5,12 +5,39 @@ import {
 } from "../utils/bookingCreationIdempotency";
 
 export const BOOKING_CHANGED_EVENT = "lorafilm:booking-changed";
+const BOOKING_SYNC_STORAGE_KEY = "lorafilm:booking-sync";
+const BOOKING_SYNC_LISTENER_FLAG = "__lorafilmBookingSyncListenerAttached";
+
+const dispatchBookingChanged = (detail) => {
+  window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT, { detail }));
+};
 
 const emitBookingChanged = (detail) => {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT, { detail }));
+    dispatchBookingChanged(detail);
+    try {
+      window.localStorage.setItem(
+        BOOKING_SYNC_STORAGE_KEY,
+        JSON.stringify({ detail, emittedAt: Date.now() }),
+      );
+    } catch {
+      // Cross-tab sync is progressive enhancement when storage is unavailable.
+    }
   }
 };
+
+if (typeof window !== "undefined" && !window[BOOKING_SYNC_LISTENER_FLAG]) {
+  window[BOOKING_SYNC_LISTENER_FLAG] = true;
+  window.addEventListener("storage", (event) => {
+    if (event.key !== BOOKING_SYNC_STORAGE_KEY || !event.newValue) return;
+    try {
+      const payload = JSON.parse(event.newValue);
+      dispatchBookingChanged(payload?.detail || {});
+    } catch {
+      // Ignore malformed values written by older app versions.
+    }
+  });
+}
 
 const normalizeCustomerBooking = (booking) => {
   if (!booking) return booking;
@@ -73,10 +100,14 @@ export const createBooking = async ({
     payload.seatPublicIds = seatPublicIds;
   if (Array.isArray(reservationPublicIds) && reservationPublicIds.length > 0)
     payload.reservationPublicIds = reservationPublicIds;
-  if (counterCustomerAccountId) payload.counterCustomerAccountId = counterCustomerAccountId;
-  if (counterCustomerName?.trim()) payload.counterCustomerName = counterCustomerName.trim();
-  if (counterCustomerPhone?.trim()) payload.counterCustomerPhone = counterCustomerPhone.trim();
-  if (counterCustomerEmail?.trim()) payload.counterCustomerEmail = counterCustomerEmail.trim();
+  if (counterCustomerAccountId)
+    payload.counterCustomerAccountId = counterCustomerAccountId;
+  if (counterCustomerName?.trim())
+    payload.counterCustomerName = counterCustomerName.trim();
+  if (counterCustomerPhone?.trim())
+    payload.counterCustomerPhone = counterCustomerPhone.trim();
+  if (counterCustomerEmail?.trim())
+    payload.counterCustomerEmail = counterCustomerEmail.trim();
   const response = await apiClient.post(
     "/api/bookings",
     {
