@@ -4,7 +4,14 @@ import {
   Languages, MapPin, Play, RefreshCw, Ticket, UserRound, Users, X
 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getBookingOptions, getMovieById, getMovies } from '@/features/catalog/customer/services/movieService';
+import {
+  getBookingOptionsCacheSnapshot,
+  getBookingOptionsWithCache,
+  getMovieDetailCacheSnapshot,
+  getMovieDetailWithCache,
+  getRelatedMoviesCacheSnapshot,
+  getRelatedMoviesWithCache
+} from '@/features/catalog/customer/services/movieDetailCache';
 import {
   addCalendarDays,
   formatLocalClock,
@@ -34,6 +41,7 @@ const FALLBACK_POSTER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2
 const surface = 'rounded-3xl border border-white/10 bg-zinc-900/80 shadow-2xl shadow-black/20';
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950';
 const ACTOR_PREVIEW_LIMIT = 8;
+const ACTOR_EXPANSION_STORAGE_PREFIX = 'lorafilm:movie-detail:actors:';
 const sortedPeople = people => [...(people || [])].sort(
   (left, right) => (left.displayOrder ?? Number.MAX_SAFE_INTEGER) - (right.displayOrder ?? Number.MAX_SAFE_INTEGER)
 );
@@ -46,6 +54,30 @@ const peopleNames = (people, includeCharacter = false) => sortedPeople(people)
   })
   .filter(Boolean);
 const companyNames = companies => (companies || []).map(company => company.name).filter(Boolean);
+const bookingWindow = (movie, today) => {
+  const from = movie?.releaseDate && movie.releaseDate > today
+    ? movie.releaseDate
+    : today;
+  return { from, to: addCalendarDays(from, 13) };
+};
+const relatedStatus = movie => movie?.status === 'UPCOMING' ? 'UPCOMING' : 'NOW_SHOWING';
+const relatedMovieItems = (page, movie) => (page?.data || page?.content || [])
+  .filter(item => item.publicId !== movie?.publicId && item.slug !== movie?.slug)
+  .slice(0, 4);
+const readActorExpansion = movieId => {
+  try {
+    return window.sessionStorage.getItem(`${ACTOR_EXPANSION_STORAGE_PREFIX}${movieId}`) === 'true';
+  } catch {
+    return false;
+  }
+};
+const writeActorExpansion = (movieId, expanded) => {
+  try {
+    window.sessionStorage.setItem(`${ACTOR_EXPANSION_STORAGE_PREFIX}${movieId}`, String(expanded));
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+};
 const formatPrice = (value, currency = 'VND') => value == null
   ? null
   : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currency || 'VND' }).format(value);
@@ -140,6 +172,15 @@ export default function MovieDetailPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const today = useMemo(() => vietnamDateKey(), []);
+  const initialMovieSnapshot = useMemo(() => getMovieDetailCacheSnapshot(movieId), [movieId]);
+  const initialMovie = initialMovieSnapshot?.data || null;
+  const initialBookingRange = initialMovie ? bookingWindow(initialMovie, today) : null;
+  const initialBookingSnapshot = initialMovie?.slug
+    ? getBookingOptionsCacheSnapshot(initialMovie.slug, initialBookingRange)
+    : null;
+  const initialRelatedSnapshot = initialMovie
+    ? getRelatedMoviesCacheSnapshot(relatedStatus(initialMovie))
+    : null;
   const requestedDate = searchParams.get('date');
   const preferredCinema = useMemo(
     () => location.state?.preferredCinema || readPreferredCinema(),
@@ -152,15 +193,17 @@ export default function MovieDetailPage() {
   const [selectedCinema, setSelectedCinema] = useState(
     searchParams.get('cinema') || preferredCinema?.publicId || 'ALL'
   );
-  const [movie, setMovie] = useState(null);
-  const [options, setOptions] = useState([]);
-  const [relatedMovies, setRelatedMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showtimeLoading, setShowtimeLoading] = useState(false);
+  const [movie, setMovie] = useState(initialMovie);
+  const [options, setOptions] = useState(initialBookingSnapshot?.data || []);
+  const [relatedMovies, setRelatedMovies] = useState(
+    initialRelatedSnapshot ? relatedMovieItems(initialRelatedSnapshot.data, initialMovie) : []
+  );
+  const [loading, setLoading] = useState(!initialMovie);
+  const [showtimeLoading, setShowtimeLoading] = useState(Boolean(initialMovie && !initialBookingSnapshot));
   const [error, setError] = useState(null);
   const [showtimeError, setShowtimeError] = useState(null);
   const [trailer, setTrailer] = useState(null);
-  const [showAllActors, setShowAllActors] = useState(false);
+  const [showAllActors, setShowAllActors] = useState(() => readActorExpansion(movieId));
   const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
   const showtimeSectionRef = useRef(null);
   const moviePreview = location.state?.moviePreview;
@@ -198,10 +241,17 @@ export default function MovieDetailPage() {
   );
 
   const loadMovie = useCallback(async () => {
-    setLoading(true);
+    const cachedMovie = getMovieDetailCacheSnapshot(movieId)?.data || null;
+    if (cachedMovie) {
+      setMovie(cachedMovie);
+      setLoading(false);
+    } else {
+      setMovie(null);
+      setLoading(true);
+    }
     setError(null);
     try {
-      setMovie(await getMovieById(movieId));
+      setMovie(await getMovieDetailWithCache(movieId));
     } catch (requestError) {
       if (requestError?.status === 404 && moviePreview?.title) {
         setMovie({
@@ -210,7 +260,7 @@ export default function MovieDetailPage() {
           media: moviePreview.media || [],
           versions: moviePreview.versions || []
         });
-      } else {
+      } else if (!cachedMovie) {
         setError(requestError?.status === 404
           ? 'Không tìm thấy thông tin phim.'
           : 'Không thể tải thông tin phim.');
@@ -218,7 +268,7 @@ export default function MovieDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [movieId, moviePreview]);
+  }, [movieId, moviePreview, setError, setLoading, setMovie]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -226,24 +276,24 @@ export default function MovieDetailPage() {
   }, [loadMovie]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowAllActors(readActorExpansion(movieId));
+  }, [movieId]);
+
+  useEffect(() => {
     if (!movie) return undefined;
     const controller = new AbortController();
     const loadRelatedMovies = async () => {
+      const status = relatedStatus(movie);
+      const cachedPage = getRelatedMoviesCacheSnapshot(status)?.data;
+      if (cachedPage) setRelatedMovies(relatedMovieItems(cachedPage, movie));
       try {
-        const page = await getMovies({
-          page: 0,
-          size: 8,
-          status: movie.status === 'UPCOMING' ? 'UPCOMING' : 'NOW_SHOWING',
-          sort: 'releaseDate,desc',
-          signal: controller.signal
-        });
+        const page = await getRelatedMoviesWithCache(status, { signal: controller.signal });
         if (!controller.signal.aborted) {
-          setRelatedMovies((page?.data || page?.content || [])
-            .filter(item => item.publicId !== movie.publicId && item.slug !== movie.slug)
-            .slice(0, 4));
+          setRelatedMovies(relatedMovieItems(page, movie));
         }
       } catch (requestError) {
-        if (requestError?.name !== 'CanceledError' && !controller.signal.aborted) {
+        if (!cachedPage && requestError?.name !== 'CanceledError' && !controller.signal.aborted) {
           setRelatedMovies([]);
         }
       }
@@ -254,26 +304,31 @@ export default function MovieDetailPage() {
 
   const loadOptions = useCallback(async signal => {
     if (!movie?.slug) return;
-    setShowtimeLoading(true);
+    const range = bookingWindow(movie, today);
+    const cachedOptions = getBookingOptionsCacheSnapshot(movie.slug, range)?.data;
+    if (cachedOptions) {
+      setOptions(cachedOptions);
+      setShowtimeLoading(false);
+    } else {
+      setShowtimeLoading(true);
+    }
     setShowtimeError(null);
     try {
-      const bookingWindowStart = movie.releaseDate && movie.releaseDate > today
-        ? movie.releaseDate
-        : today;
-      setOptions(await getBookingOptions(movie.slug, {
-        from: bookingWindowStart,
-        to: addCalendarDays(bookingWindowStart, 13),
+      setOptions(await getBookingOptionsWithCache(movie.slug, {
+        ...range,
         signal
       }));
     } catch (requestError) {
       if (requestError?.name !== 'CanceledError') {
-        setOptions([]);
-        setShowtimeError('Không thể tải lịch chiếu. Vui lòng thử lại.');
+        if (!cachedOptions) {
+          setOptions([]);
+          setShowtimeError('Không thể tải lịch chiếu. Vui lòng thử lại.');
+        }
       }
     } finally {
       if (!signal?.aborted) setShowtimeLoading(false);
     }
-  }, [movie, today]);
+  }, [movie, setOptions, setShowtimeError, setShowtimeLoading, today]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -709,7 +764,11 @@ export default function MovieDetailPage() {
                   <button
                     type="button"
                     aria-expanded={showAllActors}
-                    onClick={() => setShowAllActors(value => !value)}
+                    onClick={() => setShowAllActors(value => {
+                      const expanded = !value;
+                      writeActorExpansion(movieId, expanded);
+                      return expanded;
+                    })}
                     className={`mx-auto mt-6 flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-sm font-black text-zinc-200 hover:border-brand-orange hover:text-brand-orange ${focus}`}
                   >
                     {showAllActors ? <ChevronUp size={16} /> : <ChevronDown size={16} />}

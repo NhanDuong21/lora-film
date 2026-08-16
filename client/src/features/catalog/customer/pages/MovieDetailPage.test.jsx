@@ -7,6 +7,7 @@ import {
   getMovieById,
   getMovies
 } from '@/features/catalog/customer/services/movieService';
+import { clearMovieDetailCaches } from '@/features/catalog/customer/services/movieDetailCache';
 
 vi.mock('@/features/catalog/customer/services/movieService', () => ({
   getBookingOptions: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock('@/features/catalog/customer/services/movieService', () => ({
 describe('MovieDetailPage cinema preview fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearMovieDetailCaches();
     window.sessionStorage.clear();
     getMovieById.mockRejectedValue({ status: 404 });
     getBookingOptions.mockResolvedValue([]);
@@ -136,7 +138,7 @@ describe('MovieDetailPage cinema preview fallback', () => {
       }))
     });
 
-    render(
+    const firstRender = render(
       <MemoryRouter initialEntries={['/movies/phim-1']}>
         <Routes>
           <Route path="/movies/:movieId" element={<MovieDetailPage />} />
@@ -160,6 +162,18 @@ describe('MovieDetailPage cinema preview fallback', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Xem toàn bộ 10 diễn viên' }));
 
+    expect(screen.getByText('Diễn viên 9')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thu gọn danh sách' })).toHaveAttribute('aria-expanded', 'true');
+    expect(window.sessionStorage.getItem('lorafilm:movie-detail:actors:phim-1')).toBe('true');
+
+    firstRender.unmount();
+    render(
+      <MemoryRouter initialEntries={['/movies/phim-1']}>
+        <Routes>
+          <Route path="/movies/:movieId" element={<MovieDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
     expect(screen.getByText('Diễn viên 9')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Thu gọn danh sách' })).toHaveAttribute('aria-expanded', 'true');
   });
@@ -203,5 +217,43 @@ describe('MovieDetailPage cinema preview fallback', () => {
     })).toBeDisabled();
     expect(screen.getByText(/Dolby Atmos/)).toBeInTheDocument();
     expect(screen.getByText('2D · Tiếng Anh · Phụ đề Việt')).toBeInTheDocument();
+  });
+
+  it('reuses cached detail data when the page is mounted again', async () => {
+    getMovieById.mockResolvedValue({
+      publicId: 'movie-cache-1',
+      slug: 'phim-cache',
+      title: 'Phim được cache',
+      durationMinutes: 100,
+      releaseDate: '2098-12-01',
+      status: 'NOW_SHOWING',
+      genres: []
+    });
+    getBookingOptions.mockResolvedValue([]);
+    getMovies.mockResolvedValue({ data: [] });
+
+    const renderPage = () => render(
+      <MemoryRouter initialEntries={['/movies/phim-cache']}>
+        <Routes>
+          <Route path="/movies/:movieId" element={<MovieDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const firstRender = renderPage();
+    expect(await screen.findByRole('heading', { name: 'Phim được cache', level: 1 })).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(getBookingOptions).toHaveBeenCalledTimes(1);
+      expect(getMovies).toHaveBeenCalledTimes(1);
+    });
+    firstRender.unmount();
+
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'Phim được cache', level: 1 })).toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(getMovieById).toHaveBeenCalledTimes(1);
+      expect(getBookingOptions).toHaveBeenCalledTimes(1);
+      expect(getMovies).toHaveBeenCalledTimes(1);
+    });
   });
 });
