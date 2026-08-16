@@ -210,7 +210,13 @@ export default function AdminPayrollPage() {
   const paidLeaveMinutes = Number(selected?.paidLeaveMinutes) || 0;
   const missingMinutes = Math.max(0, scheduledMinutes - workedMinutes - (Number(selected?.paidLeaveMinutes) || 0));
   const attendancePercent = scheduledMinutes ? Math.min(100, Math.round((workedMinutes / scheduledMinutes) * 100)) : 0;
-  const isOwnPayroll = Boolean(selected?.createdBy && String(selected.createdBy) === String(user?.id));
+  const isOwnPayroll = Boolean(selected && (
+    (selected.createdBy && String(selected.createdBy) === String(user?.id))
+    || String(selected.employeeId) === String(user?.id)
+  ));
+  const isPayrollBeneficiary = Boolean(
+    selected && String(selected.employeeId) === String(user?.id),
+  );
   const criticalAttendance = selected?.sourceType === 'TIMEKEEPING'
     && scheduledMinutes > 0
     && workedMinutes + paidLeaveMinutes === 0;
@@ -224,7 +230,8 @@ export default function AdminPayrollPage() {
       {selected.status === 'PENDING_APPROVAL' ? <button type="button" disabled={!can('PAYROLL_CANCEL')} onClick={() => openAction('CANCEL')} className="rounded-xl border border-red-500/30 px-4 py-3 text-sm font-black text-red-400 disabled:cursor-not-allowed disabled:opacity-35">Hủy phiếu</button> : null}
     </div>
     {selected.status === 'PENDING_APPROVAL' && !can('PAYROLL_APPROVE') ? <p className="text-xs leading-5 text-zinc-500">Bạn có thể chuẩn bị phiếu nhưng cần tài khoản kế toán kiểm soát có quyền duyệt.</p> : null}
-    {selected.status === 'PENDING_APPROVAL' && isOwnPayroll ? <p className="text-xs leading-5 text-amber-300">Bạn là người lập phiếu nên không thể tự duyệt. Hãy chuyển cho người kiểm soát độc lập.</p> : null}
+    {selected.status === 'PENDING_APPROVAL' && isPayrollBeneficiary ? <p className="text-xs leading-5 text-amber-300">Đây là phiếu lương của bạn nên bạn không thể tự duyệt. Hãy chuyển cho người kiểm soát độc lập khác.</p> : null}
+    {selected.status === 'PENDING_APPROVAL' && isOwnPayroll && !isPayrollBeneficiary ? <p className="text-xs leading-5 text-amber-300">Bạn là người lập phiếu nên không thể tự duyệt. Hãy chuyển cho người kiểm soát độc lập.</p> : null}
     {selected.status === 'APPROVED' && !can('PAYROLL_SUBMIT_PAYMENT') ? <p className="text-xs leading-5 text-zinc-500">Tài khoản chưa có quyền gửi lệnh thanh toán.</p> : null}
     {selected.status === 'PAYMENT_PENDING' && !can('PAYROLL_RECONCILE') ? <p className="text-xs leading-5 text-zinc-500">Tài khoản chưa có quyền xác nhận chứng từ ngân hàng và bút toán.</p> : null}
   </div> : null;

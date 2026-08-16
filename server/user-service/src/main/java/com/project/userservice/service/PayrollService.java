@@ -202,6 +202,10 @@ public class PayrollService {
             throw new BusinessException("Payroll creator cannot approve the same payroll",
                     "USER_PAYROLL_MAKER_CHECKER");
         }
+        if (payroll.getEmployee().getAccountId().equals(actorId)) {
+            throw new BusinessException("Employee cannot approve their own payroll",
+                    "USER_PAYROLL_SELF_APPROVAL");
+        }
         int creditedMinutes = integerValue(payroll.getWorkedMinutes())
                 + integerValue(payroll.getPaidLeaveMinutes());
         if (integerValue(payroll.getScheduledMinutes()) > 0 && creditedMinutes == 0

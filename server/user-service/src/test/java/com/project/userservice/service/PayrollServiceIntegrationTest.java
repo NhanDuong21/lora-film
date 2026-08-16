@@ -149,6 +149,21 @@ class PayrollServiceIntegrationTest {
     }
 
     @Test
+    void employeeCannotApproveTheirOwnPayroll() {
+        PayrollResponse created = payrollService.create(request("2026-10"));
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(9001L, null, List.of()));
+
+        assertThatThrownBy(() -> payrollService.applyAction(created.id(),
+                new PayrollActionRequest(PayrollActionType.APPROVE,
+                        "Reviewed by payroll beneficiary", null, null, null, null,
+                        created.version())))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo("USER_PAYROLL_SELF_APPROVAL");
+    }
+
+    @Test
     void payrollDetailReturnsOperationalActorNames() {
         saveActor(77L, "Nguyễn Minh Anh");
         saveActor(88L, "Lê Thu Hà");

@@ -134,6 +134,12 @@ export default function AdminAccountingWorkspacePage() {
   const canReconcile = can('PAYMENT_RECONCILE');
   const canViewAnalytics = can('PERM_VIEW_FINANCE', 'ANALYTICS_VIEW');
   const canViewPayroll = can('PAYROLL_VIEW');
+  const isAccountingController = permissions.some(permission => [
+    'PAYROLL_APPROVE',
+    'REFUND_APPROVE',
+    'SETTLEMENT_LOCK',
+    'ACCOUNTING_PERIOD_CLOSE',
+  ].includes(permission));
   const canViewAccountingOperations = can(
     'SETTLEMENT_IMPORT',
     'SETTLEMENT_LOCK',
@@ -250,9 +256,9 @@ export default function AdminAccountingWorkspacePage() {
           <ShieldCheck size={17} /> Phạm vi trách nhiệm
         </p>
         <p className="mt-1">
-          Bạn chuẩn bị và đối chiếu số liệu, nhưng các bước rủi ro cao như duyệt hoàn tiền, duyệt lương,
-          khóa lô và khóa kỳ cần một người kiểm soát độc lập. Nút không đủ quyền sẽ bị khóa và nêu rõ lý do;
-          phát lại webhook hoặc sửa trạng thái kỹ thuật vẫn chỉ dành cho quản trị viên.
+          {isAccountingController
+            ? 'Bạn là người kiểm soát độc lập: rà soát căn cứ trước khi duyệt lương, duyệt hoàn tiền, khóa lô hoặc khóa kỳ. Bạn không thể duyệt hồ sơ do chính mình lập hay phiếu lương của chính mình; công cụ kỹ thuật vẫn chỉ dành cho quản trị viên.'
+            : 'Bạn chuẩn bị và đối chiếu số liệu, nhưng các bước rủi ro cao như duyệt hoàn tiền, duyệt lương, khóa lô và khóa kỳ cần một người kiểm soát độc lập. Nút không đủ quyền sẽ bị khóa và nêu rõ lý do; phát lại webhook hoặc sửa trạng thái kỹ thuật vẫn chỉ dành cho quản trị viên.'}
         </p>
       </section>
 
