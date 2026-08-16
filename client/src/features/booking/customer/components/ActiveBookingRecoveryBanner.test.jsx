@@ -2,7 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ActiveBookingRecoveryBanner from "./ActiveBookingRecoveryBanner";
-import { cancelBooking, getBookingHistory } from "../services/bookingService";
+import {
+  cancelBooking,
+  getBookingHistory,
+  getStoredCheckoutPhase,
+} from "../services/bookingService";
 import { useAuth } from "@/contexts/AuthContext";
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -11,8 +15,10 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 vi.mock("../services/bookingService", () => ({
   BOOKING_CHANGED_EVENT: "lorafilm:booking-changed",
+  CHECKOUT_PHASES: { ADD_ONS: "ADD_ONS", PAYMENT: "PAYMENT" },
   cancelBooking: vi.fn(),
   getBookingHistory: vi.fn(),
+  getStoredCheckoutPhase: vi.fn(),
 }));
 
 const activeBooking = {
@@ -32,6 +38,7 @@ const activeBooking = {
 describe("ActiveBookingRecoveryBanner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getStoredCheckoutPhase.mockReturnValue(null);
     useAuth.mockReturnValue({
       isAuthenticated: true,
       isInitializing: false,
@@ -97,6 +104,23 @@ describe("ActiveBookingRecoveryBanner", () => {
         "Khách hàng chủ động hủy giữ ghế từ thẻ khôi phục",
       );
     });
+  });
+
+  it("continues at payment when this Booking already reached step four", async () => {
+    getStoredCheckoutPhase.mockReturnValue("PAYMENT");
+
+    render(
+      <MemoryRouter>
+        <ActiveBookingRecoveryBanner />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("link", { name: /tiếp tục thanh toán/i }),
+    ).toHaveAttribute(
+      "href",
+      "/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111&step=payment",
+    );
   });
 
   it("does not call Booking API for an unauthenticated visitor", async () => {

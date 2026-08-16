@@ -27,11 +27,15 @@ import customerPromotionService from "@/features/promotion/customer/services/cus
 
 vi.mock("../services/bookingService", () => ({
   BOOKING_CHANGED_EVENT: "lorafilm:booking-changed",
+  CHECKOUT_PHASES: { ADD_ONS: "ADD_ONS", PAYMENT: "PAYMENT" },
   cancelBooking: vi.fn(),
+  clearStoredCheckoutPhase: vi.fn(),
   finalizeCheckout: vi.fn(),
   getOrCreateScoreRedemptionKey: vi.fn(),
   getBookingDetails: vi.fn(),
+  getStoredCheckoutPhase: vi.fn(() => null),
   previewBookingPromotions: vi.fn(),
+  storeCheckoutPhase: vi.fn(),
 }));
 
 vi.mock("../services/foodService", () => ({
@@ -132,6 +136,7 @@ describe("promotionDecision", () => {
 describe("BookingCheckoutPage cancellation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     getBookingDetails.mockResolvedValue({
       publicId: "11111111-1111-4111-8111-111111111111",
       bookingCode: "BK-CHECKOUT",
@@ -262,6 +267,27 @@ describe("BookingCheckoutPage cancellation", () => {
         "Khách hàng chủ động hủy đặt chỗ tại checkout",
       );
     });
+  });
+
+  it("opens the payment step directly when a recovery link requests it", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/bookings/checkout?bookingId=11111111-1111-4111-8111-111111111111&step=payment",
+        ]}
+      >
+        <BookingCheckoutPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /chọn phương thức thanh toán/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /tiếp tục đến thanh toán/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("locks the Booking amount before handing public identity to Payment Service", async () => {

@@ -4,8 +4,10 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   BOOKING_CHANGED_EVENT,
+  CHECKOUT_PHASES,
   cancelBooking,
   getBookingHistory,
+  getStoredCheckoutPhase,
 } from "../services/bookingService";
 import {
   formatHoldTimeLeft,
@@ -149,12 +151,17 @@ export default function ActiveBookingRecoveryBanner() {
       })
     : "";
   const paymentStatus = String(booking.paymentStatus || "").toUpperCase();
+  const storedCheckoutPhase = getStoredCheckoutPhase(publicId);
+  const resumesAtPayment =
+    storedCheckoutPhase === CHECKOUT_PHASES.PAYMENT ||
+    Boolean(booking.amountLockedAt) ||
+    ["PENDING", "PROCESSING"].includes(paymentStatus);
   const actionLabel = ["PENDING", "PROCESSING"].includes(paymentStatus)
     ? "Kiểm tra thanh toán"
-    : booking.amountLockedAt
+    : resumesAtPayment
       ? "Tiếp tục thanh toán"
       : "Tiếp tục đặt vé";
-  const recoveryHref = `/bookings/checkout?bookingId=${encodeURIComponent(publicId)}`;
+  const recoveryHref = `/bookings/checkout?bookingId=${encodeURIComponent(publicId)}${resumesAtPayment ? "&step=payment" : ""}`;
 
   return (
     <>

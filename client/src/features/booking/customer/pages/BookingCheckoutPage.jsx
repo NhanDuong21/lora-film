@@ -27,6 +27,10 @@ import {
   finalizeCheckout,
   previewBookingPromotions,
   getOrCreateScoreRedemptionKey,
+  CHECKOUT_PHASES,
+  getStoredCheckoutPhase,
+  storeCheckoutPhase,
+  clearStoredCheckoutPhase,
 } from "../services/bookingService";
 import {
   getConcessions,
@@ -65,10 +69,7 @@ const MOMO_LOGO_URL =
   "https://upload.wikimedia.org/wikipedia/commons/a/a0/MoMo_Logo_App.svg";
 const MOMO_LOGO_FALLBACK_URL =
   "https://res.cloudinary.com/dqc4hufot/image/upload/f_auto,q_auto,w_96/logo_jg9h5v.png";
-const CHECKOUT_PHASE = Object.freeze({
-  ADD_ONS: "ADD_ONS",
-  PAYMENT: "PAYMENT",
-});
+const CHECKOUT_PHASE = CHECKOUT_PHASES;
 const CATEGORY_LABELS = {
   ALL: "Tất cả",
   FOOD: "Bắp rang",
@@ -440,7 +441,25 @@ export default function BookingCheckoutPage() {
   }, [location.search]);
   const bookingDraft = location.state || {};
 
-  const [phase, setPhase] = useState(CHECKOUT_PHASE.ADD_ONS);
+  const [phase, setPhase] = useState(() => {
+    const requestedStep = new URLSearchParams(location.search).get("step");
+    if (requestedStep?.toLowerCase() === "payment") {
+      return CHECKOUT_PHASE.PAYMENT;
+    }
+    return getStoredCheckoutPhase(bookingId) || CHECKOUT_PHASE.ADD_ONS;
+  });
+
+  const handlePhaseChange = useCallback(
+    (nextPhase) => {
+      setPhase(nextPhase);
+      storeCheckoutPhase(bookingId, nextPhase);
+    },
+    [bookingId],
+  );
+
+  useEffect(() => {
+    storeCheckoutPhase(bookingId, phase);
+  }, [bookingId, phase]);
 
   // States
   const [booking, setBooking] = useState(null);
@@ -1137,6 +1156,7 @@ export default function BookingCheckoutPage() {
       });
       setBooking((prev) => ({ ...prev, ...finalized }));
       if (["CONFIRMED", "COMPLETED"].includes(finalized?.status)) {
+        clearStoredCheckoutPhase(bookingId);
         if (selectedWalletPromotionIds.length > 0 || appliedCouponCode) {
           await loadPromotionWallet();
           setSelectedPromotion(null);
@@ -1587,7 +1607,7 @@ export default function BookingCheckoutPage() {
                     )}
                     <button
                       type="button"
-                      onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
+                      onClick={() => handlePhaseChange(CHECKOUT_PHASE.PAYMENT)}
                       className="px-2 py-2 text-xs font-bold text-zinc-400 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-white"
                     >
                       Không mua bắp nước
@@ -1892,7 +1912,7 @@ export default function BookingCheckoutPage() {
                 {isPaymentPhase && (
                   <button
                     type="button"
-                    onClick={() => setPhase(CHECKOUT_PHASE.ADD_ONS)}
+                    onClick={() => handlePhaseChange(CHECKOUT_PHASE.ADD_ONS)}
                     className="text-[10px] font-black text-brand-orange transition-colors hover:text-orange-300"
                   >
                     Chỉnh sửa
@@ -1925,7 +1945,7 @@ export default function BookingCheckoutPage() {
                   {selectedFoodItems.length > 3 && (
                     <button
                       type="button"
-                      onClick={() => setPhase(CHECKOUT_PHASE.ADD_ONS)}
+                      onClick={() => handlePhaseChange(CHECKOUT_PHASE.ADD_ONS)}
                       className="text-[10px] font-bold text-zinc-400 hover:text-white"
                     >
                       {selectedFoodItems.length} món đã chọn · Xem chi tiết
@@ -2289,7 +2309,7 @@ export default function BookingCheckoutPage() {
               {!isPaymentPhase ? (
                 <button
                   disabled={isExpired}
-                  onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
+                  onClick={() => handlePhaseChange(CHECKOUT_PHASE.PAYMENT)}
                   className={`hidden w-full rounded-2xl py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition-all lg:block ${
                     !isExpired
                       ? "cursor-pointer bg-brand-orange text-white shadow-brand-orange/25 hover:bg-orange-600"
@@ -2318,7 +2338,7 @@ export default function BookingCheckoutPage() {
                     </p>
                   )}
                   <button
-                    onClick={() => setPhase(CHECKOUT_PHASE.ADD_ONS)}
+                    onClick={() => handlePhaseChange(CHECKOUT_PHASE.ADD_ONS)}
                     className="w-full rounded-xl py-2 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 transition-colors hover:text-white"
                   >
                     Quay lại bắp nước
@@ -2363,7 +2383,7 @@ export default function BookingCheckoutPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setPhase(CHECKOUT_PHASE.PAYMENT)}
+                onClick={() => handlePhaseChange(CHECKOUT_PHASE.PAYMENT)}
                 className="shrink-0 rounded-xl bg-brand-orange px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white"
               >
                 Tiếp tục

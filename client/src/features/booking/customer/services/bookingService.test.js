@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import apiClient from "@/services/apiClient";
 import {
+  CHECKOUT_PHASES,
   cancelBooking,
+  clearStoredCheckoutPhase,
   createBooking,
   finalizeCheckout,
   getActiveBookingForShowtime,
   getBookingHistory,
   getBookingSpendingSummary,
   getOrCreateScoreRedemptionKey,
+  getStoredCheckoutPhase,
   previewBookingPromotions,
+  storeCheckoutPhase,
 } from "./bookingService";
 
 vi.mock("@/services/apiClient", () => ({
@@ -97,6 +101,7 @@ describe("bookingService customer history normalization", () => {
   it("clears all old creation attempts after cancellation succeeds", async () => {
     sessionStorage.setItem("booking:create:showtime-1", '{"attempt":"old"}');
     sessionStorage.setItem("booking:create:showtime-2", '{"attempt":"old"}');
+    storeCheckoutPhase("booking-1", CHECKOUT_PHASES.PAYMENT);
     apiClient.delete.mockResolvedValue({
       data: { data: { publicId: "booking-1", status: "CANCELLED" } },
     });
@@ -105,11 +110,25 @@ describe("bookingService customer history normalization", () => {
 
     expect(sessionStorage.getItem("booking:create:showtime-1")).toBeNull();
     expect(sessionStorage.getItem("booking:create:showtime-2")).toBeNull();
+    expect(getStoredCheckoutPhase("booking-1")).toBeNull();
     expect(
       JSON.parse(localStorage.getItem("lorafilm:booking-sync")),
     ).toMatchObject({
       detail: { action: "CANCELLED", publicId: "booking-1" },
     });
+  });
+
+  it("stores checkout progress per Booking and ignores unsupported phases", () => {
+    storeCheckoutPhase("booking-1", CHECKOUT_PHASES.PAYMENT);
+    storeCheckoutPhase("booking-2", CHECKOUT_PHASES.ADD_ONS);
+    storeCheckoutPhase("booking-3", "UNKNOWN");
+
+    expect(getStoredCheckoutPhase("booking-1")).toBe(CHECKOUT_PHASES.PAYMENT);
+    expect(getStoredCheckoutPhase("booking-2")).toBe(CHECKOUT_PHASES.ADD_ONS);
+    expect(getStoredCheckoutPhase("booking-3")).toBeNull();
+
+    clearStoredCheckoutPhase("booking-1");
+    expect(getStoredCheckoutPhase("booking-1")).toBeNull();
   });
 
   it("reads the server-authoritative active booking for one showtime", async () => {

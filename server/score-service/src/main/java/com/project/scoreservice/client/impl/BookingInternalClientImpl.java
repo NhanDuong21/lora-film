@@ -22,7 +22,7 @@ public class BookingInternalClientImpl implements BookingInternalClient {
     public BookingInternalClientImpl(
             RestClient.Builder restClientBuilder,
             @Value("${clients.booking-service.base-url:http://localhost:8083}") String baseUrl,
-            @Value("${clients.booking-service.internal-token:${app.internal-token}}") String internalToken) {
+            @Value("${clients.booking-service.internal-token:${SCORE_TO_BOOKING_INTERNAL_TOKEN:${APP_INTERNAL_TOKEN:8f0a00f11a51ad253c9560e55236b464bab6b20e57642c01a9c896a98ff061ff}}}") String internalToken) {
         this.restClient = restClientBuilder.baseUrl(baseUrl).build();
         this.internalToken = internalToken;
     }

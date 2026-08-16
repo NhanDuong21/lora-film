@@ -7,6 +7,54 @@ import {
 export const BOOKING_CHANGED_EVENT = "lorafilm:booking-changed";
 const BOOKING_SYNC_STORAGE_KEY = "lorafilm:booking-sync";
 const BOOKING_SYNC_LISTENER_FLAG = "__lorafilmBookingSyncListenerAttached";
+const CHECKOUT_PHASE_STORAGE_PREFIX = "lorafilm:checkout-phase:";
+
+export const CHECKOUT_PHASES = Object.freeze({
+  ADD_ONS: "ADD_ONS",
+  PAYMENT: "PAYMENT",
+});
+
+const checkoutPhaseStorageKey = (bookingId) =>
+  bookingId ? `${CHECKOUT_PHASE_STORAGE_PREFIX}${bookingId}` : null;
+
+export const getStoredCheckoutPhase = (bookingId) => {
+  const storageKey = checkoutPhaseStorageKey(bookingId);
+  if (!storageKey || typeof window === "undefined") return null;
+  try {
+    const storedPhase = window.localStorage.getItem(storageKey);
+    return Object.values(CHECKOUT_PHASES).includes(storedPhase)
+      ? storedPhase
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+export const storeCheckoutPhase = (bookingId, phase) => {
+  const storageKey = checkoutPhaseStorageKey(bookingId);
+  if (
+    !storageKey ||
+    typeof window === "undefined" ||
+    !Object.values(CHECKOUT_PHASES).includes(phase)
+  ) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(storageKey, phase);
+  } catch {
+    // Checkout remains usable when browser storage is unavailable.
+  }
+};
+
+export const clearStoredCheckoutPhase = (bookingId) => {
+  const storageKey = checkoutPhaseStorageKey(bookingId);
+  if (!storageKey || typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // Nothing else is required when browser storage is unavailable.
+  }
+};
 
 const dispatchBookingChanged = (detail) => {
   window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT, { detail }));
@@ -305,6 +353,7 @@ export const cancelBooking = async (bookingId, reason = "") => {
   });
   const booking = response.data.data;
   clearAllBookingCreationAttempts();
+  clearStoredCheckoutPhase(bookingId);
   emitBookingChanged({ action: "CANCELLED", publicId: bookingId });
   return booking;
 };
