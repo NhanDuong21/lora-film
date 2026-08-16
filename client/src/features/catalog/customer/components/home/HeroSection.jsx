@@ -10,6 +10,7 @@ import {
   seatSelectionPath,
   vietnamDateKey
 } from '@/features/catalog/customer/utils/customerMovieFlow';
+import { writePreferredCinema } from '@/features/catalog/customer/utils/customerCinemaPreference';
 
 const SelectField = ({ label, value, onChange, disabled, children }) => (
   <label className={`relative flex min-w-0 flex-1 flex-col border-b border-white/10 px-4 py-3 last:border-b-0 md:border-b-0 md:border-r ${disabled ? 'opacity-40' : ''}`}>
@@ -120,7 +121,15 @@ export default function Hero() {
     setOptionError('');
   };
   const changeCinema = event => {
-    setCinemaId(event.target.value);
+    const nextCinemaId = event.target.value;
+    setCinemaId(nextCinemaId);
+    const selectedOption = options.find(option => option.cinemaPublicId === nextCinemaId);
+    writePreferredCinema(selectedOption ? {
+      publicId: selectedOption.cinemaPublicId,
+      slug: selectedOption.cinemaSlug,
+      name: selectedOption.cinemaName,
+      city: selectedOption.cinemaCity
+    } : null);
     setServiceDate('');
     setShowtimeId('');
   };
