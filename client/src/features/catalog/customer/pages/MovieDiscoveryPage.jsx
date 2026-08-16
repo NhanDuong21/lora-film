@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Play, RefreshCw, AlertCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import TrailerModal from '@/components/common/TrailerModal';
 import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
 import { getMovies, getGenres } from '@/features/catalog/customer/services/movieService';
@@ -22,6 +22,11 @@ const SORT_LIST = [
   { label: 'Khởi Chiếu Cũ Nhất', value: 'releaseDate,asc' },
   { label: 'Tên A-Z', value: 'title,asc' }
 ];
+
+const getMovieDetailPath = (movie) => {
+  const identifier = movie?.slug || movie?.publicId || movie?.id;
+  return identifier ? `/movies/${encodeURIComponent(identifier)}` : null;
+};
 
 export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -240,11 +245,20 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
             ) : (
               <div className="space-y-4">
                 {movies.map((movie) => {
+                  const moviePath = getMovieDetailPath(movie);
                   return (
                     <div 
                       key={movie.publicId || movie.id || movie.slug}
-                      className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-3xl p-4 flex gap-4 md:gap-6 shadow-xl transition-all duration-300 relative group overflow-hidden"
+                      className={`bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-3xl p-4 flex gap-4 md:gap-6 shadow-xl transition-all duration-300 relative group overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-brand-dark ${moviePath ? 'cursor-pointer' : ''}`}
                     >
+                      {moviePath && (
+                        <Link
+                          to={moviePath}
+                          aria-label={`Xem chi tiết phim ${movie.title}`}
+                          className="absolute inset-0 z-10 rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-inset"
+                        />
+                      )}
+
                       {/* Image Block (Left Aspect Ratio container) */}
                       <div className="w-28 sm:w-36 shrink-0 aspect-[2/3] rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-850 relative">
                         <img 
@@ -254,11 +268,11 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                         />
                         
                         {/* Hover dual-button overlay on desktop */}
-                        <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-3 transition-opacity duration-300 hidden md:flex p-2 z-10">
+                        <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-3 transition-opacity duration-300 hidden md:flex p-2 z-20 pointer-events-none">
                           {movie.trailerUrl && (
                             <button
                                 onClick={(e) => handleTrailerOpen(e, movie.trailerUrl)}
-                                className="w-full bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-white font-bold py-2 rounded-xl text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+                                className="w-full bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-white font-bold py-2 rounded-xl text-[10px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1 pointer-events-auto"
                             >
                                 <Play className="w-3 h-3 fill-white" />
                                 <span>Trailer</span>
@@ -299,7 +313,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                         </div>
 
                         {/* Interactive actions for mobile/tablet */}
-                        <div className="flex gap-2 mt-4 md:hidden">
+                        <div className="relative z-20 flex gap-2 mt-4 md:hidden">
                           {movie.trailerUrl && (
                             <button
                                 onClick={(e) => handleTrailerOpen(e, movie.trailerUrl)}
@@ -380,9 +394,11 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
 
               <div className="space-y-4">
                 {movies.slice(0, 3).map((movie) => (
-                  <div 
+                  <Link
                     key={movie.publicId || movie.id || movie.slug}
-                    className="flex gap-3 hover:bg-white/5 p-1.5 rounded-xl transition-colors cursor-pointer group"
+                    to={getMovieDetailPath(movie) || '/movies'}
+                    aria-label={`Xem phim nổi bật ${movie.title}`}
+                    className="flex gap-3 hover:bg-white/5 p-1.5 rounded-xl transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
                   >
                     <div className="w-12 h-18 rounded-lg overflow-hidden shrink-0 bg-zinc-950 border border-zinc-800">
                       <img src={movie.posterUrl || movie.image} alt={movie.title} className="w-full h-full object-cover" />
@@ -398,7 +414,7 @@ export default function MovieDiscoveryView({ initialTab = 'ALL' }) {
                         </span>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
