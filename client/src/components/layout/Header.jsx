@@ -7,9 +7,12 @@ import {
   LogOut,
   Menu,
   Search,
+  Shapes,
   ShieldCheck,
   Star,
   Ticket,
+  UsersRound,
+  Video,
   X
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -32,6 +35,27 @@ const dropdownItemClass =
 
 const focusRingClass =
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950';
+
+const cinemaCornerItems = [
+  {
+    label: 'Thể loại phim',
+    description: 'Khám phá phim theo sở thích',
+    path: '/movies',
+    Icon: Shapes,
+  },
+  {
+    label: 'Diễn viên',
+    description: 'Gương mặt trong phim tại LoraFilm',
+    path: '/dien-vien',
+    Icon: UsersRound,
+  },
+  {
+    label: 'Đạo diễn',
+    description: 'Người đứng sau các tác phẩm',
+    path: '/dao-dien',
+    Icon: Video,
+  },
+];
 
 function NavDropdown({
   id,
@@ -73,7 +97,7 @@ function NavDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute left-1/2 top-full z-50 w-60 -translate-x-1/2 pt-2">
+        <div className="absolute left-1/2 top-full z-50 w-72 -translate-x-1/2 pt-2">
           <div id={menuId} role="menu" aria-label={label} className={dropdownPanelClass}>
             {children}
           </div>
@@ -210,6 +234,14 @@ export default function Header() {
       navigate('/promotions');
       return;
     }
+    if (optionName === 'Diễn viên') {
+      navigate('/dien-vien');
+      return;
+    }
+    if (optionName === 'Đạo diễn') {
+      navigate('/dao-dien');
+      return;
+    }
     setInfoModalContent(optionName);
   };
 
@@ -325,20 +357,26 @@ export default function Header() {
               id="cinema-corner"
               label="Góc Điện Ảnh"
               isOpen={activeDropdown === 'cinema-corner'}
-              isActive={false}
+              isActive={pathname === '/dien-vien' || pathname === '/dao-dien' || pathname.startsWith('/nghe-si/')}
               onOpen={openDropdown}
               onClose={() => setActiveDropdown(null)}
               onToggle={toggleDropdown}
             >
-              {['Thể loại phim', 'Diễn viên', 'Đạo diễn'].map(item => (
+              {cinemaCornerItems.map(({ label: itemLabel, description, path, Icon }) => (
                 <button
-                  key={item}
+                  key={path}
                   type="button"
                   role="menuitem"
-                  onClick={() => handleInfoOptionClick(item)}
-                  className={dropdownItemClass}
+                  onClick={() => navigateFromHeader(path)}
+                  className="group/item flex min-h-[60px] w-full items-center gap-3 rounded-xl px-3 text-left transition-colors hover:bg-brand-orange/10 focus:outline-none focus-visible:bg-brand-orange/10"
                 >
-                  {item}
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-zinc-700 bg-zinc-950 text-zinc-400 transition group-hover/item:border-brand-orange/40 group-hover/item:text-brand-orange">
+                    <Icon aria-hidden="true" size={17} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black text-zinc-200 transition group-hover/item:text-brand-orange">{itemLabel}</span>
+                    <span className="mt-0.5 block text-[11px] font-medium leading-4 text-zinc-500">{description}</span>
+                  </span>
                 </button>
               ))}
             </NavDropdown>
@@ -632,14 +670,20 @@ export default function Header() {
                   >
                     Góc Điện Ảnh
                   </h2>
-                  {['Thể loại phim', 'Diễn viên', 'Đạo diễn'].map(item => (
+                  {cinemaCornerItems.map(({ label: itemLabel, description, path, Icon }) => (
                     <button
-                      key={item}
+                      key={path}
                       type="button"
-                      onClick={() => handleInfoOptionClick(item)}
-                      className={dropdownItemClass}
+                      onClick={() => navigateFromHeader(path)}
+                      className="flex min-h-[60px] w-full items-center gap-3 rounded-xl px-3 text-left transition hover:bg-brand-orange/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange/60"
                     >
-                      {item}
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-brand-orange">
+                        <Icon aria-hidden="true" size={17} />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-black text-zinc-200">{itemLabel}</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-zinc-500">{description}</span>
+                      </span>
                     </button>
                   ))}
                 </section>

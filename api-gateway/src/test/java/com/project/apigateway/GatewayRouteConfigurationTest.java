@@ -33,7 +33,7 @@ class GatewayRouteConfigurationTest {
                 .isEqualTo("AddRequestHeader=x-api-key,${TMDB_API_KEY:local-dev-tmdb-api-key}");
 
         assertThat(properties.getProperty("spring.cloud.gateway.routes[2].predicates[0]"))
-                .contains("/api/admin/locations/**");
+                .contains("/api/admin/locations/**", "/api/public/people/**");
         assertThat(properties.getProperty("spring.cloud.gateway.routes[3].predicates[0]"))
                 .contains("/api/promotions/**", "/api/customers/me/promotions/**",
                         "/api/admin/promotions/**", "/api/admin/configurations/**")

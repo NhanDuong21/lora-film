@@ -3,12 +3,14 @@ import MovieSection from "@/features/catalog/customer/components/home/MovieSecti
 import EventSection from "@/features/catalog/customer/components/home/EventSection";
 import BookingStepsSection from "@/features/catalog/customer/components/home/BookingStepsSection";
 import InfoSection from "@/features/catalog/customer/components/home/InfoSection";
+import FeaturedPeopleSection from "@/features/catalog/customer/components/home/FeaturedPeopleSection";
 
 export default function Home() {
     return (
         <div className="flex flex-col min-h-screen bg-brand-dark text-white selection:bg-brand-orange selection:text-white">
             <HeroSection />
             <MovieSection />
+            <FeaturedPeopleSection />
             <EventSection />
             <BookingStepsSection />
             <InfoSection />

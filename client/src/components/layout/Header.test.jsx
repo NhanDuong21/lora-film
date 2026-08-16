@@ -91,4 +91,14 @@ describe('Header', () => {
     expect(getCinemas).toHaveBeenCalledWith({ page: 0, size: 100 });
     expect(screen.getByTestId('location')).toHaveTextContent('/cinema/lorafilm-01');
   });
+
+  it('navigates actor and director items instead of opening placeholder dialogs', () => {
+    renderHeader();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Góc Điện Ảnh' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Diễn viên/ }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/dien-vien');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

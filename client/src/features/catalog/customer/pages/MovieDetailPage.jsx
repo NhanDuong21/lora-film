@@ -93,6 +93,18 @@ const tmdbProfileUrl = (imageUrl, size) => {
   }
 };
 
+const personDetailPath = (person, displayName) => {
+  if (!person?.publicId) return null;
+  const slug = String(displayName || person.stageName || person.fullName || 'nghe-si')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `/nghe-si/${encodeURIComponent(`${slug || 'nghe-si'}-${person.publicId}`)}`;
+};
+
 function InfoTile({ icon: Icon, label, value }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-zinc-950/55 p-4">
@@ -104,14 +116,39 @@ function InfoTile({ icon: Icon, label, value }) {
   );
 }
 
+function PersonLinks({ people }) {
+  return (
+    <span className="flex flex-wrap gap-x-1.5 gap-y-1">
+      {sortedPeople(people).map((person, index) => {
+        const name = person.stageName || person.fullName;
+        const path = personDetailPath(person, name);
+        return (
+          <span key={person.publicId || name}>
+            {path ? <Link to={path} className="hover:text-brand-orange hover:underline">{name}</Link> : name}
+            {index < people.length - 1 ? ',' : ''}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function ActorCard({ actor }) {
   const presentation = actorPresentation(actor);
   const initial = presentation.name.trim().charAt(0).toUpperCase() || '?';
+  const personPath = personDetailPath(actor, presentation.name);
   const profileImageSrcSet = actor.profileImageUrl
     ? `${tmdbProfileUrl(actor.profileImageUrl, 'w185')} 1x, ${tmdbProfileUrl(actor.profileImageUrl, 'w342')} 2x`
     : undefined;
   return (
-    <article className="group flex min-w-0 items-center gap-4 rounded-2xl border border-white/10 bg-zinc-950/45 p-4 transition-colors hover:border-brand-orange/30 hover:bg-zinc-950/70">
+    <article className="group relative flex min-w-0 items-center gap-4 rounded-2xl border border-white/10 bg-zinc-950/45 p-4 transition-colors hover:border-brand-orange/30 hover:bg-zinc-950/70">
+      {personPath && (
+        <Link
+          to={personPath}
+          aria-label={`Xem hồ sơ ${presentation.name}`}
+          className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
+        />
+      )}
       <div className="relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-brand-orange/35 to-zinc-800 text-xl font-black text-white ring-1 ring-white/15">
         <span aria-hidden="true">{initial}</span>
         {actor.profileImageUrl && (
@@ -128,7 +165,7 @@ function ActorCard({ actor }) {
           />
         )}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 transition-transform group-hover:translate-x-0.5">
         <h3 className="truncate text-base font-black text-white">{presentation.name}</h3>
         <p className="mt-1.5 truncate text-xs text-zinc-400">{presentation.character || 'Vai diễn đang cập nhật'}</p>
         <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-brand-orange">{presentation.role}</p>
@@ -413,7 +450,6 @@ export default function MovieDetailPage() {
   const genreLabels = formatGenreLabels(movie?.genres);
   const actors = sortedPeople(movie?.actors);
   const visibleActors = showAllActors ? actors : actors.slice(0, ACTOR_PREVIEW_LIMIT);
-  const directors = peopleNames(movie?.directors);
   const writers = peopleNames(movie?.writers);
   const producers = peopleNames(movie?.producers);
   const languages = [...new Set((movie?.versions || [])
@@ -718,7 +754,11 @@ export default function MovieDetailPage() {
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <InfoTile icon={Globe2} label="Quốc gia sản xuất" value={formatCountryLabel(movie.country)} />
             <InfoTile icon={Languages} label="Ngôn ngữ suất chiếu" value={languages.join(', ')} />
-            <InfoTile icon={UserRound} label="Đạo diễn" value={directors.join(', ')} />
+            <InfoTile
+              icon={UserRound}
+              label="Đạo diễn"
+              value={movie?.directors?.length ? <PersonLinks people={movie.directors} /> : null}
+            />
             <InfoTile
               icon={Building2}
               label="Đơn vị sản xuất"

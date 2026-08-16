@@ -10,6 +10,16 @@ class RouteValidatorTest {
 
     private final RouteValidator validator = new RouteValidator();
 
+    @org.junit.jupiter.api.Test
+    void publicPeopleCatalogIsOpenForGuestGetRequests() {
+        org.springframework.mock.http.server.reactive.MockServerHttpRequest request =
+                org.springframework.mock.http.server.reactive.MockServerHttpRequest
+                        .get("/api/public/people?role=ACTOR")
+                        .build();
+
+        org.junit.jupiter.api.Assertions.assertFalse(validator.isSecured.test(request));
+    }
+
     @Test
     void registrationStatusAndOAuthArePublic() {
         assertThat(isSecured(HttpMethod.GET,

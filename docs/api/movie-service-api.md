@@ -369,6 +369,28 @@ GET /api/showtimes/{showtimePublicId}/seat-layout
 
 ---
 
+### 2.10. Public People Catalog
+
+Danh sách chỉ bao gồm nghệ sĩ có credit gắn với phim đang chiếu hoặc sắp chiếu
+trong catalog LoraFilm. Frontend không gọi TMDB trực tiếp.
+
+```http
+GET /api/public/people?role=ACTOR&query=tom&availability=NOW_SHOWING&sort=POPULAR&page=0&size=20
+GET /api/public/people/{personSlug}
+GET /api/public/people/{personSlug}/movies?availability=NOW_SHOWING
+```
+
+#### Supported values
+
+* `role`: `ACTOR`, `DIRECTOR`.
+* `availability`: `ALL`, `NOW_SHOWING`, `UPCOMING`.
+* `sort`: `POPULAR`, `NAME_ASC`, `NEW`.
+
+Trang chi tiết nhóm credit theo thứ tự `availableMovies`, `upcomingMovies`,
+`otherCredits` để luồng đặt vé luôn xuất hiện trước.
+
+---
+
 ## 3. Admin APIs
 
 ### 3.1. Aggregate Movie Create

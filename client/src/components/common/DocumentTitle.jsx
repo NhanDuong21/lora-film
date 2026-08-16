@@ -39,6 +39,9 @@ const pageTitle = pathname => {
 
   if (/^\/(movies|movie)\/[^/]+/.test(path)) return 'Chi tiết phim';
   if (path === '/movies') return 'Khám phá phim';
+  if (path === '/dien-vien') return 'Diễn viên';
+  if (path === '/dao-dien') return 'Đạo diễn';
+  if (path.startsWith('/nghe-si/')) return 'Hồ sơ nghệ sĩ';
   if (path.startsWith('/cinema/')) return 'Thông tin rạp chiếu';
   if (path === '/booking') return 'Đặt vé xem phim';
   if (path === '/seat-selection') return 'Chọn ghế';

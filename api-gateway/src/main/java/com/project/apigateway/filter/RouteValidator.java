@@ -30,6 +30,7 @@ public class RouteValidator {
             "/api/customer/movies",
             "/api/customer/genres",
             "/api/customer/showtimes",
+            "/api/public/people",
             "/api/customer/concessions",
             "/api/cinemas",
             "/api/showtimes",
