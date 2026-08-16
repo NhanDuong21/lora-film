@@ -6,6 +6,11 @@ export const register = async (userData) => {
     return response.data;
 };
 
+export const inspectIdentityNumber = async (cccd) => {
+    const response = await apiClient.post('/api/auth/identity-number/inspect', { cccd });
+    return response.data;
+};
+
 
 export const verifyOtp = async (email, otpCode, purpose = "REGISTRATION") => {
     const response = await apiClient.post(`/api/auth/verify`, {

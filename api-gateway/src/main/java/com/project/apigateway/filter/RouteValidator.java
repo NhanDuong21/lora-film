@@ -13,6 +13,7 @@ public class RouteValidator {
 
     public static final Set<String> OPEN_ENDPOINTS = Set.of(
             "/api/auth/register",
+            "/api/auth/identity-number/inspect",
             "/api/auth/login",
             "/api/auth/verify",
             "/api/auth/verify-email",

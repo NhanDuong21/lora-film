@@ -18,4 +18,17 @@ public final class SensitiveDataMasker {
         }
         return normalized.charAt(0) + "***" + normalized.substring(separator);
     }
+
+    public static String maskIdentityNumber(String identityNumber) {
+        if (identityNumber == null || identityNumber.isBlank()) {
+            return "unknown";
+        }
+        String normalized = identityNumber.trim();
+        if (normalized.length() < 6) {
+            return "***";
+        }
+        return normalized.substring(0, 3)
+                + "*".repeat(Math.max(0, normalized.length() - 6))
+                + normalized.substring(normalized.length() - 3);
+    }
 }

@@ -49,6 +49,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers(HttpMethod.POST,
 								"/api/auth/register",
+								"/api/auth/identity-number/inspect",
 								"/api/auth/login",
 								"/api/auth/verify",
 								"/api/auth/verify-email",

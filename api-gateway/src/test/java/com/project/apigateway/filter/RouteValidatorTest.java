@@ -15,6 +15,7 @@ class RouteValidatorTest {
         assertThat(isSecured(HttpMethod.GET,
                 "/api/auth/registrations/a1b2c3d4-e5f6-7890-abcd-ef1234567890/status")).isFalse();
         assertThat(isSecured(HttpMethod.GET, "/oauth2/authorization/google")).isFalse();
+        assertThat(isSecured(HttpMethod.POST, "/api/auth/identity-number/inspect")).isFalse();
     }
 
     @Test

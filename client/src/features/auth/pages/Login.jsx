@@ -1,265 +1,227 @@
-import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { login } from "@/features/auth/services/authService";
-import { useAuth } from "@/contexts/AuthContext";
-import CustomerNoticeModal from '@/components/common/CustomerNoticeModal';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { login } from '@/features/auth/services/authService';
+import { useAuth } from '@/contexts/AuthContext';
 import { getCustomerErrorMessage } from '@/utils/customerErrorMessages';
-import { Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
 import { getUserPermissions } from '@/utils/authStorage';
+import AuthShell, { AuthDivider, GoogleButton } from '../components/AuthShell';
+import { consumeAuthReturn, rememberAuthReturn } from '../utils/authReturn';
 import { resolvePostLoginPath } from '../utils/loginRedirect';
 
-function Login() {
-    const { login: contextLogin } = useAuth();
-    const navigate = useNavigate();
-    const location = useLocation();
+const loginErrorMessages = {
+  AUTH_INVALID_CREDENTIALS: 'Email hoặc mật khẩu chưa chính xác.',
+  AUTH_ACCOUNT_INACTIVE: 'Tài khoản đang tạm khóa. Vui lòng liên hệ hỗ trợ.',
+  AUTH_ACCOUNT_LOCKED: 'Tài khoản đang tạm khóa. Vui lòng liên hệ hỗ trợ.',
+  AUTH_TOO_MANY_ATTEMPTS: 'Bạn đã thử quá nhiều lần. Vui lòng đợi một lúc rồi thử lại.',
+  VALIDATION_ERROR: 'Thông tin đăng nhập chưa hợp lệ. Vui lòng kiểm tra lại.',
+  INTERNAL_SERVER_ERROR: 'Hệ thống đang bận. Vui lòng thử lại sau.',
+};
 
-    const [email, setEmail] = useState(() => location.state?.email || "");
-    const [password, setPassword] = useState("");
-    const [rememberMe, setRememberMe] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
-    const [errorMsg, setErrorMsg] = useState(() => location.state?.error || "");
-    const [successMessage, setSuccessMessage] = useState(() =>
-        location.state?.message || (
-            location.state?.verified ? "Xác thực tài khoản thành công! Vui lòng đăng nhập." : ""
-        )
-    );
-    const [isSubmitting, setIsSubmitting] = useState(false);
+export default function Login() {
+  const { login: contextLogin } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [email, setEmail] = useState(() => location.state?.email || '');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(() => location.state?.error || '');
+  const [successMessage, setSuccessMessage] = useState(() => location.state?.message || (
+    location.state?.verified ? 'Email đã được xác minh. Bạn có thể đăng nhập ngay.' : ''
+  ));
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setErrorMsg("");
-        setSuccessMessage("");
+  const handleSubmit = async event => {
+    event.preventDefault();
+    setErrorMsg('');
+    setSuccessMessage('');
 
-        if (!email.trim() || !password.trim()) {
-            setErrorMsg("Vui lòng nhập đầy đủ email và mật khẩu.");
-            return;
-        }
+    if (!email.trim() || !password) {
+      setErrorMsg('Vui lòng nhập đầy đủ email và mật khẩu.');
+      return;
+    }
 
-        setIsSubmitting(true);
-        try {
-            const data = await login(email.trim(), password, rememberMe);
-            setIsSubmitting(false);
+    setIsSubmitting(true);
+    try {
+      const response = await login(email.trim(), password, rememberMe);
+      if (!response?.success || !response?.data) {
+        setErrorMsg('Hệ thống chưa thể đăng nhập lúc này. Vui lòng thử lại.');
+        return;
+      }
 
-            if (data?.success && data?.data) {
-                await contextLogin({ ...data.data, rememberMe });
-                setSuccessMessage("Đăng nhập thành công. Đang chuyển hướng...");
+      await contextLogin({ ...response.data, rememberMe });
+      setSuccessMessage('Đăng nhập thành công. Đang đưa bạn trở lại...');
+      window.setTimeout(() => {
+        const rememberedFrom = consumeAuthReturn();
+        navigate(resolvePostLoginPath({
+          role: response.data.role,
+          permissions: getUserPermissions(),
+          from: location.state?.from || rememberedFrom,
+        }), { replace: true });
+      }, 350);
+    } catch (error) {
+      const errorCode = error?.errorCode || error?.code || error?.error;
 
-                setTimeout(() => {
-                    navigate(resolvePostLoginPath({
-                        role: data.data.role,
-                        permissions: getUserPermissions(),
-                        from: location.state?.from,
-                    }), { replace: true });
-                }, 400);
-            } else {
-                setErrorMsg("Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau.");
-            }
-        } catch (error) {
-            setIsSubmitting(false);
+      if (errorCode === 'AUTH_ACCOUNT_NOT_VERIFIED') {
+        sessionStorage.setItem('pending_otp_email', email.trim());
+        sessionStorage.setItem('pending_otp_purpose', 'REGISTRATION');
+        setErrorMsg('Tài khoản chưa xác minh email. Bạn có thể nhập mã hoặc yêu cầu gửi lại mã mới.');
+        window.setTimeout(() => {
+          navigate('/verify-otp', {
+            state: {
+              email: email.trim(),
+              purpose: 'REGISTRATION',
+              from: location.state?.from,
+            },
+          });
+        }, 900);
+        return;
+      }
 
-            const errorCode = error?.errorCode || error?.code || error?.error;
-            
-            if (errorCode === "AUTH_ACCOUNT_NOT_VERIFIED") {
-                // Clear any stored/temporary auth state
-                sessionStorage.setItem("pending_otp_email", email);
-                sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
+      if (errorCode === 'AUTH_GOOGLE_ACCOUNT' || errorCode === 'AUTH_PASSWORD_NOT_SET') {
+        setErrorMsg('Tài khoản này sử dụng Google. Hãy chọn “Tiếp tục với Google”.');
+        return;
+      }
 
-                setErrorMsg("Tài khoản chưa được xác thực. Đang chuyển hướng sang trang xác thực OTP...");
-                setTimeout(() => {
-                    navigate("/verify-otp", {
-                        state: {
-                            email: email,
-                            purpose: "REGISTRATION"
-                        }
-                    });
-                }, 1500);
-                return;
-            }
+      if (!error?.response && !error?.status) {
+        setErrorMsg('Không thể kết nối. Hãy kiểm tra Internet và thử lại.');
+        return;
+      }
 
-            const errorMap = {
-                AUTH_INVALID_CREDENTIALS: "Email hoặc mật khẩu không chính xác.",
-                AUTH_ACCOUNT_INACTIVE: "Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt.",
-                VALIDATION_ERROR: "Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại.",
-                INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
-            };
+      setErrorMsg(loginErrorMessages[errorCode] || getCustomerErrorMessage(
+        error,
+        'Không thể đăng nhập. Vui lòng thử lại sau.'
+      ));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-            const errorMessage = errorMap[errorCode] || getCustomerErrorMessage(
-                error,
-                'Không thể đăng nhập. Vui lòng thử lại sau.'
-            );
-            setErrorMsg(errorMessage);
-        }
-    };
+  return (
+    <AuthShell maxWidth="max-w-md">
+      <header className="mb-7 text-center">
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.24em] text-brand-orange">
+          Thành viên LoraFilm
+        </p>
+        <h1 className="text-3xl font-black uppercase tracking-[0.08em] text-white">Đăng nhập</h1>
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-500">
+          Quản lý vé, ưu đãi và điểm thành viên của bạn.
+        </p>
+      </header>
 
-    return (
-        <main className="bg-zinc-950 text-white min-h-screen flex items-center justify-center py-10 sm:py-16 px-4 sm:px-6 relative overflow-hidden select-none">
-            {errorMsg && (
-                <CustomerNoticeModal
-                    title="Không thể đăng nhập"
-                    message={errorMsg}
-                    variant="error"
-                    onClose={() => setErrorMsg("")}
-                />
-            )}
-            {/* Background ambient decorative shapes */}
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-orange/5 rounded-full filter blur-3xl pointer-events-none"></div>
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-brand-yellow/5 rounded-full filter blur-3xl pointer-events-none"></div>
+      {errorMsg && (
+        <div id="login-error" role="alert" className="mb-5 flex gap-3 rounded-xl border border-red-900/70 bg-red-950/30 p-3.5 text-sm leading-relaxed text-red-200">
+          <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
-            <article className="bg-zinc-900/80 border border-zinc-800 p-5 sm:p-8 rounded-2xl w-full max-w-md shadow-2xl shadow-black/50 relative z-10 animate-fade-in">
-                {/* Back to Home Button */}
-                <button
-                    onClick={() => navigate("/")}
-                    className="flex items-center gap-2 text-zinc-400 hover:text-brand-orange transition-colors mb-6 text-sm font-semibold focus:outline-none"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Quay lại trang chủ</span>
-                </button>
+      {successMessage && (
+        <div role="status" className="mb-5 flex gap-3 rounded-xl border border-emerald-900/70 bg-emerald-950/30 p-3.5 text-sm leading-relaxed text-emerald-200">
+          <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+          <span>{successMessage}</span>
+        </div>
+      )}
 
-                <header className="text-center mb-8">
-                    <h2 className="text-2xl md:text-3xl font-black tracking-wider uppercase text-white">ĐĂNG NHẬP</h2>
-                    <p className="text-zinc-500 text-xs uppercase tracking-widest mt-1">Truy cập tài khoản LoraFilm</p>
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <div className="space-y-1.5">
+          <label htmlFor="email-input" className="block text-xs font-black uppercase tracking-wider text-zinc-400">
+            Địa chỉ email
+          </label>
+          <div className="relative">
+            <Mail aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+            <input
+              id="email-input"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="tenban@email.com"
+              value={email}
+              onChange={event => setEmail(event.target.value)}
+              aria-invalid={Boolean(errorMsg)}
+              aria-describedby={errorMsg ? 'login-error' : undefined}
+              className="min-h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 py-3 pl-11 pr-4 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 hover:border-zinc-700 focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/10"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
+        </div>
 
-                    {/* Success Message Banner */}
-                    {successMessage && (
-                        <div className="mt-4 bg-emerald-950/50 border border-emerald-800/80 rounded-xl p-3 flex items-center justify-center gap-2 text-emerald-200 text-xs leading-relaxed">
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="shrink-0 text-emerald-500"
-                            >
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                            <span>{successMessage}</span>
-                        </div>
-                    )}
-                </header>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-4">
+            <label htmlFor="password-input" className="block text-xs font-black uppercase tracking-wider text-zinc-400">
+              Mật khẩu
+            </label>
+            <Link to="/forgot-password" className="text-xs font-bold text-brand-orange hover:underline focus:outline-none focus-visible:underline">
+              Quên mật khẩu?
+            </Link>
+          </div>
+          <div className="relative">
+            <Lock aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+            <input
+              id="password-input"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="Nhập mật khẩu"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              onKeyUp={event => setCapsLockOn(event.getModifierState('CapsLock'))}
+              onKeyDown={event => setCapsLockOn(event.getModifierState('CapsLock'))}
+              className="min-h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 py-3 pl-11 pr-12 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 hover:border-zinc-700 focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/10"
+              required
+              disabled={isSubmitting}
+            />
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
+              onClick={() => setShowPassword(current => !current)}
+              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              disabled={isSubmitting}
+            >
+              {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
+            </button>
+          </div>
+          {capsLockOn && <p className="text-xs font-semibold text-amber-400">Caps Lock đang bật.</p>}
+        </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-                    <div className="space-y-1">
-                        <label htmlFor="email-input" className="text-zinc-400 text-xs font-black uppercase tracking-wider block">
-                            Địa chỉ Email
-                        </label>
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-zinc-500 pointer-events-none">
-                                <Mail className="w-4 h-4" />
-                            </span>
-                            <input
-                                id="email-input"
-                                name="email"
-                                type="email"
-                                placeholder="example@lorafilm.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-colors placeholder:text-zinc-600 outline-none"
-                                required
-                                disabled={isSubmitting}
-                            />
-                        </div>
-                    </div>
+        <label className="group flex cursor-pointer items-start gap-3 rounded-xl p-1 text-sm text-zinc-400">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={event => setRememberMe(event.target.checked)}
+            disabled={isSubmitting}
+            className="peer sr-only"
+          />
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-zinc-950 text-transparent transition group-hover:border-zinc-600 peer-checked:border-brand-orange peer-checked:bg-brand-orange peer-checked:text-zinc-950 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-orange peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#141417]">
+            <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />
+          </span>
+          <span>
+            <span className="block font-semibold text-zinc-300">Ghi nhớ đăng nhập</span>
+            <span className="mt-0.5 block text-xs text-zinc-600">Chỉ nên bật trên thiết bị cá nhân.</span>
+          </span>
+        </label>
 
-                    <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                            <label htmlFor="password-input" className="text-zinc-400 text-xs font-black uppercase tracking-wider block">
-                                Mật khẩu
-                            </label>
-                            <Link to="/forgot-password" className="text-xs font-bold text-orange-400 hover:underline transition-colors focus:outline-none">
-                                Quên mật khẩu?
-                            </Link>
-                        </div>
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-zinc-500 pointer-events-none">
-                                <Lock className="w-4 h-4" />
-                            </span>
-                            <input
-                                id="password-input"
-                                name="password"
-                                type={showPassword ? "text" : "password"}
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-500 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-colors placeholder:text-zinc-650 outline-none"
-                                required
-                                disabled={isSubmitting}
-                            />
-                            <button
-                                type="button"
-                                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 focus:outline-none"
-                                onClick={() => setShowPassword(!showPassword)}
-                                aria-label={showPassword ? "Hide password" : "Show password"}
-                                disabled={isSubmitting}
-                            >
-                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                        </div>
-                    </div>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-3.5 text-sm font-black uppercase tracking-[0.14em] text-zinc-950 shadow-lg shadow-brand-orange/10 transition hover:bg-orange-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-[#141417] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
+          {isSubmitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
+        </button>
+      </form>
 
-                    <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-400">
-                        <input
-                            type="checkbox"
-                            checked={rememberMe}
-                            onChange={(event) => setRememberMe(event.target.checked)}
-                            disabled={isSubmitting}
-                            className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-orange-500 focus:ring-orange-500"
-                        />
-                        Duy trì đăng nhập trên thiết bị này
-                    </label>
+      <AuthDivider />
+      <GoogleButton onStart={() => rememberAuthReturn(location.state?.from)} />
 
-                    <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="w-full bg-brand-orange hover:opacity-95 text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest mt-6 block text-center cursor-pointer"
-                    >
-                        {isSubmitting ? (
-                            <div className="flex items-center justify-center gap-2">
-                                <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
-                                <span>ĐANG KIỂM TRA...</span>
-                            </div>
-                        ) : (
-                            <span>XÁC NHẬN ĐĂNG NHẬP</span>
-                        )}
-                    </button>
-                </form>
-
-                <div className="mt-6">
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-zinc-800"></div>
-                        </div>
-                        <div className="relative flex justify-center text-xs">
-                            <span className="bg-zinc-900 px-2 text-zinc-500 uppercase tracking-widest font-bold">Hoặc tiếp tục với</span>
-                        </div>
-                    </div>
-
-                    <a
-                        href={`${import.meta.env.VITE_API_BASE_URL || ""}/oauth2/authorization/google`}
-                        className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-3.5 text-sm font-bold text-zinc-900 transition-all hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-zinc-900"
-                    >
-                        <svg className="h-5 w-5" viewBox="0 0 24 24">
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                        </svg>
-                        ĐĂNG NHẬP BẰNG GOOGLE
-                    </a>
-                </div>
-
-                <footer className="text-center mt-6 text-xs text-zinc-400">
-                    <span>Chưa có tài khoản LoraFilm? </span>
-                    <Link to="/register" className="text-orange-400 hover:underline font-medium">
-                        Đăng ký thành viên ngay
-                    </Link>
-                </footer>
-            </article>
-        </main>
-    );
+      <footer className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-zinc-500">
+        <ShieldCheck aria-hidden="true" className="h-4 w-4" />
+        Phiên đăng nhập được bảo vệ trên kết nối an toàn.
+      </footer>
+    </AuthShell>
+  );
 }
-
-export default Login;

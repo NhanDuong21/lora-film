@@ -17,4 +17,11 @@ class SensitiveDataMaskerTest {
         assertEquals("unknown", SensitiveDataMasker.maskEmail(" "));
         assertEquals("n***", SensitiveDataMasker.maskEmail("not-an-email"));
     }
+
+    @Test
+    void masksIdentityNumbersBeforeTheyReachLogsOrDtoStrings() {
+        assertEquals("092******789", SensitiveDataMasker.maskIdentityNumber("092205006789"));
+        assertEquals("***", SensitiveDataMasker.maskIdentityNumber("12345"));
+        assertEquals("unknown", SensitiveDataMasker.maskIdentityNumber(null));
+    }
 }

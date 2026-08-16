@@ -29,6 +29,7 @@ apiClient.interceptors.request.use(
         const isPublicAuthEndpoint = config.url && (
             config.url.includes("/api/auth/login") ||
             config.url.includes("/api/auth/register") ||
+            config.url.includes("/api/auth/identity-number/inspect") ||
             config.url.includes("/api/auth/verify") ||
             config.url.includes("/api/auth/send-otp") ||
             config.url.includes("/api/auth/refresh-token") ||
@@ -77,6 +78,7 @@ apiClient.interceptors.response.use(
         const isAuthEndpoint = originalRequest.url && (
             originalRequest.url.includes("/api/auth/login") ||
             originalRequest.url.includes("/api/auth/register") ||
+            originalRequest.url.includes("/api/auth/identity-number/inspect") ||
             originalRequest.url.includes("/api/auth/verify") ||
             originalRequest.url.includes("/api/auth/send-otp") ||
             originalRequest.url.includes("/api/auth/refresh-token")

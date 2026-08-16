@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from 'lucide-react';
 import { jwtDecode } from "jwt-decode";
 import { resolvePostLoginPath } from '@/features/auth/utils/loginRedirect';
+import { consumeAuthReturn } from '@/features/auth/utils/authReturn';
 
 function OAuth2RedirectHandler() {
     const { login } = useAuth();
@@ -53,7 +54,8 @@ function OAuth2RedirectHandler() {
 
                     navigate(resolvePostLoginPath({
                         role,
-                        permissions: decodedToken.permissions || []
+                        permissions: decodedToken.permissions || [],
+                        from: consumeAuthReturn()
                     }), { replace: true });
 
                 } catch {

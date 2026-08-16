@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.authservice.dto.request.LoginRequest;
+import com.project.authservice.client.CccdCheckClient;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.dto.response.JwtResponse;
 import com.project.authservice.dto.response.RegistrationInitiatedResponse;
@@ -41,6 +42,9 @@ class AuthControllerTest {
 
     @MockBean
     private AccountService accountService;
+
+    @MockBean
+    private CccdCheckClient cccdCheckClient;
 
     @MockBean
     private com.project.authservice.security.JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -78,6 +82,24 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.data.password").doesNotExist())
                 .andExpect(jsonPath("$.cccd").doesNotExist())
+                .andExpect(jsonPath("$.data.cccd").doesNotExist());
+    }
+
+    @Test
+    void identityNumberInspectionUsesExplicitDerivedFieldNamesAndNeverReturnsRawValue() throws Exception {
+        when(cccdCheckClient.checkCccd("092205006789")).thenReturn(
+                new CccdCheckClient.CccdInfo(
+                        "092******789", "092", "Cần Thơ", "MALE", 2005, null));
+
+        mockMvc.perform(post("/api/auth/identity-number/inspect")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"cccd\":\"092205006789\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.identityNumberMasked").value("092******789"))
+                .andExpect(jsonPath("$.data.birthRegistrationProvinceName").value("Cần Thơ"))
+                .andExpect(jsonPath("$.data.legalSexLabel").value("Nam"))
+                .andExpect(jsonPath("$.data.birthYear").value(2005))
                 .andExpect(jsonPath("$.data.cccd").doesNotExist());
     }
 

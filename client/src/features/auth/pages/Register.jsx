@@ -1,626 +1,621 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { register } from "@/features/auth/services/authService";
-import CustomerNoticeModal from "@/components/common/CustomerNoticeModal";
-import { getCustomerErrorMessage } from "@/utils/customerErrorMessages";
+import { useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  CreditCard,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
+  Lock,
+  Mail,
+  Phone,
+  RefreshCw,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
+import { inspectIdentityNumber, register } from '@/features/auth/services/authService';
+import { getCustomerErrorMessage } from '@/utils/customerErrorMessages';
+import AuthShell, { AuthDivider, AuthStepper, GoogleButton } from '../components/AuthShell';
+import { rememberAuthReturn } from '../utils/authReturn';
 
-function Register() {
-    const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        fullName: "",
-        email: "",
-        phoneNumber: "",
-        cccd: "",
-        birthday: "",
-        password: "",
-        confirmPassword: ""
-    });
+const initialFormData = {
+  fullName: '',
+  email: '',
+  phoneNumber: '',
+  cccd: '',
+  birthday: '',
+  password: '',
+  confirmPassword: '',
+};
 
-    const [errors, setErrors] = useState({});
-    const [touched, setTouched] = useState({});
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [globalError, setGlobalError] = useState("");
-    const [globalSuccess, setGlobalSuccess] = useState("");
+const accountFields = ['fullName', 'email', 'phoneNumber', 'password', 'confirmPassword'];
+const profileFields = ['cccd', 'birthday'];
 
-    const registrationError = (errorCode, message) => {
-        const error = new Error(message);
-        error.errorCode = errorCode;
-        return error;
-    };
+const inputClass = error => `min-h-12 w-full rounded-xl border bg-zinc-950 py-3 pl-11 pr-4 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 hover:border-zinc-700 focus:ring-2 focus:ring-brand-orange/10 ${
+  error ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-brand-orange'
+}`;
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-
-        if (touched[name]) {
-            const fieldError = validateField(name, value);
-            setErrors(prev => ({
-                ...prev,
-                [name]: fieldError
-            }));
-        }
-    };
-
-    const handleBlur = (e) => {
-        const { name, value } = e.target;
-        setTouched(prev => ({ ...prev, [name]: true }));
-        const fieldError = validateField(name, value);
-        setErrors(prev => ({
-            ...prev,
-            [name]: fieldError
-        }));
-    };
-
-    const validateField = (name, value) => {
-        switch (name) {
-            case "fullName": {
-                if (!value.trim()) return "Họ và tên không được để trống.";
-                if (!/^[a-zA-ZÀ-ỹ\s]+$/.test(value)) return "Họ và tên không được chứa số hoặc ký tự đặc biệt.";
-                const words = value.trim().split(/\s+/);
-                if (words.length < 2) return "Họ và tên phải có ít nhất 2 từ.";
-                return "";
-            }
-
-            case "email":
-                if (!value.trim()) return "Email không được để trống.";
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Email không đúng định dạng.";
-                return "";
-
-            case "phoneNumber":
-                if (!value.trim()) return "Số điện thoại không được để trống.";
-                if (!/^0\d{9}$/.test(value)) return "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.";
-                return "";
-
-            case "cccd":
-                if (!value.trim()) return "Số CCCD không được để trống.";
-                if (!/^\d{12}$/.test(value)) return "Số CCCD phải gồm đúng 12 chữ số.";
-                return "";
-
-            case "birthday": {
-                if (!value.trim()) return "Ngày sinh không được để trống.";
-                const birthDate = new Date(value);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                if (birthDate > today) return "Ngày sinh không được ở tương lai.";
-                let age = today.getFullYear() - birthDate.getFullYear();
-                const m = today.getMonth() - birthDate.getMonth();
-                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-                    age--;
-                }
-                if (age < 13) return "Bạn phải từ 13 tuổi trở lên.";
-                return "";
-            }
-
-            case "password":
-                if (!value) return "Mật khẩu không được để trống.";
-                if (value.length < 8) return "Mật khẩu phải dài ít nhất 8 ký tự.";
-                if (!/[A-Z]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ hoa.";
-                if (!/[a-z]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ thường.";
-                if (!/[0-9]/.test(value)) return "Mật khẩu phải chứa ít nhất một chữ số.";
-                if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) return "Mật khẩu phải chứa ít nhất một ký tự đặc biệt.";
-                return "";
-
-            case "confirmPassword":
-                if (!value) return "Vui lòng xác nhận mật khẩu.";
-                if (value !== formData.password) return "Mật khẩu xác nhận không trùng khớp.";
-                return "";
-
-            default:
-                return "";
-        }
-    };
-
-    const validateForm = () => {
-        const newErrors = {};
-        let isValid = true;
-
-        Object.keys(formData).forEach(key => {
-            const error = validateField(key, formData[key]);
-            if (error) {
-                newErrors[key] = error;
-                isValid = false;
-            }
-        });
-
-        setErrors(newErrors);
-
-        return isValid;
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setGlobalError("");
-        setGlobalSuccess("");
-
-        const allTouched = {};
-        Object.keys(formData).forEach(key => {
-            allTouched[key] = true;
-        });
-        setTouched(allTouched);
-
-        if (validateForm()) {
-            setIsSubmitting(true);
-            try {
-                const payload = {
-                    fullName: formData.fullName,
-                    email: formData.email,
-                    phoneNumber: formData.phoneNumber,
-                    cccd: formData.cccd,
-                    birthday: formData.birthday,
-                    password: formData.password
-                };
-
-                const res = await register(payload);
-
-                if (res.success || res.message === "Registration initiated") {
-                    const requestId = res.data?.requestId;
-                    if (!requestId) {
-                        throw registrationError(
-                            "REGISTRATION_REQUEST_INVALID",
-                            "Registration response did not contain a request ID"
-                        );
-                    }
-                    // Store email and purpose in sessionStorage for durability
-                    sessionStorage.setItem("pending_otp_email", formData.email);
-                    sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
-
-                    setGlobalSuccess("Đăng ký thành công! Đang chuyển hướng sang xác thực OTP...");
-                    setTimeout(() => {
-                        navigate("/verify-otp", {
-                            state: {
-                                email: formData.email,
-                                purpose: "REGISTRATION"
-                            }
-                        });
-                    }, 1500);
-                } else {
-                    setGlobalError(getCustomerErrorMessage(
-                        res,
-                        'Đăng ký không thành công. Vui lòng thử lại.'
-                    ));
-                }
-                setIsSubmitting(false);
-            } catch (error) {
-                setIsSubmitting(false);
-                const errorCode = error?.errorCode || error?.code || error?.error;
-                
-                // Detailed field mappings
-                if (errorCode === "AUTH_EMAIL_ALREADY_EXISTS") {
-                    setErrors(prev => ({ ...prev, email: "Email này đã được sử dụng." }));
-                    return;
-                }
-                if (errorCode === "PHONE_NUMBER_ALREADY_EXISTS") {
-                    setErrors(prev => ({ ...prev, phoneNumber: "Số điện thoại này đã được sử dụng." }));
-                    return;
-                }
-                if (errorCode === "CCCD_ALREADY_EXISTS") {
-                    setErrors(prev => ({ ...prev, cccd: "Số CCCD này đã được sử dụng." }));
-                    return;
-                }
-                if (errorCode === "USER_CCCD_INVALID") {
-                    setErrors(prev => ({ ...prev, cccd: "Số CCCD không hợp lệ." }));
-                    return;
-                }
-                if (errorCode === "USER_BIRTHDAY_CCCD_MISMATCH") {
-                    setErrors(prev => ({ ...prev, birthday: "Ngày sinh không khớp với thông tin CCCD." }));
-                    return;
-                }
-
-                if (errorCode === "PHONE_NUMBER_RESERVED") {
-                    const retrySecs = error?.data?.retryAfterSeconds || error?.retryAfterSeconds || 60;
-                    setGlobalError(`Số điện thoại này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySecs} giây.`);
-                    return;
-                }
-                if (errorCode === "CCCD_RESERVED") {
-                    const retrySecs = error?.data?.retryAfterSeconds || error?.retryAfterSeconds || 60;
-                    setGlobalError(`CCCD này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySecs} giây.`);
-                    return;
-                }
-                if (errorCode === "PHONE_NUMBER_AND_CCCD_RESERVED") {
-                    const retrySecs = error?.data?.retryAfterSeconds
-                        || error?.response?.data?.data?.retryAfterSeconds
-                        || error?.retryAfterSeconds
-                        || 60;
-                    setGlobalError(`Số điện thoại và CCCD này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySecs} giây.`);
-                    return;
-                }
-
-                if (errorCode === "REGISTRATION_ALREADY_PENDING") {
-                    setGlobalError("Tài khoản này đang chờ xác thực OTP. Đang chuyển hướng sang trang OTP...");
-                    sessionStorage.setItem("pending_otp_email", formData.email);
-                    sessionStorage.setItem("pending_otp_purpose", "REGISTRATION");
-                    setTimeout(() => {
-                        navigate("/verify-otp", {
-                            state: {
-                                email: formData.email,
-                                purpose: "REGISTRATION"
-                            }
-                        });
-                    }, 1500);
-                    return;
-                }
-
-                if (errorCode === "VALIDATION_ERROR" && error.errors) {
-                    const fieldErrors = {};
-                    error.errors.forEach(err => {
-                        fieldErrors[err.field] = getCustomerErrorMessage(
-                            err,
-                            'Giá trị này không hợp lệ.'
-                        );
-                    });
-                    setErrors(fieldErrors);
-                    setGlobalError("Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại các trường.");
-                    return;
-                }
-
-                const errorMap = {
-                    INTERNAL_SERVER_ERROR: "Lỗi hệ thống từ máy chủ. Vui lòng thử lại sau."
-                };
-                const errorMessage = errorMap[errorCode] || getCustomerErrorMessage(
-                    error,
-                    'Không thể đăng ký tài khoản. Vui lòng thử lại sau.'
-                );
-                setGlobalError(errorMessage);
-            }
-        }
-    };
-
-    const isSubmitDisabled = isSubmitting;
-
-    const calculateStrength = (pwd) => {
-        if (!pwd) return 0;
-        let score = 0;
-        if (pwd.length >= 8) score++;
-        if (/[A-Z]/.test(pwd)) score++;
-        if (/[a-z]/.test(pwd)) score++;
-        if (/[0-9]/.test(pwd)) score++;
-        if (/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) score++;
-        return score;
-    };
-
-    const strength = calculateStrength(formData.password);
-    const strengthLabels = ["", "Rất yếu", "Yếu", "Trung bình", "Khá", "Rất mạnh"];
-    const strengthColors = ["bg-zinc-800", "bg-red-500", "bg-orange-500", "bg-amber-400", "bg-emerald-400", "bg-emerald-500"];
-
+function FieldMessage({ id, error, children }) {
+  if (error) {
     return (
-        <main className="bg-[#050506] text-white min-h-screen w-full flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden select-none">
-            {globalError && (
-                <CustomerNoticeModal
-                    title="Không thể đăng ký"
-                    message={globalError}
-                    variant="error"
-                    onClose={() => setGlobalError("")}
-                />
-            )}
-            {/* Decorative ambient background lights */}
-            <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] bg-brand-orange/10 rounded-full filter blur-[80px] pointer-events-none z-0" />
-            <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] bg-brand-orange/5 rounded-full filter blur-[80px] pointer-events-none z-0" />
-
-            <article className="bg-[#121218]/85 border border-brand-orange/15 rounded-2xl w-full max-w-[600px] px-5 py-8 sm:px-8 sm:py-10 shadow-[0_15px_35px_rgba(0,0,0,0.6),0_0_25px_rgba(255,122,26,0.05)] backdrop-blur-md relative z-10 hover:border-brand-orange/35 hover:shadow-[0_20px_40px_rgba(0,0,0,0.7),0_0_35px_rgba(255,122,26,0.12)] transition-all duration-300">
-                <header className="text-center mb-6 sm:mb-8">
-                    <div className="flex items-center justify-center gap-3 mb-2">
-                        <div className="flex items-center justify-center text-brand-orange drop-shadow-[0_0_8px_rgba(255,122,26,0.7)]">
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="32"
-                                height="32"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-                                <path d="M13 5v2" />
-                                <path d="M13 17v2" />
-                                <path d="M13 11v2" />
-                            </svg>
-                        </div>
-                        <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
-                            Lora<span className="text-brand-orange">film</span>
-                        </h2>
-                    </div>
-                    <p className="text-zinc-500 text-xs sm:text-sm leading-relaxed mt-1 max-w-sm mx-auto">
-                        Đăng ký thành viên để nhận nhiều ưu đãi và đặt vé nhanh hơn
-                    </p>
-                </header>
-
-                {globalSuccess && (
-                    <div className="mb-6 bg-emerald-950/50 border border-emerald-800/80 rounded-xl p-3.5 flex items-center gap-2.5 text-emerald-200 text-xs leading-relaxed">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="shrink-0 text-emerald-500"
-                        >
-                            <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        <span>{globalSuccess}</span>
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5" noValidate>
-                    {/* Họ và tên */}
-                    <div className="flex flex-col items-start gap-1.5 w-full relative sm:col-span-2">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="fullName">
-                            Họ và tên
-                        </label>
-                        <div className="w-full relative flex items-center group">
-                            <input
-                                id="fullName"
-                                name="fullName"
-                                type="text"
-                                placeholder="Nhập họ và tên của bạn"
-                                value={formData.fullName}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.fullName && touched.fullName ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
-                                disabled={isSubmitting}
-                            />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-                            </div>
-                        </div>
-                        {errors.fullName && touched.fullName && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.fullName}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Email */}
-                    <div className="flex flex-col items-start gap-1.5 w-full relative sm:col-span-2">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="email">
-                            Địa chỉ Email
-                        </label>
-                        <div className="w-full relative flex items-center group">
-                            <input
-                                id="email"
-                                name="email"
-                                type="email"
-                                placeholder="Nhập địa chỉ email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.email && touched.email ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
-                                disabled={isSubmitting}
-                            />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
-                            </div>
-                        </div>
-                        {errors.email && touched.email && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.email}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Số điện thoại */}
-                    <div className="flex flex-col items-start gap-1.5 w-full relative">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="phoneNumber">
-                            Số điện thoại
-                        </label>
-                        <div className="w-full relative flex items-center group">
-                            <input
-                                id="phoneNumber"
-                                name="phoneNumber"
-                                type="text"
-                                placeholder="Nhập số điện thoại"
-                                value={formData.phoneNumber}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.phoneNumber && touched.phoneNumber ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
-                                disabled={isSubmitting}
-                            />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
-                            </div>
-                        </div>
-                        {errors.phoneNumber && touched.phoneNumber && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.phoneNumber}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Số CCCD */}
-                    <div className="flex flex-col items-start gap-1.5 w-full relative">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="cccd">
-                            Số CCCD
-                        </label>
-                        <div className="w-full flex gap-2">
-                            <div className="w-full relative flex items-center group">
-                                <input
-                                    id="cccd"
-                                    name="cccd"
-                                    type="text"
-                                    placeholder="Nhập 12 số CCCD"
-                                    value={formData.cccd}
-                                    onChange={handleChange}
-                                    onBlur={handleBlur}
-                                    maxLength={12}
-                                    className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-4 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.cccd && touched.cccd ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
-                                    disabled={isSubmitting}
-                                />
-                                <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="12" x="3" y="6" rx="2" /><path d="M3 10h18" /><path d="M7 15h.01" /><path d="M11 15h.01" /></svg>
-                                </div>
-                            </div>
-                        </div>
-                        {errors.cccd && touched.cccd && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.cccd}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Ngày sinh */}
-                    <div className="flex flex-col items-start gap-1.5 w-full relative sm:col-span-2">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="birthday">
-                            Ngày sinh
-                        </label>
-                        <div className="w-full relative flex items-center group">
-                            <input
-                                id="birthday"
-                                name="birthday"
-                                type="date"
-                                value={formData.birthday}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl px-4 py-3 text-sm text-zinc-100 transition-all outline-none appearance-none ${errors.birthday && touched.birthday ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
-                                disabled={isSubmitting}
-                            />
-                        </div>
-                        {errors.birthday && touched.birthday && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.birthday}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Mật khẩu */}
-                    <div className="flex flex-col items-start gap-1.5 w-full relative">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="password">
-                            Mật khẩu
-                        </label>
-                        <div className="w-full relative flex items-center group">
-                            <input
-                                id="password"
-                                name="password"
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Nhập mật khẩu"
-                                value={formData.password}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.password && touched.password ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
-                                disabled={isSubmitting}
-                            />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-                            </div>
-                            <button
-                                type="button"
-                                className="absolute right-4 text-zinc-500 hover:text-zinc-300 focus:outline-none flex items-center justify-center"
-                                onClick={() => setShowPassword(!showPassword)}
-                                aria-label="Toggle password visibility"
-                            >
-                                {showPassword ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
-                                )}
-                            </button>
-                        </div>
-                        {errors.password && touched.password && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.password}
-                            </span>
-                        )}
-                        {formData.password && (
-                            <div className="w-full mt-2 space-y-1.5 animate-fade-in">
-                                <div className="flex gap-1 h-1.5 w-full">
-                                    {[1, 2, 3, 4, 5].map((level) => (
-                                        <div
-                                            key={level}
-                                            className={`h-full flex-1 rounded-full transition-all duration-300 ${
-                                                strength >= level ? strengthColors[strength] : "bg-zinc-800"
-                                            }`}
-                                        />
-                                    ))}
-                                </div>
-                                <p className={`text-[10px] font-bold uppercase tracking-wider text-right ${
-                                    strength <= 2 ? 'text-red-400' : strength <= 4 ? 'text-amber-400' : 'text-emerald-400'
-                                }`}>
-                                    {strengthLabels[strength]}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Xác nhận mật khẩu */}
-                    <div className="flex flex-col items-start gap-1.5 w-full relative">
-                        <label className="text-[10px] sm:text-xs font-black text-zinc-400 uppercase tracking-widest" htmlFor="confirmPassword">
-                            Xác nhận mật khẩu
-                        </label>
-                        <div className="w-full relative flex items-center group">
-                            <input
-                                id="confirmPassword"
-                                name="confirmPassword"
-                                type={showConfirmPassword ? "text" : "password"}
-                                placeholder="Nhập lại mật khẩu"
-                                value={formData.confirmPassword}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                className={`w-full bg-zinc-950 border focus:bg-zinc-900/40 rounded-xl pl-11 pr-10 py-3 text-sm text-zinc-100 transition-all placeholder:text-zinc-600 outline-none ${errors.confirmPassword && touched.confirmPassword ? "border-red-500/80 focus:border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.2)]" : "border-zinc-800 focus:border-brand-orange"}`}
-                                disabled={isSubmitting}
-                            />
-                            <div className="absolute left-4 text-zinc-500 pointer-events-none flex items-center justify-center transition-colors duration-300 group-focus-within:text-brand-orange">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-                            </div>
-                            <button
-                                type="button"
-                                className="absolute right-4 text-zinc-500 hover:text-zinc-300 focus:outline-none flex items-center justify-center"
-                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                aria-label="Toggle password visibility"
-                            >
-                                {showConfirmPassword ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
-                                )}
-                            </button>
-                        </div>
-                        {errors.confirmPassword && touched.confirmPassword && (
-                            <span className="text-red-500 text-[11px] font-medium mt-1 flex items-center gap-1.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
-                                {errors.confirmPassword}
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="sm:col-span-2 flex flex-col gap-4 mt-4">
-                        <button 
-                            type="submit" 
-                            className="w-full bg-brand-orange hover:bg-orange-600 disabled:opacity-40 disabled:hover:bg-brand-orange text-zinc-950 font-black py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-500/10 font-sans uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer" 
-                            disabled={isSubmitDisabled}
-                        >
-                            <span>{isSubmitting ? "Đang đăng ký..." : "Đăng ký tài khoản"}</span>
-                            {!isSubmitting && (
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-                            )}
-                        </button>
-
-                        <footer className="text-center text-xs text-zinc-400 mt-2">
-                            <span>Đã có tài khoản?</span>
-                            <Link to="/login" className="text-orange-400 hover:underline font-semibold ml-1.5">
-                                Đăng nhập ngay
-                            </Link>
-                        </footer>
-                    </div>
-                </form>
-            </article>
-        </main>
+      <p id={id} role="alert" className="flex items-start gap-1.5 text-xs font-semibold leading-relaxed text-red-400">
+        <AlertCircle aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        {error}
+      </p>
     );
+  }
+  return children ? <p id={id} className="text-xs leading-relaxed text-zinc-600">{children}</p> : null;
 }
 
-export default Register;
+function TextField({
+  label,
+  name,
+  type = 'text',
+  value,
+  onChange,
+  onBlur,
+  error,
+  icon: Icon,
+  helper,
+  autoComplete,
+  inputMode,
+  maxLength,
+  disabled,
+}) {
+  const messageId = `${name}-message`;
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={name} className="block text-xs font-black uppercase tracking-wider text-zinc-400">
+        {label}
+      </label>
+      <div className="relative">
+        <Icon aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+        <input
+          id={name}
+          name={name}
+          type={type}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          placeholder={helper?.placeholder}
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          maxLength={maxLength}
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error || helper?.text ? messageId : undefined}
+          className={inputClass(error)}
+        />
+      </div>
+      <FieldMessage id={messageId} error={error}>{helper?.text}</FieldMessage>
+    </div>
+  );
+}
+
+export default function Register() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState(initialFormData);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [identityInfo, setIdentityInfo] = useState(null);
+  const [isInspecting, setIsInspecting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [globalError, setGlobalError] = useState('');
+  const [globalSuccess, setGlobalSuccess] = useState('');
+
+  const passwordRules = useMemo(() => [
+    { label: '8–50 ký tự', met: formData.password.length >= 8 && formData.password.length <= 50 },
+    { label: 'Có chữ hoa', met: /[A-Z]/.test(formData.password) },
+    { label: 'Có chữ thường', met: /[a-z]/.test(formData.password) },
+    { label: 'Có chữ số', met: /\d/.test(formData.password) },
+    { label: 'Có ký tự đặc biệt', met: /[!@#$%^&*(),.?":{}|<>]/.test(formData.password) },
+  ], [formData.password]);
+
+  const derivedBirthYear = identityInfo?.birthYear;
+  const enteredBirthYear = formData.birthday ? Number(formData.birthday.slice(0, 4)) : null;
+  const birthYearMismatch = Boolean(derivedBirthYear && enteredBirthYear && derivedBirthYear !== enteredBirthYear);
+
+  const validateField = (name, value = formData[name]) => {
+    switch (name) {
+      case 'fullName': {
+        if (!value.trim()) return 'Vui lòng nhập họ và tên.';
+        if (value.trim().length > 200) return 'Họ và tên không được vượt quá 200 ký tự.';
+        if (!/^[a-zA-ZÀ-ỹ\s]+$/.test(value)) return 'Họ và tên không được chứa số hoặc ký tự đặc biệt.';
+        if (value.trim().split(/\s+/).length < 2) return 'Họ và tên cần có ít nhất 2 từ.';
+        return '';
+      }
+      case 'email':
+        if (!value.trim()) return 'Vui lòng nhập địa chỉ email.';
+        if (value.trim().length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Email chưa đúng định dạng.';
+        return '';
+      case 'phoneNumber':
+        if (!value) return 'Vui lòng nhập số điện thoại.';
+        if (!/^0\d{9}$/.test(value)) return 'Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.';
+        return '';
+      case 'cccd':
+        if (!value) return 'Vui lòng nhập số định danh cá nhân.';
+        if (!/^\d{12}$/.test(value)) return 'Số định danh phải gồm đúng 12 chữ số.';
+        return '';
+      case 'birthday': {
+        if (!value) return 'Vui lòng chọn ngày sinh.';
+        const birthDate = new Date(`${value}T00:00:00`);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (Number.isNaN(birthDate.getTime()) || birthDate > today) return 'Ngày sinh chưa hợp lệ.';
+        let age = today.getFullYear() - birthDate.getFullYear();
+        if (today < new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate())) age -= 1;
+        if (age < 13) return 'Bạn cần đủ 13 tuổi để đăng ký thành viên.';
+        if (birthYearMismatch) return `Năm sinh đã nhập là ${enteredBirthYear}, nhưng mã định danh thể hiện ${derivedBirthYear}.`;
+        return '';
+      }
+      case 'password':
+        if (!value) return 'Vui lòng nhập mật khẩu.';
+        if (!passwordRules.every(rule => rule.met)) return 'Mật khẩu chưa đáp ứng đầy đủ các yêu cầu bên dưới.';
+        return '';
+      case 'confirmPassword':
+        if (!value) return 'Vui lòng nhập lại mật khẩu.';
+        if (value !== formData.password) return 'Mật khẩu xác nhận chưa khớp.';
+        return '';
+      default:
+        return '';
+    }
+  };
+
+  const updateField = event => {
+    const { name } = event.target;
+    let { value } = event.target;
+    if (name === 'phoneNumber') value = value.replace(/\D/g, '').slice(0, 10);
+    if (name === 'cccd') value = value.replace(/\D/g, '').slice(0, 12);
+
+    setFormData(previous => ({ ...previous, [name]: value }));
+    setGlobalError('');
+    if (name === 'cccd') setIdentityInfo(null);
+
+    if (touched[name]) {
+      setErrors(previous => ({ ...previous, [name]: validateField(name, value) }));
+    }
+    if (name === 'password' && touched.confirmPassword) {
+      setErrors(previous => ({
+        ...previous,
+        confirmPassword: formData.confirmPassword && formData.confirmPassword !== value
+          ? 'Mật khẩu xác nhận chưa khớp.'
+          : '',
+      }));
+    }
+  };
+
+  const blurField = event => {
+    const { name, value } = event.target;
+    setTouched(previous => ({ ...previous, [name]: true }));
+    setErrors(previous => ({ ...previous, [name]: validateField(name, value) }));
+  };
+
+  const validateFields = fields => {
+    const nextErrors = {};
+    const nextTouched = {};
+    fields.forEach(field => {
+      nextTouched[field] = true;
+      nextErrors[field] = validateField(field);
+    });
+    setTouched(previous => ({ ...previous, ...nextTouched }));
+    setErrors(previous => ({ ...previous, ...nextErrors }));
+    const invalidField = fields.find(field => nextErrors[field]);
+    if (invalidField) document.getElementById(invalidField)?.focus();
+    return !invalidField;
+  };
+
+  const continueToProfile = event => {
+    event.preventDefault();
+    setGlobalError('');
+    const valid = validateFields(accountFields);
+    if (!acceptedTerms) {
+      setErrors(previous => ({ ...previous, terms: 'Bạn cần đồng ý với Điều khoản sử dụng và Chính sách bảo mật.' }));
+    }
+    if (!valid || !acceptedTerms) return;
+    setErrors(previous => ({ ...previous, terms: '' }));
+    setCurrentStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const inspectCccd = async () => {
+    setTouched(previous => ({ ...previous, cccd: true }));
+    const cccdError = validateField('cccd');
+    setErrors(previous => ({ ...previous, cccd: cccdError }));
+    setIdentityInfo(null);
+    setGlobalError('');
+    if (cccdError) return;
+
+    setIsInspecting(true);
+    try {
+      const response = await inspectIdentityNumber(formData.cccd);
+      if (!response?.success || !response?.data) throw new Error('Identity number insight response is empty');
+      setIdentityInfo(response.data);
+      if (formData.birthday) {
+        const mismatch = Number(formData.birthday.slice(0, 4)) !== response.data.birthYear;
+        setErrors(previous => ({
+          ...previous,
+          birthday: mismatch
+            ? `Năm sinh đã nhập là ${formData.birthday.slice(0, 4)}, nhưng mã định danh thể hiện ${response.data.birthYear}.`
+            : '',
+        }));
+      }
+    } catch (error) {
+      const errorCode = error?.errorCode || error?.code || error?.error;
+      const message = errorCode === 'USER_CCCD_INVALID'
+        ? 'Không thể đọc cấu trúc số định danh này. Vui lòng kiểm tra lại 12 chữ số.'
+        : 'Chưa thể kiểm tra số định danh lúc này. Vui lòng thử lại.';
+      setErrors(previous => ({ ...previous, cccd: message }));
+    } finally {
+      setIsInspecting(false);
+    }
+  };
+
+  const handleSubmit = async event => {
+    event.preventDefault();
+    setGlobalError('');
+    setGlobalSuccess('');
+    if (!validateFields(profileFields)) return;
+    if (!identityInfo) {
+      setErrors(previous => ({ ...previous, cccd: 'Hãy kiểm tra thông tin suy ra trước khi tiếp tục.' }));
+      return;
+    }
+    if (birthYearMismatch) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await register({
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim(),
+        phoneNumber: formData.phoneNumber,
+        cccd: formData.cccd,
+        birthday: formData.birthday,
+        password: formData.password,
+      });
+
+      if (!response?.success && response?.message !== 'Registration initiated') {
+        setGlobalError(getCustomerErrorMessage(response, 'Đăng ký không thành công. Vui lòng thử lại.'));
+        return;
+      }
+      if (!response?.data?.requestId) throw new Error('Registration response did not contain a request ID');
+
+      sessionStorage.setItem('pending_otp_email', formData.email.trim());
+      sessionStorage.setItem('pending_otp_purpose', 'REGISTRATION');
+      rememberAuthReturn(location.state?.from);
+      setGlobalSuccess('Thông tin đã được ghi nhận. Đang chuyển sang bước xác minh email…');
+      window.setTimeout(() => {
+        navigate('/verify-otp', {
+          state: {
+            email: formData.email.trim(),
+            purpose: 'REGISTRATION',
+            from: location.state?.from,
+          },
+        });
+      }, 600);
+    } catch (error) {
+      const errorCode = error?.errorCode || error?.code || error?.error;
+      const fieldErrorMap = {
+        AUTH_EMAIL_ALREADY_EXISTS: ['email', 'Email này đã được sử dụng.', 1],
+        PHONE_NUMBER_ALREADY_EXISTS: ['phoneNumber', 'Số điện thoại này đã được sử dụng.', 1],
+        CCCD_ALREADY_EXISTS: ['cccd', 'Số định danh này đã được sử dụng.', 2],
+        USER_CCCD_ALREADY_EXISTS: ['cccd', 'Số định danh này đã được sử dụng.', 2],
+        USER_CCCD_INVALID: ['cccd', 'Không thể đọc cấu trúc số định danh này.', 2],
+        USER_BIRTHDAY_CCCD_MISMATCH: ['birthday', 'Năm sinh không khớp với mã định danh.', 2],
+      };
+      const mapped = fieldErrorMap[errorCode];
+      if (mapped) {
+        const [field, message, step] = mapped;
+        setErrors(previous => ({ ...previous, [field]: message }));
+        setTouched(previous => ({ ...previous, [field]: true }));
+        setCurrentStep(step);
+        window.setTimeout(() => document.getElementById(field)?.focus(), 0);
+        return;
+      }
+
+      if (errorCode === 'REGISTRATION_ALREADY_PENDING') {
+        sessionStorage.setItem('pending_otp_email', formData.email.trim());
+        sessionStorage.setItem('pending_otp_purpose', 'REGISTRATION');
+        navigate('/verify-otp', {
+          state: { email: formData.email.trim(), purpose: 'REGISTRATION', from: location.state?.from },
+        });
+        return;
+      }
+
+      if (errorCode === 'VALIDATION_ERROR' && Array.isArray(error.errors)) {
+        const nextErrors = {};
+        error.errors.forEach(item => { nextErrors[item.field] = getCustomerErrorMessage(item, 'Giá trị này chưa hợp lệ.'); });
+        setErrors(previous => ({ ...previous, ...nextErrors }));
+        if (accountFields.some(field => nextErrors[field])) setCurrentStep(1);
+        setGlobalError('Một số thông tin chưa hợp lệ. Vui lòng kiểm tra các trường được đánh dấu.');
+        return;
+      }
+
+      if (['PHONE_NUMBER_RESERVED', 'CCCD_RESERVED', 'PHONE_NUMBER_AND_CCCD_RESERVED'].includes(errorCode)) {
+        const retrySeconds = error?.data?.retryAfterSeconds || error?.retryAfterSeconds || 60;
+        setGlobalError(`Thông tin này thuộc một đăng ký đang chờ xử lý. Vui lòng thử lại sau ${retrySeconds} giây.`);
+        return;
+      }
+
+      setGlobalError(getCustomerErrorMessage(error, 'Không thể đăng ký tài khoản. Vui lòng thử lại sau.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <AuthShell maxWidth="max-w-xl">
+      <AuthStepper currentStep={currentStep} />
+
+      <header className="mb-6 text-center">
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.24em] text-brand-orange">
+          Bước {currentStep} trong 3
+        </p>
+        <h1 className="text-2xl font-black uppercase tracking-[0.07em] text-white sm:text-3xl">
+          {currentStep === 1 ? 'Tạo tài khoản' : 'Hoàn thiện hồ sơ'}
+        </h1>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
+          {currentStep === 1
+            ? 'Tạo thông tin đăng nhập để quản lý vé, nhận ưu đãi và tích điểm.'
+            : 'Bổ sung thông tin bắt buộc và kiểm tra dữ liệu được suy ra trước khi gửi.'}
+        </p>
+      </header>
+
+      {globalError && (
+        <div role="alert" className="mb-5 flex gap-3 rounded-xl border border-red-900/70 bg-red-950/30 p-3.5 text-sm leading-relaxed text-red-200">
+          <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+          <span>{globalError}</span>
+        </div>
+      )}
+      {globalSuccess && (
+        <div role="status" className="mb-5 flex gap-3 rounded-xl border border-emerald-900/70 bg-emerald-950/30 p-3.5 text-sm leading-relaxed text-emerald-200">
+          <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+          <span>{globalSuccess}</span>
+        </div>
+      )}
+
+      {currentStep === 1 ? (
+        <>
+          <GoogleButton onStart={() => rememberAuthReturn(location.state?.from)} />
+          <AuthDivider>Hoặc đăng ký bằng email</AuthDivider>
+
+          <form onSubmit={continueToProfile} className="space-y-4" noValidate>
+            <TextField
+              label="Họ và tên"
+              name="fullName"
+              value={formData.fullName}
+              onChange={updateField}
+              onBlur={blurField}
+              error={touched.fullName ? errors.fullName : ''}
+              icon={UserRound}
+              autoComplete="name"
+              helper={{ placeholder: 'Nhập họ và tên của bạn' }}
+            />
+            <TextField
+              label="Địa chỉ email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={updateField}
+              onBlur={blurField}
+              error={touched.email ? errors.email : ''}
+              icon={Mail}
+              autoComplete="email"
+              inputMode="email"
+              helper={{ placeholder: 'tenban@email.com', text: 'Mã xác minh sẽ được gửi đến email này.' }}
+            />
+            <TextField
+              label="Số điện thoại"
+              name="phoneNumber"
+              value={formData.phoneNumber}
+              onChange={updateField}
+              onBlur={blurField}
+              error={touched.phoneNumber ? errors.phoneNumber : ''}
+              icon={Phone}
+              autoComplete="tel"
+              inputMode="numeric"
+              maxLength={10}
+              helper={{ placeholder: 'Nhập 10 chữ số', text: 'Dùng để liên hệ khi suất chiếu hoặc vé của bạn có thay đổi.' }}
+            />
+
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="block text-xs font-black uppercase tracking-wider text-zinc-400">Mật khẩu mới</label>
+              <div className="relative">
+                <Lock aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={updateField}
+                  onBlur={blurField}
+                  onKeyUp={event => setCapsLockOn(event.getModifierState('CapsLock'))}
+                  onKeyDown={event => setCapsLockOn(event.getModifierState('CapsLock'))}
+                  autoComplete="new-password"
+                  placeholder="Tạo mật khẩu"
+                  aria-invalid={Boolean(touched.password && errors.password)}
+                  aria-describedby="password-guidance"
+                  className={`${inputClass(touched.password && errors.password)} pr-12`}
+                />
+                <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange">
+                  {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
+                </button>
+              </div>
+              <FieldMessage id="password-error" error={touched.password ? errors.password : ''} />
+              <div id="password-guidance" className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 sm:grid-cols-3">
+                {passwordRules.map(rule => (
+                  <span key={rule.label} className={`flex items-center gap-1.5 text-[11px] font-semibold ${rule.met ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                    <Check aria-hidden="true" className="h-3 w-3" /> {rule.label}
+                  </span>
+                ))}
+              </div>
+              {capsLockOn && <p className="text-xs font-semibold text-amber-400">Caps Lock đang bật.</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="confirmPassword" className="block text-xs font-black uppercase tracking-wider text-zinc-400">Xác nhận mật khẩu</label>
+              <div className="relative">
+                <Lock aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={formData.confirmPassword}
+                  onChange={updateField}
+                  onBlur={blurField}
+                  autoComplete="new-password"
+                  placeholder="Nhập lại mật khẩu"
+                  aria-invalid={Boolean(touched.confirmPassword && errors.confirmPassword)}
+                  aria-describedby="confirmPassword-message"
+                  className={`${inputClass(touched.confirmPassword && errors.confirmPassword)} pr-12`}
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(value => !value)} aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'} className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange">
+                  {showConfirmPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
+                </button>
+              </div>
+              <FieldMessage id="confirmPassword-message" error={touched.confirmPassword ? errors.confirmPassword : ''}>
+                {formData.confirmPassword && formData.confirmPassword === formData.password ? 'Mật khẩu đã khớp.' : ''}
+              </FieldMessage>
+            </div>
+
+            <div className="space-y-3 border-t border-zinc-800 pt-4">
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-zinc-400">
+                <input type="checkbox" checked={acceptedTerms} onChange={event => { setAcceptedTerms(event.target.checked); setErrors(previous => ({ ...previous, terms: '' })); }} className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-brand-orange focus:ring-brand-orange" />
+                <span>
+                  Tôi đồng ý với <Link target="_blank" to="/support/terms" className="font-bold text-brand-orange hover:underline">Điều khoản sử dụng</Link> và xác nhận đã đọc <Link target="_blank" to="/support/privacy" className="font-bold text-brand-orange hover:underline">Chính sách bảo mật</Link>.
+                </span>
+              </label>
+              {errors.terms && <FieldMessage id="terms-message" error={errors.terms} />}
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-zinc-500">
+                <input type="checkbox" checked={marketingConsent} onChange={event => setMarketingConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-brand-orange focus:ring-brand-orange" />
+                <span>Tôi muốn nhận thông tin phim mới và ưu đãi từ LoraFilm. <span className="text-zinc-600">(Không bắt buộc)</span></span>
+              </label>
+            </div>
+
+            <button type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-3.5 text-sm font-black uppercase tracking-[0.14em] text-zinc-950 transition hover:bg-orange-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-[#141417]">
+              Tiếp tục <ArrowRight aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </form>
+        </>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <div className="rounded-2xl border border-brand-orange/20 bg-brand-orange/[0.05] p-4">
+            <div className="mb-3 flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange"><ShieldCheck aria-hidden="true" className="h-5 w-5" /></span>
+              <div>
+                <h2 className="text-sm font-black text-zinc-100">Vì sao LoraFilm cần thông tin này?</h2>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-500">Dùng để kiểm tra trùng hồ sơ và tự động gợi ý năm sinh, giới tính theo mã và nơi đăng ký khai sinh.</p>
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-600">Số đầy đủ không được đưa vào URL hoặc dữ liệu phân tích. Hồ sơ chỉ hiển thị phiên bản đã che.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="cccd" className="block text-xs font-black uppercase tracking-wider text-zinc-400">Số định danh cá nhân</label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <CreditCard aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                <input
+                  id="cccd"
+                  name="cccd"
+                  value={formData.cccd}
+                  onChange={updateField}
+                  onBlur={blurField}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={12}
+                  placeholder="Nhập 12 chữ số"
+                  aria-invalid={Boolean(touched.cccd && errors.cccd)}
+                  aria-describedby="cccd-message"
+                  disabled={isSubmitting || isInspecting}
+                  className={inputClass(touched.cccd && errors.cccd)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={inspectCccd}
+                disabled={formData.cccd.length !== 12 || isInspecting || isSubmitting}
+                className="flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-orange/50 px-4 text-xs font-black uppercase tracking-wider text-brand-orange transition hover:bg-brand-orange/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
+              >
+                {isInspecting ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <RefreshCw aria-hidden="true" className="h-4 w-4" />}
+                {isInspecting ? 'Đang kiểm tra…' : 'Kiểm tra thông tin'}
+              </button>
+            </div>
+            <FieldMessage id="cccd-message" error={touched.cccd ? errors.cccd : ''}>Thông tin này chỉ được gửi khi bạn chủ động kiểm tra hoặc hoàn tất đăng ký.</FieldMessage>
+          </div>
+
+          {identityInfo && (
+            <section aria-labelledby="identity-insight-title" className="rounded-2xl border border-emerald-900/70 bg-emerald-950/20 p-4">
+              <div className="mb-4 flex items-center gap-2 text-emerald-300">
+                <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+                <h2 id="identity-insight-title" className="text-xs font-black uppercase tracking-[0.14em]">Thông tin suy ra từ mã định danh</h2>
+              </div>
+              <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                <div><dt className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">Nơi đăng ký khai sinh</dt><dd className="mt-1 font-bold text-zinc-200">{identityInfo.birthRegistrationProvinceName || 'Chưa xác định'}</dd></div>
+                <div><dt className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">Năm sinh</dt><dd className="mt-1 font-bold text-zinc-200">{identityInfo.birthYear}</dd></div>
+                <div><dt className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">Giới tính theo mã</dt><dd className="mt-1 font-bold text-zinc-200">{identityInfo.legalSexLabel || 'Chưa xác định'}</dd></div>
+              </dl>
+              <p className="mt-4 border-t border-emerald-900/40 pt-3 text-xs leading-relaxed text-zinc-500">Đây là kết quả đọc cấu trúc mã, không phải xác minh danh tính hay xác nhận số này thuộc về người đăng ký.</p>
+              <details className="mt-2 text-xs text-zinc-500">
+                <summary className="cursor-pointer font-bold text-brand-orange focus:outline-none">Thông tin suy ra chưa đúng?</summary>
+                <p className="mt-2 leading-relaxed">Vui lòng kiểm tra lại số đã nhập. Nếu vẫn không khớp, hãy liên hệ hỗ trợ để được hướng dẫn xử lý hồ sơ ngoại lệ.</p>
+              </details>
+            </section>
+          )}
+
+          <div className="space-y-1.5">
+            <label htmlFor="birthday" className="block text-xs font-black uppercase tracking-wider text-zinc-400">Ngày sinh</label>
+            <div className="relative">
+              <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+              <input
+                id="birthday"
+                name="birthday"
+                type="date"
+                value={formData.birthday}
+                onChange={updateField}
+                onBlur={blurField}
+                autoComplete="bday"
+                max={new Date().toISOString().slice(0, 10)}
+                aria-invalid={Boolean(touched.birthday && errors.birthday)}
+                aria-describedby="birthday-message"
+                disabled={isSubmitting}
+                className={inputClass(touched.birthday && errors.birthday)}
+              />
+            </div>
+            <FieldMessage id="birthday-message" error={touched.birthday ? errors.birthday : ''}>
+              {identityInfo && formData.birthday && !birthYearMismatch
+                ? `Năm sinh khớp với mã định danh (${identityInfo.birthYear}).`
+                : 'Dùng để xác định độ tuổi và quyền lợi sinh nhật.'}
+            </FieldMessage>
+          </div>
+
+          <div className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs leading-relaxed text-zinc-500">
+            <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
+            Bằng việc tiếp tục, bạn xác nhận đã kiểm tra thông tin được suy ra. Xem thêm trong <Link target="_blank" to="/support/privacy" className="font-bold text-brand-orange hover:underline">Chính sách bảo mật</Link>.
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
+            <button type="button" onClick={() => setCurrentStep(1)} disabled={isSubmitting} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-zinc-700 px-5 text-sm font-bold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange disabled:opacity-50">
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" /> Quay lại
+            </button>
+            <button type="submit" disabled={isSubmitting || isInspecting || !identityInfo || birthYearMismatch} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 text-sm font-black uppercase tracking-[0.1em] text-zinc-950 transition hover:bg-orange-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-[#141417] disabled:cursor-not-allowed disabled:opacity-50">
+              {isSubmitting && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
+              {isSubmitting ? 'Đang gửi…' : 'Tiếp tục xác minh email'}
+            </button>
+          </div>
+        </form>
+      )}
+    </AuthShell>
+  );
+}

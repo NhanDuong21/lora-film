@@ -110,6 +110,17 @@ class RegistrationSecurityTest {
     }
 
     @Test
+    void registerRequestStringMasksIdentityNumberAndPassword() {
+        RegisterRequest request = new RegisterRequest(
+                "Nguyen Van A", "test@example.com", "0901234567",
+                "092205006789", "2005-06-12", "Password@123");
+
+        assertThat(request.toString())
+                .contains("092******789", "[PROTECTED]")
+                .doesNotContain("092205006789", "Password@123");
+    }
+
+    @Test
     void pendingRegistrationRoundTripsThroughRedisJson() throws Exception {
         ObjectMapper objectMapper = new ObjectMapper();
         RegisterRequest request = new RegisterRequest(

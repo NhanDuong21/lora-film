@@ -10,11 +10,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.project.authservice.common.ApiResponse;
 import com.project.authservice.dto.request.LoginRequest;
+import com.project.authservice.dto.request.IdentityNumberInspectRequest;
 import com.project.authservice.dto.request.RegisterRequest;
 import com.project.authservice.dto.request.SendOtpRequest;
 import com.project.authservice.dto.request.VerifyRequest;
 import com.project.authservice.dto.request.RefreshTokenRequest;
 import com.project.authservice.dto.response.JwtResponse;
+import com.project.authservice.dto.response.IdentityNumberInsightResponse;
+import com.project.authservice.client.CccdCheckClient;
 import com.project.authservice.dto.response.RegistrationInitiatedResponse;
 import com.project.authservice.service.AuthService;
 import com.project.authservice.service.VerificationService;
@@ -31,6 +34,20 @@ public class AuthController {
 	private final VerificationService verificationService;
 	private final com.project.authservice.util.JwtUtil jwtUtil;
 	private final com.project.authservice.service.AccountService accountService;
+	private final CccdCheckClient cccdCheckClient;
+
+	@PostMapping("/identity-number/inspect")
+	public ResponseEntity<ApiResponse<IdentityNumberInsightResponse>> inspectIdentityNumber(
+			@Valid @RequestBody IdentityNumberInspectRequest request) {
+		CccdCheckClient.CccdInfo info = cccdCheckClient.checkCccd(request.getCccd());
+		IdentityNumberInsightResponse response = new IdentityNumberInsightResponse(
+				info.getCccdMasked(),
+				info.getProvinceCode(),
+				info.getProvinceName(),
+				toVietnameseLegalSexLabel(info.getGender()),
+				info.getBirthYear());
+		return ResponseEntity.ok(ApiResponse.success("Identity number structure inspected", response));
+	}
 
 	/**
 	 * Registers a new user.
@@ -169,10 +186,22 @@ public class AuthController {
 		com.project.authservice.dto.AccountDto account = accountService.getAccountByEmail(username);
 		return ResponseEntity.ok(ApiResponse.success("Success", account));
 	}
-    public AuthController(AuthService authService, VerificationService verificationService, com.project.authservice.util.JwtUtil jwtUtil, com.project.authservice.service.AccountService accountService) {
+    public AuthController(AuthService authService, VerificationService verificationService, com.project.authservice.util.JwtUtil jwtUtil, com.project.authservice.service.AccountService accountService, CccdCheckClient cccdCheckClient) {
         this.authService = authService;
         this.verificationService = verificationService;
         this.jwtUtil = jwtUtil;
         this.accountService = accountService;
+		this.cccdCheckClient = cccdCheckClient;
     }
+
+	private static String toVietnameseLegalSexLabel(String value) {
+		if (value == null || value.isBlank()) {
+			return "Chưa xác định";
+		}
+		return switch (value.trim().toUpperCase(java.util.Locale.ROOT)) {
+			case "MALE", "NAM", "M" -> "Nam";
+			case "FEMALE", "NỮ", "NU", "F" -> "Nữ";
+			default -> value;
+		};
+	}
 }

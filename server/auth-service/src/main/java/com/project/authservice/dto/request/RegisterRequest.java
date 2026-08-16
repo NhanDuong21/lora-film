@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Size;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
+import static com.project.authservice.util.SensitiveDataMasker.maskIdentityNumber;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public class RegisterRequest {
@@ -119,7 +121,7 @@ public class RegisterRequest {
                 "fullName='" + fullName + '\'' +
                 ", email='" + email + '\'' +
                 ", phoneNumber='" + phoneNumber + '\'' +
-                ", cccd='" + cccd + '\'' +
+				", cccd='" + maskIdentityNumber(cccd) + '\'' +
                 ", birthday='" + birthday + '\'' +
                 ", password='[PROTECTED]'" +
                 '}';
