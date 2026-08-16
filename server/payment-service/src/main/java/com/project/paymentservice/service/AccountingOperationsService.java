@@ -1,5 +1,7 @@
 package com.project.paymentservice.service;
 
+import com.project.paymentservice.client.user.EmployeeDirectoryClient;
+import com.project.paymentservice.client.user.EmployeeDirectoryEntry;
 import com.project.paymentservice.dto.request.*;
 import com.project.paymentservice.dto.response.*;
 import com.project.paymentservice.entity.*;
@@ -13,8 +15,11 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +46,7 @@ public class AccountingOperationsService {
     private final AccountingAuditEventRepository auditRepository;
     private final CurrentUserProvider currentUserProvider;
     private final AccountingScopeService scopeService;
+    private final EmployeeDirectoryClient employeeDirectoryClient;
 
     public AccountingOperationsService(
             SettlementBatchRepository batchRepository,
@@ -52,7 +58,8 @@ public class AccountingOperationsService {
             AccountingPeriodRepository periodRepository,
             AccountingAuditEventRepository auditRepository,
             CurrentUserProvider currentUserProvider,
-            AccountingScopeService scopeService) {
+            AccountingScopeService scopeService,
+            EmployeeDirectoryClient employeeDirectoryClient) {
         this.batchRepository = batchRepository;
         this.entryRepository = entryRepository;
         this.paymentRepository = paymentRepository;
@@ -63,6 +70,7 @@ public class AccountingOperationsService {
         this.auditRepository = auditRepository;
         this.currentUserProvider = currentUserProvider;
         this.scopeService = scopeService;
+        this.employeeDirectoryClient = employeeDirectoryClient;
     }
 
     @Transactional(readOnly = true)
@@ -210,7 +218,16 @@ public class AccountingOperationsService {
                     : cashRepository.findByStatusAndCinemaPublicIdAndVerificationStatus(
                             CounterCashSessionStatus.CLOSED, cinema, verificationStatus, pageable);
         }
-        return page.map(this::cashResponse);
+        Set<Long> accountIds = new LinkedHashSet<>();
+        page.getContent().forEach(session -> {
+            accountIds.add(session.getEmployeeAccountId());
+            if (session.getVerifiedByAccountId() != null) {
+                accountIds.add(session.getVerifiedByAccountId());
+            }
+        });
+        Map<Long, EmployeeDirectoryEntry> directory = employeeDirectoryClient
+                .findByAccountIds(accountIds);
+        return page.map(session -> cashResponse(session, directory));
     }
 
     @Transactional
@@ -225,7 +242,7 @@ public class AccountingOperationsService {
                     "Nhân viên chưa chốt và gửi ca tiền mặt này cho kế toán.");
         }
         if (session.getVerificationStatus() == CashVerificationStatus.VERIFIED) {
-            return cashResponse(session);
+            return cashResponseWithDirectory(session);
         }
         Long actorId = currentUserProvider.getCurrentUserId();
         if (!scopeService.isAdmin() && actorId.equals(session.getEmployeeAccountId())) {
@@ -239,7 +256,7 @@ public class AccountingOperationsService {
         session = cashRepository.save(session);
         audit("CASH_SESSION_VERIFIED", "COUNTER_CASH_SESSION", session.getPublicId(),
                 "Chênh lệch " + money(session.getVarianceAmount()) + ". " + request.note());
-        return cashResponse(session);
+        return cashResponseWithDirectory(session);
     }
 
     @Transactional(readOnly = true)
@@ -450,7 +467,18 @@ public class AccountingOperationsService {
                 canLock, blocked);
     }
 
-    private CashControlResponse cashResponse(CounterCashSession session) {
+    private CashControlResponse cashResponseWithDirectory(CounterCashSession session) {
+        Set<Long> accountIds = new LinkedHashSet<>();
+        accountIds.add(session.getEmployeeAccountId());
+        if (session.getVerifiedByAccountId() != null) {
+            accountIds.add(session.getVerifiedByAccountId());
+        }
+        return cashResponse(session, employeeDirectoryClient.findByAccountIds(accountIds));
+    }
+
+    private CashControlResponse cashResponse(
+            CounterCashSession session,
+            Map<Long, EmployeeDirectoryEntry> directory) {
         Long actor = currentUserProvider.getCurrentUserId();
         boolean self = !scopeService.isAdmin() && actor.equals(session.getEmployeeAccountId());
         boolean canVerify = session.getStatus() == CounterCashSessionStatus.CLOSED
@@ -459,13 +487,25 @@ public class AccountingOperationsService {
         if (session.getStatus() != CounterCashSessionStatus.CLOSED) blocked = "Nhân viên chưa chốt ca.";
         else if (session.getVerificationStatus() == CashVerificationStatus.VERIFIED) blocked = "Ca đã được xác minh.";
         else if (self) blocked = "Người thu tiền không được tự xác minh ca của mình.";
+        EmployeeDirectoryEntry employee = directory.get(session.getEmployeeAccountId());
+        EmployeeDirectoryEntry verifier = session.getVerifiedByAccountId() == null
+                ? null : directory.get(session.getVerifiedByAccountId());
         return new CashControlResponse(
-                session.getPublicId(), session.getEmployeeAccountId(), session.getCinemaPublicId(),
+                session.getPublicId(), session.getEmployeeAccountId(),
+                employee == null ? null : employee.employeeCode(),
+                employee == null ? "Không tìm thấy hồ sơ nhân viên" : employee.fullName(),
+                employee == null ? null : employee.avatarUrl(),
+                employee == null ? null : employee.positionCode(),
+                employee == null ? null : employee.positionName(),
+                session.getCinemaPublicId(),
                 session.getStatus().name(), session.getVerificationStatus().name(),
                 session.getOpeningFloat(), session.getCashSales(), session.getCashTransactionCount(),
                 session.getCashRefunds(), session.getCashRefundCount(), session.getExpectedCash(),
                 session.getCountedCash(), session.getVarianceAmount(), session.getClosingNoteSanitized(),
-                session.getVerifiedByAccountId(), session.getVerifiedAt(),
+                session.getVerifiedByAccountId(),
+                verifier == null ? null : verifier.fullName(),
+                verifier == null ? null : verifier.avatarUrl(),
+                session.getVerifiedAt(),
                 session.getVerificationNoteSanitized(), session.getOpenedAt(), session.getClosedAt(),
                 session.getVersion(), canVerify, blocked);
     }

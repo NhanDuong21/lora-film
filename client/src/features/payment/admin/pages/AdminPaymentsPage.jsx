@@ -51,6 +51,8 @@ const TECHNICAL_TABS = [
   { key: 'outbox', label: 'Hàng đợi hệ thống' },
 ];
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
 const money = (value, currency = 'VND') =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(Number(value || 0));
 
@@ -131,6 +133,7 @@ export default function AdminPaymentsPage() {
   );
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [pageInfo, setPageInfo] = useState({ number: 0, totalPages: 0, totalElements: 0 });
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState(() => defaultTransactionFilters(
@@ -146,7 +149,7 @@ export default function AdminPaymentsPage() {
 
   const params = useMemo(() => ({
     page,
-    size: 20,
+    size: pageSize,
     ...(filters.query && { query: filters.query.trim() }),
     ...(filters.status && { status: filters.status }),
     ...(filters.provider && { provider: filters.provider }),
@@ -155,7 +158,7 @@ export default function AdminPaymentsPage() {
     }),
     ...(filters.fromDate && { from: startOfLocalDate(filters.fromDate) }),
     ...(filters.toDate && { to: endOfLocalDate(filters.toDate) }),
-  }), [filters, page]);
+  }), [filters, page, pageSize]);
 
   const load = useCallback(async () => {
     const sequence = ++requestSequence.current;
@@ -164,8 +167,8 @@ export default function AdminPaymentsPage() {
       const result = activeTab === 'transactions'
         ? await searchAdminPayments(params)
         : activeTab === 'refunds'
-          ? await getAdminRefunds({ page, size: 20 })
-          : await getPaymentOperations(activeTab, { page, size: 20 });
+          ? await getAdminRefunds({ page, size: pageSize })
+          : await getPaymentOperations(activeTab, { page, size: pageSize });
       if (sequence !== requestSequence.current) return;
       setItems(result?.content || []);
       setPageInfo({
@@ -181,7 +184,7 @@ export default function AdminPaymentsPage() {
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [activeTab, page, params, triggerAlert]);
+  }, [activeTab, page, pageSize, params, triggerAlert]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -216,6 +219,13 @@ export default function AdminPaymentsPage() {
     setItems([]);
     setPageInfo(current => ({ ...current, number: nextPage }));
     setPage(nextPage);
+  };
+
+  const changePageSize = nextSize => {
+    setItems([]);
+    setPageInfo({ number: 0, totalPages: 0, totalElements: 0 });
+    setPage(0);
+    setPageSize(nextSize);
   };
 
   const replay = async (kind, id) => {
@@ -565,11 +575,14 @@ export default function AdminPaymentsPage() {
               )}
           </div>
         )}
-        {pageInfo.totalPages > 1 && (
+        {pageInfo.totalElements > 0 && (
           <Pagination
             page={pageInfo.number}
             totalPages={pageInfo.totalPages}
+            totalElements={pageInfo.totalElements}
+            pageSize={pageSize}
             onChange={changePage}
+            onPageSizeChange={changePageSize}
           />
         )}
       </section>
@@ -1017,13 +1030,41 @@ function OperationTable({
   );
 }
 
-function Pagination({ page, totalPages, onChange }) {
+function Pagination({
+  page,
+  totalPages,
+  totalElements,
+  pageSize,
+  onChange,
+  onPageSizeChange,
+}) {
+  const safeTotalPages = Math.max(totalPages, 1);
+  const firstItem = totalElements ? (page * pageSize) + 1 : 0;
+  const lastItem = Math.min((page + 1) * pageSize, totalElements);
+
   return (
-    <div className="flex items-center justify-between border-t border-zinc-800 px-6 py-4">
-      <span className="text-xs text-zinc-500">
-        Trang {page + 1} / {totalPages}
-      </span>
-      <div className="flex gap-2">
+    <div className="flex flex-col gap-4 border-t border-zinc-800 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500">
+        <label className="flex items-center gap-2">
+          <span>Hiển thị</span>
+          <select
+            aria-label="Số dòng mỗi trang"
+            value={pageSize}
+            onChange={event => onPageSizeChange(Number(event.target.value))}
+            className="rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-2 text-xs font-bold text-zinc-200"
+          >
+            {PAGE_SIZE_OPTIONS.map(size => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+          <span>dòng / trang</span>
+        </label>
+        <span>Đang xem {firstItem}–{lastItem} trong {totalElements} bản ghi</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 lg:justify-end">
+        <span className="text-xs text-zinc-500">
+          Trang {page + 1} / {safeTotalPages}
+        </span>
         <button
           type="button"
           aria-label="Trang trước"
@@ -1036,7 +1077,7 @@ function Pagination({ page, totalPages, onChange }) {
         <button
           type="button"
           aria-label="Trang sau"
-          disabled={page + 1 >= totalPages}
+          disabled={page + 1 >= safeTotalPages}
           onClick={() => onChange(page + 1)}
           className="rounded-lg border border-zinc-700 p-2 disabled:opacity-30"
         >

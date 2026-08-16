@@ -6,6 +6,7 @@ import {
   Plus, RefreshCcw, Scale, ShieldCheck, Trash2, Upload,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import RoleAvatar from '@/components/common/RoleAvatar';
 import useAdminAccess from '../hooks/useAdminAccess';
 import {
   applyAccountingPeriodAction,
@@ -273,7 +274,232 @@ function CashWorkspace({ overview, refreshOverview }) {
     catch (requestError) { setError(apiMessage(requestError)); }
     finally { setSubmitting(false); }
   };
-  return <div className="space-y-5"><OperationsHeader eyebrow="Tiền mặt tại quầy" title="Chốt ca & kiểm kê tiền mặt" description="Đối chiếu tiền hệ thống kỳ vọng với tiền nhân viên thực đếm. Ca có thừa hoặc thiếu luôn cần ghi rõ căn cứ trước khi xác minh." actions={<button type="button" onClick={load} className="rounded-xl border border-white/10 p-2.5 text-zinc-300"><RefreshCcw size={18} /></button>} /><MetricStrip items={[{ label: 'Ca chờ xác minh', value: overview?.cashSessionsNeedVerification || 0, hint: 'Bao gồm ca đang giải trình', icon: ClipboardCheck, tone: 'amber' }, { label: 'Tổng chênh lệch', value: money(overview?.cashVarianceNeedReview), hint: 'Giá trị tuyệt đối cần kiểm tra', icon: Scale, tone: 'red' }, { label: 'Nguyên tắc', value: '2 người', hint: 'Người thu tiền không tự xác minh', icon: ShieldCheck, tone: 'blue' }]} />{error && <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>}<ConsolePanel><header className="flex flex-col gap-3 border-b border-white/10 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-black text-white">Biên bản chốt ca</h2><p className="mt-1 text-xs text-zinc-500">Ưu tiên ca có chênh lệch và ca chờ lâu.</p></div><select value={query.verificationStatus} onChange={event => setQuery(value => ({ ...value, verificationStatus: event.target.value, page: 0 }))} className="rounded-xl border border-white/10 bg-black/30 p-2.5 text-sm text-zinc-300"><option value="">Tất cả ca đã chốt</option><option value="PENDING_VERIFICATION">Chờ xác minh</option><option value="DISCREPANCY_REVIEW">Có chênh lệch</option><option value="VERIFIED">Đã xác minh</option></select></header>{loading ? <p className="p-12 text-center text-sm text-zinc-500">Đang tải biên bản…</p> : result.content?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="sticky top-0 bg-[#0b0b0e] text-[10px] uppercase tracking-wider text-zinc-500"><tr><th className="p-4">Ca / nhân viên</th><th>Rạp</th><th>Hệ thống kỳ vọng</th><th>Thực đếm</th><th>Chênh lệch</th><th>Kiểm soát</th><th></th></tr></thead><tbody className="divide-y divide-white/5">{result.content.map(item => <tr key={item.publicId} className="hover:bg-white/[0.025]"><td className="p-4"><strong className="block text-zinc-200">Tài khoản #{item.employeeAccountId}</strong><span className="mt-1 block text-xs text-zinc-600">Chốt {date(item.closedAt)}</span></td><td className="font-mono text-xs text-zinc-500">{item.cinemaPublicId}</td><td className="font-mono font-bold text-zinc-200">{money(item.expectedCash)}</td><td className="font-mono font-bold text-zinc-200">{money(item.countedCash)}</td><td className={`font-mono font-black ${Number(item.varianceAmount) ? 'text-amber-300' : 'text-emerald-300'}`}>{Number(item.varianceAmount) > 0 ? '+' : ''}{money(item.varianceAmount)}</td><td><StatusPill map={CASH_STATUS} value={item.verificationStatus} /></td><td><button type="button" onClick={() => setSelected(item)} className="text-xs font-black text-orange-400">Kiểm tra</button></td></tr>)}</tbody></table></div> : <p className="p-14 text-center text-sm text-zinc-500">Chưa có ca tiền mặt đã chốt.</p>}<ConsolePagination page={result.number ?? query.page} totalPages={result.totalPages} totalElements={result.totalElements} onPage={page => setQuery(value => ({ ...value, page }))} /></ConsolePanel><DetailDrawer open={Boolean(selected)} onClose={() => setSelected(null)} title="Biên bản chốt ca" subtitle={selected ? `Nhân viên #${selected.employeeAccountId} · ${date(selected.closedAt)}` : ''} footer={selected ? <div><button type="button" disabled={!canVerify || !selected.canVerify} onClick={() => { setNote(''); setModalOpen(true); }} className="w-full rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-35"><CheckCircle2 size={17} className="mr-2 inline" />Xác minh biên bản</button><DisabledReason>{!canVerify ? 'Tài khoản không có quyền xác minh chốt ca.' : selected.verifyBlockedReason}</DisabledReason></div> : null}>{selected && <div className="space-y-5"><DetailGrid items={[{ label: 'Tiền đầu ca', value: money(selected.openingFloat) }, { label: 'Thu tiền mặt', value: `${money(selected.cashSales)} · ${selected.cashTransactionCount || 0} giao dịch` }, { label: 'Hoàn tiền mặt', value: `${money(selected.cashRefunds)} · ${selected.cashRefundCount || 0} khoản` }, { label: 'Hệ thống kỳ vọng', value: money(selected.expectedCash) }, { label: 'Nhân viên thực đếm', value: money(selected.countedCash) }, { label: 'Chênh lệch', value: money(selected.varianceAmount) }]} /><section className={`rounded-2xl border p-4 ${Number(selected.varianceAmount) ? 'border-amber-500/25 bg-amber-500/[0.06]' : 'border-emerald-500/25 bg-emerald-500/[0.06]'}`}><h3 className="text-sm font-black text-zinc-200">Giải trình của nhân viên</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{selected.closingNote || 'Không có ghi chú.'}</p></section>{selected.verificationNote && <section className="rounded-2xl border border-white/10 p-4"><h3 className="text-sm font-black text-zinc-200">Kết luận kế toán</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{selected.verificationNote}</p><p className="mt-2 text-xs text-zinc-600">Tài khoản #{selected.verifiedByAccountId} · {date(selected.verifiedAt)}</p></section>}</div>}</DetailDrawer><ActionModal open={modalOpen} onClose={() => setModalOpen(false)} title="Xác minh chốt ca" description={Number(selected?.varianceAmount) ? `Ca đang chênh lệch ${money(selected?.varianceAmount)}. Hãy ghi rõ chứng từ hoặc căn cứ chấp nhận.` : 'Tiền thực đếm đã khớp với hệ thống. Vẫn cần lưu căn cứ kiểm tra.'} onSubmit={submit} submitLabel="Xác nhận biên bản" submitting={submitting}><label className="text-xs font-black uppercase text-zinc-500">Kết luận kiểm tra *<textarea required minLength={5} maxLength={1000} rows={4} value={note} onChange={event => setNote(event.target.value)} placeholder="Đã đối chiếu biên bản bàn giao và số tiền thực tế…" className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm font-normal normal-case" /></label></ActionModal></div>;
+  const employeeAvatarUser = item => ({
+    fullName: item.employeeName || 'Không tìm thấy hồ sơ nhân viên',
+    avatarUrl: item.employeeAvatarUrl,
+    role: [item.employeePositionCode, item.employeePositionName, 'EMPLOYEE']
+      .filter(Boolean).join(' '),
+  });
+  const verifierAvatarUser = item => ({
+    fullName: item.verifiedByName,
+    avatarUrl: item.verifiedByAvatarUrl,
+    role: 'ACCOUNTING',
+  });
+
+  return (
+    <div className="space-y-5">
+      <OperationsHeader
+        eyebrow="Tiền mặt tại quầy"
+        title="Chốt ca & kiểm kê tiền mặt"
+        description="Đối chiếu tiền hệ thống kỳ vọng với tiền nhân viên thực đếm. Ca có thừa hoặc thiếu luôn cần ghi rõ căn cứ trước khi xác minh."
+        actions={(
+          <button
+            type="button"
+            aria-label="Làm mới biên bản chốt ca"
+            onClick={load}
+            className="rounded-xl border border-white/10 p-2.5 text-zinc-300"
+          >
+            <RefreshCcw size={18} />
+          </button>
+        )}
+      />
+      <MetricStrip items={[
+        { label: 'Ca chờ xác minh', value: overview?.cashSessionsNeedVerification || 0, hint: 'Bao gồm ca đang giải trình', icon: ClipboardCheck, tone: 'amber' },
+        { label: 'Tổng chênh lệch', value: money(overview?.cashVarianceNeedReview), hint: 'Giá trị tuyệt đối cần kiểm tra', icon: Scale, tone: 'red' },
+        { label: 'Nguyên tắc', value: '2 người', hint: 'Người thu tiền không tự xác minh', icon: ShieldCheck, tone: 'blue' },
+      ]} />
+      {error && (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+      <ConsolePanel>
+        <header className="flex flex-col gap-3 border-b border-white/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-black text-white">Biên bản chốt ca</h2>
+            <p className="mt-1 text-xs text-zinc-500">Ưu tiên ca có chênh lệch và ca chờ lâu.</p>
+          </div>
+          <select
+            aria-label="Lọc trạng thái biên bản"
+            value={query.verificationStatus}
+            onChange={event => setQuery(value => ({
+              ...value, verificationStatus: event.target.value, page: 0,
+            }))}
+            className="rounded-xl border border-white/10 bg-black/30 p-2.5 text-sm text-zinc-300"
+          >
+            <option value="">Tất cả ca đã chốt</option>
+            <option value="PENDING_VERIFICATION">Chờ xác minh</option>
+            <option value="DISCREPANCY_REVIEW">Có chênh lệch</option>
+            <option value="VERIFIED">Đã xác minh</option>
+          </select>
+        </header>
+        {loading ? (
+          <p className="p-12 text-center text-sm text-zinc-500">Đang tải biên bản…</p>
+        ) : result.content?.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="sticky top-0 bg-[#0b0b0e] text-[10px] uppercase tracking-wider text-zinc-500">
+                <tr>
+                  <th className="p-4">Ca / nhân viên</th>
+                  <th>Rạp</th>
+                  <th>Hệ thống kỳ vọng</th>
+                  <th>Thực đếm</th>
+                  <th>Chênh lệch</th>
+                  <th>Kiểm soát</th>
+                  <th aria-label="Hành động" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {result.content.map(item => (
+                  <tr key={item.publicId} className="hover:bg-white/[0.025]">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <RoleAvatar
+                          user={employeeAvatarUser(item)}
+                          className="h-10 w-10 border border-white/10"
+                        />
+                        <span>
+                          <strong className="block text-zinc-200">
+                            {item.employeeName || 'Không tìm thấy hồ sơ nhân viên'}
+                          </strong>
+                          <span className="mt-1 block text-xs text-zinc-600">
+                            {[item.employeeCode, item.employeePositionName].filter(Boolean).join(' · ')
+                              || 'Chưa có thông tin chức danh'}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-zinc-600">
+                            Chốt {date(item.closedAt)}
+                          </span>
+                        </span>
+                      </div>
+                    </td>
+                    <td className="font-mono text-xs text-zinc-500">{item.cinemaPublicId}</td>
+                    <td className="font-mono font-bold text-zinc-200">{money(item.expectedCash)}</td>
+                    <td className="font-mono font-bold text-zinc-200">{money(item.countedCash)}</td>
+                    <td className={`font-mono font-black ${Number(item.varianceAmount) ? 'text-amber-300' : 'text-emerald-300'}`}>
+                      {Number(item.varianceAmount) > 0 ? '+' : ''}{money(item.varianceAmount)}
+                    </td>
+                    <td><StatusPill map={CASH_STATUS} value={item.verificationStatus} /></td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => setSelected(item)}
+                        className="text-xs font-black text-orange-400"
+                      >
+                        Kiểm tra
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="p-14 text-center text-sm text-zinc-500">Chưa có ca tiền mặt đã chốt.</p>
+        )}
+        <ConsolePagination
+          page={result.number ?? query.page}
+          totalPages={result.totalPages}
+          totalElements={result.totalElements}
+          onPage={page => setQuery(value => ({ ...value, page }))}
+        />
+      </ConsolePanel>
+      <DetailDrawer
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        title="Biên bản chốt ca"
+        subtitle={selected
+          ? `${selected.employeeName || 'Không tìm thấy hồ sơ nhân viên'} · ${date(selected.closedAt)}`
+          : ''}
+        footer={selected ? (
+          <div>
+            <button
+              type="button"
+              disabled={!canVerify || !selected.canVerify}
+              onClick={() => { setNote(''); setModalOpen(true); }}
+              className="w-full rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <CheckCircle2 size={17} className="mr-2 inline" />
+              Xác minh biên bản
+            </button>
+            <DisabledReason>
+              {!canVerify
+                ? 'Tài khoản không có quyền xác minh chốt ca.'
+                : selected.verifyBlockedReason}
+            </DisabledReason>
+          </div>
+        ) : null}
+      >
+        {selected && (
+          <div className="space-y-5">
+            <section className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+              <RoleAvatar
+                user={employeeAvatarUser(selected)}
+                className="h-12 w-12 border border-white/10"
+              />
+              <div>
+                <h3 className="font-black text-white">
+                  {selected.employeeName || 'Không tìm thấy hồ sơ nhân viên'}
+                </h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {[selected.employeeCode, selected.employeePositionName]
+                    .filter(Boolean).join(' · ') || 'Chưa có thông tin chức danh'}
+                </p>
+              </div>
+            </section>
+            <DetailGrid items={[
+              { label: 'Tiền đầu ca', value: money(selected.openingFloat) },
+              { label: 'Thu tiền mặt', value: `${money(selected.cashSales)} · ${selected.cashTransactionCount || 0} giao dịch` },
+              { label: 'Hoàn tiền mặt', value: `${money(selected.cashRefunds)} · ${selected.cashRefundCount || 0} khoản` },
+              { label: 'Hệ thống kỳ vọng', value: money(selected.expectedCash) },
+              { label: 'Nhân viên thực đếm', value: money(selected.countedCash) },
+              { label: 'Chênh lệch', value: money(selected.varianceAmount) },
+            ]} />
+            <section className={`rounded-2xl border p-4 ${Number(selected.varianceAmount) ? 'border-amber-500/25 bg-amber-500/[0.06]' : 'border-emerald-500/25 bg-emerald-500/[0.06]'}`}>
+              <h3 className="text-sm font-black text-zinc-200">Giải trình của nhân viên</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                {selected.closingNote || 'Không có ghi chú.'}
+              </p>
+            </section>
+            {selected.verificationNote && (
+              <section className="rounded-2xl border border-white/10 p-4">
+                <h3 className="text-sm font-black text-zinc-200">Kết luận kế toán</h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{selected.verificationNote}</p>
+                <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
+                  <RoleAvatar user={verifierAvatarUser(selected)} className="h-7 w-7" />
+                  <span>{selected.verifiedByName || 'Người kiểm soát'} · {date(selected.verifiedAt)}</span>
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </DetailDrawer>
+      <ActionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Xác minh chốt ca"
+        description={Number(selected?.varianceAmount)
+          ? `Ca đang chênh lệch ${money(selected?.varianceAmount)}. Hãy ghi rõ chứng từ hoặc căn cứ chấp nhận.`
+          : 'Tiền thực đếm đã khớp với hệ thống. Vẫn cần lưu căn cứ kiểm tra.'}
+        onSubmit={submit}
+        submitLabel="Xác nhận biên bản"
+        submitting={submitting}
+      >
+        <label className="text-xs font-black uppercase text-zinc-500">
+          Kết luận kiểm tra *
+          <textarea
+            required
+            minLength={5}
+            maxLength={1000}
+            rows={4}
+            value={note}
+            onChange={event => setNote(event.target.value)}
+            placeholder="Đã đối chiếu biên bản bàn giao và số tiền thực tế…"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm font-normal normal-case"
+          />
+        </label>
+      </ActionModal>
+    </div>
+  );
 }
 
 function PeriodWorkspace({ overview, refreshOverview }) {

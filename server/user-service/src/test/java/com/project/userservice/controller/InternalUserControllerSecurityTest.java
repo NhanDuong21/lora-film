@@ -9,8 +9,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -32,6 +34,7 @@ class InternalUserControllerSecurityTest {
         user.setAccountId(42L);
         user.setFullName("Nguyen Van A");
         user.setEmail("customer@example.com");
+        user.setAvatarUrl("/uploads/avatar-42.png");
         userRepository.save(user);
     }
 
@@ -50,5 +53,17 @@ class InternalUserControllerSecurityTest {
                 .andExpect(jsonPath("$.data.accountId").value(42))
                 .andExpect(jsonPath("$.data.email").value("customer@example.com"))
                 .andExpect(jsonPath("$.data.fullName").value("Nguyen Van A"));
+    }
+
+    @Test
+    void returnsDisplayIdentityForCashSessionDirectory() throws Exception {
+        mockMvc.perform(post("/api/v1/internal/employees/directory")
+                        .header("X-Internal-Token", "test-internal-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountIds\":[42]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].accountId").value(42))
+                .andExpect(jsonPath("$.data[0].fullName").value("Nguyen Van A"))
+                .andExpect(jsonPath("$.data[0].avatarUrl").value("/uploads/avatar-42.png"));
     }
 }

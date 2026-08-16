@@ -222,6 +222,34 @@ describe('AdminPaymentsPage role operations', () => {
     expect(screen.queryByTitle('Xử lý lại tác vụ lỗi')).not.toBeInTheDocument();
   });
 
+  it('uses 10 rows by default and lets operators change page size', async () => {
+    searchAdminPayments.mockResolvedValue({
+      ...transactionPage,
+      totalPages: 2,
+      totalElements: 18,
+    });
+
+    render(<AdminPaymentsPage />);
+
+    await waitFor(() => expect(searchAdminPayments).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 0, size: 10 }),
+    ));
+    expect(screen.getByLabelText('Số dòng mỗi trang')).toHaveValue('10');
+    expect(screen.getByText('Đang xem 1–10 trong 18 bản ghi')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await waitFor(() => expect(searchAdminPayments).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, size: 10 }),
+    ));
+
+    fireEvent.change(screen.getByLabelText('Số dòng mỗi trang'), {
+      target: { value: '20' },
+    });
+    await waitFor(() => expect(searchAdminPayments).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 0, size: 20 }),
+    ));
+  });
+
   it('clears rows from the previous tab when an operation request fails', async () => {
     context.role = 'ADMIN';
     searchAdminPayments.mockResolvedValueOnce(transactionPage);

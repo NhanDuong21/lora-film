@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 import com.project.userservice.security.PiiCrypto;
 
@@ -29,6 +30,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     long countByPositionIdAndIsDeletedFalse(Long positionId);
     List<Employee> findByStatusAndIsDeletedFalse(EmployeeStatus status);
     List<Employee> findByCinemaPublicIdAndIsDeletedFalseOrderByEmployeeCodeAsc(String cinemaPublicId);
+
+    @EntityGraph(attributePaths = {"position"})
+    List<Employee> findByAccountIdIn(Collection<Long> accountIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from Employee e where e.accountId = :accountId")
