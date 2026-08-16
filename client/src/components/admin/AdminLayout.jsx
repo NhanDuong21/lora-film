@@ -34,7 +34,7 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/rooms') || path.includes('/rooms')) return 'rooms';
     if (path.endsWith('/seat-types') || path.includes('/seat-types')) return 'seat-types';
     if (path.endsWith('/analytics')) return 'analytics';
-    if (path.endsWith('/accounting')) return 'accounting';
+    if (path === '/admin/accounting' || path.startsWith('/admin/accounting/')) return 'accounting';
     if (path.endsWith('/settlements')) return 'settlements';
     if (path.endsWith('/cash-control')) return 'cash-control';
     if (path.endsWith('/accounting-periods')) return 'accounting-periods';

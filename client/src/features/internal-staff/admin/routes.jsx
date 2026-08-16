@@ -3,7 +3,12 @@ import { lazy, Suspense } from 'react';
 import { Navigate } from 'react-router-dom';
 import { PageLoader, PermissionRoute } from '@/components/common/RouteGuards';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAdminLandingPath, hasPermissionAccess } from './permissionAccess';
+import {
+    getAccountingLandingPath,
+    getAccountingWorkspaceMode,
+    getAdminLandingPath,
+    hasPermissionAccess,
+} from './permissionAccess';
 
 const AdminDashboardView = lazy(() => import('./pages/AdminDashboardPage'));
 const AdminMembersView = lazy(() => import('./pages/AdminMembersPage'));
@@ -47,16 +52,52 @@ function AdminLanding() {
     return <Navigate to={getAdminLandingPath(role, permissions)} replace />;
 }
 
+function AccountingLanding() {
+    const { user } = useAuth();
+    return <Navigate to={getAccountingLandingPath(user?.permissions || [])} replace />;
+}
+
+function AccountingWorkspace({ mode }) {
+    const { user, userRole } = useAuth();
+    const role = String(userRole || user?.role || '').replace(/^ROLE_/, '');
+    const permissions = user?.permissions || [];
+    const isFullAdmin = role === 'ADMIN' || permissions.includes('PERM_ROOT_ACCESS');
+    const assignedMode = getAccountingWorkspaceMode(permissions);
+
+    if (!isFullAdmin && assignedMode !== mode) {
+        return <Navigate to={getAccountingLandingPath(permissions)} replace />;
+    }
+
+    return lazyPage(<AdminAccountingWorkspacePage mode={mode} />);
+}
+
 export const adminStaffRoutes = [
     { index: true, element: <AdminLanding /> },
     { path: 'me', element: lazyPage(<AdminMyAccountPage />) },
     {
         path: 'accounting',
         element: requirePermission(
-            <AdminAccountingWorkspacePage />,
+            <AccountingLanding />,
             'PERM_VIEW_FINANCE',
             'PAYMENT_RECONCILE',
             'ANALYTICS_VIEW'
+        )
+    },
+    {
+        path: 'accounting/operations',
+        element: requirePermission(
+            <AccountingWorkspace mode="operations" />,
+            'PERM_VIEW_FINANCE', 'PAYMENT_RECONCILE', 'ANALYTICS_VIEW',
+            'SETTLEMENT_IMPORT', 'CASH_CLOSE_VERIFY', 'REFUND_REQUEST',
+            'ACCOUNTING_PERIOD_CREATE', 'PAYROLL_CREATE', 'PAYROLL_SUBMIT_PAYMENT'
+        )
+    },
+    {
+        path: 'accounting/control',
+        element: requirePermission(
+            <AccountingWorkspace mode="control" />,
+            'PAYMENT_RECONCILE', 'ANALYTICS_VIEW', 'PAYROLL_VIEW',
+            'SETTLEMENT_LOCK', 'REFUND_APPROVE', 'ACCOUNTING_PERIOD_CLOSE', 'PAYROLL_APPROVE'
         )
     },
     { path: 'finance', element: <Navigate to="/admin/analytics" replace /> },

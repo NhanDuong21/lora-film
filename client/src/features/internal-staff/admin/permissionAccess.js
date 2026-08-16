@@ -63,14 +63,48 @@ export const hasPermissionAccess = (role, permissions = [], ...requiredPermissio
 export const hasAdminAreaAccess = (role, permissions = []) =>
   hasPermissionAccess(role, permissions, ...ADMIN_AREA_PERMISSIONS);
 
+export const ACCOUNTING_OPERATION_PERMISSIONS = Object.freeze([
+  'SETTLEMENT_IMPORT',
+  'CASH_CLOSE_VERIFY',
+  'REFUND_REQUEST',
+  'ACCOUNTING_PERIOD_CREATE',
+  'ACCOUNTING_PERIOD_RECONCILE',
+  'PAYROLL_CREATE',
+  'PAYROLL_UPDATE',
+  'PAYROLL_SUBMIT_PAYMENT',
+  'PAYROLL_RECONCILE',
+]);
+
+export const ACCOUNTING_CONTROL_PERMISSIONS = Object.freeze([
+  'SETTLEMENT_LOCK',
+  'REFUND_APPROVE',
+  'ACCOUNTING_PERIOD_CLOSE',
+  'PAYROLL_APPROVE',
+]);
+
+export const getAccountingWorkspaceMode = (permissions = []) => {
+  const hasOperationalWork = ACCOUNTING_OPERATION_PERMISSIONS
+    .some(permission => permissions.includes(permission));
+  const hasControlWork = ACCOUNTING_CONTROL_PERMISSIONS
+    .some(permission => permissions.includes(permission));
+
+  return hasControlWork && !hasOperationalWork ? 'control' : 'operations';
+};
+
+export const getAccountingLandingPath = permissions => (
+  getAccountingWorkspaceMode(permissions) === 'control'
+    ? '/admin/accounting/control'
+    : '/admin/accounting/operations'
+);
+
+export const getAccountingRoleLabel = permissions => (
+  getAccountingWorkspaceMode(permissions) === 'control'
+    ? 'Kế toán kiểm soát'
+    : 'Kế toán vận hành'
+);
+
 const ADMIN_LANDING_ROUTES = [
   ['DASHBOARD_VIEW', '/admin'],
-  ['PAYMENT_RECONCILE', '/admin/accounting'],
-  ['SETTLEMENT_IMPORT', '/admin/accounting'],
-  ['SETTLEMENT_LOCK', '/admin/accounting'],
-  ['CASH_CLOSE_VERIFY', '/admin/accounting'],
-  ['ANALYTICS_VIEW', '/admin/accounting'],
-  ['PERM_VIEW_FINANCE', '/admin/accounting'],
   ['CUSTOMER_VIEW', '/admin/members'],
   ['EMPLOYEE_VIEW', '/admin/hr'],
   ['DEPARTMENT_VIEW', '/admin/departments'],
@@ -87,6 +121,16 @@ export const getAdminLandingPath = (role, permissions = []) => {
   if (normalizedRole === 'ADMIN' || permissions.includes('PERM_ROOT_ACCESS')) {
     return '/admin';
   }
+
+  const hasAccountingAccess = [
+    'PAYMENT_RECONCILE',
+    'SETTLEMENT_IMPORT',
+    'SETTLEMENT_LOCK',
+    'CASH_CLOSE_VERIFY',
+    'ANALYTICS_VIEW',
+    'PERM_VIEW_FINANCE',
+  ].some(permission => permissions.includes(permission));
+  if (hasAccountingAccess) return getAccountingLandingPath(permissions);
 
   return ADMIN_LANDING_ROUTES.find(([permission]) => permissions.includes(permission))?.[1]
     || '/403';

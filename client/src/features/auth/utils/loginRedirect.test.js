@@ -38,7 +38,22 @@ describe('resolvePostLoginPath', () => {
     expect(resolvePostLoginPath({
       role: 'ROLE_EMPLOYEE',
       permissions: ['PAYMENT_VIEW', 'PAYMENT_RECONCILE', 'ANALYTICS_VIEW', 'PAYROLL_VIEW'],
-    })).toBe('/admin/accounting');
+    })).toBe('/admin/accounting/operations');
+  });
+
+  it('opens the independent control workspace for an accounting controller', () => {
+    expect(resolvePostLoginPath({
+      role: 'ROLE_EMPLOYEE',
+      permissions: [
+        'PAYMENT_VIEW',
+        'PAYMENT_RECONCILE',
+        'PAYROLL_VIEW',
+        'PAYROLL_APPROVE',
+        'REFUND_APPROVE',
+        'SETTLEMENT_LOCK',
+        'ACCOUNTING_PERIOD_CLOSE',
+      ],
+    })).toBe('/admin/accounting/control');
   });
 
   it('keeps MANAGER inside the assigned-cinema workspace', () => {

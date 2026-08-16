@@ -37,7 +37,12 @@ import {
   ClipboardCheck,
   FileClock,
 } from 'lucide-react';
-import { getAdminLandingPath, hasPermissionAccess } from '@/features/internal-staff/admin/permissionAccess';
+import {
+  getAccountingLandingPath,
+  getAccountingRoleLabel,
+  getAdminLandingPath,
+  hasPermissionAccess,
+} from '@/features/internal-staff/admin/permissionAccess';
 import RoleAvatar from '@/components/common/RoleAvatar';
 
 const sidebarStateStorageKey = 'lorafilm.admin.sidebar.sections.v1';
@@ -98,8 +103,13 @@ export default function AdminSidebar({
     || canManagePositions || canManagePayroll;
   const hasSystemAccess = canManageRoles || canManagePermissions
     || canConfigureSystem || canViewUserAudits;
+  const accountingRoleLabel = getAccountingRoleLabel(permissions);
+  const isAccountingController = accountingRoleLabel === 'Kế toán kiểm soát';
+  const accountingHomePath = isFullAdmin
+    ? '/admin/accounting'
+    : getAccountingLandingPath(permissions);
   const roleLabel = isAccountantOnly
-    ? 'Kế toán'
+    ? accountingRoleLabel
     : (isFullAdmin ? 'Quản trị viên' : 'Nhân viên');
   const adminHomePath = getAdminLandingPath(normalizedRole, permissions);
 
@@ -150,19 +160,58 @@ export default function AdminSidebar({
       visible: isFullAdmin || hasAccountingAccess,
       items: [
         ...(hasAccountingAccess
-          ? [{ key: 'accounting', label: 'Bàn làm việc kế toán', path: '/admin/accounting', icon: Calculator }]
+          ? [{
+              key: 'accounting',
+              label: isFullAdmin
+                ? 'Bàn làm việc kế toán'
+                : (accountingRoleLabel === 'Kế toán kiểm soát'
+                    ? 'Bàn kiểm soát kế toán'
+                    : 'Bàn vận hành kế toán'),
+              path: accountingHomePath,
+              icon: Calculator,
+            }]
           : []),
         ...(canViewPayments
-          ? [{ key: 'payments', label: canReconcilePayments ? 'Giao dịch & đối soát' : 'Giao dịch thanh toán', path: '/admin/payments', icon: CreditCard }]
+          ? [{
+              key: 'payments',
+              label: isFullAdmin
+                ? 'Giao dịch & đối soát'
+                : (isAccountingController
+                    ? 'Duyệt hoàn & kiểm tra giao dịch'
+                    : (canReconcilePayments ? 'Giao dịch & xử lý đối soát' : 'Giao dịch thanh toán')),
+              path: '/admin/payments',
+              icon: CreditCard,
+            }]
           : []),
         ...(canViewSettlements
-          ? [{ key: 'settlements', label: 'Đối soát ngân hàng', path: '/admin/settlements', icon: Landmark }]
+          ? [{
+              key: 'settlements',
+              label: isFullAdmin
+                ? 'Đối soát ngân hàng'
+                : (isAccountingController ? 'Kiểm tra & khóa lô' : 'Nhập & đối soát ngân hàng'),
+              path: '/admin/settlements',
+              icon: Landmark,
+            }]
           : []),
         ...(canViewCashControl
-          ? [{ key: 'cash-control', label: 'Chốt ca & tiền mặt', path: '/admin/cash-control', icon: ClipboardCheck }]
+          ? [{
+              key: 'cash-control',
+              label: isFullAdmin
+                ? 'Chốt ca & tiền mặt'
+                : (isAccountingController ? 'Kiểm tra biên bản tiền mặt' : 'Xác minh chốt ca tiền mặt'),
+              path: '/admin/cash-control',
+              icon: ClipboardCheck,
+            }]
           : []),
         ...(canViewAccountingPeriods
-          ? [{ key: 'accounting-periods', label: 'Kỳ kế toán', path: '/admin/accounting-periods', icon: CalendarClock }]
+          ? [{
+              key: 'accounting-periods',
+              label: isFullAdmin
+                ? 'Kỳ kế toán'
+                : (isAccountingController ? 'Kiểm tra & khóa kỳ' : 'Mở & đối soát kỳ'),
+              path: '/admin/accounting-periods',
+              icon: CalendarClock,
+            }]
           : []),
         ...(canViewAccountingAudit
           ? [{ key: 'accounting-audit', label: 'Nhật ký kiểm soát', path: '/admin/accounting-audit', icon: FileClock }]
@@ -202,7 +251,14 @@ export default function AdminSidebar({
         ...(canManageEmployees ? [{ key: 'approvals', label: 'Việc chờ duyệt', path: '/admin/approvals', icon: Inbox }] : []),
         ...(canManageEmployees ? [{ key: 'staff', label: 'Hồ sơ nhân viên', path: '/admin/staff', icon: Shield }] : []),
         ...(canManageEmployees ? [{ key: 'workforce', label: 'Lịch ca & chấm công', path: '/admin/workforce', icon: CalendarClock }] : []),
-        ...(canManagePayroll ? [{ key: 'payroll', label: 'Quy trình bảng lương', path: '/admin/payroll', icon: TrendingUp }] : []),
+        ...(canManagePayroll ? [{
+          key: 'payroll',
+          label: !isFullAdmin && isAccountingController
+            ? 'Duyệt bảng lương'
+            : (!isFullAdmin && isAccountantOnly ? 'Chuẩn bị & thanh toán lương' : 'Quy trình bảng lương'),
+          path: '/admin/payroll',
+          icon: TrendingUp,
+        }] : []),
         ...(canManageDepartments || canManagePositions ? [{ key: 'organization', label: 'Sơ đồ tổ chức', path: '/admin/organization', icon: UsersRound }] : []),
       ],
     },

@@ -1,6 +1,7 @@
 import { useLocation, Link } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAccountingRoleLabel } from '@/features/internal-staff/admin/permissionAccess';
 
 const routeNameMap = {
   'admin': 'Quản trị viên',
@@ -43,6 +44,8 @@ const routeNameMap = {
   'payments': 'Giao dịch & đối soát',
   'finance': 'Tài chính',
   'accounting': 'Bàn làm việc kế toán',
+  'operations': 'Bàn vận hành',
+  'control': 'Bàn kiểm soát',
   'analytics': 'Báo cáo doanh thu',
   'settlements': 'Đối soát ngân hàng',
   'cash-control': 'Chốt ca & tiền mặt',
@@ -57,6 +60,11 @@ export default function Breadcrumbs() {
   const location = useLocation();
   const { user } = useAuth();
   const pathnames = location.pathname.split('/').filter(x => x);
+  const permissions = user?.permissions || [];
+  const hasAccountingAccess = permissions.some(permission => [
+    'PAYMENT_RECONCILE', 'SETTLEMENT_IMPORT', 'SETTLEMENT_LOCK',
+    'CASH_CLOSE_VERIFY', 'ACCOUNTING_PERIOD_VIEW', 'AUDIT_VIEW',
+  ].includes(permission));
 
   // If we are at root, no need for breadcrumb
   if (pathnames.length === 0) return null;
@@ -73,11 +81,8 @@ export default function Breadcrumbs() {
         
         // Use mapping if available, else format nicely
         let label = value === 'admin' && String(user?.role || '').replace(/^ROLE_/, '') !== 'ADMIN'
-          && (user?.permissions || []).some(permission => [
-            'PAYMENT_RECONCILE', 'SETTLEMENT_IMPORT', 'SETTLEMENT_LOCK',
-            'CASH_CLOSE_VERIFY', 'ACCOUNTING_PERIOD_VIEW', 'AUDIT_VIEW',
-          ].includes(permission))
-          ? 'Kế toán vận hành'
+          && hasAccountingAccess
+          ? getAccountingRoleLabel(permissions)
           : routeNameMap[value];
         if (!label) {
           // Check if it's a UUID or ID (e.g., number)

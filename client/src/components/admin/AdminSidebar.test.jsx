@@ -136,7 +136,7 @@ describe('AdminSidebar', () => {
     expect(screen.queryByText('Đơn đặt vé & giữ ghế')).not.toBeInTheDocument();
     expect(screen.queryByText('Danh mục bắp nước')).not.toBeInTheDocument();
     expect(screen.getByText('Giao dịch thanh toán')).toBeInTheDocument();
-    expect(screen.getByText('Bàn làm việc kế toán')).toBeInTheDocument();
+    expect(screen.getByText('Bàn vận hành kế toán')).toBeInTheDocument();
     expect(screen.getByText('Báo cáo doanh thu')).toBeInTheDocument();
     expect(screen.getByText('Doanh thu bắp nước')).toBeInTheDocument();
   });
@@ -152,12 +152,38 @@ describe('AdminSidebar', () => {
       ],
     }, 'accounting');
 
-    expect(screen.getByText('Bàn làm việc kế toán')).toBeInTheDocument();
-    expect(screen.getByText('Giao dịch & đối soát')).toBeInTheDocument();
+    expect(screen.getByText('Bàn vận hành kế toán')).toBeInTheDocument();
+    expect(screen.getAllByText('Kế toán vận hành')).toHaveLength(2);
+    expect(screen.getByText('Giao dịch & xử lý đối soát')).toBeInTheDocument();
     expect(screen.getByText('Báo cáo doanh thu')).toBeInTheDocument();
     openSection('Nhân sự & tiền lương');
-    expect(screen.getByText('Quy trình bảng lương')).toBeInTheDocument();
+    expect(screen.getByText('Chuẩn bị & thanh toán lương')).toBeInTheDocument();
     expect(screen.queryByText('Doanh thu bắp nước')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Bán vé & dịch vụ' })).not.toBeInTheDocument();
+  });
+
+  it('labels the independent controller workspace explicitly', () => {
+    renderSidebar({
+      role: 'EMPLOYEE',
+      permissions: [
+        'PAYMENT_VIEW',
+        'PAYMENT_RECONCILE',
+        'ANALYTICS_VIEW',
+        'PAYROLL_VIEW',
+        'PAYROLL_APPROVE',
+        'REFUND_APPROVE',
+        'SETTLEMENT_LOCK',
+        'ACCOUNTING_PERIOD_CLOSE',
+      ],
+    }, 'accounting');
+
+    expect(screen.getByText('Bàn kiểm soát kế toán')).toBeInTheDocument();
+    expect(screen.getAllByText('Kế toán kiểm soát')).toHaveLength(2);
+    expect(screen.getByText('Duyệt hoàn & kiểm tra giao dịch')).toBeInTheDocument();
+    expect(screen.getByText('Kiểm tra & khóa lô')).toBeInTheDocument();
+    expect(screen.getByText('Kiểm tra biên bản tiền mặt')).toBeInTheDocument();
+    expect(screen.getByText('Kiểm tra & khóa kỳ')).toBeInTheDocument();
+    openSection('Nhân sự & tiền lương');
+    expect(screen.getByText('Duyệt bảng lương')).toBeInTheDocument();
   });
 });

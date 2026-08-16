@@ -18,7 +18,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasPermissionAccess } from '../permissionAccess';
+import { getAccountingWorkspaceMode, hasPermissionAccess } from '../permissionAccess';
 import { getAnalyticsDashboard } from '@/features/analytics/admin/services/analyticsAdminService';
 import {
   exportAdminPayments,
@@ -121,7 +121,7 @@ function WorkflowStep({ number, title, description, action, onClick, disabled })
   );
 }
 
-export default function AdminAccountingWorkspacePage() {
+export default function AdminAccountingWorkspacePage({ mode }) {
   const navigate = useNavigate();
   const { user, userRole } = useAuth();
   const role = userRole || user?.role;
@@ -134,12 +134,8 @@ export default function AdminAccountingWorkspacePage() {
   const canReconcile = can('PAYMENT_RECONCILE');
   const canViewAnalytics = can('PERM_VIEW_FINANCE', 'ANALYTICS_VIEW');
   const canViewPayroll = can('PAYROLL_VIEW');
-  const isAccountingController = permissions.some(permission => [
-    'PAYROLL_APPROVE',
-    'REFUND_APPROVE',
-    'SETTLEMENT_LOCK',
-    'ACCOUNTING_PERIOD_CLOSE',
-  ].includes(permission));
+  const workspaceMode = mode || getAccountingWorkspaceMode(permissions);
+  const isAccountingController = workspaceMode === 'control';
   const canViewAccountingOperations = can(
     'SETTLEMENT_IMPORT',
     'SETTLEMENT_LOCK',
@@ -208,6 +204,105 @@ export default function AdminAccountingWorkspacePage() {
     + Number(data.payroll?.approved || 0)
     + Number(data.payroll?.paymentPending || 0);
   const payments = useMemo(() => data.payments?.content || [], [data.payments]);
+  const workspaceCopy = isAccountingController
+    ? {
+        eyebrow: 'Kế toán kiểm soát',
+        title: 'Bàn kiểm soát kế toán',
+        description: 'Tập trung vào các hồ sơ đang chờ quyết định độc lập. Rà soát đủ căn cứ trước khi duyệt hoặc khóa; không nhập liệu thay cho người vận hành.',
+        responsibility: 'Bạn là người kiểm soát độc lập: duyệt lương, duyệt hoàn tiền, khóa lô và khóa kỳ sau khi đã kiểm tra chứng từ. Bạn không thể duyệt hồ sơ do chính mình lập hoặc phiếu lương của chính mình.',
+        cycleLabel: 'Quy trình kiểm soát',
+        cycleTitle: 'Xử lý hàng đợi theo mức rủi ro',
+      }
+    : {
+        eyebrow: 'Kế toán vận hành',
+        title: 'Bàn vận hành kế toán',
+        description: 'Chuẩn bị, đối chiếu và hoàn thiện chứng từ trước khi chuyển người kiểm soát độc lập. Màn hình ưu tiên các hồ sơ cần xử lý trong ngày.',
+        responsibility: 'Bạn chịu trách nhiệm chuẩn bị và đối chiếu số liệu. Những bước rủi ro cao như duyệt hoàn tiền, duyệt lương, khóa lô và khóa kỳ sẽ được chuyển sang kế toán kiểm soát; nút không đủ quyền luôn bị khóa và nêu rõ lý do.',
+        cycleLabel: 'Quy trình vận hành',
+        cycleTitle: 'Hoàn thiện hồ sơ theo thứ tự',
+      };
+  const workflowSteps = isAccountingController
+    ? [
+        {
+          title: 'Duyệt đề nghị hoàn tiền',
+          description: 'Đối chiếu giao dịch gốc, số tiền, lý do và chứng từ; người gửi đề nghị không được tự duyệt.',
+          action: 'Mở hàng đợi hoàn tiền',
+          disabled: !can('REFUND_APPROVE'),
+          path: '/admin/payments?tab=refunds',
+        },
+        {
+          title: 'Duyệt phiếu lương',
+          description: 'Kiểm tra dữ liệu chấm công, phụ cấp và khấu trừ trước khi cho phép chuyển sang thanh toán.',
+          action: 'Mở phiếu chờ duyệt',
+          disabled: !can('PAYROLL_APPROVE'),
+          path: '/admin/payroll',
+        },
+        {
+          title: 'Khóa lô đối soát ngân hàng',
+          description: 'Chỉ khóa lô khi số LoraFilm, nhà cung cấp và ngân hàng đã khớp, không còn dòng ngoại lệ.',
+          action: 'Kiểm tra lô đối soát',
+          disabled: !can('SETTLEMENT_LOCK'),
+          path: '/admin/settlements',
+        },
+        {
+          title: 'Khóa kỳ kế toán',
+          description: 'Xác nhận mọi hồ sơ, ca tiền mặt và lô ngân hàng đã hoàn tất trước khi khóa số liệu.',
+          action: 'Kiểm tra điều kiện khóa kỳ',
+          disabled: !can('ACCOUNTING_PERIOD_CLOSE'),
+          path: '/admin/accounting-periods',
+        },
+        {
+          title: 'Rà soát dấu vết kiểm soát',
+          description: 'Kiểm tra người thực hiện, thời điểm và căn cứ của các quyết định quan trọng trước khi bàn giao.',
+          action: 'Mở nhật ký kiểm soát',
+          disabled: !can('AUDIT_VIEW'),
+          path: '/admin/accounting-audit',
+        },
+      ]
+    : [
+        {
+          title: 'Nắm số doanh thu',
+          description: 'Xem doanh thu thuần, khoản hoàn và phạm vi dữ liệu trước khi bắt đầu đối soát.',
+          action: 'Mở báo cáo',
+          disabled: !canViewAnalytics,
+          path: '/admin/analytics',
+        },
+        {
+          title: 'Nhập và khớp lô ngân hàng',
+          description: 'Nhập sao kê và so ba nguồn: LoraFilm, nhà cung cấp và số ngân hàng thực ghi có.',
+          action: 'Mở đối soát ngân hàng',
+          disabled: !can('SETTLEMENT_IMPORT'),
+          path: '/admin/settlements',
+        },
+        {
+          title: 'Xác minh tiền mặt cuối ca',
+          description: 'So tiền hệ thống với tiền nhân viên thực đếm; ca thừa thiếu phải có giải trình.',
+          action: 'Mở biên bản chốt ca',
+          disabled: !can('CASH_CLOSE_VERIFY'),
+          path: '/admin/cash-control',
+        },
+        {
+          title: 'Xử lý chênh lệch và lập đề nghị hoàn',
+          description: 'Ghi kết luận hồ sơ lệch, bổ sung căn cứ và chuyển đề nghị hoàn sang người kiểm soát.',
+          action: 'Vào hàng đợi xử lý',
+          disabled: !canReconcile,
+          path: '/admin/payments?tab=reconciliations',
+        },
+        {
+          title: 'Chuẩn bị và gửi bảng lương',
+          description: 'Hoàn thiện phiếu đã duyệt, gửi lệnh thanh toán và khớp chứng từ ngân hàng.',
+          action: 'Mở quy trình bảng lương',
+          disabled: !can('PAYROLL_CREATE', 'PAYROLL_SUBMIT_PAYMENT', 'PAYROLL_RECONCILE'),
+          path: '/admin/payroll',
+        },
+        {
+          title: 'Hoàn tất đối soát kỳ',
+          description: 'Xác nhận kỳ đã đủ hồ sơ rồi chuyển kế toán kiểm soát thực hiện bước khóa cuối cùng.',
+          action: 'Mở kỳ kế toán',
+          disabled: !can('ACCOUNTING_PERIOD_RECONCILE'),
+          path: '/admin/accounting-periods',
+        },
+      ];
 
   if (loading) {
     return (
@@ -222,12 +317,12 @@ export default function AdminAccountingWorkspacePage() {
       <header className="flex flex-col justify-between gap-5 border-b border-zinc-800 pb-6 xl:flex-row xl:items-end">
         <div>
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-orange-400">
-            <BadgeDollarSign size={17} /> Kế toán vận hành
+            {isAccountingController ? <ShieldCheck size={17} /> : <BadgeDollarSign size={17} />}
+            {workspaceCopy.eyebrow}
           </p>
-          <h1 className="mt-2 text-3xl font-black">Bàn làm việc kế toán</h1>
+          <h1 className="mt-2 text-3xl font-black">{workspaceCopy.title}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-            Một điểm bắt đầu cho doanh thu, giao dịch lệch, hoàn tiền và kỳ lương. Ưu tiên xử lý
-            hồ sơ có chênh lệch trước, sau đó mới xuất số liệu bàn giao.
+            {workspaceCopy.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -256,9 +351,7 @@ export default function AdminAccountingWorkspacePage() {
           <ShieldCheck size={17} /> Phạm vi trách nhiệm
         </p>
         <p className="mt-1">
-          {isAccountingController
-            ? 'Bạn là người kiểm soát độc lập: rà soát căn cứ trước khi duyệt lương, duyệt hoàn tiền, khóa lô hoặc khóa kỳ. Bạn không thể duyệt hồ sơ do chính mình lập hay phiếu lương của chính mình; công cụ kỹ thuật vẫn chỉ dành cho quản trị viên.'
-            : 'Bạn chuẩn bị và đối chiếu số liệu, nhưng các bước rủi ro cao như duyệt hoàn tiền, duyệt lương, khóa lô và khóa kỳ cần một người kiểm soát độc lập. Nút không đủ quyền sẽ bị khóa và nêu rõ lý do; phát lại webhook hoặc sửa trạng thái kỹ thuật vẫn chỉ dành cho quản trị viên.'}
+          {workspaceCopy.responsibility}
         </p>
       </section>
 
@@ -273,41 +366,76 @@ export default function AdminAccountingWorkspacePage() {
       )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          icon={BarChart3}
-          label="Doanh thu thuần tháng này"
-          value={canViewAnalytics ? money(summary.netRevenue, summary.currency) : 'Không được cấp quyền'}
-          hint={canViewAnalytics
-            ? `Doanh thu gộp ${money(summary.grossRevenue, summary.currency)}`
-            : 'Cần quyền xem báo cáo doanh thu'}
-          onClick={canViewAnalytics ? () => navigate('/admin/analytics') : undefined}
-        />
-        <MetricCard
-          icon={ClipboardCheck}
-          label="Hồ sơ cần đối soát"
-          value={canViewPayments ? reconciliationTotal : '—'}
-          hint={`${openReconciliations} hồ sơ mới · ${reviewingReconciliations} đang kiểm tra`}
-          tone={reconciliationTotal ? 'danger' : 'success'}
-          onClick={canViewPayments ? () => navigate('/admin/payments?tab=reconciliations') : undefined}
-        />
-        <MetricCard
-          icon={WalletCards}
-          label="Việc kỳ lương chưa hoàn tất"
-          value={canViewPayroll ? payrollPending : '—'}
-          hint={canViewPayroll
-            ? `${Number(data.payroll?.paymentPending) || 0} phiếu đang chờ khớp chứng từ`
-            : 'Không thuộc phạm vi được cấp'}
-          tone={payrollPending ? 'warning' : 'success'}
-          onClick={canViewPayroll ? () => navigate('/admin/payroll') : undefined}
-        />
-        <MetricCard
-          icon={CreditCard}
-          label="Khoản hoàn cần chú ý"
-          value={canViewPayments ? Number(data.refunds?.totalElements) || 0 : '—'}
-          hint="Kế toán theo dõi số tiền; quyết định hoàn theo đúng luồng phê duyệt"
-          tone={Number(data.refunds?.totalElements) ? 'warning' : 'neutral'}
-          onClick={canViewPayments ? () => navigate('/admin/payments?tab=refunds') : undefined}
-        />
+        {isAccountingController ? <>
+          <MetricCard
+            icon={CreditCard}
+            label="Đề nghị hoàn chờ quyết định"
+            value={canViewPayments ? Number(data.refunds?.totalElements) || 0 : '—'}
+            hint="Ưu tiên hồ sơ có đủ giao dịch gốc và chứng từ khách hàng"
+            tone={Number(data.refunds?.totalElements) ? 'danger' : 'success'}
+            onClick={canViewPayments ? () => navigate('/admin/payments?tab=refunds') : undefined}
+          />
+          <MetricCard
+            icon={WalletCards}
+            label="Phiếu lương chờ duyệt"
+            value={canViewPayroll ? Number(data.payroll?.pendingApproval) || 0 : '—'}
+            hint="Không được tự duyệt phiếu do mình lập hoặc phiếu lương của chính mình"
+            tone={Number(data.payroll?.pendingApproval) ? 'danger' : 'success'}
+            onClick={canViewPayroll ? () => navigate('/admin/payroll') : undefined}
+          />
+          <MetricCard
+            icon={Landmark}
+            label="Lô cần rà soát trước khi khóa"
+            value={Number(data.accounting?.settlementBatchesNeedReview) || 0}
+            hint="Chỉ khóa sau khi ba nguồn đã khớp và không còn ngoại lệ"
+            tone={Number(data.accounting?.settlementBatchesNeedReview) ? 'warning' : 'success'}
+            onClick={() => navigate('/admin/settlements')}
+          />
+          <MetricCard
+            icon={CalendarClock}
+            label="Kỳ đang chờ hoàn tất kiểm soát"
+            value={Number(data.accounting?.accountingPeriodsOpen) || 0}
+            hint="Kiểm tra toàn bộ điều kiện trước khi khóa số liệu"
+            tone={Number(data.accounting?.accountingPeriodsOpen) ? 'warning' : 'neutral'}
+            onClick={() => navigate('/admin/accounting-periods')}
+          />
+        </> : <>
+          <MetricCard
+            icon={BarChart3}
+            label="Doanh thu thuần tháng này"
+            value={canViewAnalytics ? money(summary.netRevenue, summary.currency) : 'Không được cấp quyền'}
+            hint={canViewAnalytics
+              ? `Doanh thu gộp ${money(summary.grossRevenue, summary.currency)}`
+              : 'Cần quyền xem báo cáo doanh thu'}
+            onClick={canViewAnalytics ? () => navigate('/admin/analytics') : undefined}
+          />
+          <MetricCard
+            icon={ClipboardCheck}
+            label="Hồ sơ cần đối soát"
+            value={canViewPayments ? reconciliationTotal : '—'}
+            hint={`${openReconciliations} hồ sơ mới · ${reviewingReconciliations} đang kiểm tra`}
+            tone={reconciliationTotal ? 'danger' : 'success'}
+            onClick={canViewPayments ? () => navigate('/admin/payments?tab=reconciliations') : undefined}
+          />
+          <MetricCard
+            icon={WalletCards}
+            label="Việc kỳ lương chưa hoàn tất"
+            value={canViewPayroll ? payrollPending : '—'}
+            hint={canViewPayroll
+              ? `${Number(data.payroll?.paymentPending) || 0} phiếu đang chờ khớp chứng từ`
+              : 'Không thuộc phạm vi được cấp'}
+            tone={payrollPending ? 'warning' : 'success'}
+            onClick={canViewPayroll ? () => navigate('/admin/payroll') : undefined}
+          />
+          <MetricCard
+            icon={CreditCard}
+            label="Đề nghị hoàn đang chuẩn bị"
+            value={canViewPayments ? Number(data.refunds?.totalElements) || 0 : '—'}
+            hint="Hoàn thiện căn cứ rồi chuyển kế toán kiểm soát quyết định"
+            tone={Number(data.refunds?.totalElements) ? 'warning' : 'neutral'}
+            onClick={canViewPayments ? () => navigate('/admin/payments?tab=refunds') : undefined}
+          />
+        </>}
       </section>
 
       {canViewAccountingOperations ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -348,62 +476,79 @@ export default function AdminAccountingWorkspacePage() {
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.4fr]">
         <div className="space-y-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-600">Một vòng làm việc</p>
-            <h2 className="mt-2 text-xl font-black">Làm theo thứ tự này</h2>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-600">{workspaceCopy.cycleLabel}</p>
+            <h2 className="mt-2 text-xl font-black">{workspaceCopy.cycleTitle}</h2>
           </div>
-          <WorkflowStep
-            number="01"
-            title="Nắm số doanh thu"
-            description="Xem doanh thu thuần, khoản hoàn và phạm vi dữ liệu trước khi bắt đầu đối soát."
-            action="Mở báo cáo"
-            disabled={!canViewAnalytics}
-            onClick={() => navigate('/admin/analytics')}
-          />
-          <WorkflowStep
-            number="02"
-            title="Khớp lô ngân hàng"
-            description="Nhập sao kê settlement và so ba nguồn: số LoraFilm, số nhà cung cấp, số ngân hàng thực ghi có."
-            action="Mở đối soát ngân hàng"
-            disabled={!canViewAccountingOperations}
-            onClick={() => navigate('/admin/settlements')}
-          />
-          <WorkflowStep
-            number="03"
-            title="Xác minh tiền mặt cuối ca"
-            description="Kiểm tra tiền hệ thống kỳ vọng với tiền nhân viên thực đếm; ca thừa thiếu phải có giải trình."
-            action="Mở biên bản chốt ca"
-            disabled={!canViewAccountingOperations}
-            onClick={() => navigate('/admin/cash-control')}
-          />
-          <WorkflowStep
-            number="04"
-            title="Xử lý chênh lệch & hoàn tiền"
-            description={canReconcile
-              ? 'Tiếp nhận hồ sơ lệch, ghi kết luận; đề nghị hoàn tiền được chuyển sang người kiểm soát độc lập.'
-              : 'Theo dõi hồ sơ và chuyển người có quyền đối soát.'}
-            action={canReconcile ? 'Vào hàng đợi xử lý' : 'Xem giao dịch'}
-            disabled={!canViewPayments}
-            onClick={() => navigate('/admin/payments?tab=reconciliations')}
-          />
-          <WorkflowStep
-            number="05"
-            title="Chốt quy trình bảng lương"
-            description="Kiểm tra phiếu, duyệt độc lập, gửi lô ngân hàng và khớp mã bút toán."
-            action="Mở kỳ lương"
-            disabled={!canViewPayroll}
-            onClick={() => navigate('/admin/payroll')}
-          />
-          <WorkflowStep
-            number="06"
-            title="Đối soát và khóa kỳ"
-            description="Chỉ chuyển kỳ sang đã đối soát khi mọi hồ sơ, lô ngân hàng và biên bản tiền mặt đã hoàn tất."
-            action="Mở kỳ kế toán"
-            disabled={!canViewAccountingOperations}
-            onClick={() => navigate('/admin/accounting-periods')}
-          />
+          {workflowSteps.map((step, index) => (
+            <WorkflowStep
+              key={step.title}
+              number={String(index + 1).padStart(2, '0')}
+              title={step.title}
+              description={step.description}
+              action={step.action}
+              disabled={step.disabled}
+              onClick={() => navigate(step.path)}
+            />
+          ))}
         </div>
 
-        <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60">
+        {isAccountingController ? (
+          <section className="overflow-hidden rounded-2xl border border-sky-500/20 bg-sky-500/[0.035]">
+            <header className="border-b border-sky-500/15 px-5 py-4">
+              <h2 className="flex items-center gap-2 text-sm font-black text-sky-100">
+                <ShieldCheck size={17} className="text-sky-400" /> Hàng đợi kiểm soát độc lập
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">Chọn hồ sơ cần ra quyết định; hệ thống sẽ tiếp tục chặn việc tự duyệt và các hồ sơ chưa đủ điều kiện.</p>
+            </header>
+            <div className="grid gap-3 p-5 sm:grid-cols-2">
+              {[
+                {
+                  label: 'Đề nghị hoàn tiền',
+                  count: Number(data.refunds?.totalElements) || 0,
+                  hint: 'Duyệt hoặc từ chối kèm căn cứ',
+                  path: '/admin/payments?tab=refunds',
+                  allowed: can('REFUND_APPROVE'),
+                },
+                {
+                  label: 'Phiếu lương chờ duyệt',
+                  count: Number(data.payroll?.pendingApproval) || 0,
+                  hint: 'Kiểm tra trước khi cho thanh toán',
+                  path: '/admin/payroll',
+                  allowed: can('PAYROLL_APPROVE'),
+                },
+                {
+                  label: 'Lô đối soát cần rà soát',
+                  count: Number(data.accounting?.settlementBatchesNeedReview) || 0,
+                  hint: 'Khóa khi đủ ba nguồn và hết chênh lệch',
+                  path: '/admin/settlements',
+                  allowed: can('SETTLEMENT_LOCK'),
+                },
+                {
+                  label: 'Kỳ kế toán đang mở',
+                  count: Number(data.accounting?.accountingPeriodsOpen) || 0,
+                  hint: 'Khóa sau khi mọi điều kiện đã đạt',
+                  path: '/admin/accounting-periods',
+                  allowed: can('ACCOUNTING_PERIOD_CLOSE'),
+                },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  type="button"
+                  disabled={!item.allowed}
+                  onClick={() => navigate(item.path)}
+                  className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-sky-400/35 hover:bg-sky-500/[0.05] disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <span>
+                    <strong className="block text-sm text-zinc-100">{item.label}</strong>
+                    <span className="mt-1 block text-xs leading-5 text-zinc-500">{item.hint}</span>
+                  </span>
+                  <span className="grid h-10 min-w-10 place-items-center rounded-xl bg-sky-500/10 px-3 text-lg font-black text-sky-300">{item.count}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60">
           <header className="flex items-center justify-between gap-4 border-b border-zinc-800 px-5 py-4">
             <div>
               <h2 className="flex items-center gap-2 text-sm font-black text-zinc-100">
@@ -461,7 +606,8 @@ export default function AdminAccountingWorkspacePage() {
               ))}
             </div>
           )}
-        </section>
+          </section>
+        )}
       </section>
     </main>
   );
