@@ -25,7 +25,8 @@ public class MovieServiceClientImpl implements MovieServiceClient {
     public MovieServiceClientImpl(
             RestTemplate restTemplate,
             @Value("${movie.service.url:http://movie-service}") String movieServiceUrl,
-            @Value("${app.internal-token:secret-internal-token}") String internalToken) {
+            @Value("${services.movie-service.internal-token:${BOOKING_TO_MOVIE_INTERNAL_TOKEN:${APP_INTERNAL_TOKEN:${INTERNAL_NOTIFICATION_TOKEN:8f0a00f11a51ad253c9560e55236b464bab6b20e57642c01a9c896a98ff061ff}}}}")
+            String internalToken) {
         this.restTemplate = restTemplate;
         this.movieServiceUrl = movieServiceUrl;
         this.internalToken = internalToken;

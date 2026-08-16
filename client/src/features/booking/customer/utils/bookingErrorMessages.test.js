@@ -37,6 +37,13 @@ describe('booking error messages', () => {
     })).toBe('Không được để lại một ghế trống đơn lẻ. Vui lòng chọn lại ghế.');
   });
 
+  it('reports an upstream showtime integration failure accurately', () => {
+    expect(getBookingErrorMessage({
+      errorCode: 'INTEGRATION_ERROR',
+      message: 'Movie Service rejected public booking context request'
+    })).toBe('Không thể xác thực thông tin suất chiếu lúc này. Vui lòng thử lại sau.');
+  });
+
   it('uses the Vietnamese fallback for an unknown raw English error', () => {
     expect(getBookingErrorMessage(
       { message: 'Unexpected database constraint violation' },

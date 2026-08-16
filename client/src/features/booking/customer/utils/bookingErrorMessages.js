@@ -41,6 +41,7 @@ const BOOKING_ERROR_MESSAGES = {
   SEAT_COUPLE_PAIR_REQUIRED: 'Vui lòng chọn đủ hai ghế đôi.',
   SEAT_SINGLE_GAP_NOT_ALLOWED: 'Không được để lại một ghế trống đơn lẻ. Vui lòng chọn lại ghế.',
   SHOWTIME_VALIDATION_UNAVAILABLE: 'Không thể xác thực suất chiếu lúc này. Vui lòng thử lại.',
+  INTEGRATION_ERROR: 'Không thể xác thực thông tin suất chiếu lúc này. Vui lòng thử lại sau.',
   INTERNAL_SERVER_ERROR: 'Hệ thống đang bận. Vui lòng thử lại sau.'
 };
 

@@ -23,7 +23,8 @@ public class MovieServiceShowtimeClient implements ShowtimeClient {
     public MovieServiceShowtimeClient(
             RestClient.Builder restClientBuilder,
             @Value("${services.movie-service.url:http://localhost:8082}") String movieServiceUrl,
-            @Value("${app.internal-token}") String internalToken) {
+            @Value("${services.movie-service.internal-token:${BOOKING_TO_MOVIE_INTERNAL_TOKEN:${APP_INTERNAL_TOKEN:${INTERNAL_NOTIFICATION_TOKEN:8f0a00f11a51ad253c9560e55236b464bab6b20e57642c01a9c896a98ff061ff}}}}")
+            String internalToken) {
         this.restClient = restClientBuilder.baseUrl(movieServiceUrl).build();
         this.internalToken = internalToken;
     }
