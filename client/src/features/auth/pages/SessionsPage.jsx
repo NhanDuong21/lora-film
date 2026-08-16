@@ -1,11 +1,36 @@
 import { useCallback, useEffect, useState } from 'react';
 import AuthActionCard from '../components/AuthActionCard';
 import { getSessions, revokeAllSessions, revokeSession } from '../services/authService';
-import { Laptop, Smartphone, Monitor, ShieldAlert, Trash2, LogOut } from 'lucide-react';
+import { Laptop, Smartphone, Monitor, ShieldAlert, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function SessionsPage() {
+const browserName = (userAgent = '') => {
+  if (/Edg\//i.test(userAgent)) return 'Edge';
+  if (/Chrome\//i.test(userAgent)) return 'Chrome';
+  if (/Firefox\//i.test(userAgent)) return 'Firefox';
+  if (/Safari\//i.test(userAgent) && !/Chrome\//i.test(userAgent)) return 'Safari';
+  return 'Trình duyệt';
+};
+
+const operatingSystem = (userAgent = '') => {
+  if (/Windows/i.test(userAgent)) return 'Windows';
+  if (/Android/i.test(userAgent)) return 'Android';
+  if (/iPhone|iPad|iOS/i.test(userAgent)) return 'iOS';
+  if (/Mac OS|Macintosh/i.test(userAgent)) return 'macOS';
+  if (/Linux/i.test(userAgent)) return 'Linux';
+  return 'thiết bị không xác định';
+};
+
+const maskedIp = (value = '') => {
+  if (!value) return 'IP được bảo vệ';
+  if (value === '127.0.0.1' || value === '::1' || value.startsWith('0:0:0:0:0:0:0:1')) return 'Mạng nội bộ';
+  if (value.includes(':')) return `${value.split(':').slice(0, 2).join(':')}:••••`;
+  const parts = value.split('.');
+  return parts.length === 4 ? `${parts[0]}.${parts[1]}.xxx.${parts[3]}` : 'IP được bảo vệ';
+};
+
+export default function SessionsPage({ embedded = false }) {
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -62,7 +87,7 @@ export default function SessionsPage() {
   };
 
   return (
-    <AuthActionCard title="Thiết bị đăng nhập" subtitle="Quản lý và thu hồi các thiết bị đang truy cập vào tài khoản của bạn.">
+    <AuthActionCard embedded={embedded} title="Các thiết bị đang hoạt động" subtitle="Nếu không nhận ra thiết bị nào, hãy đăng xuất thiết bị đó và đổi mật khẩu ngay.">
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-950/50 p-3 border border-red-900/50">
           <ShieldAlert size={16} className="text-red-500 mt-0.5" />
@@ -105,20 +130,23 @@ export default function SessionsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="truncate font-bold text-sm text-zinc-100">
-                      {session.deviceName || session.userAgent?.split(' ')[0] || 'Thiết bị không xác định'}
+                      {session.deviceName && !/^Mozilla\//i.test(session.deviceName)
+                        ? session.deviceName
+                        : `${browserName(session.userAgent || session.deviceName)} trên ${operatingSystem(session.userAgent || session.deviceName)}`}
+                      {(session.current || session.currentSession || session.isCurrent) && <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black text-emerald-400">Thiết bị này</span>}
                     </p>
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
-                      <span className="font-mono bg-zinc-900 px-1.5 py-0.5 rounded">{session.ipAddress || 'IP không xác định'}</span>
+                      <span className="font-mono bg-zinc-900 px-1.5 py-0.5 rounded">{maskedIp(session.ipAddress)}</span>
                       <span>·</span>
                       <span>{session.lastActiveAt ? new Date(session.lastActiveAt).toLocaleString('vi-VN') : 'Mới đây'}</span>
                     </div>
                   </div>
                   <button 
                     onClick={() => setPendingAction({ id: session.id, label: session.deviceName || 'thiết bị này' })}
-                    className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                    title="Thu hồi phiên"
+                    className="rounded-lg border border-red-500/20 px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    title="Đăng xuất thiết bị"
                   >
-                    <Trash2 size={18} />
+                    Đăng xuất
                   </button>
                 </article>
               ))}

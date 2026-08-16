@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
-  KeyRound,
+  Award,
+  Gift,
+  LayoutDashboard,
   LogOut,
-  Mail,
   Menu,
   Search,
+  ShieldCheck,
   Star,
-  User,
+  Ticket,
   X
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -16,6 +18,8 @@ import { resolvePostLoginPath } from '@/features/auth/utils/loginRedirect';
 import { getCinemas } from '@/features/catalog/customer/services/movieService';
 import CustomerNotificationBell from '@/features/notifications/customer/components/CustomerNotificationBell';
 import { getOptimizedImageUrl } from '@/utils/imageOptimization';
+import scoreCustomerService from '@/features/score/customer/services/scoreCustomerService';
+import queryCache from '@/utils/queryCache';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 const resolveMediaUrl = value => value?.startsWith('/') ? `${apiBaseUrl}${value}` : value;
@@ -85,6 +89,7 @@ export default function Header() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const headerRef = useRef(null);
+  const profileMenuRef = useRef(null);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -94,6 +99,7 @@ export default function Header() {
   const [cinemas, setCinemas] = useState([]);
   const [cinemaMenuLoading, setCinemaMenuLoading] = useState(true);
   const [cinemaMenuError, setCinemaMenuError] = useState('');
+  const [headerScore, setHeaderScore] = useState(null);
 
   const normalizedRole = (userRole || '').replace(/^ROLE_/, '');
   const isCustomer = normalizedRole === 'CUSTOMER';
@@ -150,6 +156,34 @@ export default function Header() {
     loadCinemaMenu();
   }, [loadCinemaMenu]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !isCustomer) {
+      return undefined;
+    }
+    let active = true;
+    queryCache.fetchQuery(
+      'customer-score-balance',
+      () => scoreCustomerService.getScoreBalance(),
+      { staleTime: 30000 }
+    )
+      .then(response => {
+        if (active) setHeaderScore(response?.data || null);
+      })
+      .catch(() => {
+        if (active) setHeaderScore(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, isCustomer, user?.id]);
+
+  useEffect(() => {
+    if (!profileDropdownOpen) return;
+    window.requestAnimationFrame(() => {
+      profileMenuRef.current?.querySelector('[role="menuitem"]')?.focus();
+    });
+  }, [profileDropdownOpen]);
+
   const closeNavigation = () => {
     setActiveDropdown(null);
     setMobileMenuOpen(false);
@@ -191,6 +225,17 @@ export default function Header() {
     setProfileDropdownOpen(false);
     setActiveDropdown(current => (current === id ? null : id));
   };
+
+  const openDropdown = id => {
+    setProfileDropdownOpen(false);
+    setActiveDropdown(id);
+  };
+
+  const headerTier = String(headerScore?.currentTier?.tierName || 'Thành viên')
+    .replace(/\b(vip|member|membership)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Thành viên';
+  const headerPoints = Number(headerScore?.currentPoints || 0);
 
   return (
     <>
@@ -254,7 +299,7 @@ export default function Header() {
               label="Phim"
               isOpen={activeDropdown === 'movies'}
               isActive={pathname.startsWith('/movies')}
-              onOpen={setActiveDropdown}
+              onOpen={openDropdown}
               onClose={() => setActiveDropdown(null)}
               onToggle={toggleDropdown}
             >
@@ -281,7 +326,7 @@ export default function Header() {
               label="Góc Điện Ảnh"
               isOpen={activeDropdown === 'cinema-corner'}
               isActive={false}
-              onOpen={setActiveDropdown}
+              onOpen={openDropdown}
               onClose={() => setActiveDropdown(null)}
               onToggle={toggleDropdown}
             >
@@ -311,7 +356,7 @@ export default function Header() {
               label="Rạp/Giá Vé"
               isOpen={activeDropdown === 'cinemas'}
               isActive={pathname.startsWith('/cinema/')}
-              onOpen={setActiveDropdown}
+              onOpen={openDropdown}
               onClose={() => setActiveDropdown(null)}
               onToggle={toggleDropdown}
             >
@@ -418,32 +463,43 @@ export default function Header() {
 
                   {profileDropdownOpen && (
                     <div className="absolute right-0 top-full w-64 pt-3">
-                      <div id="profile-menu" className={dropdownPanelClass}>
+                      <div id="profile-menu" ref={profileMenuRef} role="menu" aria-label="Tài khoản của tôi" className={dropdownPanelClass}>
                         <div className="mb-1 border-b border-zinc-800 px-3 pb-3 pt-1">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                            Tài khoản
+                            Tài khoản của tôi
                           </p>
                           <p className="truncate text-sm font-bold text-white">{user?.fullName}</p>
-                          <p className="text-[10px] font-semibold uppercase text-brand-orange">
-                            {normalizedRole}
-                          </p>
+                          {isCustomer ? (
+                            <p className="mt-1 text-[11px] font-semibold text-zinc-400">
+                              <span className="text-brand-orange">{headerTier}</span> · {headerScore ? `${headerPoints.toLocaleString('vi-VN')} điểm` : 'Đang tải điểm'}
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-[11px] font-semibold text-brand-orange">Tài khoản quản lý</p>
+                          )}
                         </div>
 
                         {isCustomer ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setProfileDropdownOpen(false);
-                              navigate('/profile');
-                            }}
-                            className={dropdownItemClass}
-                          >
-                            <User aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
-                            Hồ sơ cá nhân
-                          </button>
+                          <>
+                            <button type="button" role="menuitem" onClick={() => { setProfileDropdownOpen(false); navigate('/account'); }} className={dropdownItemClass}>
+                              <LayoutDashboard aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" /> Tài khoản của tôi
+                            </button>
+                            <button type="button" role="menuitem" onClick={() => { setProfileDropdownOpen(false); navigate('/account/tickets'); }} className={dropdownItemClass}>
+                              <Ticket aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" /> Vé của tôi
+                            </button>
+                            <button type="button" role="menuitem" onClick={() => { setProfileDropdownOpen(false); navigate('/account/offers'); }} className={dropdownItemClass}>
+                              <Gift aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" /> Ưu đãi của tôi
+                            </button>
+                            <button type="button" role="menuitem" onClick={() => { setProfileDropdownOpen(false); navigate('/account/loyalty'); }} className={dropdownItemClass}>
+                              <Award aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" /> Điểm & hạng thành viên
+                            </button>
+                            <button type="button" role="menuitem" onClick={() => { setProfileDropdownOpen(false); navigate('/account/security'); }} className={dropdownItemClass}>
+                              <ShieldCheck aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" /> Bảo mật tài khoản
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"
+                            role="menuitem"
                             onClick={() => {
                               setProfileDropdownOpen(false);
                               navigate(managementPath);
@@ -456,39 +512,7 @@ export default function Header() {
 
                         <button
                           type="button"
-                          onClick={() => {
-                            setProfileDropdownOpen(false);
-                            navigate('/change-email');
-                          }}
-                          className={dropdownItemClass}
-                        >
-                          <Mail aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
-                          Thay đổi email
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProfileDropdownOpen(false);
-                            navigate('/change-password');
-                          }}
-                          className={dropdownItemClass}
-                        >
-                          <KeyRound aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
-                          Đổi mật khẩu
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProfileDropdownOpen(false);
-                            navigate('/sessions');
-                          }}
-                          className={dropdownItemClass}
-                        >
-                          <KeyRound aria-hidden="true" className="mr-2 h-4 w-4 text-zinc-500" />
-                          Phiên đăng nhập
-                        </button>
-                        <button
-                          type="button"
+                          role="menuitem"
                           onClick={handleLogoutClick}
                           className={`${dropdownItemClass} mt-1 border-t border-zinc-800 text-red-400 hover:bg-red-950/30 hover:text-red-300`}
                         >

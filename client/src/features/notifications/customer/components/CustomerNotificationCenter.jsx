@@ -82,10 +82,22 @@ const copyToClipboard = async value => {
   input.remove();
 };
 
-function TicketDetails({ data }) {
+function TicketDetails({ data, compact = false }) {
   const seats = asList(data?.seatNames);
   const ticketCodes = asList(data?.ticketCodes);
   const foodItems = asList(data?.foodItems);
+
+  if (compact) {
+    return (
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-zinc-400">
+        <span>{data?.movieTitle || 'Thông tin vé đang được cập nhật'}</span>
+        {seats.length > 0 && <span>· Ghế {seats.join(', ')}</span>}
+        {Number.isFinite(Number(data?.totalPaid ?? data?.totalAmount)) && <span>· {formatCurrency(data?.totalPaid ?? data?.totalAmount, data?.currency)}</span>}
+        {foodItems.length > 0 && <span>· {foodItems.map(item => `${item?.name || 'Bắp nước'} ×${item?.quantity || 1}`).join(', ')}</span>}
+        {data?.bookingCode && <span className="font-mono text-[10px] text-zinc-600">{data.bookingCode}</span>}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4 overflow-hidden rounded-2xl border border-amber-500/15 bg-zinc-950/70">
@@ -176,7 +188,7 @@ function NotificationCard({ item, onOpen }) {
 
   return (
     <article
-      className={`w-full rounded-2xl border p-4 transition-all sm:p-5 ${
+      className={`w-full rounded-xl border p-4 transition-all ${
         unread
           ? 'border-amber-500/25 bg-amber-500/[0.04] hover:border-amber-500/40'
           : 'border-zinc-800 bg-zinc-950/30 hover:border-zinc-700'
@@ -199,13 +211,13 @@ function NotificationCard({ item, onOpen }) {
                 <h4 className={`text-sm ${unread ? 'font-black text-white' : 'font-bold text-zinc-300'}`}>
                   {item.title}
                 </h4>
-                <p className="mt-1 text-xs leading-5 text-zinc-500">{item.body}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{item.body}</p>
+                {ticket && <TicketDetails data={item.data || {}} compact />}
               </div>
               {unread && (
                 <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-orange" />
               )}
             </div>
-            {ticket && <TicketDetails data={item.data || {}} />}
           </div>
         </div>
       </button>

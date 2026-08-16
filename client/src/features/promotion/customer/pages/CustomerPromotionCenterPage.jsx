@@ -36,9 +36,9 @@ const contentOf = (payload) =>
   Array.isArray(payload) ? payload : payload?.content || [];
 
 const tabItems = [
-  { key: "system", label: "Hệ thống", icon: Globe2 },
-  { key: "event", label: "Sự kiện", icon: Gift },
-  { key: "wallet", label: "Ví voucher", icon: WalletCards },
+  { key: "wallet", label: "Có thể sử dụng", icon: WalletCards },
+  { key: "event", label: "Có thể nhận", icon: Gift },
+  { key: "system", label: "Tự động áp dụng", icon: Globe2 },
 ];
 
 const walletIdOf = (promotion) =>
@@ -77,6 +77,32 @@ const maxDiscountOf = (promotion) => {
 const minimumOrderOf = (promotion) => {
   const conditions = jsonValue(promotion?.conditionsJson);
   return conditions.minimumOrderAmount ?? conditions.minOrderAmount ?? null;
+};
+
+const looksLikeEnglishSeedCopy = (value) =>
+  /\b(welcome|save|discount|automatic|promotion|applied|order|instant|off)\b/i.test(String(value || ""));
+
+const customerPromotionTitle = (promotion) => {
+  const original = promotion?.name || "";
+  if (/welcome/i.test(original) && /10\s*%/i.test(original)) return "Chào thành viên mới – giảm 10%";
+  if (/(50\s*k|50[.,]?000)/i.test(original) && /discount|save/i.test(original)) return "Giảm ngay 50.000đ";
+  if (/combo/i.test(original) && /20\s*%/i.test(original)) return "Combo tối – giảm 20%";
+  if (!looksLikeEnglishSeedCopy(original)) return original || "Ưu đãi LoraFilm";
+  return promotion?.promotionType === "AUTO"
+    ? `Ưu đãi tự động ${voucherDiscountSummary(promotion)}`
+    : `Ưu đãi giảm ${voucherDiscountSummary(promotion)}`;
+};
+
+const customerPromotionDescription = (promotion) => {
+  const original = promotion?.description || "";
+  if (!looksLikeEnglishSeedCopy(original)) return original;
+  const minimum = minimumOrderOf(promotion);
+  if (promotion?.promotionType === "AUTO") {
+    return "Tự động áp dụng khi đơn hàng đáp ứng đủ điều kiện.";
+  }
+  return Number(minimum) > 0
+    ? `Giảm ${voucherDiscountSummary(promotion)} cho đơn từ ${currency(minimum)}.`
+    : "Ưu đãi dành riêng cho thành viên LoraFilm.";
 };
 
 const dayLabels = {
@@ -261,15 +287,15 @@ function PromotionCard({
       }}
       className={`grid gap-4 border-b border-zinc-800 py-5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
         onOpenDetail
-          ? "cursor-pointer rounded-lg px-3 transition-colors hover:bg-zinc-900/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
+          ? "cursor-pointer rounded-lg px-3 transition-colors hover:bg-zinc-900/70 focus:outline-none focus:ring-2 focus:ring-brand-orange/60"
           : ""
       }`}
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <TicketPercent className="h-4 w-4 text-emerald-400" />
+          <TicketPercent className="h-4 w-4 text-brand-orange" />
           <h3 className="break-words text-sm font-black text-white">
-            {promotion.name || "Ưu đãi LoraFilm"}
+            {customerPromotionTitle(promotion)}
           </h3>
           {recommended && (
             <span className="rounded border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-black text-amber-200">
@@ -290,12 +316,12 @@ function PromotionCard({
             {promotion.code}
           </p>
         )}
-        <p className="mt-2 text-base font-black text-emerald-400">
+        <p className="mt-2 text-base font-black text-brand-orange">
           {voucherDiscountSummary(promotion)}
         </p>
-        {promotion.description && (
+        {customerPromotionDescription(promotion) && (
           <p className="mt-1 text-xs leading-5 text-zinc-400">
-            {promotion.description}
+            {customerPromotionDescription(promotion)}
           </p>
         )}
         <p className="mt-2 text-[11px] leading-5 text-zinc-500">
@@ -317,7 +343,7 @@ function PromotionCard({
             event.stopPropagation();
             onClaim(promotion.promotionPublicId || promotion.publicId);
           }}
-          className="inline-flex h-9 min-w-32 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 text-xs font-black text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+          className="inline-flex h-9 min-w-32 items-center justify-center gap-2 rounded-lg bg-brand-orange px-3 text-xs font-black text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -328,7 +354,7 @@ function PromotionCard({
         </button>
       ) : system ? (
         <span className="inline-flex h-9 items-center gap-2 self-center rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-bold text-sky-200">
-          <Globe2 className="h-4 w-4" /> Chọn tại checkout
+          <Globe2 className="h-4 w-4" /> Chọn khi thanh toán
         </span>
       ) : (
         <span className="inline-flex h-9 items-center gap-2 self-center rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-300">
@@ -388,18 +414,18 @@ function VoucherDetailModal({
       >
         <header className="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-400">
+            <span className="rounded-lg bg-brand-orange/10 p-2.5 text-brand-orange">
               <TicketPercent className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase text-emerald-400">
+              <p className="text-[10px] font-black uppercase text-brand-orange">
                 Chi tiết voucher
               </p>
               <h2
                 id="voucher-detail-title"
                 className="mt-1 break-words text-lg font-black text-white"
               >
-                {detail?.name || "Voucher LoraFilm"}
+                {customerPromotionTitle(detail)}
               </h2>
             </div>
           </div>
@@ -430,7 +456,7 @@ function VoucherDetailModal({
               <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-xs font-black text-zinc-950 hover:bg-emerald-400"
+                className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-brand-orange px-4 text-xs font-black text-white hover:bg-orange-600"
               >
                 <RefreshCw className="h-4 w-4" /> Thử lại
               </button>
@@ -447,9 +473,9 @@ function VoucherDetailModal({
             </div>
           ) : (
             <div className="space-y-5">
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+              <div className="rounded-lg border border-brand-orange/20 bg-brand-orange/[0.06] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-2xl font-black text-emerald-300">
+                  <p className="text-2xl font-black text-brand-orange">
                     {voucherDiscountSummary(detail)}
                   </p>
                   <span
@@ -499,13 +525,13 @@ function VoucherDetailModal({
                 />
               </div>
 
-              {detail.description && (
+              {customerPromotionDescription(detail) && (
                 <section className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
                   <h3 className="flex items-center gap-2 text-xs font-black uppercase text-zinc-400">
                     <ReceiptText className="h-4 w-4" /> Hướng dẫn
                   </h3>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    {detail.description}
+                    {customerPromotionDescription(detail)}
                   </p>
                 </section>
               )}
@@ -539,7 +565,7 @@ function VoucherDetailModal({
             <button
               type="button"
               onClick={onUseNow}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-500 px-4 text-xs font-black text-zinc-950 hover:bg-emerald-400"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-xs font-black text-white hover:bg-orange-600"
             >
               <ShoppingCart className="h-4 w-4" /> Dùng ngay
             </button>
@@ -723,11 +749,11 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
       {!embedded && (
         <header className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-800 pb-6">
           <div>
-            <div className="flex items-center gap-2 text-xs font-black uppercase text-emerald-400">
+            <div className="flex items-center gap-2 text-xs font-black uppercase text-brand-orange">
               <WalletCards className="h-4 w-4" /> Ví ưu đãi
             </div>
             <h1 className="mt-2 text-2xl font-black text-white sm:text-3xl">
-              Khuyến mãi của bạn
+              Ưu đãi của tôi
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
               Nhận voucher sự kiện, quản lý ưu đãi cá nhân và kiểm tra nguồn
@@ -755,7 +781,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`flex min-h-12 items-center justify-center gap-2 border-b-2 px-2 py-3 text-xs font-bold ${tab === key ? "border-emerald-500 text-white" : "border-transparent text-zinc-500 hover:bg-zinc-900/60 hover:text-zinc-200"}`}
+            className={`flex min-h-12 items-center justify-center gap-2 border-b-2 px-2 py-3 text-xs font-bold ${tab === key ? "border-brand-orange text-brand-orange" : "border-transparent text-zinc-500 hover:bg-zinc-900/60 hover:text-zinc-200"}`}
           >
             <Icon className="h-4 w-4" /> {label}
             {counts[key] !== undefined ? ` (${counts[key]})` : ""}
@@ -790,9 +816,8 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-sky-500/20 bg-sky-500/[0.05] px-3 py-2 text-xs leading-5 text-sky-100">
           <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
           <span>
-            Voucher hệ thống không thuộc ví cá nhân. Bạn có thể chọn voucher phù
-            hợp ở bước checkout, hệ thống sẽ kiểm tra điều kiện trước khi giảm
-            giá.
+            Những ưu đãi này được tự động kiểm tra và áp dụng khi đơn hàng của
+            bạn đáp ứng đủ điều kiện.
           </span>
         </div>
       )}
@@ -807,10 +832,10 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
             <Gift className="h-8 w-8 text-zinc-700" />
             <p className="mt-3 text-sm font-black text-zinc-300">
               {tab === "event"
-                ? "Chưa có voucher sự kiện mới"
+                ? "Chưa có ưu đãi mới để nhận"
                 : tab === "system"
-                  ? "Chưa có ưu đãi hệ thống đang chạy"
-                  : "Ví voucher cá nhân đang trống"}
+                  ? "Chưa có ưu đãi tự động đang áp dụng"
+                  : "Bạn chưa có voucher có thể sử dụng"}
             </p>
             <p className="mt-1 text-xs text-zinc-600">
               Các ưu đãi hợp lệ sẽ xuất hiện tại đây.

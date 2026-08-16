@@ -24,6 +24,7 @@ export default function CustomerBookingHistory() {
   const [toDate, setToDate] = useState('');
   const [sortField, setSortField] = useState('createdAt'); // 'createdAt', 'totalAmount'
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc', 'desc'
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const [bookingPage, setBookingPage] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -102,6 +103,10 @@ export default function CustomerBookingHistory() {
     return (val || 0).toLocaleString('vi-VN') + 'đ';
   };
 
+  const customerAuditoriumName = (value) => String(value || '')
+    .replace(/^Screen\s*/i, 'Phòng ')
+    .replace(/\bStandard\b/gi, 'Tiêu chuẩn');
+
   const getStatusBadgeStyle = (bStatus) => {
     switch (bStatus) {
       case 'CONFIRMED':
@@ -164,7 +169,7 @@ export default function CustomerBookingHistory() {
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-500">
             <SlidersHorizontal className="h-3.5 w-3.5 text-brand-orange" />
-            Trạng thái giao dịch
+            Trạng thái đơn hàng
           </div>
           <div className="flex w-full gap-2 overflow-x-auto py-1 scrollbar-none">
             {['ALL', 'PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'].map(tab => (
@@ -186,13 +191,13 @@ export default function CustomerBookingHistory() {
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
           <div className="flex flex-wrap items-end gap-3">
-            <label className="min-w-[230px] flex-[2_1_280px] space-y-1.5">
+            <label className="min-w-[230px] flex-[2_1_420px] space-y-1.5">
               <span className="block text-[10px] font-bold text-zinc-500">Tìm theo mã đơn hoặc tên phim</span>
               <span className="relative block">
                 <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
                 <input
                   type="search"
-                  placeholder="Ví dụ: LORAFILM-... hoặc tên phim"
+                  placeholder="Tìm mã đơn hoặc tên phim"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 pl-9 pr-4 text-xs text-zinc-200 outline-none transition-colors placeholder:text-zinc-650 focus:border-brand-orange"
@@ -200,7 +205,16 @@ export default function CustomerBookingHistory() {
               </span>
             </label>
 
-            <label className="min-w-[145px] flex-[1_1_160px] space-y-1.5">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters(value => !value)}
+              aria-expanded={showAdvancedFilters}
+              className={`flex h-10 min-w-[110px] items-center justify-center gap-2 rounded-xl border px-4 text-xs font-bold transition-colors ${showAdvancedFilters ? 'border-brand-orange/40 bg-brand-orange/10 text-brand-orange' : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'}`}
+            >
+              <SlidersHorizontal className="h-4 w-4" /> Bộ lọc
+            </button>
+
+            <label className={`${showAdvancedFilters ? 'block' : 'hidden'} min-w-[145px] flex-[1_1_160px] space-y-1.5`}>
               <span className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500">
                 <CalendarDays className="h-3 w-3" />
                 Từ ngày
@@ -214,7 +228,7 @@ export default function CustomerBookingHistory() {
               />
             </label>
 
-            <label className="min-w-[145px] flex-[1_1_160px] space-y-1.5">
+            <label className={`${showAdvancedFilters ? 'block' : 'hidden'} min-w-[145px] flex-[1_1_160px] space-y-1.5`}>
               <span className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500">
                 <CalendarDays className="h-3 w-3" />
                 Đến ngày
@@ -228,7 +242,7 @@ export default function CustomerBookingHistory() {
               />
             </label>
 
-            <label className="min-w-[190px] flex-[1.4_1_210px] space-y-1.5">
+            <label className={`${showAdvancedFilters ? 'block' : 'hidden'} min-w-[190px] flex-[1.4_1_210px] space-y-1.5`}>
               <span className="block text-[10px] font-bold text-zinc-500">Sắp xếp danh sách</span>
               <select
                 value={sortField}
@@ -243,7 +257,7 @@ export default function CustomerBookingHistory() {
             <button
               type="button"
               onClick={() => { setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc'); setPage(0); }}
-              className="flex h-10 min-w-[116px] items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-[10px] font-bold text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+              className={`${showAdvancedFilters ? 'flex' : 'hidden'} h-10 min-w-[116px] items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-[10px] font-bold text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white`}
               aria-label="Đổi chiều sắp xếp"
               title="Đổi chiều sắp xếp"
             >
@@ -256,7 +270,7 @@ export default function CustomerBookingHistory() {
 
       {loading ? (
         /* Loading states skeletons */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-4">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="bg-zinc-900/40 border border-zinc-850 rounded-3xl p-6 h-48 animate-pulse space-y-4">
               <div className="h-4 bg-zinc-800 rounded w-1/3"></div>
@@ -273,7 +287,7 @@ export default function CustomerBookingHistory() {
       ) : filteredBookings.length > 0 ? (
         /* Bookings Grid list */
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-4">
             {filteredBookings.map(b => {
               const bookingStatus = b.bookingStatus || b.status;
               const publicId = b.publicId || b.id;
@@ -299,11 +313,11 @@ export default function CustomerBookingHistory() {
               return (
                 <div
                   key={b.publicId || b.id}
-                  className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-750 transition-all rounded-3xl p-5 flex flex-col justify-between space-y-4 shadow-xl"
+                  className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xl"
                 >
                   <div className="flex flex-col sm:flex-row gap-4">
                     {/* Poster Placeholder */}
-                    <div className="relative w-full sm:w-24 h-32 sm:h-auto bg-zinc-800 rounded-xl overflow-hidden shrink-0 flex items-center justify-center border border-zinc-750">
+                    <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800 sm:h-36 sm:w-24">
                       <Film className="w-8 h-8 text-zinc-600" />
                       {posterUrl && (
                         <img
@@ -336,7 +350,7 @@ export default function CustomerBookingHistory() {
                         <div className="flex items-center gap-1.5">
                           <span className="text-zinc-500 w-16">Rạp:</span>
                           <span className="text-zinc-300">
-                            {[cinemaName, auditoriumName].filter(Boolean).join(' · ') || 'Chưa có thông tin'}
+                            {[cinemaName, customerAuditoriumName(auditoriumName)].filter(Boolean).join(' · ') || 'Chưa có thông tin'}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">

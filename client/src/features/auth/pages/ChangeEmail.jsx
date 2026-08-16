@@ -6,10 +6,13 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function ChangeEmail() {
+export default function ChangeEmail({ embedded = false }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, account } = useAuth();
+  const { logout, user, email } = useAuth();
+  const currentEmail = email || user?.email || '';
+  const googleOnly = user?.hasPassword === false
+    || String(user?.authProvider || user?.provider || '').toUpperCase() === 'GOOGLE';
   
   const [step, setStep] = useState('STEP_REQUEST'); // 'STEP_REQUEST' or 'STEP_VERIFY'
   const [form, setForm] = useState({ newEmail: location.state?.newEmail || '', password: '', otp: '' });
@@ -23,7 +26,7 @@ export default function ChangeEmail() {
       setFeedback({ error: 'Vui lòng nhập địa chỉ email hợp lệ.', success: '' });
       return;
     }
-    if (!form.password) {
+    if (!googleOnly && !form.password) {
       setFeedback({ error: 'Vui lòng nhập mật khẩu hiện tại.', success: '' });
       return;
     }
@@ -34,7 +37,7 @@ export default function ChangeEmail() {
       await requestChangeEmail(newEmail, form.password);
       setFeedback({
         error: '',
-        success: `Mã OTP đã được gửi đến email hiện tại (${account?.email}). Vui lòng kiểm tra hộp thư.`
+        success: `Mã OTP đã được gửi đến email hiện tại (${currentEmail}). Vui lòng kiểm tra hộp thư.`
       });
       setStep('STEP_VERIFY');
     } catch (reason) {
@@ -79,11 +82,17 @@ export default function ChangeEmail() {
 
   return (
     <AuthActionCard
-      title="Thay đổi email"
+      embedded={embedded}
+      title="Xác minh email mới"
       subtitle={step === 'STEP_REQUEST' ? "Email mới sẽ trở thành định danh đăng nhập của tài khoản." : "Xác thực yêu cầu thay đổi email."}
     >
       {step === 'STEP_REQUEST' ? (
         <form onSubmit={submitRequest} className="space-y-4" noValidate>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+            <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Email hiện tại</p>
+            <p className="mt-1 break-words text-sm font-bold text-white">{currentEmail}</p>
+            <p className="mt-1 text-xs font-bold text-emerald-400">Đã xác minh</p>
+          </div>
           <div>
             <label htmlFor="new-email" className="mb-1.5 block text-xs font-bold text-zinc-400">
               Email mới
@@ -99,7 +108,7 @@ export default function ChangeEmail() {
               required
             />
           </div>
-          <div>
+          {!googleOnly && <div>
             <label htmlFor="change-email-password" className="mb-1.5 block text-xs font-bold text-zinc-400">
               Mật khẩu hiện tại
             </label>
@@ -113,7 +122,12 @@ export default function ChangeEmail() {
               disabled={loading}
               required
             />
-          </div>
+          </div>}
+          {googleOnly && (
+            <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.06] p-4 text-sm leading-6 text-sky-100">
+              Tài khoản này đăng nhập bằng Google. LoraFilm sẽ yêu cầu bạn xác minh lại với Google trước khi đổi email.
+            </div>
+          )}
           {feedback.error && (
             <p role="alert" className="rounded-xl border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
               {feedback.error}
@@ -126,16 +140,16 @@ export default function ChangeEmail() {
           )}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || googleOnly}
             className="w-full rounded-xl bg-orange-500 py-3 font-black text-zinc-950 hover:bg-brand-orange transition-colors disabled:opacity-60"
           >
-            {loading ? 'Đang gửi...' : 'Gửi mã xác nhận'}
+            {googleOnly ? 'Xác minh với Google' : loading ? 'Đang gửi...' : 'Gửi mã xác nhận'}
           </button>
         </form>
       ) : (
         <form onSubmit={submitVerify} className="space-y-4" noValidate>
           <div className="text-sm text-zinc-300 mb-4">
-            Mã xác nhận (OTP) đã được gửi đến địa chỉ email hiện tại của bạn <span className="font-bold text-brand-orange">{account?.email}</span>. Vui lòng kiểm tra hộp thư (bao gồm cả mục Spam) và nhập mã vào bên dưới để tiếp tục.
+            Mã xác nhận (OTP) đã được gửi đến địa chỉ email hiện tại của bạn <span className="font-bold text-brand-orange">{currentEmail}</span>. Vui lòng kiểm tra hộp thư (bao gồm cả mục Spam) và nhập mã vào bên dưới để tiếp tục.
           </div>
           <div>
             <label htmlFor="otp" className="mb-1.5 block text-xs font-bold text-zinc-400">

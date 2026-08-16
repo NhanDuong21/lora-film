@@ -25,6 +25,17 @@ const pageTitle = pathname => {
   if (path === '/change-password') return 'Đổi mật khẩu';
   if (path === '/change-email') return 'Đổi email đăng nhập';
   if (path === '/sessions') return 'Phiên đăng nhập';
+  if (path === '/account') return 'Tổng quan tài khoản';
+  if (path === '/account/tickets') return 'Vé & đơn hàng';
+  if (path === '/account/offers') return 'Ưu đãi của tôi';
+  if (path === '/account/loyalty') return 'Điểm & hạng thành viên';
+  if (path === '/account/notifications') return 'Thông báo';
+  if (path === '/account/profile') return 'Hồ sơ cá nhân';
+  if (path === '/account/security/email') return 'Đổi email đăng nhập';
+  if (path === '/account/security/password') return 'Đổi mật khẩu';
+  if (path === '/account/security/devices') return 'Thiết bị đăng nhập';
+  if (path === '/account/security') return 'Bảo mật & đăng nhập';
+  if (path === '/account/help') return 'Trung tâm trợ giúp';
 
   if (/^\/(movies|movie)\/[^/]+/.test(path)) return 'Chi tiết phim';
   if (path === '/movies') return 'Khám phá phim';

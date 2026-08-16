@@ -7,7 +7,7 @@ const footerLinks = {
     { label: 'Chọn suất chiếu', to: '/booking' },
     { label: 'Hệ thống rạp', to: '/#rap' },
     { label: 'Ưu đãi thành viên', to: '/promotions' },
-    { label: 'Lịch sử đặt vé', to: '/bookings' },
+    { label: 'Vé & đơn hàng', to: '/account/tickets' },
   ],
   support: [
     { label: 'Hướng dẫn thanh toán', to: '/support/payment' },

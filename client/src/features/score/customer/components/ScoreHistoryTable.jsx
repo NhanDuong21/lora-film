@@ -26,15 +26,65 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
           </span>
         );
       case 'REFUND_REDEEM':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-xs font-bold text-sky-400 border border-sky-500/20">
+            <RefreshCcw className="h-3.5 w-3.5" />
+            Hoàn điểm
+          </span>
+        );
+      case 'HOLD':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-xs font-bold text-sky-400 border border-sky-500/20">
+            <RefreshCcw className="h-3.5 w-3.5" />
+            Tạm giữ điểm
+          </span>
+        );
+      case 'COMMIT':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-400 border border-amber-500/20">
+            <ArrowDownLeft className="h-3.5 w-3.5" />
+            Đã dùng điểm
+          </span>
+        );
+      case 'RELEASE':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2.5 py-1 text-xs font-bold text-sky-400 border border-sky-500/20">
+            <RefreshCcw className="h-3.5 w-3.5" />
+            Hoàn điểm tạm giữ
+          </span>
+        );
+      case 'EXPIRE':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2.5 py-1 text-xs font-bold text-zinc-400 border border-zinc-700">
+            <RefreshCcw className="h-3.5 w-3.5" />
+            Điểm hết hạn
+          </span>
+        );
       case 'REVOKE_EARN':
       case 'MANUAL_ADJUSTMENT':
       default:
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-bold text-blue-400 border border-blue-500/20">
             <RefreshCcw className="h-3.5 w-3.5" />
-            {type}
+            Điều chỉnh điểm
           </span>
         );
+    }
+  };
+
+  const customerDescription = item => {
+    const booking = item.bookingId ? ` cho đơn #BK${item.bookingId}` : '';
+    switch (item.transactionType) {
+      case 'EARN': return `Tích điểm từ đơn hàng${booking}`;
+      case 'REDEEM':
+      case 'COMMIT': return `Dùng điểm thanh toán${booking}`;
+      case 'HOLD': return `Tạm giữ điểm${booking}`;
+      case 'RELEASE': return `Hoàn điểm tạm giữ${booking}`;
+      case 'REFUND_REDEEM': return `Hoàn điểm từ giao dịch${booking}`;
+      case 'REVOKE_EARN': return `Điều chỉnh điểm từ đơn hoàn hoặc hủy${booking}`;
+      case 'EXPIRE': return 'Điểm đã hết thời hạn sử dụng';
+      case 'MANUAL_ADJUSTMENT': return 'Điều chỉnh điểm bởi bộ phận hỗ trợ';
+      default: return 'Cập nhật số dư điểm thành viên';
     }
   };
 
@@ -151,8 +201,8 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
                     <td className="py-4 px-4 whitespace-nowrap text-right font-bold text-white tracking-wide">
                       {(item.balanceAfter ?? 0).toLocaleString('vi-VN')}
                     </td>
-                    <td className="py-4 px-4 text-zinc-400 max-w-xs truncate" title={item.description}>
-                      {item.description || '—'}
+                    <td className="py-4 px-4 text-zinc-400 max-w-xs truncate" title={customerDescription(item)}>
+                      {customerDescription(item)}
                     </td>
                   </tr>
                 );
