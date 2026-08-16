@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, CalendarDays, Clock3, Film, MapPin, Monitor, Projector, ShieldAlert, Volume2
+  Accessibility, AlertTriangle, ArrowLeft, CalendarDays, Check, Clock3, Film,
+  LoaderCircle, LockKeyhole, MapPin, Monitor, ShieldAlert, Volume2, X
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSeatLayout } from '@/features/catalog/customer/services/movieService';
-import { formatLocalClock, formatServiceDate } from '@/features/catalog/customer/utils/customerMovieFlow';
+import { formatLocalClock } from '@/features/catalog/customer/utils/customerMovieFlow';
+import {
+  formatAuditoriumLabel,
+  formatScreenTypeLabel,
+  formatVersionLabel
+} from '@/features/catalog/customer/utils/movieDetailPresentation';
 import {
   seatPresentation,
   seatTypePresentation,
@@ -42,6 +48,70 @@ import BookingStepper from '../components/BookingStepper';
 const money = value => value == null
   ? 'Chưa có giá'
   : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+
+const formatDetailedServiceDate = value => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value || '--/--';
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const formatted = new Intl.DateTimeFormat('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'UTC'
+  }).format(date);
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+};
+
+const formatSeatClock = value => {
+  const formatted = formatLocalClock(value);
+  if (formatted !== '--:--') return formatted;
+  return String(value || '').match(/^(\d{2}:\d{2})/)?.[1] || '--:--';
+};
+
+const formatShowtimeRange = (startValue, endValue) => {
+  const start = formatSeatClock(startValue);
+  if (!endValue) return start;
+  const end = formatSeatClock(endValue);
+  const startDate = String(startValue || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  const endDate = String(endValue || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  const nextDay = startDate && endDate && endDate > startDate;
+  return `${start}–${end}${nextDay ? ', ngày hôm sau' : ''}`;
+};
+
+const getShowtimePresentation = layout => {
+  const rawAuditoriumName = layout?.auditorium?.name || '';
+  const screenTypeFromName = rawAuditoriumName.match(/\b(IMAX|4DX|PREMIUM|STANDARD)\b/i)?.[1];
+  const room = formatAuditoriumLabel(rawAuditoriumName)
+    .replace(/\s*[·-]\s*(IMAX|4DX|Premium|Standard|Tiêu chuẩn)\s*$/i, '')
+    .trim();
+  const version = layout?.movieVersion || {};
+  const rawVersionName = String(version.versionName || '').trim();
+  const hasStructuredVersion = Boolean(
+    version.format
+    || version.audioLanguage
+    || version.dubLanguage
+    || version.subtitleLanguage
+  );
+  const versionLabel = hasStructuredVersion
+    ? formatVersionLabel(version)
+    : rawVersionName
+      .replace(/\b(2D|3D|IMAX|4DX)\s+(?=Phụ đề|Lồng tiếng)/i, '$1 · ')
+      .replace(/\s*[-/]\s*/g, ' · ')
+      || formatVersionLabel(version);
+  const screenType = formatScreenTypeLabel(
+    layout?.auditorium?.screenType || layout?.screenType || screenTypeFromName
+  );
+  const versionParts = [screenType, ...versionLabel.split('·')]
+    .map(part => part?.trim())
+    .filter(Boolean);
+
+  return {
+    room,
+    version: [...new Set(versionParts.map(part => part.toUpperCase()))]
+      .map(normalized => versionParts.find(part => part.toUpperCase() === normalized))
+      .join(' · ')
+  };
+};
 
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950';
 
@@ -191,7 +261,7 @@ export default function SeatSelectionPage() {
   }, [load]);
 
   const refreshAvailability = useCallback(async () => {
-    if (!showtimePublicId) return;
+    if (!showtimePublicId) return new Set();
     const availability = await getSeatAvailability(showtimePublicId);
     const occupiedIds = new Set(
       (availability?.occupiedSeats || [])
@@ -211,6 +281,7 @@ export default function SeatSelectionPage() {
       }
       : previous);
     setSelectedSeats(previous => removeUnavailableSeatUnits(previous, occupiedIds));
+    return occupiedIds;
   }, [showtimePublicId]);
 
   useEffect(() => {
@@ -326,7 +397,8 @@ export default function SeatSelectionPage() {
   // A couple seat is one visual control backed by two authoritative seat IDs.
   const handleSeatClick = (seatUnit) => {
     if (
-      !seatUnit.sellable
+      reservationLoading
+      || !seatUnit.sellable
       || seatUnit.blockedForShowtime
       || seatUnit.operationalStatus !== 'ACTIVE'
       || !seatUnit.pairValid
@@ -431,8 +503,15 @@ export default function SeatSelectionPage() {
           // Fall through to the translated modal when the recovery read also fails.
         }
       }
+      let conflictMessage = null;
       if (seatConflictErrorCodes.has(errorCode)) {
-        await refreshAvailability().catch(() => {});
+        const occupiedIds = await refreshAvailability().catch(() => new Set());
+        const conflictedSeatUnits = selectedSeatUnits.filter(seatUnit =>
+          seatUnit.seats.some(seat => occupiedIds.has(seat.publicId))
+        );
+        if (conflictedSeatUnits.length > 0) {
+          conflictMessage = `Ghế ${conflictedSeatUnits.map(seatUnit => seatUnit.seatCode).join(', ')} vừa được khách khác giữ. Vui lòng chọn vị trí khác.`;
+        }
       }
       if (
         errorCode === 'IDEMPOTENCY_PAYLOAD_CONFLICT'
@@ -441,7 +520,7 @@ export default function SeatSelectionPage() {
         clearBookingCreationAttempt(layout.showtimePublicId);
       }
       showNotice(
-        getBookingErrorMessage(
+        conflictMessage || getBookingErrorMessage(
           err,
           'Không thể giữ ghế hoặc tạo đơn hàng. Vui lòng thử lại.'
         ),
@@ -514,6 +593,22 @@ export default function SeatSelectionPage() {
   const backPath = layout.movie?.slug ? `/movies/${layout.movie.slug}` : '/movies';
   const legend = sortSeatLegend(rows.flatMap(([, seatUnits]) => seatUnits));
   const totalAmount = selectedSeats.reduce((sum, seat) => sum + (Number(seat.price) || 0), 0);
+  const maxSeats = Number(layout.maxSeatsPerBooking || 8);
+  const showtime = getShowtimePresentation(layout);
+  const selectedCodes = selectedSeatUnits.map(seatUnit => seatUnit.seatCode).join(', ');
+  const selectedTypeLabels = [...new Set(
+    selectedSeatUnits.map(seatUnit => seatTypePresentation(seatUnit.seatType).label)
+  )];
+  const onlySelectedUnit = selectedSeatUnits.length === 1 ? selectedSeatUnits[0] : null;
+  const selectedDescription = onlySelectedUnit?.isCouple
+    ? `${onlySelectedUnit.seatCode} · 1 cặp (2 vé)`
+    : selectedSeatUnits.length > 0
+      ? `${selectedCodes} · ${selectedSeats.length} ${
+        selectedTypeLabels.length === 1
+          ? selectedTypeLabels[0].replace(/^Ghế\s+/i, 'ghế ')
+          : `vé · ${selectedTypeLabels.join(', ')}`
+      }`
+      : 'Chọn ghế trên sơ đồ để tiếp tục';
 
   return (
     <main className="min-h-screen bg-zinc-950 px-4 pb-40 pt-6 text-zinc-100 sm:px-6">
@@ -535,21 +630,26 @@ export default function SeatSelectionPage() {
               </div>
             </div>
 
-            <dl className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-300">
-              <div className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-zinc-500" />
-                <dd className="font-bold">{layout.cinema?.name} · {layout.auditorium?.name}</dd>
+            <dl className="grid min-w-0 gap-1.5 text-xs text-zinc-300">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                <dd className="truncate font-bold">{layout.cinema?.name} · {showtime.room}</dd>
               </div>
-              <div className="flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 text-zinc-500" />
-                <dd className="font-bold">{formatServiceDate(layout.serviceDate)}</dd>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Monitor className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                <dd className="truncate font-bold text-zinc-200">{showtime.version}</dd>
               </div>
-              <div className="flex items-center gap-1.5">
-                <Clock3 className="h-3.5 w-3.5 text-zinc-500" />
-                <dd className="font-bold text-white">
-                  {formatLocalClock(layout.localStartTime)}
-                  {layout.localEndTime && ` – ${formatLocalClock(layout.localEndTime)}`}
-                </dd>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <div className="flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-zinc-500" />
+                  <dd className="font-bold">{formatDetailedServiceDate(layout.serviceDate)}</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock3 className="h-3.5 w-3.5 text-zinc-500" />
+                  <dd className="font-bold text-white">
+                    {formatShowtimeRange(layout.localStartTime, layout.localEndTime)}
+                  </dd>
+                </div>
               </div>
             </dl>
 
@@ -593,34 +693,44 @@ export default function SeatSelectionPage() {
         )}
 
         <section className="mb-4 rounded-2xl border border-white/10 bg-zinc-900/60 p-4" aria-labelledby="seat-legend-title">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
               <h2 id="seat-legend-title" className="text-sm font-black text-white">Chọn ghế ngồi</h2>
-              <p className="mt-1 text-xs text-zinc-500">Chọn tối đa {layout.maxSeatsPerBooking || 8} ghế · Vuốt ngang để xem toàn bộ sơ đồ</p>
+              <p className="mt-1 text-xs text-zinc-500">Màu thể hiện loại ghế; viền và biểu tượng thể hiện trạng thái.</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-400">
+              Tối đa {maxSeats} ghế
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div>
+              <p className="mb-2 text-[9px] font-black uppercase tracking-[.2em] text-zinc-500">Loại ghế</p>
+              <div className="flex flex-wrap gap-2">
               {legend.map(seat => {
                 const type = seatTypePresentation(seat.seatType);
+                const priceUnit = type.wide ? 'cặp' : type.accessible ? 'vị trí' : 'ghế';
                 return (
                   <div key={seat.seatType} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
-                    <span className={`h-5 rounded border ${type.wide ? 'w-8' : 'w-5'} ${type.className}`} aria-hidden="true" />
+                    <span className={`relative flex h-5 items-center justify-center rounded border ${type.wide ? 'w-8' : 'w-5'} ${type.className}`} aria-hidden="true">
+                      {type.accessible && <Accessibility size={12} />}
+                    </span>
                     <span className="text-[10px] font-bold text-zinc-300">
-                      {seat.seatTypeName || type.label} · {money(seat.price)}
+                      {type.label} · {money(seat.price)}/{priceUnit}
                     </span>
                   </div>
                 );
               })}
-              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
-                <span className="h-5 w-5 rounded border-2 border-brand-orange bg-white" aria-hidden="true" />
-                <span className="text-[10px] font-bold text-zinc-300">Đang chọn</span>
               </div>
-              <div className="flex items-center gap-2 rounded-lg border border-fuchsia-400/30 bg-black/20 px-2.5 py-2">
-                <span className="h-5 w-5 rounded border border-fuchsia-300 bg-fuchsia-950" aria-hidden="true" />
-                <span className="text-[10px] font-bold text-zinc-300">Đang được giữ</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
-                <span className="h-5 w-5 rounded border border-zinc-700 bg-zinc-900 opacity-60" aria-hidden="true" />
-                <span className="text-[10px] font-bold text-zinc-300">Không khả dụng</span>
+            </div>
+
+            <div>
+              <p className="mb-2 text-[9px] font-black uppercase tracking-[.2em] text-zinc-500">Trạng thái</p>
+              <div className="flex flex-wrap gap-2">
+                <SeatStatusLegend label="Còn trống" />
+                <SeatStatusLegend label="Đang chọn" state="selected" />
+                <SeatStatusLegend label="Khách khác đang giữ" state="held" />
+                <SeatStatusLegend label="Đã bán" state="booked" />
               </div>
             </div>
           </div>
@@ -677,6 +787,7 @@ export default function SeatSelectionPage() {
                       {seatUnits.map(seatUnit => {
                         const presentation = seatPresentation(seatUnit);
                         const isHeld = seatUnit.reservationStatus === 'HELD';
+                        const isBooked = seatUnit.reservationStatus === 'BOOKED';
                         const isSelected = seatUnit.seats.every(seat =>
                           selectedSeats.some(selected => selected.publicId === seat.publicId)
                         );
@@ -694,22 +805,21 @@ export default function SeatSelectionPage() {
                             key={seatUnit.key}
                             type="button"
                             onClick={() => handleSeatClick(seatUnit)}
-                            disabled={!seatUnit.sellable || seatUnit.blockedForShowtime}
+                            disabled={reservationLoading || !seatUnit.sellable || seatUnit.blockedForShowtime}
                             aria-pressed={isSelected}
                             aria-label={accessibleLabel}
                             title={accessibleLabel}
                             style={{
                               gridColumnStart: column,
-                              gridColumnEnd: `span ${seatUnit.columnSpan || 1}`
+                              gridColumnEnd: `span ${seatUnit.columnSpan || 1}`,
+                              borderColor: isSelected ? '#f97316' : undefined
                             }}
                             className={`relative h-10 min-w-0 border px-1 text-[10px] font-black shadow-inner transition-all ${
                               presentation.wide ? 'rounded-xl border-2' : 'rounded-t-lg rounded-b-xl'
+                            } ${presentation.className} ${
+                              isSelected ? 'z-10 -translate-y-0.5 ring-2 ring-brand-orange shadow-[0_0_16px_rgba(255,122,0,0.48)]' : ''
                             } ${
-                              isSelected
-                                ? 'border-brand-orange bg-white text-zinc-950 ring-2 ring-brand-orange/80 shadow-[0_0_14px_rgba(255,122,0,0.45)] scale-105'
-                                : presentation.className
-                            } ${
-                            seatUnit.sellable && !seatUnit.blockedForShowtime
+                            seatUnit.sellable && !seatUnit.blockedForShowtime && !reservationLoading
                               ? 'cursor-pointer hover:scale-105'
                               : isHeld
                                 ? 'cursor-not-allowed'
@@ -718,10 +828,21 @@ export default function SeatSelectionPage() {
                                   : 'cursor-not-allowed opacity-40'
                             }`}
                           >
-                            <span aria-hidden="true">{seatUnit.seatCode}</span>
-                            {isHeld ? (
-                              <span className="absolute -right-1 -top-1 rounded-full bg-fuchsia-950 p-0.5 text-fuchsia-200" aria-hidden="true">
-                                <Clock3 size={10} />
+                            <span className="flex items-center justify-center gap-1" aria-hidden="true">
+                              {presentation.accessible && <Accessibility size={12} />}
+                              {seatUnit.seatCode}
+                            </span>
+                            {isSelected ? (
+                              <span className="absolute -right-1.5 -top-1.5 rounded-full bg-brand-orange p-0.5 text-white shadow-lg" aria-hidden="true">
+                                <Check size={10} strokeWidth={3.5} />
+                              </span>
+                            ) : isHeld ? (
+                              <span className="absolute -right-1 -top-1 rounded-full bg-zinc-800 p-0.5 text-zinc-300" aria-hidden="true">
+                                <LockKeyhole size={10} />
+                              </span>
+                            ) : isBooked ? (
+                              <span className="absolute -right-1 -top-1 rounded-full bg-zinc-950 p-0.5 text-zinc-500" aria-hidden="true">
+                                <X size={10} strokeWidth={3} />
                               </span>
                             ) : (seatUnit.blockedForShowtime
                               || seatUnit.operationalStatus !== 'ACTIVE'
@@ -740,60 +861,49 @@ export default function SeatSelectionPage() {
                 );
               })}
             </div>
-
-            <div className="relative z-20 mt-10 flex flex-col items-center justify-center pb-2">
-              <div className="absolute -top-5 h-20 w-40 rounded-full bg-orange-500/10 blur-2xl animate-pulse" aria-hidden="true" />
-              <div className="relative flex items-center gap-2 rounded-2xl border border-orange-400/25 bg-zinc-950/95 px-4 py-2.5 shadow-[0_0_28px_rgba(249,115,22,0.16)]">
-                <Projector className="h-5 w-5 text-orange-300" aria-hidden="true" />
-                <span className="text-[10px] font-black uppercase tracking-[.22em] text-orange-200">
-                  Máy chiếu
-                </span>
-              </div>
-              <span className="mt-2 text-[9px] font-bold uppercase tracking-[.28em] text-zinc-600">
-                Hướng về màn hình
-              </span>
-            </div>
           </div>
         </section>
 
       </div>
 
       <section
-        aria-label="Ghế đã chọn và tổng tiền"
+        aria-label="Ghế đã chọn và tạm tính tiền vé"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-700/80 bg-zinc-950/95 px-4 py-3 shadow-[0_-12px_35px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:px-6"
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Ghế đã chọn</span>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-x-auto">
-              {selectedSeatUnits.length > 0 ? selectedSeatUnits.map(seatUnit => (
-                <span key={seatUnit.key} className="shrink-0 rounded-lg bg-brand-orange/15 px-2.5 py-1 text-xs font-black text-brand-orange">
-                  {seatUnit.seatCode}
-                </span>
-              )) : (
-                <span className="truncate text-xs text-zinc-500">Chọn ghế trên sơ đồ để tiếp tục</span>
-              )}
-            </div>
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="min-w-0 w-full sm:w-auto sm:flex-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
+              Đã chọn {selectedSeats.length}/{maxSeats} ghế
+            </span>
+            <p className={`mt-1 truncate text-xs ${selectedSeats.length > 0 ? 'font-bold text-zinc-200' : 'text-zinc-500'}`}>
+              {selectedDescription}
+            </p>
           </div>
 
-          <div className="shrink-0 text-right">
-            <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500">Tổng tiền</span>
+          <div className="ml-auto shrink-0 text-right sm:ml-0">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500">Tạm tính tiền vé</span>
             <span className="text-lg font-black text-white sm:text-xl">{money(totalAmount)}</span>
           </div>
 
           <button
-            aria-label="Tiếp tục"
+            aria-label={reservationLoading
+              ? 'Đang giữ ghế'
+              : selectedSeats.length > 0
+                ? 'Giữ ghế và tiếp tục'
+                : 'Chọn ghế để tiếp tục'}
             disabled={selectedSeats.length === 0 || reservationLoading}
             onClick={handleContinue}
-            className={`shrink-0 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-wider transition-all sm:px-7 ${
+            className={`min-w-[154px] shrink-0 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-wider transition-all sm:min-w-[190px] sm:px-7 ${
               selectedSeats.length > 0 && !reservationLoading
                 ? 'cursor-pointer bg-brand-orange text-white shadow-lg shadow-brand-orange/20 hover:bg-orange-600'
                 : 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500'
             }`}
           >
             {reservationLoading
-              ? 'Đang giữ ghế...'
-              : <><span className="sm:hidden">Tiếp tục</span><span className="hidden sm:inline">Tiếp tục · {money(totalAmount)}</span></>}
+              ? <span className="flex items-center justify-center gap-2"><LoaderCircle size={14} className="animate-spin" /> Đang giữ ghế...</span>
+              : selectedSeats.length > 0
+                ? 'Giữ ghế & tiếp tục'
+                : 'Chọn ghế để tiếp tục'}
           </button>
         </div>
       </section>
@@ -860,6 +970,39 @@ export default function SeatSelectionPage() {
         </div>
       )}
     </main>
+  );
+}
+
+function SeatStatusLegend({ label, state = 'available' }) {
+  const status = {
+    available: {
+      className: 'border-zinc-500 bg-zinc-800/80',
+      icon: null
+    },
+    selected: {
+      className: 'border-brand-orange bg-zinc-800 ring-2 ring-brand-orange',
+      icon: <Check size={9} strokeWidth={3.5} />
+    },
+    held: {
+      className: 'border-zinc-600 bg-zinc-800 text-zinc-400 opacity-50',
+      icon: <LockKeyhole size={9} />
+    },
+    booked: {
+      className: 'border-zinc-700 bg-zinc-900 text-zinc-600 opacity-60',
+      icon: <X size={10} strokeWidth={3} />
+    }
+  }[state];
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+      <span
+        className={`flex h-5 w-5 items-center justify-center rounded border text-white ${status.className}`}
+        aria-hidden="true"
+      >
+        {status.icon}
+      </span>
+      <span className="text-[10px] font-bold text-zinc-300">{label}</span>
+    </div>
   );
 }
 

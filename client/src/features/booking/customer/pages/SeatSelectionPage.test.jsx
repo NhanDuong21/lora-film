@@ -187,9 +187,11 @@ describe('SeatSelectionPage customer errors', () => {
 
     const coupleButton = await screen.findByRole('button', { name: /Ghế đôi I1–I2/i });
     expect(screen.getAllByRole('button', { name: /Ghế đôi I1–I2/i })).toHaveLength(1);
+    expect(screen.getByText(/Ghế đôi · 156\.000.*\/cặp/i)).toBeInTheDocument();
 
     fireEvent.click(coupleButton);
-    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+    expect(screen.getByText('I1–I2 · 1 cặp (2 vé)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Giữ ghế và tiếp tục/i }));
 
     await waitFor(() => {
       expect(createBooking).toHaveBeenCalledWith(expect.objectContaining({
@@ -234,7 +236,7 @@ describe('SeatSelectionPage customer errors', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Ghế A2/i }));
     fireEvent.click(screen.getByRole('button', { name: /Ghế A3/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Giữ ghế và tiếp tục/i }));
 
     const dialog = await screen.findByRole('alertdialog', {
       name: /Không thể để trống ghế đơn lẻ/i
@@ -270,7 +272,7 @@ describe('SeatSelectionPage customer errors', () => {
 
     expect(await screen.findByText(/Bạn đang giữ các ghế/i)).toHaveTextContent('B1, B2');
     fireEvent.click(screen.getByRole('button', { name: /Ghế A1/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Giữ ghế và tiếp tục/i }));
 
     const dialog = await screen.findByRole('alertdialog', {
       name: /Bạn đã có đơn giữ ghế/i
@@ -303,7 +305,7 @@ describe('SeatSelectionPage customer errors', () => {
 
     await screen.findByText(/Bạn đang giữ các ghế/i);
     fireEvent.click(screen.getByRole('button', { name: /Ghế A1/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Giữ ghế và tiếp tục/i }));
     const dialog = await screen.findByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: /Hủy đơn cũ để chọn lại/i }));
 
@@ -342,7 +344,7 @@ describe('SeatSelectionPage customer errors', () => {
     const seatButton = await screen.findByRole('button', { name: /Ghế A1/i });
     await waitFor(() => expect(getActiveBookingForShowtime).toHaveBeenCalledTimes(1));
     fireEvent.click(seatButton);
-    fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Giữ ghế và tiếp tục/i }));
 
     const dialog = await screen.findByRole('alertdialog', {
       name: /Bạn đã có đơn giữ ghế/i
@@ -351,5 +353,36 @@ describe('SeatSelectionPage customer errors', () => {
       .toBeInTheDocument();
     expect(within(dialog).queryByText(/already has an active Booking/i))
       .not.toBeInTheDocument();
+  });
+
+  it('keeps the customer on the map and names a seat lost during the atomic hold', async () => {
+    getSeatAvailability
+      .mockResolvedValueOnce({ maxSeatsPerBooking: 8, occupiedSeats: [] })
+      .mockResolvedValueOnce({
+        maxSeatsPerBooking: 8,
+        occupiedSeats: [{
+          seatPublicId: 'seat-public-a1',
+          status: 'HELD',
+          expiresAt: '2099-07-27T19:45:00Z'
+        }]
+      });
+    createBooking.mockRejectedValue({
+      errorCode: 'BOOKING_SEAT_CONFLICT',
+      message: 'Seat reservation conflict'
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/booking/seats?showtimeId=showtime-public-9']}>
+        <SeatSelectionPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ghế A1/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Giữ ghế và tiếp tục/i }));
+
+    const dialog = await screen.findByRole('alertdialog', { name: /Không thể giữ ghế/i });
+    expect(within(dialog).getByText(/Ghế A1 vừa được khách khác giữ/i)).toBeInTheDocument();
+    expect(createBooking).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Đã chọn 0\/8 ghế/i)).toBeInTheDocument();
   });
 });

@@ -120,7 +120,7 @@ export default function BookingSuccessPage() {
     <div className="min-h-screen bg-zinc-950 px-4 pb-16 pt-6 font-sans font-medium text-zinc-100 selection:bg-brand-orange selection:text-zinc-950 md:px-12 print:bg-white print:pt-4 print:text-black">
 
       <div className="max-w-4xl mx-auto w-full space-y-8">
-        <BookingStepper currentStep={4} />
+        <BookingStepper currentStep={4} completed />
 
         {/* Success Announcement Header */}
         <div className="text-center space-y-3 print:hidden">

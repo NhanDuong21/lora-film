@@ -1,12 +1,12 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 
-export default function BookingStepper({ currentStep = 1 }) {
+export default function BookingStepper({ currentStep = 1, completed = false }) {
   const steps = [
     { label: 'Chọn suất', desc: 'Rạp, phim và giờ chiếu' },
     { label: 'Chọn ghế', desc: 'Vị trí yêu thích' },
-    { label: 'Thanh toán', desc: 'Bắp nước không bắt buộc' },
-    { label: 'Nhận vé', desc: 'Hoàn tất đặt vé' }
+    { label: 'Bắp nước', desc: 'Không bắt buộc' },
+    { label: 'Thanh toán', desc: 'Xác nhận và thanh toán' }
   ];
 
   return (
@@ -19,16 +19,16 @@ export default function BookingStepper({ currentStep = 1 }) {
           Bước {Math.min(currentStep, steps.length)}/{steps.length}
         </span>
         <span className="text-xs font-bold text-brand-orange">
-          {steps[Math.min(currentStep, steps.length) - 1]?.label}
+          {completed ? 'Hoàn tất đặt vé' : steps[Math.min(currentStep, steps.length) - 1]?.label}
         </span>
       </div>
 
       <div className="flex items-center justify-between gap-2">
         {steps.map((step, idx) => {
           const stepNum = idx + 1;
-          const isCompleted = stepNum < currentStep;
-          const isActive = stepNum === currentStep;
-          const isPending = stepNum > currentStep;
+          const isCompleted = completed || stepNum < currentStep;
+          const isActive = !completed && stepNum === currentStep;
+          const isPending = !completed && stepNum > currentStep;
 
           return (
             <React.Fragment key={idx}>

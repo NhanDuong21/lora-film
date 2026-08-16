@@ -8,10 +8,10 @@ import {
 
 describe('customer seat presentation', () => {
   it.each([
-    ['STANDARD', 'Ghế thường', false],
+    ['STANDARD', 'Ghế tiêu chuẩn', false],
     ['VIP', 'Ghế VIP', false],
     ['COUPLE', 'Ghế đôi', true],
-    ['SUPPORT', 'Ghế hỗ trợ', false]
+    ['SUPPORT', 'Ghế hỗ trợ tiếp cận', false]
   ])('maps %s to a distinct accessible presentation', (code, label, wide) => {
     const result = seatTypePresentation(code);
     expect(result.label).toBe(label);
@@ -25,7 +25,7 @@ describe('customer seat presentation', () => {
     expect(seatStatePresentation({ priced: false, operationalStatus: 'ACTIVE' }).sellable).toBe(false);
   });
 
-  it('does not invent availability language', () => {
+  it('describes a sellable seat as available', () => {
     const result = seatPresentation({
       seatType: 'VIP',
       priced: true,
@@ -34,8 +34,24 @@ describe('customer seat presentation', () => {
       blockedForShowtime: false,
       sellable: true
     });
-    expect(result.reason).toBe('chưa xác nhận tình trạng');
-    expect(JSON.stringify(result)).not.toMatch(/AVAILABLE|HELD|BOOKED/);
+    expect(result.reason).toBe('còn trống');
+    expect(result.state).toBe('available');
+  });
+
+  it('keeps the seat type styling when another customer is holding it', () => {
+    const result = seatPresentation({
+      seatType: 'COUPLE',
+      priced: true,
+      price: 180000,
+      operationalStatus: 'ACTIVE',
+      blockedForShowtime: false,
+      reservationStatus: 'HELD',
+      sellable: false
+    });
+
+    expect(result.state).toBe('held');
+    expect(result.className).toContain('bg-purple-950');
+    expect(result.className).toContain('opacity-45');
   });
 
   it('sorts and deduplicates the legend deterministically', () => {
@@ -46,5 +62,12 @@ describe('customer seat presentation', () => {
       { seatType: 'STANDARD' }
     ]);
     expect(result.map(seat => seat.seatType)).toEqual(['STANDARD', 'VIP', 'COUPLE']);
+  });
+
+  it('uses a complete couple unit for the legend price', () => {
+    const invalidUnit = { seatType: 'COUPLE', pairValid: false, price: 90000 };
+    const completePair = { seatType: 'COUPLE', pairValid: true, price: 180000 };
+
+    expect(sortSeatLegend([invalidUnit, completePair])).toEqual([completePair]);
   });
 });
