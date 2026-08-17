@@ -277,7 +277,7 @@ export default function AdminSidebar({
       visible: isFullAdmin,
       items: [
         { key: 'notification-dashboard', label: 'Tổng quan', path: '/admin/notifications', icon: BellRing },
-        { key: 'notification-attention', label: 'Cần xử lý', path: '/admin/notification-operations?tab=dead-letters', icon: Inbox },
+        { key: 'notification-attention', label: 'Cần xử lý', path: '/admin/notification-attention', icon: Inbox },
         { key: 'notification-operations', label: 'Lịch sử gửi', path: '/admin/notification-operations', icon: History },
         { key: 'notification-templates', label: 'Mẫu thông báo', path: '/admin/notification-templates', icon: Mail },
         { key: 'notification-coverage', label: 'Cấu hình & độ phủ', path: '/admin/notification-coverage', icon: ClipboardCheck },

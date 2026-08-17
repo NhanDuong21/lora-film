@@ -14,6 +14,7 @@ export const adminNotificationRoutes = [
     { path: 'notifications', element: page(<Dashboard />) },
     { path: 'notification-templates', element: page(<Templates />) },
     { path: 'notification-templates/:templateKey', element: page(<Editor />) },
-    { path: 'notification-operations', element: page(<Operations />) },
+    { path: 'notification-attention', element: page(<Operations mode="attention" />) },
+    { path: 'notification-operations', element: page(<Operations mode="history" />) },
     { path: 'notification-coverage', element: page(<Coverage />) },
 ];

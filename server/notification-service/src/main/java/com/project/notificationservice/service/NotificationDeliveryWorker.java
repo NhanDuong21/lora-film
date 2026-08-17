@@ -133,12 +133,26 @@ public class NotificationDeliveryWorker {
             Map<String, Object> payload = objectMapper.readValue(
                     request.getPayloadJson(), new TypeReference<>() {
                     });
-            TemplateDocument template = templateRegistry.getPublishedTemplate(
-                    request.getTemplateKey(), delivery.getChannel(), request.getLocale());
-            request.setTemplateCommitSha(template.commitSha());
-            request.setTemplateVersion(template.version());
-            RenderedTemplate rendered = renderer.render(
-                    template, payloadAdapter.adapt(payload, template));
+            RenderedTemplate rendered;
+            if (delivery.getTemplateCommitSha() == null) {
+                TemplateDocument template = templateRegistry.getPublishedTemplate(
+                        request.getTemplateKey(), delivery.getChannel(), request.getLocale());
+                rendered = renderer.render(template, payloadAdapter.adapt(payload, template));
+                delivery.setTemplateCommitSha(template.commitSha());
+                delivery.setTemplateVersion(template.version());
+                delivery.setRenderedSubject(rendered.subject());
+                delivery.setRenderedHtml(rendered.htmlContent());
+                delivery.setRenderedText(rendered.textContent());
+                if (request.getTemplateCommitSha() == null) {
+                    request.setTemplateCommitSha(template.commitSha());
+                    request.setTemplateVersion(template.version());
+                }
+            } else {
+                rendered = new RenderedTemplate(
+                        delivery.getRenderedSubject(),
+                        delivery.getRenderedHtml(),
+                        delivery.getRenderedText());
+            }
             Map<String, Object> providerPayload = new HashMap<>(payload);
             providerPayload.put("_deliveryDatabaseId", delivery.getId());
             NotificationChannelSender sender = senderResolver.resolve(delivery.getChannel());

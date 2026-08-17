@@ -324,6 +324,8 @@ public class NotificationApplicationService {
     private DeliveryDetails toDetails(NotificationDelivery delivery) {
         return new DeliveryDetails(delivery.getPublicId(), delivery.getChannel().name(),
                 delivery.getProvider(), delivery.getStatus().name(), delivery.getProviderMessageId(),
+                delivery.getTemplateCommitSha(), delivery.getTemplateVersion(),
+                delivery.getTemplateCommitSha() != null,
                 delivery.getFailureCategory() == null ? null : delivery.getFailureCategory().name(),
                 delivery.getFailureCode(), delivery.getFailureMessage(), delivery.getAttemptCount(),
                 delivery.getNextRetryAt(), delivery.getSentAt(), delivery.getDeliveredAt());
@@ -368,6 +370,9 @@ public class NotificationApplicationService {
             String provider,
             String status,
             String providerMessageId,
+            String templateCommitSha,
+            String templateVersion,
+            boolean renderedSnapshotAvailable,
             String failureCategory,
             String failureCode,
             String failureMessage,

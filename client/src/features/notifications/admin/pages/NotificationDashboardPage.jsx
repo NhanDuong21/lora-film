@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertOctagon, ArrowRight, BellRing, CheckCheck, Clock3,
-    GitBranch, RefreshCw, Send, ShieldCheck, Siren, TestTube2,
+    GitBranch, RefreshCw, Send, ShieldCheck, Siren,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { notificationAdminService } from '../services/notificationAdminService';
@@ -62,7 +62,7 @@ export default function NotificationDashboardPage() {
             <PageHeading
                 eyebrow="Vận hành thông báo"
                 title="Trung tâm điều phối thông báo"
-                description="Ưu tiên cảnh báo cần xử lý, sức khỏe kênh gửi và số liệu production trong phạm vi đã chọn."
+                description="Ưu tiên cảnh báo cần xử lý, sức khỏe kênh gửi và số liệu vận hành thật trong phạm vi đã chọn."
                 actions={
                     <>
                         <button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:border-zinc-500">
@@ -83,10 +83,10 @@ export default function NotificationDashboardPage() {
                         </button>
                     ))}
                 </div>
-                <label className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs font-bold text-zinc-400">
-                    <TestTube2 className="h-4 w-4 text-violet-300" />
-                    <input type="checkbox" checked={filters.includeTest} onChange={event => setFilters(current => ({ ...current, includeTest: event.target.checked }))} className="accent-orange-500" />
-                    Bao gồm lượt gửi thử
+                <label className={`inline-flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-xs font-bold transition ${filters.includeTest ? 'border-violet-400/30 bg-violet-400/10 text-violet-200' : 'border-zinc-800 bg-zinc-950 text-zinc-400'}`}>
+                    <span>Bao gồm lượt gửi thử</span>
+                    <input type="checkbox" role="switch" aria-label="Bao gồm lượt gửi thử" checked={filters.includeTest} onChange={event => setFilters(current => ({ ...current, includeTest: event.target.checked }))} className="peer sr-only" />
+                    <span aria-hidden="true" className="relative h-5 w-9 rounded-full bg-zinc-700 transition peer-checked:bg-violet-500 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-4" />
                 </label>
             </section>
 
@@ -101,7 +101,7 @@ export default function NotificationDashboardPage() {
                                 <p className="mt-1 text-sm leading-6 text-zinc-400">{blockedItems[0].sourceService} đang phát sự kiện {blockedItems[0].eventTypes?.join(', ')} cho {blockedItems[0].channels?.join(', ')} · {blockedItems[0].locale}.</p>
                             </div>
                         </div>
-                        <Link to="/admin/notification-coverage" className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-xs font-black text-white hover:bg-red-400">
+                        <Link to="/admin/notification-attention" className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-xs font-black text-white hover:bg-red-400">
                             Xem và xử lý <ArrowRight className="h-4 w-4" />
                         </Link>
                     </div>
@@ -109,10 +109,10 @@ export default function NotificationDashboardPage() {
             )}
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <HealthCard label="Notification service" value="Hoạt động" status="READY" detail={`Cập nhật ${formatDateTime(data?.generatedAt)}`} />
-                <HealthCard label="Nguồn mẫu" value={data?.templateRegistry?.available ? 'Đã đồng bộ' : 'Không khả dụng'} status={data?.templateRegistry?.available ? 'READY' : 'BLOCKED'} detail={data?.templateRegistry?.repository || 'Chưa xác định repository'} />
-                <HealthCard label="Hàng đợi" value={`${formatNumber(data?.pending)} đang chờ`} status={Number(data?.pending) > 0 ? 'WARNING' : 'READY'} detail="Bao gồm lượt chờ và đang thử lại" />
-                <HealthCard label="Độ phủ contract" value={`${formatNumber(data?.coverage?.readyRequirements)}/${formatNumber(data?.coverage?.totalRequirements)}`} status={Number(data?.coverage?.blockedRequirements) > 0 ? 'BLOCKED' : 'READY'} detail={`${formatNumber(data?.coverage?.blockedRequirements)} yêu cầu bị chặn`} />
+                <HealthCard label="Dịch vụ thông báo" value="Hoạt động" badge="Hoạt động" tone="success" detail={`Cập nhật ${formatDateTime(data?.generatedAt)}`} />
+                <HealthCard label="Nguồn mẫu" value={data?.templateRegistry?.available ? 'Đã đồng bộ' : 'Không khả dụng'} badge={data?.templateRegistry?.available ? 'Đã đồng bộ' : 'Không khả dụng'} tone={data?.templateRegistry?.available ? 'success' : 'danger'} detail={data?.templateRegistry?.repository || 'Chưa xác định repository'} />
+                <HealthCard label="Hàng đợi" value={`${formatNumber(data?.pending)} đang chờ`} badge={Number(data?.pending) > 0 ? 'Cần theo dõi' : 'Bình thường'} tone={Number(data?.pending) > 0 ? 'warning' : 'info'} detail="Bao gồm lượt chờ và đang thử lại" />
+                <HealthCard label="Độ phủ yêu cầu tích hợp" value={`${formatNumber(data?.coverage?.readyRequirements)}/${formatNumber(data?.coverage?.totalRequirements)}`} badge={Number(data?.coverage?.blockedRequirements) > 0 ? `Thiếu ${formatNumber(data?.coverage?.blockedRequirements)} yêu cầu` : 'Đủ yêu cầu'} tone={Number(data?.coverage?.blockedRequirements) > 0 ? 'danger' : 'success'} detail={`${formatNumber(data?.coverage?.blockedRequirements)} yêu cầu bị chặn`} />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -169,8 +169,14 @@ export default function NotificationDashboardPage() {
     );
 }
 
-function HealthCard({ label, value, status, detail }) {
-    return <article className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-4"><div className="flex items-center justify-between gap-2"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</p><StatusPill value={status} /></div><p className="mt-3 text-sm font-black text-white">{value}</p><p className="mt-1 truncate text-[10px] text-zinc-600">{detail}</p></article>;
+function HealthCard({ label, value, badge, tone, detail }) {
+    const badgeTone = {
+        success: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300',
+        info: 'border-sky-400/20 bg-sky-400/10 text-sky-300',
+        warning: 'border-amber-400/20 bg-amber-400/10 text-amber-300',
+        danger: 'border-red-400/20 bg-red-400/10 text-red-300',
+    }[tone] || 'border-zinc-700 bg-zinc-800 text-zinc-300';
+    return <article className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-4"><div className="flex items-center justify-between gap-2"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</p><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${badgeTone}`}>{badge}</span></div><p className="mt-3 text-sm font-black text-white">{value}</p><p className="mt-1 truncate text-[10px] text-zinc-500">{detail}</p></article>;
 }
 
 function RegistryRow({ label, value, mono, last }) {

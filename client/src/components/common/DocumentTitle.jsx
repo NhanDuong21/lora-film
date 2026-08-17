@@ -93,7 +93,9 @@ const pageTitle = pathname => {
     ['/admin/scores', 'Quản lý điểm thưởng'],
     ['/admin/notifications', 'Trung tâm thông báo'],
     ['/admin/notification-templates', 'Mẫu thông báo'],
-    ['/admin/notification-operations', 'Vận hành thông báo'],
+    ['/admin/notification-attention', 'Cần xử lý thông báo'],
+    ['/admin/notification-operations', 'Lịch sử gửi thông báo'],
+    ['/admin/notification-coverage', 'Cấu hình và độ phủ thông báo'],
     ['/admin/me', 'Tài khoản quản trị'],
   ];
 

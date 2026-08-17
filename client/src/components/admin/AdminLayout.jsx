@@ -60,8 +60,10 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/user-audits')) return 'audits';
     if (path.endsWith('/audits')) return 'audits';
     if (path === '/admin/notifications') return 'notification-dashboard';
+    if (path.includes('/notification-attention')) return 'notification-attention';
     if (path.includes('/notification-templates')) return 'notification-templates';
     if (path.includes('/notification-operations')) return 'notification-operations';
+    if (path.includes('/notification-coverage')) return 'notification-coverage';
     if (path.endsWith('/departments')) return 'departments';
     if (path.endsWith('/positions')) return 'positions';
     if (path.endsWith('/organization')) return 'organization';

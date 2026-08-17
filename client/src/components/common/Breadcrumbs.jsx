@@ -73,6 +73,46 @@ export default function Breadcrumbs() {
   // If we are at root, no need for breadcrumb
   if (pathnames.length === 0) return null;
 
+  const notificationSection = pathnames[0] === 'admin' && [
+    'notifications', 'notification-attention', 'notification-operations',
+    'notification-templates', 'notification-coverage',
+  ].includes(pathnames[1]);
+  if (notificationSection) {
+    const pageLabels = {
+      notifications: 'Tổng quan',
+      'notification-attention': 'Cần xử lý',
+      'notification-operations': 'Lịch sử gửi',
+      'notification-templates': 'Mẫu thông báo',
+      'notification-coverage': 'Cấu hình và độ phủ',
+    };
+    const crumbs = [
+      { label: 'Thông báo', to: '/admin/notifications' },
+      { label: pageLabels[pathnames[1]], to: pathnames[1] === 'notification-templates' ? '/admin/notification-templates' : location.pathname },
+      ...(pathnames[1] === 'notification-templates' && pathnames[2]
+        ? [{ label: decodeURIComponent(pathnames[2]), to: location.pathname }]
+        : []),
+    ];
+
+    return (
+      <div className="hidden lg:flex items-center text-sm">
+        <Link to="/" className="text-zinc-500 hover:text-brand-orange transition-colors flex items-center p-1 rounded hover:bg-zinc-800/50">
+          <Home className="w-4 h-4" />
+        </Link>
+        {crumbs.map((crumb, index) => {
+          const isLast = index === crumbs.length - 1;
+          return (
+            <div key={`${crumb.to}-${crumb.label}`} className="flex items-center">
+              <ChevronRight className="w-4 h-4 text-zinc-600 mx-1 shrink-0" />
+              {isLast
+                ? <span className="text-zinc-200 font-semibold">{crumb.label}</span>
+                : <Link to={crumb.to} className="text-zinc-500 hover:text-white transition-colors font-medium">{crumb.label}</Link>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="hidden lg:flex items-center text-sm">
       <Link to="/" className="text-zinc-500 hover:text-brand-orange transition-colors flex items-center p-1 rounded hover:bg-zinc-800/50">

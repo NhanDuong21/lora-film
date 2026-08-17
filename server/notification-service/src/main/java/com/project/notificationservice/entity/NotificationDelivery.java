@@ -10,6 +10,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -47,6 +48,18 @@ public class NotificationDelivery {
     private DeliveryStatus status;
     @Column(name = "provider_message_id", length = 200)
     private String providerMessageId;
+    @Column(name = "template_commit_sha", length = 64)
+    private String templateCommitSha;
+    @Column(name = "template_version", length = 40)
+    private String templateVersion;
+    @Column(name = "rendered_subject", length = 200)
+    private String renderedSubject;
+    @Lob
+    @Column(name = "rendered_html", columnDefinition = "LONGTEXT")
+    private String renderedHtml;
+    @Lob
+    @Column(name = "rendered_text", columnDefinition = "LONGTEXT")
+    private String renderedText;
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "failure_category", length = 40)
@@ -102,6 +115,16 @@ public class NotificationDelivery {
     public void setStatus(DeliveryStatus value) { this.status = value; }
     public String getProviderMessageId() { return providerMessageId; }
     public void setProviderMessageId(String value) { this.providerMessageId = value; }
+    public String getTemplateCommitSha() { return templateCommitSha; }
+    public void setTemplateCommitSha(String value) { this.templateCommitSha = value; }
+    public String getTemplateVersion() { return templateVersion; }
+    public void setTemplateVersion(String value) { this.templateVersion = value; }
+    public String getRenderedSubject() { return renderedSubject; }
+    public void setRenderedSubject(String value) { this.renderedSubject = value; }
+    public String getRenderedHtml() { return renderedHtml; }
+    public void setRenderedHtml(String value) { this.renderedHtml = value; }
+    public String getRenderedText() { return renderedText; }
+    public void setRenderedText(String value) { this.renderedText = value; }
     public FailureCategory getFailureCategory() { return failureCategory; }
     public void setFailureCategory(FailureCategory value) { this.failureCategory = value; }
     public String getFailureCode() { return failureCode; }
