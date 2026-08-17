@@ -44,6 +44,7 @@ import com.lorafilm.movie.showtime.dto.response.BookingContextResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
 import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.validation.ShowtimeFacilityAvailabilityPolicy;
 
 @ExtendWith(MockitoExtension.class)
 class ShowtimeBookingContextServiceImplTest {
@@ -63,6 +64,9 @@ class ShowtimeBookingContextServiceImplTest {
     @Mock
     private SeatRepository seatRepository;
 
+    @Mock
+    private ShowtimeFacilityAvailabilityPolicy facilityAvailabilityPolicy;
+
     private SeatService seatService;
     private ShowtimeMapper showtimeMapper;
 
@@ -77,11 +81,12 @@ class ShowtimeBookingContextServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(seatRepository, null, null);
+        seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(
+                seatRepository, null, null, showtimeRepository);
         showtimeMapper = new ShowtimeMapper();
         showtimeService = new ShowtimeBookingContextServiceImpl(
                 showtimeRepository, showtimePriceRepository, showtimeBlockedSeatRepository,
-                movieMediaRepository, seatService, showtimeMapper);
+                movieMediaRepository, seatService, showtimeMapper, facilityAvailabilityPolicy);
 
         Movie movie = new Movie();
         movie.setId(1L);

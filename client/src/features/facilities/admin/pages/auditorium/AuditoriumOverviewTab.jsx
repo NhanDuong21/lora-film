@@ -13,7 +13,7 @@ const STATUS_ACTIONS = {
     {
       target: 'ACTIVE',
       label: 'Đưa vào phục vụ',
-      description: 'Cho phép phòng tham gia xếp lịch và bán vé.',
+      description: 'Cho phép chọn phòng khi tạo suất chiếu; mở bán vẫn là tác vụ của từng suất.',
       requiresLayout: true,
       tone: 'primary',
     },
@@ -53,14 +53,9 @@ const STATUS_ACTIONS = {
   ],
   INACTIVE: [
     {
-      target: 'DRAFT',
-      label: 'Chuyển về thiết lập',
-      description: 'Cho phép chỉnh sửa lại sơ đồ ghế trước khi mở phòng.',
-    },
-    {
       target: 'ACTIVE',
       label: 'Mở lại phòng',
-      description: 'Đưa phòng trở lại phục vụ ngay.',
+      description: 'Đưa phòng trở lại khả dụng cho lịch chiếu; không tự mở bán suất.',
       requiresLayout: true,
       tone: 'primary',
     },
@@ -72,7 +67,7 @@ export default function AuditoriumOverviewTab({
   onUpdate,
   onChangeStatus,
 }) {
-  const { triggerConfirm } = useOutletContext() || {};
+  const { triggerConfirm, triggerToast } = useOutletContext() || {};
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [roomName, setRoomName] = useState(auditorium?.auditoriumName || '');
@@ -81,6 +76,7 @@ export default function AuditoriumOverviewTab({
   const [cleaningBuffer, setCleaningBuffer] = useState(
     auditorium?.cleaningBufferMinutes ?? 15,
   );
+  const [approvedCapacity, setApprovedCapacity] = useState(auditorium?.capacity ?? 1);
 
   const computedCapacity = useMemo(
     () => (auditorium?.rows || []).reduce(
@@ -104,12 +100,16 @@ export default function AuditoriumOverviewTab({
 
   const handleSave = async (event) => {
     event.preventDefault();
+    if (approvedCapacity < computedCapacity) {
+      triggerToast?.('Số vị trí trong sơ đồ không được vượt sức chứa theo hồ sơ.', 'error');
+      return;
+    }
     setIsSubmitting(true);
     const success = await onUpdate({
       name: roomName.trim(),
       screenType,
       soundType,
-      capacity: computedCapacity,
+      capacity: approvedCapacity,
       cleaningBufferMinutes: cleaningBuffer,
       status,
     }, 'Đã lưu cấu hình phòng chiếu');
@@ -191,6 +191,8 @@ export default function AuditoriumOverviewTab({
               cleaningBuffer={cleaningBuffer}
               setCleaningBuffer={setCleaningBuffer}
               capacity={computedCapacity}
+              approvedCapacity={approvedCapacity}
+              setApprovedCapacity={setApprovedCapacity}
             />
             <div className="flex justify-end gap-3">
               <button
@@ -218,7 +220,8 @@ export default function AuditoriumOverviewTab({
               ['Công nghệ màn hình', SCREEN_TYPE_LABELS[auditorium.screenType] || 'Chưa xác định'],
               ['Hệ thống âm thanh', SOUND_TYPE_LABELS[auditorium.soundType] || 'Chưa xác định'],
               ['Thời gian dọn phòng', `${auditorium.cleaningBufferMinutes ?? 0} phút`],
-              ['Sức chứa', `${computedCapacity} ghế`],
+              ['Vị trí trong sơ đồ', `${computedCapacity} ghế`],
+              ['Sức chứa theo hồ sơ', `${auditorium.capacity ?? computedCapacity} người`],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
                 <dt className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{label}</dt>

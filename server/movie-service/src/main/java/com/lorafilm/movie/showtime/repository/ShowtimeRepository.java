@@ -137,6 +137,18 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             @org.springframework.data.repository.query.Param("startTime") java.time.Instant startTime,
             @org.springframework.data.repository.query.Param("endTime") java.time.Instant endTime);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+            "movie", "movieVersion", "cinema", "auditorium"})
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s WHERE s.cinema.id = :cinemaId " +
+            "AND s.deletedAt IS NULL " +
+            "AND s.status != 'CANCELLED' " +
+            "AND s.startTime < :endTime AND s.endTime > :startTime " +
+            "ORDER BY s.startTime ASC")
+    java.util.List<Showtime> findCinemaPotentialOverlaps(
+            @org.springframework.data.repository.query.Param("cinemaId") Long cinemaId,
+            @org.springframework.data.repository.query.Param("startTime") java.time.Instant startTime,
+            @org.springframework.data.repository.query.Param("endTime") java.time.Instant endTime);
+
     @org.springframework.data.jpa.repository.Query("SELECT s FROM Showtime s WHERE s.auditorium.id = :auditoriumId " +
             "AND s.id != :excludeShowtimeId " +
             "AND s.deletedAt IS NULL " +

@@ -15,6 +15,7 @@ import com.lorafilm.movie.cinema.dto.OperatingHourUpdateRequest;
 import com.lorafilm.movie.cinema.dto.OperatingHourResponse;
 import com.lorafilm.movie.cinema.dto.CreateCinemaClosurePeriodRequest;
 import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
+import com.lorafilm.movie.cinema.dto.CinemaReadinessResponse;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.cinema.repository.CinemaSpecification;
 import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
@@ -271,19 +272,12 @@ public class CinemaServiceImpl implements CinemaService {
         }
 
         if (targetStatus == CinemaStatus.ACTIVE) {
-            boolean hasAuditorium = auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId());
-            if (!hasAuditorium) {
-                throw new BusinessException(ErrorCode.CINEMA_MISSING_AUDITORIUM);
-            }
-
-            boolean hasImages = cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(cinema.getId());
-            if (!hasImages) {
-                throw new BusinessException(ErrorCode.CINEMA_MISSING_IMAGES);
-            }
-
-            boolean hasOperatingHours = cinemaOperatingHourRepository.existsByCinemaId(cinema.getId());
-            if (!hasOperatingHours) {
-                throw new BusinessException(ErrorCode.CINEMA_MISSING_OPERATING_HOURS);
+            CinemaReadinessResponse readiness = calculateReadiness(cinema);
+            if (!readiness.readyForActivation()) {
+                throw new BusinessException(
+                        ErrorCode.CINEMA_ACTIVATION_BLOCKED,
+                        "Cụm rạp còn điều kiện vận hành chưa hoàn tất",
+                        readiness);
             }
         }
 
@@ -436,8 +430,9 @@ public class CinemaServiceImpl implements CinemaService {
                     throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                             "Open time and close time must not be null for open days");
                 }
-                if (!parsedOpenTime.isBefore(parsedCloseTime)) {
-                    throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Open time must be before close time");
+                if (parsedOpenTime.equals(parsedCloseTime)) {
+                    throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                            "Open time and close time must differ; use an overnight range when closing after midnight");
                 }
             }
         }
@@ -494,11 +489,30 @@ public class CinemaServiceImpl implements CinemaService {
             throw new BusinessException(ErrorCode.CINEMA_CLOSURE_CONFLICT);
         }
 
+        List<com.lorafilm.movie.showtime.domain.entity.Showtime> affectedShowtimes =
+                showtimeRepository.findCinemaPotentialOverlaps(
+                        cinema.getId(), request.getStartTime(), request.getEndTime());
+        if (!affectedShowtimes.isEmpty()) {
+            java.util.Map<String, Object> errorData = new java.util.LinkedHashMap<>();
+            errorData.put("affectedShowtimeCount", affectedShowtimes.size());
+            errorData.put("openForBookingCount", affectedShowtimes.stream()
+                    .filter(showtime -> showtime.getStatus()
+                            == com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus.OPEN_FOR_BOOKING)
+                    .count());
+            throw new BusinessException(
+                    ErrorCode.CINEMA_CLOSURE_HAS_AFFECTED_SHOWTIMES,
+                    "Hãy điều phối hoặc hủy các suất chiếu bị ảnh hưởng trước khi tạo lịch đóng cửa",
+                    errorData);
+        }
+
         Long userId = currentUserProvider.getCurrentUserId();
         CinemaClosurePeriod period = new CinemaClosurePeriod();
         period.setCinema(cinema);
         period.setStartTime(request.getStartTime());
         period.setEndTime(request.getEndTime());
+        period.setServiceDate(request.getStartTime()
+                .atZone(java.time.ZoneId.of(cinema.getTimezone()))
+                .toLocalDate());
         period.setReason(request.getReason());
         period.setStatus(ActionStatus.ACTIVE);
         period.setCreatedBy(userId);
@@ -591,6 +605,95 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
         return mapToDetailDto(cinema);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public CinemaReadinessResponse getCinemaReadiness(String publicId) {
+        Cinema cinema = cinemaRepository.findByPublicIdAndDeletedAtIsNull(publicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cinema not found"));
+        return calculateReadiness(cinema);
+    }
+
+    private CinemaReadinessResponse calculateReadiness(Cinema cinema) {
+        List<CinemaOperatingHour> hours = cinemaOperatingHourRepository.findByCinemaId(cinema.getId());
+        List<Auditorium> auditoriums = auditoriumRepository
+                .findByCinemaIdAndDeletedAtIsNull(cinema.getId());
+        List<CinemaMedia> activeMedia = cinemaMediaRepository
+                .findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(
+                        cinema.getId(), ActiveStatus.ACTIVE);
+
+        boolean basicInformation = hasText(cinema.getName())
+                && hasText(cinema.getAddress())
+                && hasText(cinema.getCity())
+                && isValidTimezone(cinema.getTimezone());
+        long distinctDays = hours.stream()
+                .map(CinemaOperatingHour::getDayOfWeek)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .count();
+        boolean completeHours = distinctDays == 7
+                && hours.stream().anyMatch(hour -> !Boolean.TRUE.equals(hour.getIsClosed()));
+
+        List<Auditorium> activeAuditoriums = auditoriums.stream()
+                .filter(room -> room.getStatus() == AuditoriumStatus.ACTIVE)
+                .toList();
+        int readyAuditoriums = (int) activeAuditoriums.stream()
+                .filter(room -> seatRepository.countSellableLayoutSeatsByAuditoriumId(room.getId()) > 0)
+                .count();
+        boolean hasActiveAuditorium = !activeAuditoriums.isEmpty();
+        boolean hasBookingLayout = readyAuditoriums > 0;
+
+        List<CinemaReadinessResponse.ReadinessCheck> operationalChecks = List.of(
+                readinessCheck("basic", "Thông tin và vị trí hợp lệ", basicInformation,
+                        "Bổ sung tên, thành phố, địa chỉ và timezone hợp lệ.", "overview"),
+                readinessCheck("hours", "Giờ hoạt động đủ 7 ngày", completeHours,
+                        "Cấu hình đủ 7 ngày và ít nhất một ngày mở cửa.", "operating-hours"),
+                readinessCheck("active-room", "Có phòng được đưa vào phục vụ", hasActiveAuditorium,
+                        "Đưa ít nhất một phòng đủ điều kiện sang ACTIVE.", "auditoriums"),
+                readinessCheck("booking-layout", "Phòng phục vụ có sơ đồ ghế", hasBookingLayout,
+                        "Phòng ACTIVE phải có ít nhất một ghế trong booking layout.", "auditoriums"));
+
+        boolean hasPrimaryMedia = activeMedia.stream().anyMatch(media -> Boolean.TRUE.equals(media.getIsPrimary()));
+        List<CinemaReadinessResponse.ReadinessCheck> publicProfileChecks = List.of(
+                readinessCheck("primary-media", "Có ảnh đại diện", hasPrimaryMedia,
+                        "Thêm một ảnh đang hoạt động và đặt làm ảnh chính.", "media"),
+                readinessCheck("description", "Có mô tả cho khách hàng", hasText(cinema.getDescription()),
+                        "Bổ sung mô tả ngắn cho trang cụm rạp.", "overview"),
+                readinessCheck("hotline", "Có hotline", hasText(cinema.getHotline()),
+                        "Bổ sung số liên hệ của cụm rạp.", "overview"));
+
+        int completed = (int) operationalChecks.stream()
+                .filter(CinemaReadinessResponse.ReadinessCheck::complete)
+                .count();
+        return new CinemaReadinessResponse(
+                cinema.getPublicId(),
+                completed == operationalChecks.size(),
+                completed,
+                operationalChecks.size(),
+                readyAuditoriums,
+                auditoriums.size(),
+                operationalChecks,
+                publicProfileChecks);
+    }
+
+    private CinemaReadinessResponse.ReadinessCheck readinessCheck(
+            String id, String label, boolean complete, String reason, String actionTab) {
+        return new CinemaReadinessResponse.ReadinessCheck(
+                id, label, complete, complete ? null : reason, actionTab);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private boolean isValidTimezone(String timezone) {
+        try {
+            java.time.ZoneId.of(timezone);
+            return true;
+        } catch (Exception exception) {
+            return false;
+        }
     }
 
     @Override

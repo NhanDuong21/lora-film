@@ -136,7 +136,7 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast, onRefresh }
                             className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 font-bold text-zinc-200 hover:border-orange-500/50"
                           >
                             <Wrench className="h-4 w-4" />
-                            Mở trung tâm phòng
+                            Mở phòng
                           </button>
                           <button
                             type="button"
@@ -159,7 +159,7 @@ export default function CinemaAuditoriumsTab({ cinema, triggerToast, onRefresh }
       </div>
 
       <p className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4 text-xs leading-5 text-zinc-400">
-        Để tạm ngừng hoặc bảo trì phòng, chọn <strong className="text-zinc-200">Mở trung tâm phòng</strong>.
+        Để tạm ngừng hoặc bảo trì phòng, chọn <strong className="text-zinc-200">Mở phòng</strong>.
         Giao diện sẽ hướng dẫn chuyển trạng thái phù hợp và giữ nguyên dữ liệu lịch sử.
       </p>
     </div>

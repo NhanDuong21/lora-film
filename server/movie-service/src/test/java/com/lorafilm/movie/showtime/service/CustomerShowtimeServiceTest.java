@@ -16,6 +16,7 @@ import com.lorafilm.movie.showtime.domain.entity.Showtime;
 import com.lorafilm.movie.showtime.domain.enums.ShowtimeStatus;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.validation.ShowtimeFacilityAvailabilityPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -38,10 +39,12 @@ class CustomerShowtimeServiceTest {
     @Test
     void bookingOptionsUsePersistedServiceDateAndCinemaLocalClocks() {
         ShowtimeRepository repository = mock(ShowtimeRepository.class);
+        ShowtimeFacilityAvailabilityPolicy availabilityPolicy =
+                mock(ShowtimeFacilityAvailabilityPolicy.class);
         CustomerShowtimeService service = new CustomerShowtimeService(
                 repository, mock(ShowtimePriceRepository.class),
                 mock(ShowtimeBlockedSeatRepository.class), mock(SeatService.class),
-                Clock.systemUTC());
+                Clock.systemUTC(), availabilityPolicy);
         LocalDate persistedDate = LocalDate.of(2026, 7, 24);
 
         Cinema cinema = new Cinema();
@@ -70,6 +73,7 @@ class CustomerShowtimeServiceTest {
         when(repository.findCustomerBookingOptions(
                 eq("movie"), eq(persistedDate), eq(persistedDate), any(Instant.class)))
                 .thenReturn(List.of(showtime, showtime));
+        when(availabilityPolicy.isAvailable(showtime)).thenReturn(true);
 
         var result = service.getBookingOptions("movie", persistedDate, persistedDate);
 
@@ -88,9 +92,11 @@ class CustomerShowtimeServiceTest {
         ShowtimeBlockedSeatRepository blockedSeatRepository =
                 mock(ShowtimeBlockedSeatRepository.class);
         SeatService seatService = mock(SeatService.class);
+        ShowtimeFacilityAvailabilityPolicy availabilityPolicy =
+                mock(ShowtimeFacilityAvailabilityPolicy.class);
         CustomerShowtimeService service = new CustomerShowtimeService(
                 repository, priceRepository, blockedSeatRepository, seatService,
-                Clock.systemUTC());
+                Clock.systemUTC(), availabilityPolicy);
 
         Cinema cinema = new Cinema();
         cinema.setPublicId("cinema-public");

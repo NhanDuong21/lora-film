@@ -12,6 +12,7 @@ import com.lorafilm.movie.seat.dto.BulkSeatItemRequest;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import com.lorafilm.movie.seat.service.impl.SeatServiceImpl;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 public class BulkSeatValidationTest {
@@ -35,6 +37,9 @@ public class BulkSeatValidationTest {
 
     @Mock
     private AuditoriumRepository auditoriumRepository;
+
+    @Mock
+    private ShowtimeRepository showtimeRepository;
 
     @InjectMocks
     private SeatServiceImpl seatService;
@@ -104,5 +109,29 @@ public class BulkSeatValidationTest {
                     org.assertj.core.api.Assertions.assertThat(errorData.errors()).hasSize(4);
                     verify(seatRepository, never()).deleteByAuditoriumId(anyLong());
                 });
+    }
+
+    @Test
+    void shouldUpdateConfiguredCapacityInTheSameLayoutTransaction() {
+        when(auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate("aud-1"))
+                .thenReturn(Optional.of(auditorium));
+        SeatType standardType = new SeatType();
+        standardType.setId(10L);
+        standardType.setPublicId("standard-type");
+        standardType.setCode(com.lorafilm.movie.seat.domain.enums.SeatTypeCode.STANDARD);
+        standardType.setStatus(ActiveStatus.ACTIVE);
+        when(seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(any()))
+                .thenReturn(List.of(standardType));
+        when(seatRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        BulkSeatItemRequest seat = new BulkSeatItemRequest(
+                "standard-type", "A", 1, "A1", 1, 1, null,
+                com.lorafilm.movie.seat.domain.enums.SeatStatus.ACTIVE);
+
+        seatService.bulkCreateSeats(
+                "aud-1", new BulkCreateSeatsRequest(List.of(seat), 2));
+
+        assertThat(auditorium.getCapacity()).isEqualTo(2);
+        verify(seatRepository).deleteByAuditoriumId(1L);
+        verify(seatRepository).saveAll(anyList());
     }
 }

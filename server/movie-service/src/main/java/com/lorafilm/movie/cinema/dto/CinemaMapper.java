@@ -85,6 +85,7 @@ public class CinemaMapper {
         }
         response.setStartTime(period.getStartTime());
         response.setEndTime(period.getEndTime());
+        response.setServiceDate(period.getServiceDate());
         response.setReason(period.getReason());
         response.setStatus(period.getStatus());
         return response;

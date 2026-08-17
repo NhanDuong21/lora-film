@@ -3,6 +3,7 @@ package com.lorafilm.movie.cinema.domain.entity;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "cinema_closure_periods")
@@ -21,6 +22,9 @@ public class CinemaClosurePeriod {
 
     @Column(name = "end_time", nullable = false)
     private Instant endTime;
+
+    @Column(name = "service_date", nullable = false)
+    private LocalDate serviceDate;
 
     @Column(name = "reason")
     private String reason;
@@ -73,6 +77,14 @@ public class CinemaClosurePeriod {
 
     public void setEndTime(Instant endTime) {
         this.endTime = endTime;
+    }
+
+    public LocalDate getServiceDate() {
+        return serviceDate;
+    }
+
+    public void setServiceDate(LocalDate serviceDate) {
+        this.serviceDate = serviceDate;
     }
 
     public String getReason() {

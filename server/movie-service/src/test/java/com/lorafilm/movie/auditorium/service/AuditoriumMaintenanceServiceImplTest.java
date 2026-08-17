@@ -118,7 +118,7 @@ class AuditoriumMaintenanceServiceImplTest {
         ArgumentCaptor<UpdateShowtimeStatusRequest> statusRequest =
                 ArgumentCaptor.forClass(UpdateShowtimeStatusRequest.class);
         verify(showtimeTransitionService).transitionStatus(eq("showtime-01"), statusRequest.capture());
-        assertThat(statusRequest.getValue().getStatus()).isEqualTo(ShowtimeStatus.CLOSED);
+        assertThat(statusRequest.getValue().getStatus()).isEqualTo(ShowtimeStatus.CANCELLED);
         assertThat(statusRequest.getValue().getReason()).contains("sự cố phòng chiếu #7");
     }
 

@@ -68,6 +68,11 @@ const adminCinemaService = {
     return response.data;
   },
 
+  getCinemaReadiness: async (publicId) => {
+    const response = await apiClient.get(`/api/admin/cinemas/${publicId}/readiness`);
+    return response.data;
+  },
+
   // Update cinema details
   updateCinema: async (publicId, cinemaData) => {
     const response = await apiClient.put(`/api/admin/cinemas/${publicId}`, cinemaData);
@@ -83,6 +88,14 @@ const adminCinemaService = {
   // Create closure period
   createClosurePeriod: async (publicId, closureData) => {
     const response = await apiClient.post(`/api/admin/cinemas/${publicId}/closure-periods`, closureData);
+    return response.data;
+  },
+
+  previewClosureImpact: async (publicId, closureData) => {
+    const response = await apiClient.post(
+      `/api/admin/cinemas/${publicId}/closure-periods/impact-preview`,
+      closureData,
+    );
     return response.data;
   },
 

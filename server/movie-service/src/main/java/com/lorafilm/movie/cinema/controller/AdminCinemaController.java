@@ -20,6 +20,7 @@ import com.lorafilm.movie.cinema.dto.OperatingHourResponse;
 import com.lorafilm.movie.cinema.dto.CreateCinemaClosurePeriodRequest;
 import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
 import com.lorafilm.movie.cinema.dto.CinemaDetailDto;
+import com.lorafilm.movie.cinema.dto.CinemaReadinessResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
 import java.util.List;
 
@@ -115,6 +116,12 @@ public class AdminCinemaController {
             @PathVariable String cinemaPublicId) {
         CinemaDetailDto response = cinemaService.getAdminCinemaDetail(cinemaPublicId);
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/cinemas/{cinemaPublicId}/readiness")
+    public ResponseEntity<ApiResponse<CinemaReadinessResponse>> getCinemaReadiness(
+            @PathVariable String cinemaPublicId) {
+        return ResponseEntity.ok(ApiResponse.ok(cinemaService.getCinemaReadiness(cinemaPublicId)));
     }
 
     @DeleteMapping("/cinemas/{cinemaPublicId}")

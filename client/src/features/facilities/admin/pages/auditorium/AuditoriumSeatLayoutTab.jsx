@@ -289,9 +289,9 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
                 Phòng này hiện đang <strong>{statusPresentation.label}</strong>.
               </p>
               <p className="font-semibold text-zinc-450 mt-1">
-                Cách thực hiện: vào tab Tổng quan & tác vụ, tạm ngừng phòng, sau đó
-                chọn “Chuyển sang thiết lập” và quay lại đây. Hãy kiểm tra lịch chiếu
-                và khách đã đặt vé trước khi thay đổi.
+                Không chuyển một phòng đang hoặc đã phục vụ về Bản nháp chỉ để sửa sơ đồ.
+                Nếu phòng đã có lịch sử suất chiếu, seat identity hiện tại là bất biến;
+                cần tạo phiên bản sơ đồ mới trước khi áp dụng cho các suất tương lai.
               </p>
             </div>
           </div>

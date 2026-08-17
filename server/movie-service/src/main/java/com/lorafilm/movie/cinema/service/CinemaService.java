@@ -12,6 +12,7 @@ import com.lorafilm.movie.cinema.dto.OperatingHourUpdateRequest;
 import com.lorafilm.movie.cinema.dto.OperatingHourResponse;
 import com.lorafilm.movie.cinema.dto.CreateCinemaClosurePeriodRequest;
 import com.lorafilm.movie.cinema.dto.CinemaClosurePeriodResponse;
+import com.lorafilm.movie.cinema.dto.CinemaReadinessResponse;
 import com.lorafilm.movie.common.dto.PageResponse;
 import java.util.List;
 
@@ -42,6 +43,8 @@ public interface CinemaService {
     PageResponse<CinemaResponse> getAdminCinemas(String status, String city, String district, String keyword, Boolean showDeleted, int page, int size, String sort);
 
     CinemaDetailDto getAdminCinemaDetail(String publicId);
+
+    CinemaReadinessResponse getCinemaReadiness(String publicId);
 
     void deleteCinema(String publicId);
 

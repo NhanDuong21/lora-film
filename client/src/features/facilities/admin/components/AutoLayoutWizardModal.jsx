@@ -14,7 +14,13 @@ import {
 import SeatGridDesigner from './SeatGridDesigner';
 import { generateAutoSeatMatrix } from '../utils/seatLayout';
 
-export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, currentSkipIO }) {
+export default function AutoLayoutWizardModal({
+  isOpen,
+  onClose,
+  onApply,
+  currentSkipIO,
+  currentMatrix = [],
+}) {
   const [step, setStep] = useState(1);
   
   // Step 1: Scale
@@ -23,13 +29,20 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
   const [cols, setCols] = useState(12);
 
   // Step 2: Aisles & Exits
-  const [verticalAisle, setVerticalAisle] = useState('CENTER'); // NONE, CENTER, TWO
-  const [horizontalAisle, setHorizontalAisle] = useState(true);
-  const [exitLeft, setExitLeft] = useState(true);
-  const [exitRight, setExitRight] = useState(true);
+  const [verticalAisle, setVerticalAisle] = useState('NONE'); // NONE, CENTER, TWO
+  const [horizontalAisle, setHorizontalAisle] = useState(false);
+  const [exitLeft, setExitLeft] = useState(false);
+  const [exitRight, setExitRight] = useState(false);
 
   // Step 3: Strategy
-  const [strategy, setStrategy] = useState('AUTO'); // AUTO, ALL_STANDARD
+  const strategy = 'ALL_STANDARD';
+  const [overwriteConfirmed, setOverwriteConfirmed] = useState(false);
+
+  const handleClose = () => {
+    setStep(1);
+    setOverwriteConfirmed(false);
+    onClose();
+  };
 
   // Handle Preset changes
   const handlePresetChange = (p) => {
@@ -68,9 +81,20 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
     return { standard, vip, couple, disabled, total: standard + vip + couple + disabled };
   }, [previewMatrix]);
 
+  const currentStats = useMemo(() => {
+    let standard = 0, vip = 0, couple = 0, disabled = 0;
+    currentMatrix.forEach(row => row.forEach(cell => {
+      if (cell.type === 'STANDARD') standard++;
+      if (cell.type === 'VIP') vip++;
+      if (cell.type === 'COUPLE') couple++;
+      if (cell.type === 'DISABLED') disabled++;
+    }));
+    return { standard, vip, couple, disabled, total: standard + vip + couple + disabled };
+  }, [currentMatrix]);
+
   const handleApply = () => {
     onApply(previewMatrix, rows, cols);
-    onClose();
+    handleClose();
   };
 
   const steps = [
@@ -93,12 +117,14 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-white uppercase tracking-wider">Sinh sơ đồ tự động</h2>
-              <p className="text-xs text-zinc-400 font-bold mt-0.5">Wizard hỗ trợ khởi tạo nhanh Layout phòng chiếu</p>
+              <h2 className="text-lg font-black text-white uppercase tracking-wider">Tạo bố cục khởi đầu</h2>
+              <p className="text-xs text-zinc-400 font-bold mt-0.5">
+                Tạo một bản nháp để tiếp tục chỉnh sửa; không thay thế hồ sơ thiết kế hoặc phê duyệt an toàn.
+              </p>
             </div>
           </div>
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
@@ -169,7 +195,7 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
 
                 <div className="grid grid-cols-2 gap-6 p-6 bg-zinc-900 rounded-2xl border border-zinc-800">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Số hàng ghế (Rows)</label>
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Số hàng ghế</label>
                     <input 
                       type="number" min="4" max="20"
                       value={rows}
@@ -178,7 +204,7 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Số cột ghế (Cols)</label>
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Số cột ghế</label>
                     <input 
                       type="number" min="4" max="20"
                       value={cols}
@@ -239,7 +265,7 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
                           className="w-5 h-5 accent-brand-orange rounded border-zinc-700 bg-zinc-950"
                         />
                         <DoorOpen className="w-5 h-5 text-zinc-500" />
-                        <span className="text-sm font-bold text-white">Cửa thoát hiểm Góc Trái</span>
+                        <span className="text-sm font-bold text-white">Đánh dấu cửa theo hồ sơ · Góc trái</span>
                       </label>
                       <label className="flex-1 flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-700 transition-colors">
                         <input 
@@ -249,9 +275,13 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
                           className="w-5 h-5 accent-brand-orange rounded border-zinc-700 bg-zinc-950"
                         />
                         <DoorOpen className="w-5 h-5 text-zinc-500" />
-                        <span className="text-sm font-bold text-white">Cửa thoát hiểm Góc Phải</span>
+                        <span className="text-sm font-bold text-white">Đánh dấu cửa theo hồ sơ · Góc phải</span>
                       </label>
                     </div>
+                    <p className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-[11px] leading-5 text-sky-200">
+                      Các marker lối đi và cửa phải được nhập theo hồ sơ thiết kế đã được phê duyệt.
+                      LoraFilm không tự xác nhận yêu cầu pháp lý hoặc PCCC.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -263,37 +293,15 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
                 <div>
                   <h3 className="text-lg font-black text-white uppercase tracking-wider mb-4">Chiến lược phân vùng ghế</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div 
-                      onClick={() => setStrategy('AUTO')}
-                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                        strategy === 'AUTO' ? 'border-brand-orange bg-brand-orange/10' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'
-                      }`}
-                    >
+                    <div className="p-5 rounded-2xl border-2 border-brand-orange bg-brand-orange/10">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className={`p-2 rounded-xl ${strategy === 'AUTO' ? 'bg-brand-orange text-black' : 'bg-zinc-800 text-zinc-400'}`}>
-                          <Sparkles className="w-5 h-5" />
-                        </div>
-                        <span className={`text-sm font-black uppercase tracking-wider ${strategy === 'AUTO' ? 'text-brand-orange' : 'text-zinc-300'}`}>Hệ thống tự đề xuất</span>
-                      </div>
-                      <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-                        Áp dụng tỷ lệ tối ưu: ~30% Standard ở các hàng đầu, ~50% VIP ở giữa phòng, và ~20% Couple ở các hàng cuối. Tự động xếp 2 ghế Hỗ trợ.
-                      </p>
-                    </div>
-
-                    <div 
-                      onClick={() => setStrategy('ALL_STANDARD')}
-                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                        strategy === 'ALL_STANDARD' ? 'border-brand-orange bg-brand-orange/10' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className={`p-2 rounded-xl ${strategy === 'ALL_STANDARD' ? 'bg-brand-orange text-black' : 'bg-zinc-800 text-zinc-400'}`}>
+                        <div className="p-2 rounded-xl bg-brand-orange text-black">
                           <Grid3X3 className="w-5 h-5" />
                         </div>
-                        <span className={`text-sm font-black uppercase tracking-wider ${strategy === 'ALL_STANDARD' ? 'text-brand-orange' : 'text-zinc-300'}`}>Toàn bộ là ghế Thường</span>
+                        <span className="text-sm font-black uppercase tracking-wider text-brand-orange">Khởi đầu bằng ghế thường</span>
                       </div>
                       <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-                        Trải đều ghế Standard (Thường) cho toàn bộ sơ đồ. Bạn sẽ tự dùng cọ (Brush) để đổi màu VIP/Couple sau.
+                        Công cụ chỉ tạo lưới, khoảng trống và marker đã chọn. Hãy phân vùng VIP, ghế đôi và vị trí xe lăn thủ công theo hồ sơ và policy được phê duyệt.
                       </p>
                     </div>
                   </div>
@@ -307,7 +315,7 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
                 <div className="flex justify-between items-end mb-6 shrink-0">
                   <div>
                     <h3 className="text-lg font-black text-white uppercase tracking-wider">Xem trước Sơ đồ</h3>
-                    <p className="text-xs text-zinc-400 font-bold mt-1">Kiểm tra lại bố cục trước khi áp dụng vào Editor</p>
+                    <p className="text-xs text-zinc-400 font-bold mt-1">Kiểm tra lại bố cục trước khi áp dụng vào trình chỉnh sửa</p>
                   </div>
                   <div className="flex gap-4">
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-center">
@@ -319,7 +327,7 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
                       <span className="text-lg font-black text-rose-500 leading-none">{stats.vip}</span>
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-center">
-                      <span className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">Couple</span>
+                      <span className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">Ghế đôi</span>
                       <span className="text-lg font-black text-pink-500 leading-none">{stats.couple}</span>
                     </div>
                   </div>
@@ -336,6 +344,27 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
                     />
                   </div>
                 </div>
+                {currentStats.total > 0 && (
+                  <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+                    <p className="text-xs font-black uppercase tracking-wider text-amber-300">
+                      Xác nhận ghi đè bản nháp hiện tại
+                    </p>
+                    <p className="mt-2 text-xs text-zinc-400">
+                      Bố cục hiện tại: <strong className="text-white">{currentStats.total}</strong> vị trí ·
+                      Sau khi áp dụng: <strong className="text-white">{stats.total}</strong> vị trí.
+                      Thao tác này thay toàn bộ chỉnh sửa chưa lưu trên canvas.
+                    </p>
+                    <label className="mt-3 flex cursor-pointer items-start gap-3 text-xs text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={overwriteConfirmed}
+                        onChange={event => setOverwriteConfirmed(event.target.checked)}
+                        className="mt-0.5 accent-orange-500"
+                      />
+                      Tôi đã xem chênh lệch và muốn áp dụng vào bản nháp.
+                    </label>
+                  </div>
+                )}
               </div>
             )}
 
@@ -365,10 +394,11 @@ export default function AutoLayoutWizardModal({ isOpen, onClose, onApply, curren
           ) : (
             <button
               onClick={handleApply}
-              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20"
+              disabled={currentStats.total > 0 && !overwriteConfirmed}
+              className="flex items-center gap-2 bg-brand-orange hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40 text-black font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all"
             >
               <Check className="w-4 h-4" />
-              Áp dụng vào Trình thiết kế
+              Áp dụng vào bản nháp
             </button>
           )}
         </div>

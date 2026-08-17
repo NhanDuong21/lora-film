@@ -47,6 +47,7 @@ class CinemaClosurePeriodRepositoryIntegrationTest {
         closure.setCinema(cinema);
         closure.setStartTime(start);
         closure.setEndTime(end);
+        closure.setServiceDate(start.atZone(java.time.ZoneId.of(cinema.getTimezone())).toLocalDate());
         closure.setStatus(ActionStatus.ACTIVE);
         closure.setReason("Test closure");
         return closureRepository.save(closure);

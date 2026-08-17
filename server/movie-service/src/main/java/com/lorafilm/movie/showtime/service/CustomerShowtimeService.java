@@ -15,6 +15,7 @@ import com.lorafilm.movie.showtime.dto.response.CustomerBookingOptionResponse;
 import com.lorafilm.movie.showtime.dto.response.CustomerSeatLayoutResponse;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.validation.ShowtimeFacilityAvailabilityPolicy;
 import com.lorafilm.movie.common.enums.ActionStatus;
 import com.lorafilm.movie.common.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
@@ -42,17 +43,20 @@ public class CustomerShowtimeService {
     private final ShowtimeBlockedSeatRepository blockedSeatRepository;
     private final SeatService seatService;
     private final Clock clock;
+    private final ShowtimeFacilityAvailabilityPolicy facilityAvailabilityPolicy;
 
     public CustomerShowtimeService(ShowtimeRepository showtimeRepository,
                                    ShowtimePriceRepository priceRepository,
                                    ShowtimeBlockedSeatRepository blockedSeatRepository,
                                    SeatService seatService,
-                                   Clock clock) {
+                                   Clock clock,
+                                   ShowtimeFacilityAvailabilityPolicy facilityAvailabilityPolicy) {
         this.showtimeRepository = showtimeRepository;
         this.priceRepository = priceRepository;
         this.blockedSeatRepository = blockedSeatRepository;
         this.seatService = seatService;
         this.clock = clock;
+        this.facilityAvailabilityPolicy = facilityAvailabilityPolicy;
     }
 
     public List<CustomerBookingOptionResponse> getBookingOptions(
@@ -69,6 +73,7 @@ public class CustomerShowtimeService {
         }
         List<Showtime> showtimes = showtimeRepository.findCustomerBookingOptions(
                         movieIdentifier, from, to, Instant.now(clock)).stream()
+                .filter(facilityAvailabilityPolicy::isAvailable)
                 .collect(Collectors.toMap(
                         Showtime::getPublicId,
                         Function.identity(),
@@ -200,6 +205,7 @@ public class CustomerShowtimeService {
             throw new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND,
                     "Showtime is not open for booking or has already started");
         }
+        facilityAvailabilityPolicy.validateAvailable(showtime);
         return showtime;
     }
 }

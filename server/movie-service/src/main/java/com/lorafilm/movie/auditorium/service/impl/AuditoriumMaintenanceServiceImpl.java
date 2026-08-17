@@ -274,7 +274,10 @@ public class AuditoriumMaintenanceServiceImpl implements AuditoriumMaintenanceSe
                 .toList();
         openShowtimes.forEach(showtime -> {
             UpdateShowtimeStatusRequest request = new UpdateShowtimeStatusRequest();
-            request.setStatus(ShowtimeStatus.CLOSED);
+            // The screening cannot take place, so this is a cancellation rather
+            // than a normal sales close. The transition also creates the refund
+            // outbox work for paid bookings.
+            request.setStatus(ShowtimeStatus.CANCELLED);
             request.setReason(reason);
             showtimeTransitionService.transitionStatus(showtime.showtimePublicId(), request);
 

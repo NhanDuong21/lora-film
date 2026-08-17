@@ -4,6 +4,7 @@ import com.lorafilm.movie.auditorium.dto.AuditoriumResponse;
 import com.lorafilm.movie.auditorium.dto.CreateAuditoriumRequest;
 import com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest;
 import com.lorafilm.movie.auditorium.dto.CloneAuditoriumRequest;
+import com.lorafilm.movie.auditorium.dto.CreateAuditoriumWithLayoutRequest;
 
 import com.lorafilm.movie.auditorium.service.AuditoriumService;
 import com.lorafilm.movie.common.api.ApiResponse;
@@ -39,6 +40,16 @@ public class AdminAuditoriumController {
             @Valid @RequestBody CreateAuditoriumRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(auditoriumService.createAuditorium(cinemaPublicId, request)));
+    }
+
+    @Operation(summary = "Atomically create an auditorium draft with its initial booking layout")
+    @PostMapping("/cinemas/{cinemaPublicId}/auditoriums/with-layout")
+    public ResponseEntity<ApiResponse<AuditoriumResponse>> createAuditoriumWithLayout(
+            @PathVariable String cinemaPublicId,
+            @Valid @RequestBody CreateAuditoriumWithLayoutRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(
+                        auditoriumService.createAuditoriumWithLayout(cinemaPublicId, request)));
     }
 
     @Operation(summary = "Update an auditorium")

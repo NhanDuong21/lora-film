@@ -34,6 +34,7 @@ export default function AdminRoomEditPage() {
   const [screenType, setScreenType] = useState('STANDARD');
   const [soundType, setSoundType] = useState('STANDARD');
   const [cleaningBuffer, setCleaningBuffer] = useState(15);
+  const [approvedCapacity, setApprovedCapacity] = useState(120);
   const [status, setStatus] = useState('DRAFT');
   const [initialStatus, setInitialStatus] = useState('DRAFT');
 
@@ -75,6 +76,7 @@ export default function AdminRoomEditPage() {
           setScreenType(d.screenType || 'STANDARD');
           setSoundType(d.soundType || 'STANDARD');
           setCleaningBuffer(d.cleaningBufferMinutes || 15);
+          setApprovedCapacity(d.capacity || 1);
           setStatus(d.auditoriumStatus || 'DRAFT');
           setInitialStatus(d.auditoriumStatus || 'DRAFT');
 
@@ -253,6 +255,10 @@ export default function AdminRoomEditPage() {
       triggerToast?.('Sơ đồ phòng chiếu phải có ít nhất 1 ghế!', 'error');
       return;
     }
+    if (approvedCapacity < stats.activeSeats) {
+      triggerToast?.('Số vị trí trong sơ đồ không được vượt sức chứa theo hồ sơ.', 'error');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -270,7 +276,10 @@ export default function AdminRoomEditPage() {
       if (isLayoutEditable) {
         const seatsList = buildSeatItems({ matrix, rows, cols, skipIO, typeMapping });
 
-        const bulkRes = await adminRoomService.bulkCreateSeats(roomId, { seats: seatsList });
+        const bulkRes = await adminRoomService.bulkCreateSeats(roomId, {
+          seats: seatsList,
+          capacity: approvedCapacity,
+        });
         if (!bulkRes?.success) {
           throw new Error(bulkRes?.message || 'Không thể cập nhật danh sách ghế');
         }
@@ -281,7 +290,7 @@ export default function AdminRoomEditPage() {
         name: roomName.trim(),
         screenType,
         soundType,
-        capacity: stats.activeSeats,
+        capacity: approvedCapacity,
         cleaningBufferMinutes: parseInt(cleaningBuffer) || 15,
         status: status 
       };
@@ -437,6 +446,8 @@ export default function AdminRoomEditPage() {
               status={status}
               setStatus={setStatus}
               capacity={stats.activeSeats}
+              approvedCapacity={approvedCapacity}
+              setApprovedCapacity={setApprovedCapacity}
               availableStatuses={availableStatuses}
             />
 
@@ -451,7 +462,7 @@ export default function AdminRoomEditPage() {
                 {/* Rows Slider */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-bold text-zinc-400">
-                    <span>Số hàng ghế (Rows)</span>
+                    <span>Số hàng ghế</span>
                     <span className="text-brand-orange font-black">{rows}</span>
                   </div>
                   <input 
@@ -467,7 +478,7 @@ export default function AdminRoomEditPage() {
                 {/* Columns Slider */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-bold text-zinc-400">
-                    <span>Số cột ghế (Cols)</span>
+                    <span>Số cột ghế</span>
                     <span className="text-brand-orange font-black">{cols}</span>
                   </div>
                   <input 

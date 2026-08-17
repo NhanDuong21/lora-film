@@ -2,9 +2,11 @@
 import React from 'react';
 import { LogOut } from 'lucide-react';
 
-export default function BrushToolbar({ activeBrush, setActiveBrush }) {
+export default function BrushToolbar({ activeBrush, setActiveBrush, orientation = 'horizontal' }) {
+  const vertical = orientation === 'vertical';
+  const buttonClass = vertical ? 'w-full justify-start' : '';
   return (
-    <div className="bg-zinc-900/60 border border-zinc-900 rounded-2xl p-3 flex flex-wrap items-center gap-2 mb-8 select-none shadow-2xl backdrop-blur-md">
+    <div className={`bg-zinc-900/60 border border-zinc-900 rounded-2xl p-3 flex gap-2 select-none shadow-2xl backdrop-blur-md ${vertical ? 'flex-col items-stretch' : 'mb-8 flex-wrap items-center'}`}>
       <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-2.5">
         Cọ vẽ:
       </div>
@@ -12,7 +14,7 @@ export default function BrushToolbar({ activeBrush, setActiveBrush }) {
       {/* Standard Brush */}
       <button
         onClick={() => setActiveBrush('STANDARD')}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${buttonClass} ${
           activeBrush === 'STANDARD'
             ? 'bg-purple-600 text-white border border-purple-500 shadow-lg shadow-purple-600/20'
             : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-zinc-900'
@@ -25,7 +27,7 @@ export default function BrushToolbar({ activeBrush, setActiveBrush }) {
       {/* VIP Brush */}
       <button
         onClick={() => setActiveBrush('VIP')}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${buttonClass} ${
           activeBrush === 'VIP'
             ? 'bg-red-500 text-white border border-red-400 shadow-lg shadow-red-500/20'
             : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-zinc-900'
@@ -38,7 +40,7 @@ export default function BrushToolbar({ activeBrush, setActiveBrush }) {
       {/* Couple Brush */}
       <button
         onClick={() => setActiveBrush('COUPLE')}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${buttonClass} ${
           activeBrush === 'COUPLE'
             ? 'bg-amber-400 text-black border border-amber-300 shadow-lg shadow-amber-400/20'
             : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-zinc-900'
@@ -51,7 +53,7 @@ export default function BrushToolbar({ activeBrush, setActiveBrush }) {
       {/* Disabled Brush */}
       <button
         onClick={() => setActiveBrush('DISABLED')}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${buttonClass} ${
           activeBrush === 'DISABLED'
             ? 'bg-sky-500 text-white border border-sky-400 shadow-lg shadow-sky-500/20'
             : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-zinc-900'
@@ -61,12 +63,12 @@ export default function BrushToolbar({ activeBrush, setActiveBrush }) {
         <span>Khuyết tật</span>
       </button>
 
-      <div className="h-6 w-[1px] bg-zinc-800 mx-1"></div>
+      <div className={vertical ? 'h-px w-full bg-zinc-800 my-1' : 'h-6 w-px bg-zinc-800 mx-1'}></div>
 
       {/* Aisle Brush */}
       <button
         onClick={() => setActiveBrush('AISLE')}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${buttonClass} ${
           activeBrush === 'AISLE'
             ? 'bg-zinc-900 border border-zinc-700 text-zinc-300'
             : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-zinc-900'
@@ -79,14 +81,14 @@ export default function BrushToolbar({ activeBrush, setActiveBrush }) {
       {/* Exit Door Brush */}
       <button
         onClick={() => setActiveBrush('EXIT')}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${buttonClass} ${
           activeBrush === 'EXIT'
             ? 'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-600/20'
             : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-zinc-900'
         }`}
       >
         <LogOut className="w-3.5 h-3.5 text-emerald-400" />
-        <span>Cửa Thoát</span>
+        <span>Cửa thoát</span>
       </button>
     </div>
   );

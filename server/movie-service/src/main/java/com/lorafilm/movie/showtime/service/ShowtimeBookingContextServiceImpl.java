@@ -38,6 +38,7 @@ import com.lorafilm.movie.showtime.dto.response.BookingContextShowtimeDto;
 import com.lorafilm.movie.showtime.repository.ShowtimeBlockedSeatRepository;
 import com.lorafilm.movie.pricing.repository.ShowtimePriceRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
+import com.lorafilm.movie.showtime.validation.ShowtimeFacilityAvailabilityPolicy;
 
 @Service
 public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContextService {
@@ -48,19 +49,22 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
     private final MovieMediaRepository movieMediaRepository;
     private final SeatService seatService;
     private final ShowtimeMapper showtimeMapper;
+    private final ShowtimeFacilityAvailabilityPolicy facilityAvailabilityPolicy;
 
     public ShowtimeBookingContextServiceImpl(ShowtimeRepository showtimeRepository,
                                ShowtimePriceRepository showtimePriceRepository,
                                ShowtimeBlockedSeatRepository showtimeBlockedSeatRepository,
                                MovieMediaRepository movieMediaRepository,
                                SeatService seatService,
-                               ShowtimeMapper showtimeMapper) {
+                               ShowtimeMapper showtimeMapper,
+                               ShowtimeFacilityAvailabilityPolicy facilityAvailabilityPolicy) {
         this.showtimeRepository = showtimeRepository;
         this.showtimePriceRepository = showtimePriceRepository;
         this.showtimeBlockedSeatRepository = showtimeBlockedSeatRepository;
         this.movieMediaRepository = movieMediaRepository;
         this.seatService = seatService;
         this.showtimeMapper = showtimeMapper;
+        this.facilityAvailabilityPolicy = facilityAvailabilityPolicy;
     }
 
     // removed query methods
@@ -73,6 +77,7 @@ public class ShowtimeBookingContextServiceImpl implements ShowtimeBookingContext
         if (showtime.getStatus() != ShowtimeStatus.OPEN_FOR_BOOKING) {
             throw new BusinessException(ErrorCode.INVALID_SHOWTIME_STATUS_TRANSITION, "Showtime is not open for booking");
         }
+        facilityAvailabilityPolicy.validateAvailable(showtime);
 
         Set<Long> uniqueSeatIds = new java.util.HashSet<>(request.getSeatIds());
         if (uniqueSeatIds.size() != request.getSeatIds().size()) {

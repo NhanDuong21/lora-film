@@ -32,7 +32,7 @@ export default function CinemaMediaForm({
 
       <div className="border-t border-zinc-800/50 pt-6">
         <CinemaImageUploader 
-          label="Sơ Đồ Rạp (Map)"
+          label="Sơ đồ vị trí rạp"
           description="Sơ đồ bố trí các phòng chiếu trong cụm rạp."
           aspectRatio={16/9}
           value={mapImageUrl}
@@ -42,7 +42,7 @@ export default function CinemaMediaForm({
 
       <div className="border-t border-zinc-800/50 pt-6">
         <CinemaGalleryUploader 
-          label="Bộ Sưu Tập (Gallery)"
+          label="Bộ sưu tập"
           description="Hình ảnh không gian, sảnh chờ, v.v..."
           files={galleryUrls.filter(Boolean)}
           onChange={setGalleryUrls}

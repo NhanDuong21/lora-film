@@ -349,7 +349,9 @@ export default function CinemaEditView({ cinemaPublicId, onCancel, onSubmit, tri
                   <option value="MAINTENANCE">Đang Bảo Trì (MAINTENANCE)</option>
                   <option value="TEMPORARILY_CLOSED">Tạm Thời Đóng Cửa (TEMPORARILY_CLOSED)</option>
                   <option value="INACTIVE">Ngưng Hoạt Động (INACTIVE)</option>
-                  <option value="PERMANENTLY_CLOSED">Đóng Cửa Vĩnh Viễn (PERMANENTLY_CLOSED)</option>
+                  <option value="PERMANENTLY_CLOSED" disabled>
+                    Ngừng khai thác (khóa đến khi có impact workflow)
+                  </option>
                 </select>
               </div>
             </div>

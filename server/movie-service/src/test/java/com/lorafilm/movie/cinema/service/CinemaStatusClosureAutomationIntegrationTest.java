@@ -84,6 +84,7 @@ class CinemaStatusClosureAutomationIntegrationTest {
         futureClosure.setCinema(cinema);
         futureClosure.setStartTime(now.plus(1, ChronoUnit.HOURS)); // Starts in 1 hour
         futureClosure.setEndTime(now.plus(2, ChronoUnit.HOURS));
+        futureClosure.setServiceDate(now.atZone(java.time.ZoneId.of(cinema.getTimezone())).toLocalDate());
         futureClosure.setReason("Scheduled maintenance");
         futureClosure.setStatus(ActionStatus.ACTIVE);
         closurePeriodRepository.saveAndFlush(futureClosure);
@@ -112,6 +113,7 @@ class CinemaStatusClosureAutomationIntegrationTest {
         activeClosure.setCinema(cinema);
         activeClosure.setStartTime(now.minus(5, ChronoUnit.MINUTES));
         activeClosure.setEndTime(now.plus(5, ChronoUnit.MINUTES));
+        activeClosure.setServiceDate(now.atZone(java.time.ZoneId.of(cinema.getTimezone())).toLocalDate());
         activeClosure.setReason("Unexpected repair");
         activeClosure.setStatus(ActionStatus.ACTIVE);
         closurePeriodRepository.saveAndFlush(activeClosure);

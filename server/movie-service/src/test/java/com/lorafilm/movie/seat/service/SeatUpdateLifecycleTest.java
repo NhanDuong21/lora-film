@@ -13,6 +13,7 @@ import com.lorafilm.movie.seat.dto.UpdateSeatRequest;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import com.lorafilm.movie.seat.service.impl.SeatServiceImpl;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,9 @@ public class SeatUpdateLifecycleTest {
 
     @Mock
     private AuditoriumRepository auditoriumRepository;
+
+    @Mock
+    private ShowtimeRepository showtimeRepository;
 
     @InjectMocks
     private SeatServiceImpl seatService;
@@ -123,6 +127,22 @@ public class SeatUpdateLifecycleTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.AUDITORIUM_LAYOUT_NOT_EDITABLE);
+    }
+
+    @Test
+    void shouldRejectStructuralUpdateWhenShowtimeHistoryExists() {
+        when(seatRepository.findByPublicIdAndDeletedAtIsNull(anyString())).thenReturn(Optional.of(seat));
+        when(auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate(anyString()))
+                .thenReturn(Optional.of(auditorium));
+        when(showtimeRepository.existsByAuditoriumId(auditorium.getId())).thenReturn(true);
+
+        UpdateSeatRequest request = new UpdateSeatRequest(
+                "type-1", "B", 2, "B2", 2, 2, null, SeatStatus.ACTIVE);
+
+        assertThatThrownBy(() -> seatService.updateSeat(seat.getPublicId(), request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUDITORIUM_LAYOUT_HAS_SHOWTIME_HISTORY);
     }
     
     @Test

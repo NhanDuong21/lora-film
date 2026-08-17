@@ -14,6 +14,8 @@ export default function RoomForm({
   cleaningBuffer,
   setCleaningBuffer,
   capacity,
+  approvedCapacity,
+  setApprovedCapacity,
   isCreateMode = false,
 }) {
   return (
@@ -98,19 +100,48 @@ export default function RoomForm({
         </p>
       </div>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-        <div className="flex items-center justify-between gap-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-              Sức chứa hiện tại
+              Số vị trí trong sơ đồ
             </p>
             <p className="mt-1 text-lg font-black text-white">{capacity} ghế</p>
           </div>
-          <span className="rounded-lg bg-brand-orange/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-brand-orange">
-            Tính từ sơ đồ ghế
-          </span>
+          <p className="mt-2 text-[10px] leading-4 text-zinc-500">Tự tính từ booking map.</p>
         </div>
+        {setApprovedCapacity ? (
+          <label className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-sky-300">
+              Sức chứa theo hồ sơ
+            </span>
+            <input
+              type="number"
+              min={capacity || 1}
+              max="1000"
+              value={approvedCapacity}
+              onChange={event => setApprovedCapacity(Number.parseInt(event.target.value, 10) || 0)}
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-bold text-white outline-none focus:border-sky-500"
+            />
+            <span className="mt-2 block text-[10px] leading-4 text-zinc-500">
+              Admin ghi nhận theo hồ sơ bên ngoài; hệ thống không tự phê duyệt PCCC.
+            </span>
+          </label>
+        ) : (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              Sức chứa đã cấu hình
+            </p>
+            <p className="mt-1 text-lg font-black text-white">{approvedCapacity ?? capacity} người</p>
+          </div>
+        )}
       </div>
+
+      {setApprovedCapacity && approvedCapacity < capacity && (
+        <p className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-300">
+          Số vị trí đặt vé đang vượt sức chứa theo hồ sơ. Hãy giảm ghế hoặc kiểm tra lại số đã nhập.
+        </p>
+      )}
 
       {isCreateMode && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-200">

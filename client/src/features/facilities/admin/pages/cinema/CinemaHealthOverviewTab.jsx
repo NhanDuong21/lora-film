@@ -10,30 +10,25 @@ import {
 } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import {
-  getCinemaReadiness,
   getCinemaStatus,
 } from '../../utils/facilityPresentation';
 
-const CHECK_ACTIONS = {
-  basic: { tab: 'overview', label: 'Bổ sung thông tin' },
-  hours: { tab: 'operating-hours', label: 'Thiết lập giờ mở cửa' },
-  media: { tab: 'media', label: 'Thêm hình ảnh' },
-  rooms: { tab: 'auditoriums', label: 'Thiết lập phòng chiếu' },
-};
-
 export default function CinemaHealthOverviewTab({
   cinema,
+  readiness,
   onOpenTab,
   onStatusChange,
 }) {
   const { triggerConfirm } = useOutletContext() || {};
-  const readiness = getCinemaReadiness(cinema);
   const status = getCinemaStatus(cinema.status);
+  const operationalChecks = readiness?.operationalChecks || [];
+  const publicProfileChecks = readiness?.publicProfileChecks || [];
+  const ready = readiness?.readyForActivation === true;
   const openDays = (cinema.operatingHours || []).filter((item) => !item.isClosed).length;
   const mediaCount = (cinema.gallery || []).length;
 
   const requestActivation = async () => {
-    if (!readiness.ready) return;
+    if (!ready) return;
     const confirmed = await triggerConfirm?.({
       title: 'Đưa cụm rạp vào hoạt động?',
       message:
@@ -53,12 +48,14 @@ export default function CinemaHealthOverviewTab({
                 Sức khỏe vận hành
               </p>
               <h2 className="mt-2 text-xl font-black text-white">
-                {readiness.ready ? 'Cụm rạp đã đủ điều kiện cơ bản' : 'Cụm rạp còn việc cần hoàn thiện'}
+                {ready ? 'Cụm rạp đã đủ điều kiện vận hành' : 'Cụm rạp còn điều kiện vận hành chưa hoàn tất'}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                {readiness.ready
-                  ? 'Thông tin, giờ mở cửa, hình ảnh và ít nhất một phòng phục vụ đã sẵn sàng.'
-                  : 'Hoàn thành các mục bên dưới trước khi đưa cụm rạp vào vận hành chính thức.'}
+                {ready
+                  ? 'Backend đã xác nhận thông tin, giờ hoạt động và phòng có booking layout.'
+                  : readiness
+                    ? 'Hoàn thành từng blocker do backend trả về trước khi đưa cụm rạp vào vận hành.'
+                    : 'Chưa tải được readiness authoritative. Thao tác kích hoạt đang được khóa an toàn.'}
               </p>
             </div>
             <span className={`rounded-xl border px-3 py-2 text-xs font-bold ${status.className}`}>
@@ -69,17 +66,17 @@ export default function CinemaHealthOverviewTab({
           <div className="mt-6 h-2 overflow-hidden rounded-full bg-zinc-800">
             <div
               className="h-full rounded-full bg-orange-500 transition-all"
-              style={{ width: `${(readiness.completed / readiness.total) * 100}%` }}
+              style={{ width: `${readiness ? (readiness.completedOperationalChecks / readiness.totalOperationalChecks) * 100 : 0}%` }}
             />
           </div>
           <p className="mt-2 text-xs text-zinc-500">
-            Hoàn thành {readiness.completed}/{readiness.total} hạng mục thiết lập
+            Hoàn thành {readiness?.completedOperationalChecks || 0}/{readiness?.totalOperationalChecks || 0} điều kiện vận hành
           </p>
 
           {cinema.status === 'DRAFT' && (
             <button
               type="button"
-              disabled={!readiness.ready}
+              disabled={!ready}
               onClick={requestActivation}
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-xs font-black uppercase tracking-wider text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -94,7 +91,7 @@ export default function CinemaHealthOverviewTab({
             Tình trạng hiện tại
           </h3>
           <div className="mt-5 space-y-4 text-sm">
-            <HealthRow icon={Film} label="Phòng sẵn sàng" value={`${readiness.readyRooms}/${readiness.totalRooms}`} />
+            <HealthRow icon={Film} label="Phòng sẵn sàng" value={`${readiness?.readyAuditoriums || 0}/${readiness?.totalAuditoriums || 0}`} />
             <HealthRow icon={Clock3} label="Ngày mở cửa mỗi tuần" value={`${openDays}/7`} />
             <HealthRow icon={ImageIcon} label="Hình ảnh đang quản lý" value={`${mediaCount}`} />
             <HealthRow icon={MapPin} label="Vị trí" value={cinema.city || 'Chưa hoàn thiện'} />
@@ -110,17 +107,16 @@ export default function CinemaHealthOverviewTab({
               Chọn một việc để đi thẳng đến khu vực cần xử lý.
             </p>
           </div>
-          {!readiness.ready && <AlertTriangle className="h-5 w-5 text-amber-400" />}
+          {!ready && <AlertTriangle className="h-5 w-5 text-amber-400" />}
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
-          {readiness.checks.map((check) => {
-            const action = CHECK_ACTIONS[check.id];
+          {operationalChecks.map((check) => {
             return (
               <button
                 type="button"
                 key={check.id}
-                onClick={() => onOpenTab(action.tab)}
+                onClick={() => onOpenTab(check.actionTab)}
                 className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-left transition hover:border-orange-500/40"
               >
                 <CheckCircle2
@@ -129,13 +125,38 @@ export default function CinemaHealthOverviewTab({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-zinc-100">{check.label}</p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    {check.complete ? 'Đã hoàn thành' : action.label}
+                    {check.complete ? 'Đã hoàn thành' : check.reason}
                   </p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-600" />
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-sky-500/20 bg-sky-500/5 p-6">
+        <h2 className="text-sm font-black uppercase tracking-wider text-sky-200">
+          Hồ sơ hiển thị cho khách hàng
+        </h2>
+        <p className="mt-2 text-xs leading-5 text-zinc-400">
+          Các mục này giúp trang cụm rạp đầy đủ hơn, nhưng không phải điều kiện an toàn để kích hoạt vận hành.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {publicProfileChecks.map((check) => (
+            <button
+              type="button"
+              key={check.id}
+              onClick={() => onOpenTab(check.actionTab)}
+              className="rounded-2xl border border-sky-500/10 bg-zinc-950/40 p-4 text-left"
+            >
+              <p className={`text-xs font-bold ${check.complete ? 'text-emerald-300' : 'text-sky-300'}`}>
+                {check.complete ? 'Đã hoàn tất' : 'Nên bổ sung'}
+              </p>
+              <p className="mt-2 text-sm font-bold text-zinc-100">{check.label}</p>
+              {!check.complete && <p className="mt-1 text-xs text-zinc-500">{check.reason}</p>}
+            </button>
+          ))}
         </div>
       </section>
 

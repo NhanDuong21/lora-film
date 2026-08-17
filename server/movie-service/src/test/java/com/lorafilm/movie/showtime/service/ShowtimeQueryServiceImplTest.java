@@ -77,7 +77,8 @@ class ShowtimeQueryServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(seatRepository, null, null);
+        seatService = new com.lorafilm.movie.seat.service.impl.SeatServiceImpl(
+                seatRepository, null, null, null);
         showtimeService = new ShowtimeQueryServiceImpl(showtimeRepository, showtimePriceRepository,
                 showtimeBlockedSeatRepository, seatService, showtimeMapper, movieMediaRepository);
 

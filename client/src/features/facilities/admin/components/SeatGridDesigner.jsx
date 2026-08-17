@@ -31,7 +31,7 @@ export default function SeatGridDesigner({
       {/* Projector Screen Visual Indicator */}
       <div className="w-full max-w-lg mx-auto mb-16 text-center">
         <div className="h-1.5 bg-gradient-to-r from-transparent via-[#ff7a1a] to-transparent shadow-[0_0_20px_rgba(255,122,26,0.9)] rounded-full mb-3"></div>
-        <span className="text-zinc-500 text-[10px] tracking-[0.44em] font-black uppercase">MÀN HÌNH CHIẾU / PROJECTOR SCREEN</span>
+        <span className="text-zinc-500 text-[10px] tracking-[0.44em] font-black uppercase">MÀN HÌNH CHIẾU</span>
       </div>
 
       {/* Visual Interactive Seating Grid Box */}

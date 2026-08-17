@@ -12,6 +12,7 @@ import com.lorafilm.movie.seat.dto.*;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import com.lorafilm.movie.seat.service.SeatService;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,12 +25,14 @@ public class SeatServiceImpl implements SeatService {
     private final SeatRepository seatRepository;
     private final SeatTypeRepository seatTypeRepository;
     private final AuditoriumRepository auditoriumRepository;
+    private final ShowtimeRepository showtimeRepository;
 
     public SeatServiceImpl(SeatRepository seatRepository, SeatTypeRepository seatTypeRepository,
-            AuditoriumRepository auditoriumRepository) {
+            AuditoriumRepository auditoriumRepository, ShowtimeRepository showtimeRepository) {
         this.seatRepository = seatRepository;
         this.seatTypeRepository = seatTypeRepository;
         this.auditoriumRepository = auditoriumRepository;
+        this.showtimeRepository = showtimeRepository;
     }
 
     @Override
@@ -48,11 +51,15 @@ public class SeatServiceImpl implements SeatService {
             errorData.put("message", "Thay đổi cấu trúc ghế chỉ được phép khi Auditorium ở trạng thái DRAFT.");
             throw new BusinessException(ErrorCode.AUDITORIUM_LAYOUT_NOT_EDITABLE, errorData);
         }
+        assertNoShowtimeHistory(auditorium);
         
         List<BulkItemError> errors = new ArrayList<>();
         int totalItems = request.seats().size();
+        int targetCapacity = request.capacity() == null
+                ? auditorium.getCapacity()
+                : request.capacity();
 
-        if (totalItems > auditorium.getCapacity()) {
+        if (totalItems > targetCapacity) {
             throw new BusinessException(ErrorCode.SEAT_CAPACITY_EXCEEDED);
         }
 
@@ -178,6 +185,7 @@ public class SeatServiceImpl implements SeatService {
 
         // Saving a DRAFT room layout is a full replacement. Validate the complete
         // incoming layout first so invalid input never executes a delete statement.
+        auditorium.setCapacity(targetCapacity);
         seatRepository.deleteByAuditoriumId(auditorium.getId());
         seatsToSave = seatRepository.saveAll(seatsToSave);
         return seatsToSave.stream().map(this::mapToResponse).collect(Collectors.toList());
@@ -253,6 +261,9 @@ public class SeatServiceImpl implements SeatService {
             errorData.put("seatPublicId", seatPublicId);
             errorData.put("message", "Thay đổi cấu trúc ghế chỉ được phép khi Auditorium ở trạng thái DRAFT.");
             throw new BusinessException(ErrorCode.AUDITORIUM_LAYOUT_NOT_EDITABLE, errorData);
+        }
+        if (structuralChanged) {
+            assertNoShowtimeHistory(auditorium);
         }
 
         String normalizedSeatCode = request.seatCode() != null ? request.seatCode().trim() : null;
@@ -330,6 +341,16 @@ public class SeatServiceImpl implements SeatService {
                         ErrorCode.INVALID_COUPLE_PAIR_CONFIGURATION,
                         "A couple pairGroup must contain exactly two adjacent seats in the same row");
             }
+        }
+    }
+
+    private void assertNoShowtimeHistory(Auditorium auditorium) {
+        if (showtimeRepository.existsByAuditoriumId(auditorium.getId())) {
+            Map<String, Object> errorData = new HashMap<>();
+            errorData.put("auditoriumPublicId", auditorium.getPublicId());
+            errorData.put("message",
+                    "Phòng đã có lịch sử suất chiếu. Hãy tạo phiên bản sơ đồ mới thay vì ghi đè seat identity.");
+            throw new BusinessException(ErrorCode.AUDITORIUM_LAYOUT_HAS_SHOWTIME_HISTORY, errorData);
         }
     }
 

@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -8,7 +8,9 @@ import {
   Sliders, 
   Save, 
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import adminRoomService from '@/features/facilities/admin/services/adminRoomService';
@@ -23,7 +25,7 @@ import AutoLayoutWizardModal from '@/features/facilities/admin/components/AutoLa
 import { buildSeatItems } from '@/features/facilities/admin/utils/seatLayout';
 
 export default function AdminRoomCreatePage() {
-  const { triggerToast } = useOutletContext() || {};
+  const { triggerToast, triggerConfirm } = useOutletContext() || {};
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const cinemaId = searchParams.get('cinemaId');
@@ -35,6 +37,7 @@ export default function AdminRoomCreatePage() {
   const [screenType, setScreenType] = useState('STANDARD');
   const [soundType, setSoundType] = useState('STANDARD');
   const [cleaningBuffer, setCleaningBuffer] = useState(15);
+  const [approvedCapacity, setApprovedCapacity] = useState(120);
 
   // Seating grid dimensions
   const [rows, setRows] = useState(10);
@@ -52,6 +55,75 @@ export default function AdminRoomCreatePage() {
   // Available seat types from DB
   const [dbSeatTypes, setDbSeatTypes] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [historyState, setHistoryState] = useState({ undoCount: 0, redoCount: 0 });
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
+
+  const cloneMatrix = source => source.map(row => row.map(cell => ({ ...cell })));
+
+  const createLayoutSnapshot = (
+    source = matrix,
+    snapshotRows = rows,
+    snapshotCols = cols,
+    snapshotSkipIO = skipIO,
+  ) => ({
+    matrix: cloneMatrix(source),
+    rows: snapshotRows,
+    cols: snapshotCols,
+    skipIO: snapshotSkipIO,
+  });
+
+  const restoreLayoutSnapshot = snapshot => {
+    setRows(snapshot.rows);
+    setCols(snapshot.cols);
+    setSkipIO(snapshot.skipIO);
+    setMatrix(cloneMatrix(snapshot.matrix));
+  };
+
+  const pushHistory = source => {
+    undoStackRef.current = [
+      ...undoStackRef.current.slice(-49),
+      createLayoutSnapshot(source),
+    ];
+    redoStackRef.current = [];
+    setHistoryState({ undoCount: undoStackRef.current.length, redoCount: 0 });
+    setHasUnsavedChanges(true);
+  };
+
+  const undo = () => {
+    const previous = undoStackRef.current.pop();
+    if (!previous) return;
+    redoStackRef.current.push(createLayoutSnapshot());
+    restoreLayoutSnapshot(previous);
+    setHistoryState({
+      undoCount: undoStackRef.current.length,
+      redoCount: redoStackRef.current.length,
+    });
+    setHasUnsavedChanges(true);
+  };
+
+  const redo = () => {
+    const next = redoStackRef.current.pop();
+    if (!next) return;
+    undoStackRef.current.push(createLayoutSnapshot());
+    restoreLayoutSnapshot(next);
+    setHistoryState({
+      undoCount: undoStackRef.current.length,
+      redoCount: redoStackRef.current.length,
+    });
+    setHasUnsavedChanges(true);
+  };
+
+  useEffect(() => {
+    const warnBeforeUnload = event => {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // Load initial cinema detail and seat types
   useEffect(() => {
@@ -115,6 +187,7 @@ export default function AdminRoomCreatePage() {
   };
 
   const handleCellMouseDown = (r, c) => {
+    pushHistory(matrix);
     setIsMouseDown(true);
     handleCellPaint(r, c);
   };
@@ -207,6 +280,7 @@ export default function AdminRoomCreatePage() {
 
   // Handle Wizard Apply
   const handleApplyWizard = (newMatrix, newRows, newCols) => {
+    pushHistory(matrix);
     setRows(newRows);
     setCols(newCols);
     setMatrix(newMatrix);
@@ -221,6 +295,10 @@ export default function AdminRoomCreatePage() {
 
     if (stats.activeSeats === 0) {
       triggerToast?.('Sơ đồ phòng chiếu phải có ít nhất 1 ghế!', 'error');
+      return;
+    }
+    if (approvedCapacity < stats.activeSeats) {
+      triggerToast?.('Số vị trí trong sơ đồ không được vượt sức chứa theo hồ sơ.', 'error');
       return;
     }
 
@@ -255,31 +333,29 @@ export default function AdminRoomCreatePage() {
       // malformed manual couple-seat selection cannot leave an orphan DRAFT.
       const seatsList = buildSeatItems({ matrix, rows, cols, skipIO, typeMapping });
 
-      // 2. Create the Auditorium Room (status defaults to DRAFT)
+      // Create the auditorium and its initial booking layout in one backend
+      // transaction so a failed layout can never leave an orphan room draft.
       const roomPayload = {
         name: roomName.trim(),
         screenType,
         soundType,
-        capacity: stats.activeSeats,
+        capacity: approvedCapacity,
         cleaningBufferMinutes: parseInt(cleaningBuffer) || 15
       };
 
-      const auditoriumRes = await adminRoomService.createAuditorium(cinemaId, roomPayload);
+      const auditoriumRes = await adminRoomService.createAuditoriumWithLayout(
+        cinemaId,
+        roomPayload,
+        { seats: seatsList, capacity: approvedCapacity },
+      );
       if (!auditoriumRes?.success || !auditoriumRes.data) {
         throw new Error(auditoriumRes?.message || 'Không thể tạo phòng chiếu');
-      }
-
-      const roomPublicId = auditoriumRes.data.publicId;
-
-      // 3. Save seats via bulk endpoint
-      const bulkRes = await adminRoomService.bulkCreateSeats(roomPublicId, { seats: seatsList });
-      if (!bulkRes?.success) {
-        throw new Error(bulkRes?.message || 'Không thể đồng bộ danh sách ghế');
       }
 
       triggerToast?.(
         `Đã tạo phòng "${roomName}" với ${stats.activeSeats} ghế. Phòng đang ở bước thiết lập để bạn kiểm tra trước khi mở bán.`
       );
+      setHasUnsavedChanges(false);
       navigate('/admin/rooms');
     } catch (err) {
       console.error('Failed to save room:', err);
@@ -289,6 +365,22 @@ export default function AdminRoomCreatePage() {
     }
   };
 
+  const leaveEditor = async () => {
+    if (!hasUnsavedChanges) {
+      navigate('/admin/rooms');
+      return;
+    }
+    const confirmed = triggerConfirm
+      ? await triggerConfirm({
+          title: 'Rời bản nháp chưa lưu?',
+          message: 'Các thay đổi trên sơ đồ và thông tin phòng sẽ bị mất.',
+          confirmLabel: 'Rời trang',
+          tone: 'danger',
+        })
+      : window.confirm('Các thay đổi chưa lưu sẽ bị mất. Rời trang?');
+    if (confirmed) navigate('/admin/rooms');
+  };
+
   return (
     <div className="flex flex-col flex-1 h-screen overflow-hidden bg-zinc-950 font-sans text-white">
       
@@ -296,7 +388,7 @@ export default function AdminRoomCreatePage() {
       <header className="h-16 bg-zinc-900 border-b border-zinc-800 px-6 flex justify-between items-center select-none shrink-0">
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => navigate('/admin/rooms')}
+            onClick={leaveEditor}
             className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-all hover:bg-zinc-800 hover:text-white"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -310,113 +402,68 @@ export default function AdminRoomCreatePage() {
               {cinemaName || 'Đang tải thông tin cụm rạp...'}
             </p>
           </div>
+          <span className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-300">
+            Bản nháp · Chưa xác nhận
+          </span>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={isSubmitting}
-          className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-650 text-black text-xs font-black py-2 px-4 rounded-xl uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10"
-        >
-          <Save className="w-4 h-4" />
-          <span>{isSubmitting ? 'Đang lưu...' : 'Lưu Phòng Chiếu'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="mr-2 text-[10px] font-bold text-zinc-500">
+            {hasUnsavedChanges ? 'Có thay đổi chưa lưu' : 'Chưa có thay đổi mới'}
+          </span>
+          <button
+            type="button"
+            onClick={undo}
+            disabled={historyState.undoCount === 0}
+            aria-label="Hoàn tác"
+            className="rounded-lg border border-zinc-800 p-2 text-zinc-300 disabled:opacity-30"
+          >
+            <Undo2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={historyState.redoCount === 0}
+            aria-label="Làm lại"
+            className="rounded-lg border border-zinc-800 p-2 text-zinc-300 disabled:opacity-30"
+          >
+            <Redo2 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="flex items-center gap-2 bg-brand-orange hover:bg-orange-500 disabled:bg-zinc-800 disabled:text-zinc-650 text-black text-xs font-black py-2 px-4 rounded-xl uppercase tracking-wider transition-all"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isSubmitting ? 'Đang lưu...' : 'Tạo bản nháp phòng'}</span>
+          </button>
+        </div>
       </header>
 
-      {/* Editor Body */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* Left Form Settings Bar */}
-        <aside className="w-80 bg-zinc-900 border-r border-zinc-800 p-5 flex flex-col justify-between overflow-y-auto shrink-0 select-none">
-          <div className="space-y-6">
-            
-            {/* Quick Layout Trigger */}
-            <button 
-              onClick={() => setIsWizardOpen(true)}
-              className="w-full flex items-center justify-center gap-2 bg-zinc-950 border border-brand-orange/40 hover:bg-brand-orange/10 text-brand-orange font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition-all"
-            >
-              <Sparkles className="w-4 h-4" />
-              Sinh sơ đồ tự động
-            </button>
-
-            {/* General Info Form */}
-            <RoomForm
-              roomName={roomName}
-              setRoomName={setRoomName}
-              screenType={screenType}
-              setScreenType={setScreenType}
-              soundType={soundType}
-              setSoundType={setSoundType}
-              cleaningBuffer={cleaningBuffer}
-              setCleaningBuffer={setCleaningBuffer}
-              capacity={stats.activeSeats}
-              isCreateMode={true}
-            />
-
-            {/* Grid Dimensions */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
-                <Sliders className="w-4 h-4 text-brand-orange" />
-                <h3 className="font-bold text-xs text-white uppercase tracking-wider">Kích thước lưới</h3>
-              </div>
-
-              {/* Rows Selector */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-bold text-zinc-400">
-                  <span>Số hàng ghế (Rows)</span>
-                  <span className="text-brand-orange font-black">{rows}</span>
-                </div>
-                <input 
-                  type="range"
-                  min="4"
-                  max="20"
-                  value={rows}
-                  onChange={(e) => setRows(parseInt(e.target.value))}
-                  className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
-                />
-              </div>
-
-              {/* Columns Selector */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-bold text-zinc-400">
-                  <span>Số cột ghế (Cols)</span>
-                  <span className="text-brand-orange font-black">{cols}</span>
-                </div>
-                <input 
-                  type="range"
-                  min="4"
-                  max="20"
-                  value={cols}
-                  onChange={(e) => setCols(parseInt(e.target.value))}
-                  className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-orange"
-                />
-              </div>
-
-              {/* Skip I/O Selector */}
-              <div className="pt-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-zinc-400 hover:text-white transition-colors">
-                  <input 
-                    type="checkbox" 
-                    checked={skipIO}
-                    onChange={(e) => setSkipIO(e.target.checked)}
-                    className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-brand-orange focus:ring-brand-orange/50 focus:ring-offset-zinc-950"
-                  />
-                  <span>Bỏ qua ký tự dễ gây nhầm lẫn (I, O)</span>
-                </label>
-              </div>
-            </div>
+      <div className="grid min-h-0 flex-1 grid-cols-[230px_minmax(0,1fr)_340px] overflow-hidden">
+        <aside className="overflow-y-auto border-r border-zinc-800 bg-zinc-900/70 p-4 select-none">
+          <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Công cụ sơ đồ</p>
+          <button
+            onClick={() => setIsWizardOpen(true)}
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-orange/40 bg-zinc-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-brand-orange transition hover:bg-brand-orange/10"
+          >
+            <Sparkles className="h-4 w-4" />
+            Tạo bố cục khởi đầu
+          </button>
+          <BrushToolbar
+            activeBrush={activeBrush}
+            setActiveBrush={setActiveBrush}
+            orientation="vertical"
+          />
+          <div className="mt-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-[11px] leading-5 text-sky-200">
+            Lối đi và cửa là dữ liệu số hóa theo hồ sơ đã duyệt; LoraFilm không tự xác nhận PCCC.
           </div>
-
-          {/* Stats Summary Panel */}
-          <StatsPanel stats={stats} />
         </aside>
 
-        {/* Right Seating Canvas Workspace */}
-        <main className="flex-grow bg-zinc-950 p-6 md:p-8 flex flex-col items-center overflow-auto relative">
-          
-          {/* Seating Brush Selector Top Toolbar */}
-          <BrushToolbar activeBrush={activeBrush} setActiveBrush={setActiveBrush} />
-
-          {/* Seating Grid */}
+        <main className="relative flex min-w-0 flex-col items-center overflow-auto bg-zinc-950 p-6 md:p-8">
+          <div className="mb-6 w-full max-w-5xl rounded-2xl border border-zinc-900 bg-zinc-900/20 px-4 py-3 text-xs text-zinc-400">
+            Canvas sơ đồ · Màn hình chiếu ở phía trên · {stats.activeSeats} vị trí đặt vé
+          </div>
           <SeatGridDesigner
             matrix={matrix}
             rows={rows}
@@ -427,20 +474,90 @@ export default function AdminRoomCreatePage() {
             onCellMouseEnter={handleCellMouseEnter}
           />
           
-          {/* Seating Map Guide */}
           <div className="flex items-center gap-2 mt-8 text-zinc-500 text-[10px] uppercase font-bold tracking-wider max-w-lg bg-zinc-900/20 border border-zinc-900 p-4 rounded-xl select-none">
             <AlertCircle className="w-4 h-4 text-brand-orange shrink-0" />
             <span>Mẹo: Nhấn chuột xuống và di (kéo rê chuột) qua lưới để vẽ hàng ghế/lối đi nhanh hơn. Chỉ có ghế ngồi (Thường, VIP, Đôi, Khuyết tật) được lưu vào cơ sở dữ liệu.</span>
           </div>
 
         </main>
+
+        <aside className="overflow-y-auto border-l border-zinc-800 bg-zinc-900/60 p-5 select-none">
+          <RoomForm
+            roomName={roomName}
+            setRoomName={(value) => { setRoomName(value); setHasUnsavedChanges(true); }}
+            screenType={screenType}
+            setScreenType={(value) => { setScreenType(value); setHasUnsavedChanges(true); }}
+            soundType={soundType}
+            setSoundType={(value) => { setSoundType(value); setHasUnsavedChanges(true); }}
+            cleaningBuffer={cleaningBuffer}
+            setCleaningBuffer={(value) => { setCleaningBuffer(value); setHasUnsavedChanges(true); }}
+            capacity={stats.activeSeats}
+            approvedCapacity={approvedCapacity}
+            setApprovedCapacity={(value) => {
+              setApprovedCapacity(value);
+              setHasUnsavedChanges(true);
+            }}
+            isCreateMode={true}
+          />
+
+          <div className="mt-6 space-y-4 border-t border-zinc-800 pt-5">
+            <div className="flex items-center gap-2">
+              <Sliders className="h-4 w-4 text-brand-orange" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Kích thước canvas</h3>
+            </div>
+            <RangeField
+              label="Số hàng"
+              value={rows}
+              onChange={(value) => { pushHistory(matrix); setRows(value); }}
+            />
+            <RangeField
+              label="Số cột"
+              value={cols}
+              onChange={(value) => { pushHistory(matrix); setCols(value); }}
+            />
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-400">
+              <input
+                type="checkbox"
+                checked={skipIO}
+                onChange={(event) => {
+                  setSkipIO(event.target.checked);
+                  setHasUnsavedChanges(true);
+                }}
+                className="h-4 w-4 accent-orange-500"
+              />
+              Bỏ qua ký tự I, O
+            </label>
+          </div>
+          <StatsPanel stats={stats} />
+        </aside>
+
         <AutoLayoutWizardModal 
           isOpen={isWizardOpen} 
           onClose={() => setIsWizardOpen(false)} 
           onApply={handleApplyWizard} 
           currentSkipIO={skipIO}
+          currentMatrix={matrix}
         />
       </div>
     </div>
+  );
+}
+
+function RangeField({ label, value, onChange }) {
+  return (
+    <label className="block space-y-2">
+      <span className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-zinc-500">
+        <span>{label}</span>
+        <span className="rounded-md bg-zinc-950 px-2 py-1 text-zinc-200">{value}</span>
+      </span>
+      <input
+        type="range"
+        min="3"
+        max="30"
+        value={value}
+        onChange={event => onChange(Number.parseInt(event.target.value, 10))}
+        className="h-1.5 w-full cursor-pointer accent-orange-500"
+      />
+    </label>
   );
 }

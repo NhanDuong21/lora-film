@@ -2,6 +2,7 @@ package com.lorafilm.movie.cinema.dto;
 
 import com.lorafilm.movie.common.enums.ActionStatus;
 import java.time.Instant;
+import java.time.LocalDate;
 
 public class CinemaClosurePeriodResponse {
 
@@ -9,6 +10,7 @@ public class CinemaClosurePeriodResponse {
     private String cinemaPublicId;
     private Instant startTime;
     private Instant endTime;
+    private LocalDate serviceDate;
     private String reason;
     private ActionStatus status;
 
@@ -45,6 +47,14 @@ public class CinemaClosurePeriodResponse {
 
     public void setEndTime(Instant endTime) {
         this.endTime = endTime;
+    }
+
+    public LocalDate getServiceDate() {
+        return serviceDate;
+    }
+
+    public void setServiceDate(LocalDate serviceDate) {
+        this.serviceDate = serviceDate;
     }
 
     public String getReason() {

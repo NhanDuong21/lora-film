@@ -4,6 +4,7 @@ import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
 import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
 import com.lorafilm.movie.auditorium.dto.AuditoriumResponse;
 import com.lorafilm.movie.auditorium.dto.CreateAuditoriumRequest;
+import com.lorafilm.movie.auditorium.dto.CreateAuditoriumWithLayoutRequest;
 import com.lorafilm.movie.auditorium.dto.UpdateAuditoriumRequest;
 
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
@@ -16,6 +17,7 @@ import com.lorafilm.movie.common.exception.BusinessException;
 import com.lorafilm.movie.common.exception.ErrorCode;
 import com.lorafilm.movie.common.security.CurrentUserProvider;
 import com.lorafilm.movie.seat.repository.SeatRepository;
+import com.lorafilm.movie.seat.service.SeatService;
 import com.lorafilm.movie.seat.domain.entity.Seat;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.springframework.stereotype.Service;
@@ -33,13 +35,21 @@ public class AuditoriumServiceImpl implements AuditoriumService {
     private final SeatRepository seatRepository;
     private final ShowtimeRepository showtimeRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final SeatService seatService;
 
-    public AuditoriumServiceImpl(AuditoriumRepository auditoriumRepository, CinemaRepository cinemaRepository, SeatRepository seatRepository, ShowtimeRepository showtimeRepository, CurrentUserProvider currentUserProvider) {
+    public AuditoriumServiceImpl(
+            AuditoriumRepository auditoriumRepository,
+            CinemaRepository cinemaRepository,
+            SeatRepository seatRepository,
+            ShowtimeRepository showtimeRepository,
+            CurrentUserProvider currentUserProvider,
+            SeatService seatService) {
         this.auditoriumRepository = auditoriumRepository;
         this.cinemaRepository = cinemaRepository;
         this.seatRepository = seatRepository;
         this.showtimeRepository = showtimeRepository;
         this.currentUserProvider = currentUserProvider;
+        this.seatService = seatService;
     }
 
     @Override
@@ -68,6 +78,21 @@ public class AuditoriumServiceImpl implements AuditoriumService {
         
         auditorium = auditoriumRepository.save(auditorium);
         return mapToResponse(auditorium);
+    }
+
+    @Override
+    @Transactional
+    public AuditoriumResponse createAuditoriumWithLayout(
+            String cinemaPublicId, CreateAuditoriumWithLayoutRequest request) {
+        if (!request.auditorium().capacity().equals(request.layout().capacity())) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Sức chứa phòng phải khớp với sức chứa của sơ đồ ban đầu");
+        }
+
+        AuditoriumResponse auditorium = createAuditorium(cinemaPublicId, request.auditorium());
+        seatService.bulkCreateSeats(auditorium.publicId(), request.layout());
+        return auditorium;
     }
 
     @Override
@@ -116,6 +141,11 @@ public class AuditoriumServiceImpl implements AuditoriumService {
 
         if (targetAuditorium.getStatus() != AuditoriumStatus.DRAFT) {
             throw new BusinessException(ErrorCode.AUDITORIUM_NOT_CONFIGURABLE);
+        }
+        if (showtimeRepository.existsByAuditoriumId(targetAuditorium.getId())) {
+            throw new BusinessException(
+                    ErrorCode.AUDITORIUM_LAYOUT_HAS_SHOWTIME_HISTORY,
+                    "Phòng đã có lịch sử suất chiếu; không thể ghi đè seat identity bằng thao tác nhân bản.");
         }
 
         List<Seat> existingSeats = seatRepository.findByAuditoriumIdAndDeletedAtIsNull(targetAuditorium.getId());
@@ -200,6 +230,9 @@ public class AuditoriumServiceImpl implements AuditoriumService {
             CinemaStatus cs = auditorium.getCinema().getStatus();
             if (cs == CinemaStatus.INACTIVE || cs == CinemaStatus.PERMANENTLY_CLOSED) {
                 throw new BusinessException(ErrorCode.CINEMA_NOT_CONFIGURABLE);
+            }
+            if (seatRepository.countSellableLayoutSeatsByAuditoriumId(auditorium.getId()) <= 0) {
+                throw new BusinessException(ErrorCode.AUDITORIUM_LAYOUT_REQUIRED);
             }
         }
     }

@@ -15,6 +15,7 @@ import com.lorafilm.movie.seat.dto.BulkSeatItemRequest;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.seat.repository.SeatTypeRepository;
 import com.lorafilm.movie.seat.service.impl.SeatServiceImpl;
+import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,8 @@ class SeatServiceCoupleValidationTest {
     private SeatTypeRepository seatTypeRepository;
     @Mock
     private AuditoriumRepository auditoriumRepository;
+    @Mock
+    private ShowtimeRepository showtimeRepository;
 
     private SeatServiceImpl seatService;
     private Auditorium auditorium;
@@ -48,7 +51,7 @@ class SeatServiceCoupleValidationTest {
     @BeforeEach
     void setUp() {
         seatService = new SeatServiceImpl(
-                seatRepository, seatTypeRepository, auditoriumRepository);
+                seatRepository, seatTypeRepository, auditoriumRepository, showtimeRepository);
 
         auditorium = new Auditorium();
         auditorium.setId(10L);
@@ -64,7 +67,8 @@ class SeatServiceCoupleValidationTest {
 
         when(auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate("auditorium-10"))
                 .thenReturn(Optional.of(auditorium));
-        when(seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(anyList()))
+        org.mockito.Mockito.lenient()
+                .when(seatTypeRepository.findAllByPublicIdInAndDeletedAtIsNull(anyList()))
                 .thenReturn(List.of(coupleType));
     }
 
@@ -95,6 +99,21 @@ class SeatServiceCoupleValidationTest {
         assertThat(response).hasSize(2);
         assertThat(response).extracting("pairGroup").containsOnly("I-01");
         verify(seatRepository).deleteByAuditoriumId(10L);
+    }
+
+    @Test
+    void rejectsReplacementWhenAuditoriumHasShowtimeHistory() {
+        BulkCreateSeatsRequest request = new BulkCreateSeatsRequest(List.of(
+                coupleSeat("I1", 1, "I-01"),
+                coupleSeat("I2", 2, "I-01")));
+        when(showtimeRepository.existsByAuditoriumId(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> seatService.bulkCreateSeats("auditorium-10", request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUDITORIUM_LAYOUT_HAS_SHOWTIME_HISTORY);
+
+        verify(seatRepository, never()).deleteByAuditoriumId(10L);
     }
 
     private BulkSeatItemRequest coupleSeat(

@@ -2,13 +2,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 
-export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
+export default function useAdminCinemas({ triggerToast } = {}) {
   const [cinemas, setCinemas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [error, setError] = useState(null);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
@@ -49,35 +48,6 @@ export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
     }
   }, [currentPage, pageSize, searchTerm, cityFilter, statusFilter, triggerToast]);
 
-  // Keep historical data intact: "remove" in the UI means archive, never hard-delete.
-  const handleDeleteCinema = async (id, name) => {
-    const shouldDelete = await triggerConfirm?.({
-      title: `Lưu trữ cụm rạp “${name}”?`,
-      message: 'Cụm rạp sẽ ngừng xuất hiện trong hoạt động bán vé nhưng toàn bộ lịch sử suất chiếu, đơn đặt vé và báo cáo vẫn được giữ lại. Hãy kiểm tra các suất chiếu sắp tới trước khi tiếp tục.',
-      confirmLabel: 'Lưu trữ cụm rạp',
-      tone: 'danger',
-    });
-
-    if (shouldDelete) {
-      setIsLoading(true);
-      setError(null);
-      try {
-        await adminCinemaService.updateCinemaStatus(id, 'PERMANENTLY_CLOSED');
-        triggerToast?.('Đã lưu trữ cụm rạp và giữ nguyên dữ liệu lịch sử', 'success');
-        await fetchCinemas();
-        return true;
-      } catch (err) {
-        const displayMsg = err.response?.data?.message || err.message || 'Không thể lưu trữ cụm rạp';
-        setError(displayMsg);
-        triggerToast?.(displayMsg, 'error');
-        return false;
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    return false;
-  };
-
   // Handle status update
   const handleStatusChange = useCallback(async (publicId, newStatus) => {
     try {
@@ -106,8 +76,6 @@ export default function useAdminCinemas({ triggerConfirm, triggerToast } = {}) {
     totalElements,
     citiesList,
     fetchCinemas,
-    handleDeleteCinema,
     handleStatusChange,
-    error
   };
 }

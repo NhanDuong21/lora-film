@@ -19,6 +19,12 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
     
     @Query("SELECT COUNT(s) FROM Seat s WHERE s.auditorium.id = :auditoriumId AND s.deletedAt IS NULL")
     long countByAuditoriumIdAndDeletedAtIsNull(@Param("auditoriumId") Long auditoriumId);
+
+    @Query("SELECT COUNT(s) FROM Seat s JOIN s.seatType st " +
+           "WHERE s.auditorium.id = :auditoriumId " +
+           "AND s.deletedAt IS NULL AND s.status = 'ACTIVE' " +
+           "AND st.deletedAt IS NULL AND st.status = 'ACTIVE'")
+    long countSellableLayoutSeatsByAuditoriumId(@Param("auditoriumId") Long auditoriumId);
     
     boolean existsByAuditoriumIdAndSeatCodeAndDeletedAtIsNull(Long auditoriumId, String seatCode);
     

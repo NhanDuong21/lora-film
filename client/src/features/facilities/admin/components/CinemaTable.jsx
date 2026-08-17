@@ -1,4 +1,4 @@
-import { Search, MapPin, Plus, Archive, Settings2 } from 'lucide-react';
+import { Search, MapPin, Plus, Settings2 } from 'lucide-react';
 import SkeletonTable from '@/components/common/SkeletonTable';
 import { getCinemaStatus } from '../utils/facilityPresentation';
 
@@ -17,7 +17,6 @@ export default function CinemaTable({
   totalPages,
   totalElements,
   citiesList,
-  onDelete,
   // eslint-disable-next-line no-unused-vars
   onStatusChange,
   onOpenCreate,
@@ -98,7 +97,7 @@ export default function CinemaTable({
             <option value="MAINTENANCE">Đang bảo trì</option>
             <option value="TEMPORARILY_CLOSED">Tạm đóng cửa</option>
             <option value="INACTIVE">Tạm ngừng</option>
-            <option value="PERMANENTLY_CLOSED">Đã lưu trữ</option>
+            <option value="PERMANENTLY_CLOSED">Ngừng khai thác</option>
           </select>
         </div>
       </div>
@@ -183,15 +182,6 @@ export default function CinemaTable({
                             <Settings2 className="w-3.5 h-3.5" />
                             Mở trung tâm vận hành
                           </button>
-                          {cinema.status !== 'PERMANENTLY_CLOSED' && (
-                          <button
-                            onClick={() => onDelete(cinema.publicId, cinema.name)}
-                            className="inline-flex items-center gap-2 px-3 py-2 text-[10px] text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-zinc-800 hover:border-red-500/20 rounded-lg transition-all"
-                          >
-                            <Archive className="w-3.5 h-3.5" />
-                            Lưu trữ
-                          </button>
-                          )}
                         </div>
                       </td>
                     </tr>

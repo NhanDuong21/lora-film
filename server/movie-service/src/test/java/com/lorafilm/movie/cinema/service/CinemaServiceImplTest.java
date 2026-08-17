@@ -12,6 +12,8 @@ import com.lorafilm.movie.cinema.repository.CinemaOperatingHourRepository;
 import com.lorafilm.movie.cinema.repository.CinemaClosurePeriodRepository;
 import com.lorafilm.movie.cinema.repository.CinemaRepository;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
+import com.lorafilm.movie.auditorium.domain.entity.Auditorium;
+import com.lorafilm.movie.auditorium.domain.enums.AuditoriumStatus;
 import com.lorafilm.movie.seat.repository.SeatRepository;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import com.lorafilm.movie.common.enums.ActiveStatus;
@@ -200,11 +202,11 @@ class CinemaServiceImplTest {
         existingCinema.setId(1L);
         existingCinema.setPublicId("uuid-123");
         existingCinema.setStatus(CinemaStatus.DRAFT);
+        stubBasicInformation(existingCinema);
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
-        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
-        when(cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
-        when(cinemaOperatingHourRepository.existsByCinemaId(1L)).thenReturn(true);
+        stubOperatingHours();
+        stubActiveRoomWithLayout(existingCinema);
         when(cinemaRepository.save(any(Cinema.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CinemaResponse expectedResponse = new CinemaResponse();
@@ -224,31 +226,39 @@ class CinemaServiceImplTest {
         existingCinema.setId(1L);
         existingCinema.setPublicId("uuid-123");
         existingCinema.setStatus(CinemaStatus.DRAFT);
+        stubBasicInformation(existingCinema);
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
-        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+        stubOperatingHours();
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
-        assertEquals(ErrorCode.CINEMA_MISSING_AUDITORIUM, exception.getErrorCode());
+        assertEquals(ErrorCode.CINEMA_ACTIVATION_BLOCKED, exception.getErrorCode());
         verify(cinemaRepository, never()).save(any(Cinema.class));
     }
 
     @Test
-    void updateCinemaStatus_shouldThrowException_whenActivatingWithoutImages() {
+    void updateCinemaStatus_shouldAllowActivationWithoutPublicProfileImages() {
         Cinema existingCinema = new Cinema();
         existingCinema.setId(1L);
         existingCinema.setPublicId("uuid-123");
         existingCinema.setStatus(CinemaStatus.DRAFT);
+        stubBasicInformation(existingCinema);
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
-        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
-        when(cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(false);
+        stubOperatingHours();
+        stubActiveRoomWithLayout(existingCinema);
+        when(cinemaMediaRepository.findByCinemaIdAndStatusAndDeletedAtIsNullOrderByDisplayOrderAsc(
+                1L, ActiveStatus.ACTIVE)).thenReturn(List.of());
+        when(cinemaRepository.save(any(Cinema.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        CinemaResponse expectedResponse = new CinemaResponse();
+        expectedResponse.setStatus(CinemaStatus.ACTIVE);
+        when(cinemaMapper.toResponse(any(Cinema.class))).thenReturn(expectedResponse);
 
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
-        assertEquals(ErrorCode.CINEMA_MISSING_IMAGES, exception.getErrorCode());
-        verify(cinemaRepository, never()).save(any(Cinema.class));
+        CinemaResponse response = cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE);
+
+        assertEquals(CinemaStatus.ACTIVE, response.getStatus());
+        verify(cinemaRepository).save(any(Cinema.class));
     }
 
     @Test
@@ -257,15 +267,14 @@ class CinemaServiceImplTest {
         existingCinema.setId(1L);
         existingCinema.setPublicId("uuid-123");
         existingCinema.setStatus(CinemaStatus.DRAFT);
+        stubBasicInformation(existingCinema);
 
         when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("uuid-123")).thenReturn(Optional.of(existingCinema));
-        when(auditoriumRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
-        when(cinemaMediaRepository.existsByCinemaIdAndDeletedAtIsNull(1L)).thenReturn(true);
-        when(cinemaOperatingHourRepository.existsByCinemaId(1L)).thenReturn(false);
+        stubActiveRoomWithLayout(existingCinema);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> cinemaService.updateCinemaStatus("uuid-123", CinemaStatus.ACTIVE));
-        assertEquals(ErrorCode.CINEMA_MISSING_OPERATING_HOURS, exception.getErrorCode());
+        assertEquals(ErrorCode.CINEMA_ACTIVATION_BLOCKED, exception.getErrorCode());
         verify(cinemaRepository, never()).save(any(Cinema.class));
     }
 
@@ -311,7 +320,7 @@ class CinemaServiceImplTest {
         request.setTitle("Banner");
         request.setIsPrimary(false);
 
-        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        when(cinemaRepository.findByPublicIdForScheduling("cinema-uuid")).thenReturn(Optional.of(cinema));
         when(cinemaMediaRepository.save(any(CinemaMedia.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CinemaMediaResponse responseDto = new CinemaMediaResponse();
@@ -370,7 +379,7 @@ class CinemaServiceImplTest {
             requests.add(req);
         }
 
-        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        when(cinemaRepository.findByPublicIdForScheduling("cinema-uuid")).thenReturn(Optional.of(cinema));
         when(currentUserProvider.getCurrentUserId()).thenReturn(99L);
         when(cinemaOperatingHourRepository.findByCinemaId(1L)).thenReturn(new ArrayList<>());
         when(cinemaOperatingHourRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
@@ -381,7 +390,7 @@ class CinemaServiceImplTest {
     }
 
     @Test
-    void updateOperatingHours_shouldThrowException_whenOpenTimeIsNotBeforeCloseTime() {
+    void updateOperatingHours_shouldAcceptOvernightRange() {
         Cinema cinema = new Cinema();
         cinema.setId(1L);
         cinema.setPublicId("cinema-uuid");
@@ -393,7 +402,7 @@ class CinemaServiceImplTest {
             req.setIsClosed(true);
             requests.add(req);
         }
-        // Day 7 with invalid time
+        // Day 7 closes on the following service day.
         OperatingHourUpdateRequest req7 = new OperatingHourUpdateRequest();
         req7.setDayOfWeek(7);
         req7.setIsClosed(false);
@@ -401,9 +410,40 @@ class CinemaServiceImplTest {
         req7.setCloseTime("08:00");
         requests.add(req7);
 
-        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-uuid")).thenReturn(Optional.of(cinema));
+        when(cinemaRepository.findByPublicIdForScheduling("cinema-uuid")).thenReturn(Optional.of(cinema));
+        when(currentUserProvider.getCurrentUserId()).thenReturn(99L);
+        when(cinemaOperatingHourRepository.findByCinemaId(1L)).thenReturn(new ArrayList<>());
+        when(cinemaOperatingHourRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThrows(BusinessException.class, () -> cinemaService.updateOperatingHours("cinema-uuid", requests));
+        cinemaService.updateOperatingHours("cinema-uuid", requests);
+
+        verify(cinemaOperatingHourRepository).saveAll(anyList());
+    }
+
+    @Test
+    void updateOperatingHours_shouldRejectZeroLengthRange() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+        cinema.setPublicId("cinema-uuid");
+
+        List<OperatingHourUpdateRequest> requests = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            OperatingHourUpdateRequest req = new OperatingHourUpdateRequest();
+            req.setDayOfWeek(i);
+            req.setIsClosed(true);
+            requests.add(req);
+        }
+        OperatingHourUpdateRequest req7 = new OperatingHourUpdateRequest();
+        req7.setDayOfWeek(7);
+        req7.setIsClosed(false);
+        req7.setOpenTime("08:00");
+        req7.setCloseTime("08:00");
+        requests.add(req7);
+
+        when(cinemaRepository.findByPublicIdForScheduling("cinema-uuid")).thenReturn(Optional.of(cinema));
+
+        assertThrows(BusinessException.class,
+                () -> cinemaService.updateOperatingHours("cinema-uuid", requests));
     }
 
     @Test
@@ -426,6 +466,34 @@ class CinemaServiceImplTest {
         cinemaService.createClosurePeriod("cinema-uuid", request);
 
         verify(cinemaClosurePeriodRepository, times(1)).save(any(CinemaClosurePeriod.class));
+        verify(cinemaClosurePeriodRepository).save(argThat(period -> period.getServiceDate() != null));
+    }
+
+    @Test
+    void createClosurePeriod_shouldRejectAffectedShowtimes() {
+        Cinema cinema = new Cinema();
+        cinema.setId(1L);
+        cinema.setPublicId("cinema-uuid");
+        cinema.setTimezone("Asia/Ho_Chi_Minh");
+
+        CreateCinemaClosurePeriodRequest request = new CreateCinemaClosurePeriodRequest();
+        request.setStartTime(Instant.now().plusSeconds(3600));
+        request.setEndTime(Instant.now().plusSeconds(7200));
+        request.setReason("MAINTENANCE");
+
+        when(cinemaRepository.findByPublicIdForScheduling("cinema-uuid"))
+                .thenReturn(Optional.of(cinema));
+        when(cinemaClosurePeriodRepository.findOverlappingClosures(
+                eq(1L), any(Instant.class), any(Instant.class))).thenReturn(List.of());
+        when(showtimeRepository.findCinemaPotentialOverlaps(
+                eq(1L), any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of(new com.lorafilm.movie.showtime.domain.entity.Showtime()));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> cinemaService.createClosurePeriod("cinema-uuid", request));
+
+        assertEquals(ErrorCode.CINEMA_CLOSURE_HAS_AFFECTED_SHOWTIMES, exception.getErrorCode());
+        verify(cinemaClosurePeriodRepository, never()).save(any());
     }
 
     @Test
@@ -582,5 +650,36 @@ class CinemaServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.size());
         assertEquals(10L, result.get(0).getId());
+    }
+
+    private void stubBasicInformation(Cinema cinema) {
+        cinema.setName("LoraFilm Test");
+        cinema.setCity("HCM");
+        cinema.setAddress("1 Test Street");
+        cinema.setTimezone("Asia/Ho_Chi_Minh");
+    }
+
+    private void stubOperatingHours() {
+        List<CinemaOperatingHour> hours = new ArrayList<>();
+        for (int day = 1; day <= 7; day++) {
+            CinemaOperatingHour hour = new CinemaOperatingHour();
+            hour.setDayOfWeek(day);
+            hour.setOpenTime(LocalTime.of(8, 0));
+            hour.setCloseTime(LocalTime.of(23, 0));
+            hour.setIsClosed(false);
+            hours.add(hour);
+        }
+        when(cinemaOperatingHourRepository.findByCinemaId(1L)).thenReturn(hours);
+    }
+
+    private void stubActiveRoomWithLayout(Cinema cinema) {
+        Auditorium auditorium = new Auditorium();
+        auditorium.setId(10L);
+        auditorium.setCinema(cinema);
+        auditorium.setStatus(AuditoriumStatus.ACTIVE);
+        auditorium.setCapacity(100);
+        when(auditoriumRepository.findByCinemaIdAndDeletedAtIsNull(1L))
+                .thenReturn(List.of(auditorium));
+        when(seatRepository.countSellableLayoutSeatsByAuditoriumId(10L)).thenReturn(100L);
     }
 }

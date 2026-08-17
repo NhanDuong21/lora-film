@@ -195,6 +195,7 @@ class ShowtimeCommandServiceIntegrationTest {
         closure.setCinema(cinema);
         closure.setStartTime(start.plus(125, ChronoUnit.MINUTES));
         closure.setEndTime(start.plus(180, ChronoUnit.MINUTES));
+        closure.setServiceDate(start.atZone(java.time.ZoneId.of(cinema.getTimezone())).toLocalDate());
         closure.setReason("Cleaning overlap regression");
         closure.setStatus(com.lorafilm.movie.common.enums.ActionStatus.ACTIVE);
         closurePeriodRepository.saveAndFlush(closure);

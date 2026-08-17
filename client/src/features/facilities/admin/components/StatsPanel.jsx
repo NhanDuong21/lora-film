@@ -8,19 +8,19 @@ export default function StatsPanel({ stats }) {
       
       <div className="space-y-1.5 text-xs">
         <div className="flex justify-between">
-          <span className="text-zinc-400">STANDARD (Tím):</span>
+          <span className="text-zinc-400">Ghế thường (Tím):</span>
           <span className="text-white font-bold">{stats.standard}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-zinc-400">VIP (Đỏ):</span>
+          <span className="text-zinc-400">Ghế VIP (Đỏ):</span>
           <span className="text-white font-bold">{stats.vip}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-zinc-400">COUPLE / Đôi (Vàng):</span>
+          <span className="text-zinc-400">Ghế đôi (Vàng):</span>
           <span className="text-white font-bold">{stats.couple}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-zinc-400">DISABLED (Xanh):</span>
+          <span className="text-zinc-400">Vị trí hỗ trợ (Xanh):</span>
           <span className="text-white font-bold">{stats.disabled}</span>
         </div>
         <div className="flex justify-between border-t border-zinc-900 pt-1.5 mt-1.5 font-bold">

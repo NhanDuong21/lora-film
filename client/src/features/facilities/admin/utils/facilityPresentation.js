@@ -5,18 +5,18 @@ export const CINEMA_STATUS = {
     className: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
   },
   ACTIVE: {
-    label: 'Đang hoạt động',
-    description: 'Đang mở cửa và có thể phục vụ khách hàng.',
+    label: 'Đang vận hành',
+    description: 'Được phép tham gia vận hành; khả dụng thực tế còn phụ thuộc giờ hoạt động, closure và maintenance.',
     className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
   },
   MAINTENANCE: {
     label: 'Đang bảo trì',
-    description: 'Tạm dừng vận hành để bảo trì.',
+    description: 'Trạng thái cũ đang được giữ để tương thích; nên dùng khoảng thời gian khả dụng thay cho lifecycle.',
     className: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
   },
   TEMPORARILY_CLOSED: {
     label: 'Tạm đóng cửa',
-    description: 'Tạm ngừng phục vụ và có thể mở lại.',
+    description: 'Trạng thái cũ đang được giữ để tương thích; lịch đóng cửa mới là dữ liệu thời gian authoritative.',
     className: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
   },
   INACTIVE: {
@@ -25,8 +25,8 @@ export const CINEMA_STATUS = {
     className: 'bg-zinc-800 text-zinc-400 border-zinc-700',
   },
   PERMANENTLY_CLOSED: {
-    label: 'Đã lưu trữ',
-    description: 'Đã ngừng hoạt động dài hạn, dữ liệu lịch sử vẫn được giữ lại.',
+    label: 'Ngừng khai thác',
+    description: 'Trạng thái cuối: không còn sử dụng lâu dài, dữ liệu lịch sử vẫn được giữ lại.',
     className: 'bg-red-500/10 text-red-400 border-red-500/30',
   },
 };
@@ -39,7 +39,7 @@ export const AUDITORIUM_STATUS = {
   },
   ACTIVE: {
     label: 'Sẵn sàng phục vụ',
-    description: 'Phòng đang tham gia xếp lịch và bán vé.',
+    description: 'Phòng được phép nhận suất chiếu; việc mở bán thuộc về từng suất chiếu cụ thể.',
     className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
   },
   MAINTENANCE: {

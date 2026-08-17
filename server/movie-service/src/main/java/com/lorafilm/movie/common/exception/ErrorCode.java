@@ -39,6 +39,7 @@ public enum ErrorCode {
     CINEMA_MISSING_AUDITORIUM("Cannot activate cinema without any auditoriums", 400),
     CINEMA_MISSING_IMAGES("Cannot activate cinema without any images", 400),
     CINEMA_MISSING_OPERATING_HOURS("Cannot activate cinema without operating hours", 400),
+    CINEMA_ACTIVATION_BLOCKED("Cinema does not satisfy operational readiness requirements", 409),
     INVALID_CINEMA_TIMEZONE("Invalid cinema timezone", 400),
     INVALID_OPERATING_HOURS("Operating hour must be between 00:00 and 23:59", 400),
     AUDITORIUM_NOT_FOUND("Auditorium not found", 404),
@@ -46,12 +47,14 @@ public enum ErrorCode {
     AUDITORIUM_NOT_BELONG_TO_CINEMA("Auditorium does not belong to the cinema", 400),
     AUDITORIUM_NAME_DUPLICATED("Auditorium name already exists in this cinema", 400),
     CINEMA_CLOSURE_CONFLICT("Action conflicts with cinema closure schedule", 409),
+    CINEMA_CLOSURE_HAS_AFFECTED_SHOWTIMES("Closure cannot be created until affected showtimes are resolved", 409),
     AUDITORIUM_MAINTENANCE_CONFLICT("Action conflicts with auditorium maintenance schedule", 409),
     INVALID_AUDITORIUM_CAPACITY("Invalid auditorium capacity", 400),
     AUDITORIUM_CAPACITY_BELOW_CURRENT_SEAT_COUNT("Auditorium capacity cannot be lower than current active seats", 400),
     INVALID_CLEANING_BUFFER("Invalid cleaning buffer", 400),
     INVALID_AUDITORIUM_STATUS_TRANSITION("Invalid auditorium status transition", 400),
     AUDITORIUM_NOT_CONFIGURABLE("Auditorium is not in a configurable state", 400),
+    AUDITORIUM_LAYOUT_REQUIRED("Auditorium requires a non-empty seat layout before activation", 409),
     AUDITORIUM_CANNOT_BE_DELETED_HAS_SHOWTIME_HISTORY("Auditorium cannot be deleted because it has showtime history", 409),
     AUDITORIUM_HAS_ACTIVE_SEATS("Auditorium cannot be deleted because it has active seats", 409),
     CLONE_AUDITORIUM_FAILED("Failed to clone auditorium layout", 400),
@@ -97,6 +100,7 @@ public enum ErrorCode {
     SHOWTIME_NOT_FOUND("Showtime not found", 404),
     SHOWTIME_OVERLAP_CONFLICT("Showtime overlaps with an existing schedule", 409),
     SHOWTIME_PRICE_MISSING("Showtime price config is missing", 400),
+    SHOWTIME_FACILITY_UNAVAILABLE("Cinema or auditorium is unavailable for this showtime", 409),
     SHOWTIME_PRICE_NOT_EDITABLE("Cannot edit prices for this showtime status", 400),
     PRICE_POLICY_NOT_FOUND("Price policy not found", 404),
     PRICE_POLICY_OVERLAP("Price policy rules overlap at equal rank", 409),
@@ -107,6 +111,7 @@ public enum ErrorCode {
     INVALID_SHOWTIME_STATUS_TRANSITION("Invalid showtime status transition", 400),
     
     AUDITORIUM_LAYOUT_NOT_EDITABLE("The seating arrangement cannot be changed while the auditorium is in operation", 409),
+    AUDITORIUM_LAYOUT_HAS_SHOWTIME_HISTORY("The seating arrangement is immutable after showtime history exists", 409),
     BULK_SEAT_VALIDATION_ERROR("Invalid data for bulk seat creation", 400),
 
     // --- New Validation Error Codes ---

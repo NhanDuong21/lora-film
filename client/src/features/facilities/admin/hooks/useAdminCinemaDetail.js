@@ -4,6 +4,7 @@ import { getErrorMessage } from '@/utils/apiErrorHandler';
 
 export default function useAdminCinemaDetail(cinemaPublicId, triggerToast) {
   const [cinema, setCinema] = useState(null);
+  const [readiness, setReadiness] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -12,12 +13,22 @@ export default function useAdminCinemaDetail(cinemaPublicId, triggerToast) {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await adminCinemaService.getAdminCinemaDetail(cinemaPublicId);
+      const [detailResult, readinessResult] = await Promise.allSettled([
+        adminCinemaService.getAdminCinemaDetail(cinemaPublicId),
+        adminCinemaService.getCinemaReadiness(cinemaPublicId),
+      ]);
+      if (detailResult.status === 'rejected') throw detailResult.reason;
+      const res = detailResult.value;
       if (res?.success && res.data) {
         setCinema(res.data);
       } else {
         throw new Error('Dữ liệu rạp chiếu không hợp lệ');
       }
+      setReadiness(
+        readinessResult.status === 'fulfilled' && readinessResult.value?.success
+          ? readinessResult.value.data
+          : null,
+      );
     } catch (err) {
       const errMsg = getErrorMessage(err, 'Lỗi khi tải chi tiết rạp chiếu');
       setError(errMsg);
@@ -148,6 +159,7 @@ export default function useAdminCinemaDetail(cinemaPublicId, triggerToast) {
 
   return {
     cinema,
+    readiness,
     isLoading,
     error,
     fetchCinema,
