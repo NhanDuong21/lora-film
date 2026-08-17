@@ -14,7 +14,8 @@ class TemplateRegistryHealthIndicatorTest {
     void omitsUnavailableOptionalDetailsInsteadOfFailingHealthCheck() {
         TemplateRegistry registry = mock(TemplateRegistry.class);
         when(registry.health()).thenReturn(
-                new TemplateRegistry.RegistryHealth(false, "JGit", "main", null, null));
+                new TemplateRegistry.RegistryHealth(false, "JGit", "main",
+                        null, null, null, null, null, null));
 
         var health = new TemplateRegistryHealthIndicator(registry).health();
 

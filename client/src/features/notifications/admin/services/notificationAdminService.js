@@ -5,8 +5,8 @@ const operationBase = '/api/v1/admin/notifications';
 const unwrap = response => response?.data?.data;
 
 export const notificationAdminService = {
-    async dashboard() {
-        return unwrap(await apiClient.get(`${operationBase}/dashboard`));
+    async dashboard(params = {}) {
+        return unwrap(await apiClient.get(`${operationBase}/dashboard`, { params }));
     },
     async requests(params = {}) {
         return unwrap(await apiClient.get(operationBase, { params }));
@@ -22,6 +22,9 @@ export const notificationAdminService = {
     },
     async templates(params = {}) {
         return unwrap(await apiClient.get(templateBase, { params }));
+    },
+    async coverage() {
+        return unwrap(await apiClient.get(`${templateBase}/coverage`));
     },
     async published(templateKey, channel, locale) {
         return unwrap(await apiClient.get(`${templateBase}/${templateKey}`, {
@@ -53,6 +56,13 @@ export const notificationAdminService = {
         return unwrap(await apiClient.post(`${templateBase}/${templateKey}/preview`, sampleData, {
             params: { draftId },
         }));
+    },
+    async previewPublished(templateKey, channel, locale, sampleData) {
+        return unwrap(await apiClient.post(
+            `${templateBase}/${templateKey}/preview-published`,
+            sampleData,
+            { params: { channel, locale } },
+        ));
     },
     async publish(templateKey, draftId, expectedCommitSha) {
         return unwrap(await apiClient.post(`${templateBase}/${templateKey}/publish`, {

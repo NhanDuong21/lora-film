@@ -91,6 +91,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     private volatile Git git;
     private volatile String initializationError;
     private volatile String lastRefreshError;
+    private volatile Instant lastSyncedAt;
 
     public JGitTemplateRegistry(
             ObjectMapper objectMapper,
@@ -131,6 +132,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                 git = Git.open(workingDirectory.toFile());
                 fetch();
                 checkoutPublished();
+                lastSyncedAt = Instant.now();
                 initializationError = null;
                 return;
             }
@@ -158,6 +160,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                         .setTimeout(fetchTimeoutSeconds)
                         .call();
             }
+            lastSyncedAt = Instant.now();
             initializationError = null;
         } catch (Exception exception) {
             initializationError = safeMessage(exception);
@@ -184,6 +187,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         }
         try {
             String updatedCommit = fastForwardPublishedBranch();
+            lastSyncedAt = Instant.now();
             lastRefreshError = null;
             if (updatedCommit != null) {
                 log.info("Template registry fast-forwarded {}/{} to commit {}",
@@ -439,6 +443,21 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     }
 
     @Override
+    public TemplatePreviewResult previewPublished(
+            String templateKey,
+            Channel channel,
+            String locale,
+            Map<String, Object> sampleData) {
+        TemplateDocument document = getPublishedTemplate(templateKey, channel, locale);
+        Map<String, Object> data = sampleData == null || sampleData.isEmpty()
+                ? document.sampleData()
+                : sampleData;
+        TemplateValidationResult validation = renderer.validate(document, data);
+        RenderedTemplate rendered = validation.valid() ? renderer.render(document, data) : null;
+        return new TemplatePreviewResult(validation, rendered, document.commitSha());
+    }
+
+    @Override
     public TemplatePublicationResult publishDraft(
             String templateKey,
             String draftId,
@@ -564,14 +583,17 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         lock.lock();
         try {
             if (git == null) {
-                return new RegistryHealth(false, "JGit", publishedBranch, null, initializationError);
+                return new RegistryHealth(false, "JGit", publishedBranch,
+                        remoteUri, repositoryName(), null, null, lastSyncedAt, initializationError);
             }
             String message = lastRefreshError == null
                     ? "Template registry is available"
                     : "Template registry is available; last automatic refresh failed: " + lastRefreshError;
-            return new RegistryHealth(true, "JGit", publishedBranch, head(git), message);
+            return new RegistryHealth(true, "JGit", publishedBranch,
+                    remoteUri, repositoryName(), head(git), remoteHead(), lastSyncedAt, message);
         } catch (Exception exception) {
-            return new RegistryHealth(false, "JGit", publishedBranch, null, safeMessage(exception));
+            return new RegistryHealth(false, "JGit", publishedBranch,
+                    remoteUri, repositoryName(), null, null, lastSyncedAt, safeMessage(exception));
         } finally {
             lock.unlock();
         }
@@ -672,6 +694,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             String templateKey, String locale, String commitSha, Path path) throws Exception {
         String html = read(path);
         String subject = legacySubject(html, displayName(templateKey));
+        Map<String, VariableDefinition> variables = legacyVariables(html);
         RevCommit commit = parseCommit(ObjectId.fromString(commitSha));
         return new TemplateDocument(
                 templateKey,
@@ -681,8 +704,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                 Channel.EMAIL,
                 locale,
                 TemplateStatus.PUBLISHED,
-                legacyVariables(html),
-                Map.of(),
+                variables,
+                legacySampleData(templateKey, locale, variables.keySet()),
                 subject,
                 html,
                 legacyPlainText(html),
@@ -700,6 +723,7 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         String html = read(path);
         String subject = legacySubject(html, displayName(templateKey));
         String text = legacySummaryText(html, subject);
+        Map<String, VariableDefinition> variables = legacyVariables(html);
         RevCommit commit = parseCommit(ObjectId.fromString(commitSha));
         return new TemplateDocument(
                 templateKey,
@@ -710,8 +734,8 @@ public class JGitTemplateRegistry implements TemplateRegistry {
                 channel,
                 locale,
                 TemplateStatus.PUBLISHED,
-                legacyVariables(html),
-                Map.of(),
+                variables,
+                legacySampleData(templateKey, locale, variables.keySet()),
                 subject,
                 "<p>" + text + "</p>",
                 text,
@@ -821,6 +845,72 @@ public class JGitTemplateRegistry implements TemplateRegistry {
             variables.putIfAbsent(matcher.group(1), new VariableDefinition("string", false));
         }
         return Map.copyOf(variables);
+    }
+
+    private Map<String, Object> legacySampleData(
+            String templateKey,
+            String locale,
+            Set<String> variables) {
+        String language = locale == null || locale.length() < 2
+                ? "vi"
+                : locale.substring(0, 2).toLowerCase(Locale.ROOT);
+        Path fixture = safePath(workingDirectory.resolve("email")
+                .resolve("preview-data").resolve(language + ".json"));
+        if (!Files.isRegularFile(fixture, LinkOption.NOFOLLOW_LINKS)) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> root = objectMapper.readValue(
+                    read(fixture), new TypeReference<>() { });
+            Map<String, Object> merged = new LinkedHashMap<>();
+            Object common = root.get("common");
+            if (common instanceof Map<?, ?> commonValues) {
+                commonValues.forEach((key, value) -> merged.put(String.valueOf(key), value));
+            }
+            Object templates = root.get("templates");
+            if (templates instanceof Map<?, ?> templateValues) {
+                Object specific = templateValues.get(templateKey);
+                if (specific == null) {
+                    specific = templateValues.get(templateKey.toLowerCase(Locale.ROOT));
+                }
+                if (specific instanceof Map<?, ?> specificValues) {
+                    specificValues.forEach((key, value) -> merged.put(String.valueOf(key), value));
+                }
+            }
+            Map<String, Object> filtered = new LinkedHashMap<>();
+            variables.forEach(variable -> {
+                if (merged.containsKey(variable)) {
+                    filtered.put(variable, merged.get(variable));
+                }
+            });
+            return Map.copyOf(filtered);
+        } catch (Exception exception) {
+            log.warn("Unable to load preview fixture {} for {}: {}",
+                    fixture.getFileName(), templateKey, safeMessage(exception));
+            return Map.of();
+        }
+    }
+
+    private String remoteHead() throws IOException {
+        Ref ref = requireGit().getRepository().exactRef(
+                Constants.R_REMOTES + "origin/" + publishedBranch);
+        return ref == null || ref.getObjectId() == null ? null : ref.getObjectId().getName();
+    }
+
+    private String repositoryName() {
+        if (remoteUri == null || remoteUri.isBlank()) {
+            return workingDirectory.getFileName() == null
+                    ? workingDirectory.toString()
+                    : workingDirectory.getFileName().toString();
+        }
+        String normalized = remoteUri.replace('\\', '/').replaceAll("/+$", "")
+                .replaceAll("\\.git$", "");
+        int githubMarker = normalized.toLowerCase(Locale.ROOT).indexOf("github.com/");
+        if (githubMarker >= 0) {
+            return normalized.substring(githubMarker + "github.com/".length());
+        }
+        int separator = normalized.lastIndexOf('/');
+        return separator >= 0 ? normalized.substring(separator + 1) : normalized;
     }
 
     private String legacySubject(String html, String fallback) {

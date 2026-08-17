@@ -16,6 +16,35 @@ describe('notificationAdminService', () => {
         vi.clearAllMocks();
     });
 
+    it('loads production dashboard metrics in the requested time window', async () => {
+        apiClient.get.mockResolvedValue({ data: { data: { totalRequests: 4 } } });
+
+        await expect(notificationAdminService.dashboard({ hours: 168, includeTest: false }))
+            .resolves.toEqual({ totalRequests: 4 });
+
+        expect(apiClient.get).toHaveBeenCalledWith(
+            '/api/v1/admin/notifications/dashboard',
+            { params: { hours: 168, includeTest: false } },
+        );
+    });
+
+    it('requests a sanitized preview for the published locale variant', async () => {
+        apiClient.post.mockResolvedValue({ data: { data: { renderedHtml: '<p>Preview</p>' } } });
+
+        await notificationAdminService.previewPublished(
+            'ACCOUNT_LOCKED',
+            'EMAIL',
+            'vi-VN',
+            { user_name: 'Nguyễn Văn An' },
+        );
+
+        expect(apiClient.post).toHaveBeenCalledWith(
+            '/api/v1/admin/notification-templates/ACCOUNT_LOCKED/preview-published',
+            { user_name: 'Nguyễn Văn An' },
+            { params: { channel: 'EMAIL', locale: 'vi-VN' } },
+        );
+    });
+
     it('sends the expected Git commit as an If-Match header when saving a draft', async () => {
         apiClient.put.mockResolvedValue({
             data: { data: { commitSha: 'next-sha' } },

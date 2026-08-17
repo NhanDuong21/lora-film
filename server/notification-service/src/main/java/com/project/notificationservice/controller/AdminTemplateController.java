@@ -7,6 +7,7 @@ import com.project.notificationservice.service.NotificationApplicationService;
 import com.project.notificationservice.service.NotificationCommands.AcceptedNotification;
 import com.project.notificationservice.service.NotificationCommands.CreateNotificationCommand;
 import com.project.notificationservice.template.TemplateRegistry;
+import com.project.notificationservice.template.TemplateContractCoverageService;
 import com.project.notificationservice.template.TemplateRegistry.CreateTemplateDraftCommand;
 import com.project.notificationservice.template.TemplateRegistry.TemplateDraft;
 import com.project.notificationservice.template.TemplateRegistry.TemplatePreviewResult;
@@ -39,12 +40,15 @@ public class AdminTemplateController {
 
     private final TemplateRegistry registry;
     private final NotificationApplicationService notificationService;
+    private final TemplateContractCoverageService coverageService;
 
     public AdminTemplateController(
             TemplateRegistry registry,
-            NotificationApplicationService notificationService) {
+            NotificationApplicationService notificationService,
+            TemplateContractCoverageService coverageService) {
         this.registry = registry;
         this.notificationService = notificationService;
+        this.coverageService = coverageService;
     }
 
     @GetMapping
@@ -58,12 +62,27 @@ public class AdminTemplateController {
                 new TemplateSearchCriteria(query, category, channel, locale, archived)));
     }
 
+    @GetMapping("/coverage")
+    public ApiResponse<TemplateContractCoverageService.CoverageReport> coverage() {
+        return ApiResponse.success(coverageService.inspect());
+    }
+
     @GetMapping("/{templateKey}")
     public ApiResponse<TemplateRegistry.TemplateDocument> published(
             @PathVariable String templateKey,
             @RequestParam Channel channel,
             @RequestParam String locale) {
         return ApiResponse.success(registry.getPublishedTemplate(templateKey, channel, locale));
+    }
+
+    @PostMapping("/{templateKey}/preview-published")
+    public ApiResponse<TemplatePreviewResult> previewPublished(
+            @PathVariable String templateKey,
+            @RequestParam Channel channel,
+            @RequestParam String locale,
+            @RequestBody(required = false) Map<String, Object> sampleData) {
+        return ApiResponse.success(registry.previewPublished(
+                templateKey, channel, locale, sampleData));
     }
 
     @PostMapping("/drafts")

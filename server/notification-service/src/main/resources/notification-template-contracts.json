@@ -1,0 +1,49 @@
+{
+  "contracts": [
+    {
+      "templateKey": "REGISTER_OTP",
+      "displayName": "Xác thực đăng ký bằng OTP",
+      "sourceService": "auth-service",
+      "eventTypes": ["AUTH_REGISTRATION_OTP"],
+      "channels": ["EMAIL"],
+      "locales": ["vi-VN"],
+      "required": true
+    },
+    {
+      "templateKey": "FORGOT_PASSWORD_OTP",
+      "displayName": "OTP đặt lại mật khẩu",
+      "sourceService": "auth-service",
+      "eventTypes": ["AUTH_FORGOT_PASSWORD_OTP"],
+      "channels": ["EMAIL"],
+      "locales": ["vi-VN"],
+      "required": true
+    },
+    {
+      "templateKey": "CHANGE_EMAIL_OTP",
+      "displayName": "OTP thay đổi email",
+      "sourceService": "auth-service",
+      "eventTypes": ["AUTH_CHANGE_EMAIL_OTP"],
+      "channels": ["EMAIL"],
+      "locales": ["vi-VN"],
+      "required": true
+    },
+    {
+      "templateKey": "BOOKING_CONFIRMED",
+      "displayName": "Xác nhận đặt vé",
+      "sourceService": "booking-service",
+      "eventTypes": ["TICKET_ISSUED", "BOOKING_CONFIRMED"],
+      "channels": ["EMAIL", "IN_APP"],
+      "locales": ["vi-VN"],
+      "required": true
+    },
+    {
+      "templateKey": "VOUCHER_GRANTED",
+      "displayName": "Voucher được cấp",
+      "sourceService": "promotion-service",
+      "eventTypes": ["VOUCHER_GRANTED"],
+      "channels": ["EMAIL", "IN_APP"],
+      "locales": ["vi-VN"],
+      "required": true
+    }
+  ]
+}

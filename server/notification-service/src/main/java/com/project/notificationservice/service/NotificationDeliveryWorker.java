@@ -182,9 +182,11 @@ public class NotificationDeliveryWorker {
         Instant now = Instant.now();
         delivery.setProvider(result.provider());
         delivery.setProviderMessageId(result.providerMessageId());
-        delivery.setStatus(DeliveryStatus.SENT);
+        boolean deliveryConfirmed = delivery.getChannel()
+                == com.project.notificationservice.domain.NotificationTypes.Channel.IN_APP;
+        delivery.setStatus(deliveryConfirmed ? DeliveryStatus.DELIVERED : DeliveryStatus.SENT);
         delivery.setSentAt(now);
-        delivery.setDeliveredAt(now);
+        delivery.setDeliveredAt(deliveryConfirmed ? now : null);
         delivery.setFailureCategory(null);
         delivery.setFailureCode(null);
         delivery.setFailureMessage(null);

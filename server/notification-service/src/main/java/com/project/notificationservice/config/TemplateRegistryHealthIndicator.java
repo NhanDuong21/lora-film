@@ -20,7 +20,13 @@ public class TemplateRegistryHealthIndicator implements HealthIndicator {
         Health.Builder builder = registryHealth.available() ? Health.up() : Health.down();
         addDetail(builder, "provider", registryHealth.provider());
         addDetail(builder, "branch", registryHealth.branch());
+        addDetail(builder, "remoteUri", registryHealth.remoteUri());
+        addDetail(builder, "repository", registryHealth.repository());
         addDetail(builder, "headCommit", registryHealth.headCommit());
+        addDetail(builder, "remoteHeadCommit", registryHealth.remoteHeadCommit());
+        if (registryHealth.lastSyncedAt() != null) {
+            builder.withDetail("lastSyncedAt", registryHealth.lastSyncedAt());
+        }
         addDetail(builder, "message", registryHealth.message());
         return builder.build();
     }

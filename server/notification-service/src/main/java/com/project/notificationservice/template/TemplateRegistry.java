@@ -35,6 +35,12 @@ public interface TemplateRegistry {
             String draftId,
             Map<String, Object> sampleData);
 
+    TemplatePreviewResult previewPublished(
+            String templateKey,
+            Channel channel,
+            String locale,
+            Map<String, Object> sampleData);
+
     TemplatePublicationResult publishDraft(
             String templateKey,
             String draftId,
@@ -161,6 +167,15 @@ public interface TemplateRegistry {
             boolean rollback) {
     }
 
-    record RegistryHealth(boolean available, String provider, String branch, String headCommit, String message) {
+    record RegistryHealth(
+            boolean available,
+            String provider,
+            String branch,
+            String remoteUri,
+            String repository,
+            String headCommit,
+            String remoteHeadCommit,
+            Instant lastSyncedAt,
+            String message) {
     }
 }

@@ -153,7 +153,7 @@ class NotificationApplicationServiceTest {
                 })
                 .anySatisfy(delivery -> {
                     assertThat(delivery.getChannel()).isEqualTo(Channel.IN_APP);
-                    assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.SENT);
+                    assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.DELIVERED);
                 });
 
         org.mockito.ArgumentCaptor<NotificationRequest> requestCaptor =

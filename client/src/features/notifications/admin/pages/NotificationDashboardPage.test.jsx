@@ -19,6 +19,8 @@ describe('NotificationDashboardPage', () => {
         notificationAdminService.dashboard.mockResolvedValue({
             totalRequests: 12,
             totalDeliveries: 18,
+            accepted: 15,
+            confirmed: 4,
             delivered: 15,
             failed: 1,
             pending: 2,
@@ -33,7 +35,23 @@ describe('NotificationDashboardPage', () => {
                 available: true,
                 provider: 'JGit',
                 branch: 'main',
+                repository: 'NhanDuong21/template-mail',
                 headCommit: '1234567890abcdef',
+                remoteHeadCommit: 'abcdef1234567890',
+                lastSyncedAt: '2026-08-18T01:00:00Z',
+            },
+            coverage: {
+                totalRequirements: 5,
+                readyRequirements: 4,
+                blockedRequirements: 1,
+                items: [{
+                    templateKey: 'REGISTER_OTP',
+                    sourceService: 'auth-service',
+                    eventTypes: ['REGISTER_OTP'],
+                    channels: ['EMAIL'],
+                    locale: 'vi-VN',
+                    readiness: 'BLOCKED',
+                }],
             },
         });
 
@@ -48,7 +66,13 @@ describe('NotificationDashboardPage', () => {
         })).toBeInTheDocument();
         expect(screen.getByText('83.3%')).toBeInTheDocument();
         expect(screen.getByText('1234567890')).toBeInTheDocument();
-        expect(screen.getByText('Chờ gửi lại')).toBeInTheDocument();
+        expect(screen.getByText('Đang thử lại')).toBeInTheDocument();
+        expect(screen.getByText('REGISTER_OTP chưa có template đang hoạt động'))
+            .toBeInTheDocument();
+        expect(notificationAdminService.dashboard).toHaveBeenCalledWith({
+            hours: 24,
+            includeTest: false,
+        });
     });
 
     it('shows a recoverable error state when the operations API is unavailable', async () => {

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.notificationservice.domain.NotificationTypes.Category;
 import com.project.notificationservice.domain.NotificationTypes.Channel;
 import com.project.notificationservice.domain.NotificationTypes.DeliveryStatus;
+import com.project.notificationservice.domain.NotificationTypes.FailureCategory;
 import com.project.notificationservice.domain.NotificationTypes.Priority;
 import com.project.notificationservice.domain.NotificationTypes.RequestStatus;
 import com.project.notificationservice.entity.NotificationDelivery;
@@ -199,7 +200,7 @@ public class NotificationApplicationService {
         inAppDelivery.setNotificationRecipientId(recipient.getId());
         inAppDelivery.setChannel(Channel.IN_APP);
         inAppDelivery.setProvider("in-app");
-        inAppDelivery.setStatus(DeliveryStatus.SENT);
+        inAppDelivery.setStatus(DeliveryStatus.DELIVERED);
         inAppDelivery.setAttemptCount(1);
         inAppDelivery.setSentAt(now);
         inAppDelivery.setDeliveredAt(now);
@@ -262,6 +263,14 @@ public class NotificationApplicationService {
                 && delivery.getStatus() != DeliveryStatus.DEAD_LETTERED) {
             throw new NotificationException("DELIVERY_NOT_RETRYABLE",
                     "Only failed or dead-lettered deliveries can be reprocessed", HttpStatus.CONFLICT);
+        }
+        if (delivery.getFailureCategory() != null
+                && delivery.getFailureCategory() != FailureCategory.TRANSIENT
+                && delivery.getFailureCategory() != FailureCategory.RATE_LIMITED
+                && delivery.getFailureCategory() != FailureCategory.AUTHENTICATION_ERROR) {
+            throw new NotificationException("DELIVERY_FAILURE_NOT_RETRYABLE",
+                    "This failure requires correcting the recipient, payload, template, or provider response before creating a new request",
+                    HttpStatus.CONFLICT);
         }
         delivery.setStatus(DeliveryStatus.PENDING);
         delivery.setAttemptCount(0);

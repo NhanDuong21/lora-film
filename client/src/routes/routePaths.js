@@ -61,5 +61,6 @@ export const routePaths = {
     notificationTemplates: '/admin/notification-templates',
     notificationTemplateEditor: '/admin/notification-templates/:templateKey',
     notificationOperations: '/admin/notification-operations',
+    notificationCoverage: '/admin/notification-coverage',
   }
 };

@@ -96,6 +96,14 @@ class JGitRemoteTemplateSmokeTest {
                     "expiry_minutes", 5), changeEmailOtp)).htmlContent())
                     .contains("An", "new&#64;example.com", "345678", "5");
 
+            TemplateRegistry.TemplateDocument accountLocked = registry.getPublishedTemplate(
+                    "ACCOUNT_LOCKED", Channel.EMAIL, "vi-VN");
+            assertThat(accountLocked.sampleData())
+                    .containsKeys("user_name", "lock_reason", "lock_time", "support_email");
+            assertThat(registry.previewPublished(
+                    "ACCOUNT_LOCKED", Channel.EMAIL, "vi-VN", null).rendered().htmlContent())
+                    .contains("Nguyễn Minh Anh", "hotro&#64;lorafilm.vn");
+
             TemplateRegistry.TemplateDocument inApp = registry.getPublishedTemplate(
                     "BOOKING_CONFIRMED", Channel.IN_APP, "vi-VN");
             assertThat(renderer.render(inApp, adapter.adapt(payload, inApp)).textContent())

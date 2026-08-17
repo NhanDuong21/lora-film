@@ -96,9 +96,11 @@ describe('AdminSidebar', () => {
     renderSidebar();
     openSection('Thông báo');
 
-    expect(screen.getByRole('button', { name: 'Tổng quan thông báo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tổng quan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cần xử lý' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lịch sử gửi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mẫu thông báo' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Vận hành gửi thông báo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cấu hình & độ phủ' })).toBeInTheDocument();
   });
 
   it('separates system administration from notification operations', () => {
@@ -115,7 +117,7 @@ describe('AdminSidebar', () => {
     expect(screen.queryByRole('button', { name: 'Quản lý quyền hạn' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Nhật ký truy cập' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Nhật ký nghiệp vụ' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Tổng quan thông báo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tổng quan' })).not.toBeInTheDocument();
   });
 
   it('allows each operational group to be collapsed independently', () => {
