@@ -1,4 +1,4 @@
-import { CreditCard, Film, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
+import { CreditCard, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const footerLinks = {
@@ -24,9 +24,11 @@ export default function Footer() {
       <div className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-[1.15fr_0.8fr_1fr_1fr] lg:px-8">
         <div>
           <div className="flex items-center gap-2">
-            <span className="rounded-xl bg-brand-orange/10 p-2.5">
-              <Film className="h-5 w-5 text-brand-orange" />
-            </span>
+            <img
+              src="/images/main-logo.png"
+              alt="LoraFilm"
+              className="h-10 w-10 rounded-xl object-contain"
+            />
             <span className="text-lg font-black text-white">
               <span className="text-brand-orange">Lora</span>Film
             </span>

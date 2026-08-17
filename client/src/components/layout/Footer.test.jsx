@@ -11,6 +11,7 @@ describe('Footer', () => {
       </MemoryRouter>,
     );
 
+    expect(screen.getByRole('img', { name: 'LoraFilm' })).toHaveAttribute('src', '/images/main-logo.png');
     expect(screen.getByText('LoraFilm — Vé phim trong tầm tay.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Hệ thống rạp' })).toHaveAttribute('href', '/#rap');
     expect(screen.getByRole('link', { name: 'Chính sách đổi, hủy và hoàn vé' })).toHaveAttribute('href', '/support/refunds');
