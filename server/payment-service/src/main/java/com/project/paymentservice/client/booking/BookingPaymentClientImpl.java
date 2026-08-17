@@ -33,7 +33,7 @@ public class BookingPaymentClientImpl implements BookingPaymentClient {
     public BookingPaymentClientImpl(
             ObjectMapper objectMapper,
             @Value("${booking.service.base-url:http://localhost:8083}") String baseUrl,
-            @Value("${booking.service.internal-token:}") String internalToken,
+            @Value("${booking.service.internal-token:${PAYMENT_TO_BOOKING_INTERNAL_TOKEN:payment-booking-local-token}}") String internalToken,
             @Value("${booking.service.connect-timeout:5000}") int connectTimeout,
             @Value("${booking.service.read-timeout:10000}") int readTimeout,
             @Value("${booking.service.max-clock-skew-seconds:5}") long maxClockSkewSeconds) {
