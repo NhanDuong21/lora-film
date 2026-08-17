@@ -7,7 +7,7 @@ import SeatGridDesigner from '@/features/facilities/admin/components/SeatGridDes
 import { getAuditoriumStatus } from '@/features/facilities/admin/utils/facilityPresentation';
 import { buildSeatItems } from '@/features/facilities/admin/utils/seatLayout';
 
-export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo, onUpdateSeats, triggerToast }) {
+export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo, onUpdateSeats, triggerToast, futureShowtimeCount = 0 }) {
   // Seating grid dimensions
   const [rows, setRows] = useState(10);
   const [cols, setCols] = useState(12);
@@ -23,6 +23,7 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
   // Available seat types from DB
   const [dbSeatTypes, setDbSeatTypes] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [layoutMetadata, setLayoutMetadata] = useState({ version: 1, appliedAt: null });
 
   const initialStatus = auditorium?.auditoriumStatus || 'DRAFT';
   const isLayoutEditable = initialStatus === 'DRAFT';
@@ -55,20 +56,15 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
 
       let maxRow = 10;
       let maxCol = 12;
-      let isSkippingIO = false;
       if (seats.length > 0) {
         maxRow = Math.max(...seats.map(s => s.positionRow || 1));
         maxCol = Math.max(...seats.map(s => s.positionColumn || 1));
-        
-        // Check if any seat code contains 'I' or 'O' at the start
-        const hasIORow = seats.some(s => s.rowLabel === 'I' || s.rowLabel === 'O');
-        isSkippingIO = maxRow >= 9 && !hasIORow; // if we reached row 9 (I) and it's missing, then skipIO is true
       }
 
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRows(maxRow);
       setCols(maxCol);
-      setSkipIO(isSkippingIO);
+      setSkipIO(true);
 
       const initialMatrix = [];
       for (let r = 0; r < maxRow; r++) {
@@ -91,6 +87,44 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
       setMatrix(initialMatrix);
     }
   }, [auditorium]);
+
+  useEffect(() => {
+    if (!auditorium || isLayoutEditable) return undefined;
+    let active = true;
+    const loadCompleteStructure = async () => {
+      try {
+        const response = await adminRoomService.getClonePreview(auditorium.auditoriumPublicId);
+        const preview = response?.success ? response.data : null;
+        if (!active || !preview?.matrix?.length) return;
+        const seats = (auditorium.rows || []).flatMap(row => row.seats || []);
+        const seatByPosition = new Map(seats.map(seat => [
+          `${seat.positionRow}:${seat.positionColumn}`,
+          seat,
+        ]));
+        setRows(preview.rows);
+        setCols(preview.columns);
+        setSkipIO(true);
+        setMatrix(preview.matrix.map((row, rowIndex) => row.map((type, columnIndex) => {
+          const seat = seatByPosition.get(`${rowIndex + 1}:${columnIndex + 1}`);
+          return {
+            type: seat?.seatType?.code || type,
+            seatPublicId: seat?.seatPublicId,
+            status: seat?.status,
+            pairGroup: seat?.pairGroup,
+          };
+        })));
+        const appliedAt = seats
+          .map(seat => seat.createdAt)
+          .filter(Boolean)
+          .sort()[0] || null;
+        setLayoutMetadata({ version: preview.layoutVersion || 1, appliedAt });
+      } catch {
+        // Keep the seat-only fallback when structural preview cannot be reconstructed.
+      }
+    };
+    void loadCompleteStructure();
+    return () => { active = false; };
+  }, [auditorium, isLayoutEditable]);
 
   // Click & Drag painting handler (only if editable)
   const handleCellPaint = (r, c) => {
@@ -136,7 +170,13 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
         else if (cell.type === 'AISLE') aisles++;
       });
     });
-    return { standard, vip, couple, disabled, exits, aisles, activeSeats: standard + vip + couple + disabled };
+    const activeSeats = standard + vip + couple + disabled;
+    const coupleModules = Math.floor(couple / 2);
+    return {
+      standard, vip, couple, disabled, exits, aisles, activeSeats,
+      coupleModules,
+      ticketingPositions: activeSeats - coupleModules,
+    };
   }, [matrix]);
 
   const handleSaveLayout = async () => {
@@ -279,34 +319,43 @@ export default function AuditoriumSeatLayoutTab({ auditorium, onUpdateBasicInfo,
         {isLayoutEditable ? (
           <BrushToolbar activeBrush={activeBrush} setActiveBrush={setActiveBrush} />
         ) : (
-          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-4 rounded-2xl flex items-start gap-3 mb-8 max-w-2xl shadow-xl shadow-black/20 select-none">
-            <Info className="w-5 h-5 shrink-0 mt-0.5" />
-            <div className="text-xs space-y-1">
-              <h4 className="font-extrabold uppercase">Sơ đồ ghế đang ở chế độ chỉ xem</h4>
-              <p className="font-semibold text-zinc-300">
-                Để bảo vệ các suất chiếu và đơn đặt vé, chỉ phòng ở bước
-                <strong> Đang thiết lập</strong> mới được thay đổi sơ đồ ghế.
-                Phòng này hiện đang <strong>{statusPresentation.label}</strong>.
-              </p>
-              <p className="font-semibold text-zinc-450 mt-1">
-                Không chuyển một phòng đang hoặc đã phục vụ về Bản nháp chỉ để sửa sơ đồ.
-                Nếu phòng đã có lịch sử suất chiếu, seat identity hiện tại là bất biến;
-                cần tạo phiên bản sơ đồ mới trước khi áp dụng cho các suất tương lai.
-              </p>
+          <div className="mb-4 flex w-full max-w-4xl flex-col gap-3">
+            <div className="grid gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/25 p-3 text-xs sm:grid-cols-3">
+              <p><span className="text-zinc-500">Phiên bản sơ đồ:</span> <strong className="text-white">v{layoutMetadata.version}</strong></p>
+              <p><span className="text-zinc-500">Đang áp dụng từ:</span> <strong className="text-white">{layoutMetadata.appliedAt ? new Intl.DateTimeFormat('vi-VN').format(new Date(layoutMetadata.appliedAt)) : 'Chưa có dữ liệu'}</strong></p>
+              <p><span className="text-zinc-500">Sử dụng bởi:</span> <strong className="text-white">{futureShowtimeCount} suất chiếu tương lai</strong></p>
             </div>
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.07] p-3 text-amber-300 select-none">
+            <Info className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-xs leading-5">
+              <h4 className="font-extrabold uppercase">Sơ đồ đang ở chế độ chỉ xem</h4>
+              <p className="text-zinc-300">Phòng đang {statusPresentation.label.toLocaleLowerCase('vi')} nên không thể sửa trực tiếp sơ đồ hiện tại. Thay đổi cấu trúc cần một phiên bản sơ đồ mới để không ảnh hưởng các suất đã có.</p>
+            </div>
+          </div>
           </div>
         )}
 
-        <div className="flex-1 overflow-auto w-full flex justify-center pb-20">
-          <SeatGridDesigner
-            matrix={matrix}
-            rows={rows}
-            cols={cols}
-            skipIO={skipIO}
-            isLayoutEditable={isLayoutEditable}
-            onCellMouseDown={handleCellMouseDown}
-            onCellMouseEnter={handleCellMouseEnter}
-          />
+        <div className="flex-1 overflow-auto w-full pb-20">
+          {!isLayoutEditable && (
+            <div className="mx-auto mb-5 flex max-w-3xl flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] font-bold text-zinc-400">
+              {[
+                ['bg-purple-500', 'Ghế thường'], ['bg-red-500', 'VIP'], ['bg-amber-400', 'Ghế đôi'],
+                ['bg-sky-400', 'Vị trí tiếp cận'], ['border border-zinc-600 bg-transparent', 'Lối đi'],
+                ['bg-emerald-500', 'Cửa'], ['border border-dashed border-zinc-700', 'Vùng trống'],
+              ].map(([tone, label]) => <span key={label} className="inline-flex items-center gap-2"><i className={`h-2.5 w-2.5 rounded-sm ${tone}`} />{label}</span>)}
+            </div>
+          )}
+          <div className="flex justify-center">
+            <SeatGridDesigner
+              matrix={matrix}
+              rows={rows}
+              cols={cols}
+              skipIO={skipIO}
+              isLayoutEditable={isLayoutEditable}
+              onCellMouseDown={handleCellMouseDown}
+              onCellMouseEnter={handleCellMouseEnter}
+            />
+          </div>
         </div>
 
         {isLayoutEditable && (

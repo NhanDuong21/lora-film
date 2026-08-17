@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Armchair,
+  AlertTriangle,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
   Clock3,
   CirclePause,
   DoorOpen,
+  Ellipsis,
   ExternalLink,
+  LayoutGrid,
   PlusCircle,
+  RefreshCw,
   Search,
-  Settings2,
+  Wrench,
 } from 'lucide-react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/ui/uiKit';
@@ -24,18 +27,27 @@ import {
 } from '@/features/scheduling/admin/utils/autoSchedulePreviewDateTime';
 import {
   getAuditoriumReadiness,
-  getAuditoriumStatus,
   SCREEN_TYPE_LABELS,
   SOUND_TYPE_LABELS,
 } from '@/features/facilities/admin/utils/facilityPresentation';
 import {
   addDaysToDateKey,
-  getNextShowtimeForAuditorium,
+  getAuditoriumOperationalState,
   getShowtimeDateKeys,
-  getShowtimeState,
 } from '@/features/facilities/admin/utils/roomShowtimePresentation';
 
 const PAGE_SIZE = 8;
+
+const minutesBetween = (later, earlier) => Math.max(
+  0,
+  Math.ceil((new Date(later).getTime() - new Date(earlier).getTime()) / 60_000),
+);
+
+const formatRefreshAge = (updatedAt, now) => {
+  if (!updatedAt) return 'Đang đồng bộ';
+  const seconds = Math.max(0, Math.floor((now.getTime() - updatedAt.getTime()) / 1000));
+  return seconds < 60 ? `${seconds} giây trước` : `${Math.floor(seconds / 60)} phút trước`;
+};
 
 export default function AdminRoomPage() {
   const { triggerToast, triggerConfirm } = useOutletContext() || {};
@@ -53,6 +65,10 @@ export default function AdminRoomPage() {
   const [isShowtimesLoading, setIsShowtimesLoading] = useState(false);
   const [showtimesError, setShowtimesError] = useState(null);
   const [now, setNow] = useState(() => new Date());
+  const [roomInsights, setRoomInsights] = useState({});
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const showtimeRequestId = useRef(0);
 
   useEffect(() => {
     const fetchCinemas = async () => {
@@ -107,7 +123,7 @@ export default function AdminRoomPage() {
   }, [fetchRooms]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    const timer = window.setInterval(() => setNow(new Date()), 15_000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -116,10 +132,8 @@ export default function AdminRoomPage() {
     [cinemas, selectedCinemaId],
   );
 
-  useEffect(() => {
-    let isCurrentRequest = true;
-
-    const fetchUpcomingShowtimes = async () => {
+  const fetchUpcomingShowtimes = useCallback(async ({ silent = false } = {}) => {
+      const requestId = ++showtimeRequestId.current;
       if (!selectedCinema?.slug) {
         setShowtimes([]);
         setShowtimesError(null);
@@ -127,7 +141,7 @@ export default function AdminRoomPage() {
         return;
       }
 
-      setIsShowtimesLoading(true);
+      if (!silent) setIsShowtimesLoading(true);
       setShowtimesError(null);
       const dateKeys = getShowtimeDateKeys(new Date(), selectedCinema.timezone, 7);
 
@@ -140,14 +154,15 @@ export default function AdminRoomPage() {
             size: 100,
           })),
         );
-        if (!isCurrentRequest) return;
+        if (requestId !== showtimeRequestId.current) return;
 
         const rows = responses.flatMap(response => (
           response?.success && Array.isArray(response.data?.data) ? response.data.data : []
         ));
         setShowtimes(rows);
+        setLastUpdatedAt(new Date());
       } catch (requestError) {
-        if (!isCurrentRequest) return;
+        if (requestId !== showtimeRequestId.current) return;
         setShowtimes([]);
         setShowtimesError(
           requestError.response?.data?.message
@@ -155,32 +170,102 @@ export default function AdminRoomPage() {
             || 'Không thể tải lịch chiếu',
         );
       } finally {
-        if (isCurrentRequest) setIsShowtimesLoading(false);
+        if (requestId === showtimeRequestId.current) setIsShowtimesLoading(false);
       }
-    };
-
-    fetchUpcomingShowtimes();
-    return () => {
-      isCurrentRequest = false;
-    };
   }, [selectedCinema]);
+
+  useEffect(() => {
+    // This effect synchronizes the selected cinema with its operational showtimes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchUpcomingShowtimes();
+  }, [fetchUpcomingShowtimes]);
+
+  const fetchRoomInsights = useCallback(async () => {
+    if (!rooms.length) {
+      setRoomInsights({});
+      return;
+    }
+    const entries = await Promise.all(rooms.map(async (room) => {
+      const [layoutResult, maintenanceResult] = await Promise.allSettled([
+        adminRoomService.getAdminSeatLayout(room.publicId),
+        adminRoomService.getMaintenanceWindows(room.publicId),
+      ]);
+      const layout = layoutResult.status === 'fulfilled' && layoutResult.value?.success
+        ? layoutResult.value.data
+        : null;
+      const windows = maintenanceResult.status === 'fulfilled'
+        && maintenanceResult.value?.success
+        && Array.isArray(maintenanceResult.value.data)
+        ? maintenanceResult.value.data
+        : [];
+      return [room.publicId, {
+        maintenanceSeats: Number(layout?.maintenanceSeats || 0),
+        activeSeats: Number(layout?.activeSeats || room.capacity || 0),
+        totalSeats: Number(layout?.totalSeats || room.capacity || 0),
+        windows,
+      }];
+    }));
+    setRoomInsights(Object.fromEntries(entries));
+    setLastUpdatedAt(new Date());
+  }, [rooms]);
+
+  useEffect(() => {
+    // This effect synchronizes room cards with seat and maintenance facts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchRoomInsights();
+  }, [fetchRoomInsights]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(new Date());
+      void fetchUpcomingShowtimes({ silent: true });
+      void fetchRoomInsights();
+    }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [fetchRoomInsights, fetchUpcomingShowtimes]);
+
+  const roomViewModels = useMemo(() => rooms.map((room) => {
+    const insight = roomInsights[room.publicId] || {};
+    return {
+      room,
+      insight,
+      readiness: getAuditoriumReadiness(room),
+      operational: getAuditoriumOperationalState({
+        room,
+        showtimes,
+        maintenanceWindows: insight.windows || [],
+        lockedSeatCount: insight.maintenanceSeats || 0,
+        now,
+      }),
+    };
+  }), [now, roomInsights, rooms, showtimes]);
 
   const filteredRooms = useMemo(() => {
     const keyword = searchTerm.trim().toLocaleLowerCase('vi');
-    return rooms.filter((room) => {
+    return roomViewModels.filter(({ room, readiness, operational }) => {
       const roomName = room.name || room.auditoriumName || '';
       const matchesKeyword = !keyword || roomName.toLocaleLowerCase('vi').includes(keyword);
-      const matchesStatus = statusFilter === 'ALL' || room.status === statusFilter;
+      const matchesStatus = statusFilter === 'ALL'
+        || (statusFilter === 'READY' && readiness.canServe)
+        || (statusFilter === 'ATTENTION' && operational.priority <= 1)
+        || operational.key === statusFilter
+        || room.status === statusFilter;
       return matchesKeyword && matchesStatus;
-    });
-  }, [rooms, searchTerm, statusFilter]);
+    }).sort((left, right) => (
+      left.operational.priority - right.operational.priority
+      || new Date(left.operational.nextShowtime?.startTime || '9999-12-31').getTime()
+        - new Date(right.operational.nextShowtime?.startTime || '9999-12-31').getTime()
+      || (left.room.name || '').localeCompare(right.room.name || '', 'vi')
+    ));
+  }, [roomViewModels, searchTerm, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRooms.length / PAGE_SIZE));
   const visibleRooms = filteredRooms.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const roomSummary = useMemo(() => ({
-    ready: filteredRooms.filter(room => getAuditoriumReadiness(room).canServe).length,
-    seats: filteredRooms.reduce((total, room) => total + Number(room.capacity || 0), 0),
-  }), [filteredRooms]);
+    ready: roomViewModels.filter(item => item.readiness.canServe).length,
+    attention: roomViewModels.filter(item => item.operational.priority <= 1).length,
+    seats: roomViewModels.reduce((total, item) => total + Number(item.room.capacity || 0), 0),
+  }), [roomViewModels]);
 
   const handlePauseRoom = async (room) => {
     const roomName = room.name || room.auditoriumName || 'phòng chiếu';
@@ -196,18 +281,37 @@ export default function AdminRoomPage() {
       );
       return;
     }
-    const confirmed = await triggerConfirm?.({
-      title: `Tạm ngừng ${roomName}?`,
-      message:
-        'Phòng sẽ không tiếp tục tham gia xếp lịch hoặc bán vé. Hệ thống hiện chưa trả số suất chiếu và đơn đặt vé bị ảnh hưởng; hãy kiểm tra Lịch vận hành và Đơn đặt vé trước khi xác nhận.',
-      confirmLabel: 'Tạm ngừng phòng',
-      cancelLabel: 'Quay lại kiểm tra',
-      tone: 'danger',
-    });
-    if (!confirmed) return;
-
     setIsMutating(true);
     try {
+      const previewResponse = await adminRoomService.previewMaintenanceImpact(room.publicId, {
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + 365 * 24 * 60 * 60_000).toISOString(),
+        reason: 'Kiểm tra ảnh hưởng trước khi tạm ngừng phòng',
+        maintenanceType: 'EMERGENCY',
+      });
+      const impact = previewResponse?.data;
+      if (!previewResponse?.success || !impact) throw new Error('Không thể kiểm tra phạm vi ảnh hưởng');
+      if (impact.affectedShowtimeCount > 0 || !impact.bookingDataComplete) {
+        const viewAffected = await triggerConfirm?.({
+          title: `Chưa thể tạm ngừng ${roomName}`,
+          message: `Phòng hiện có ${impact.affectedShowtimeCount} suất chiếu tương lai, ${impact.openForBookingCount || 0} suất đang mở bán và ${impact.occupiedSeatCount || 0} ghế đang được giữ hoặc đã bán. Không thể tạm ngừng trực tiếp khi còn suất bị ảnh hưởng.`,
+          confirmLabel: 'Xem các suất bị ảnh hưởng',
+          cancelLabel: 'Để sau',
+          tone: 'warning',
+        });
+        if (viewAffected) navigate(`/admin/showtimes?cinemaSlug=${encodeURIComponent(selectedCinema?.slug || '')}`);
+        return;
+      }
+
+      const confirmed = await triggerConfirm?.({
+      title: `Tạm ngừng ${roomName}?`,
+      message: 'Đã kiểm tra: phòng không có suất chiếu hoặc ghế bán bị ảnh hưởng. Phòng sẽ ngừng tham gia xếp lịch cho đến khi được mở lại.',
+      confirmLabel: 'Tạm ngừng phòng',
+      cancelLabel: 'Giữ phòng hoạt động',
+      tone: 'danger',
+      });
+      if (!confirmed) return;
+
       const response = await adminRoomService.updateAuditorium(room.publicId, {
         name: roomName,
         screenType: room.screenType || 'STANDARD',
@@ -229,6 +333,7 @@ export default function AdminRoomPage() {
       );
     } finally {
       setIsMutating(false);
+      setOpenMenuId(null);
     }
   };
 
@@ -287,7 +392,12 @@ export default function AdminRoomPage() {
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm font-semibold normal-case text-zinc-200 outline-none focus:border-brand-orange"
           >
             <option value="ALL">Tất cả trạng thái</option>
-            <option value="ACTIVE">Sẵn sàng phục vụ</option>
+            <option value="READY">Cấu hình sẵn sàng</option>
+            <option value="ATTENTION">Cần chú ý</option>
+            <option value="IN_SHOW">Đang chiếu</option>
+            <option value="CLEANING">Đang dọn phòng</option>
+            <option value="UPCOMING">Sắp chiếu</option>
+            <option value="IDLE">Đang trống</option>
             <option value="DRAFT">Đang thiết lập</option>
             <option value="MAINTENANCE">Đang bảo trì</option>
             <option value="INACTIVE">Tạm ngừng</option>
@@ -331,28 +441,47 @@ export default function AdminRoomPage() {
                 <p className="mt-1 text-xs text-zinc-500">
                   Chọn một phòng để quản lý thông tin, sơ đồ ghế và trạng thái vận hành.
                 </p>
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500">
+                  <span>Cập nhật {formatRefreshAge(lastUpdatedAt, now)} · Tự động làm mới</span>
+                  <button
+                    type="button"
+                    aria-label="Làm mới trạng thái phòng"
+                    onClick={() => {
+                      void fetchUpcomingShowtimes();
+                      void fetchRoomInsights();
+                    }}
+                    className="rounded-lg border border-zinc-800 p-1.5 text-zinc-400 hover:border-zinc-700 hover:text-white"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isShowtimesLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2 text-[11px] font-bold">
-                <span className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-zinc-300">
-                  {filteredRooms.length} phòng
-                </span>
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">
+                <button type="button" onClick={() => { setStatusFilter('ALL'); setPage(0); }} className={`rounded-full border px-3 py-1.5 ${statusFilter === 'ALL' ? 'border-white/30 bg-white/10 text-white' : 'border-zinc-800 bg-zinc-900/60 text-zinc-300'}`}>
+                  {rooms.length} phòng
+                </button>
+                <button type="button" onClick={() => { setStatusFilter('READY'); setPage(0); }} className={`rounded-full border px-3 py-1.5 ${statusFilter === 'READY' ? 'border-emerald-400/40 bg-emerald-500/20' : 'border-emerald-500/20 bg-emerald-500/10'} text-emerald-300`}>
                   {roomSummary.ready} sẵn sàng
-                </span>
+                </button>
+                {roomSummary.attention > 0 && (
+                  <button type="button" onClick={() => { setStatusFilter('ATTENTION'); setPage(0); }} className={`rounded-full border px-3 py-1.5 ${statusFilter === 'ATTENTION' ? 'border-amber-400/50 bg-amber-500/20' : 'border-amber-500/25 bg-amber-500/10'} text-amber-300`}>
+                    {roomSummary.attention} cần chú ý
+                  </button>
+                )}
                 <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1.5 text-sky-300">
-                  {roomSummary.seats} ghế
+                  {roomSummary.seats} chỗ
                 </span>
               </div>
             </div>
 
             <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-              {visibleRooms.map((room) => {
+              {visibleRooms.map(({ room, readiness, operational, insight }) => {
                 const roomName = room.name || room.auditoriumName || 'Phòng chiếu';
-                const status = getAuditoriumStatus(room.status);
-                const readiness = getAuditoriumReadiness(room);
-                const nextShowtime = getNextShowtimeForAuditorium(showtimes, room.publicId, now);
-                const showtimeState = nextShowtime ? getShowtimeState(nextShowtime, now) : null;
-                const showtimeTimezone = nextShowtime?.cinema?.timezone || selectedCinema?.timezone;
+                const nextShowtime = operational.nextShowtime;
+                const currentShowtime = operational.currentShowtime;
+                const showtimeTimezone = nextShowtime?.cinema?.timezone
+                  || currentShowtime?.cinema?.timezone
+                  || selectedCinema?.timezone;
                 const todayKey = getCinemaDateKey(now, showtimeTimezone);
                 const showtimeDateKey = nextShowtime?.serviceDate || getCinemaDateKey(
                   nextShowtime?.startTime,
@@ -363,62 +492,84 @@ export default function AdminRoomPage() {
                   : showtimeDateKey === addDaysToDateKey(todayKey, 1)
                     ? 'Ngày mai'
                     : formatServiceDateKey(showtimeDateKey);
+                const openDetail = (tab = 'overview') => navigate(
+                  `/admin/rooms/edit/${room.publicId}${tab === 'overview' ? '' : `?tab=${tab}`}`,
+                  { state: { breadcrumbLabel: roomName } },
+                );
+                let currentMessage = 'Không có hoạt động đang diễn ra.';
+                if (operational.key === 'IN_SHOW') {
+                  currentMessage = `Còn ${minutesBetween(currentShowtime.endTime, now)} phút`;
+                } else if (operational.key === 'CLEANING') {
+                  currentMessage = `Dự kiến hoàn tất lúc ${formatCinemaTime(operational.cleaningUntil, showtimeTimezone)}`;
+                } else if (operational.key === 'UPCOMING') {
+                  currentMessage = `Bắt đầu sau ${minutesBetween(nextShowtime.startTime, now)} phút`;
+                } else if (operational.key === 'MAINTENANCE') {
+                  currentMessage = operational.activeMaintenance?.reason || 'Phòng đang ngừng phục vụ để bảo trì.';
+                } else if (operational.key === 'ATTENTION') {
+                  currentMessage = `${operational.lockedSeatCount} ghế đang bảo trì`;
+                } else if (operational.key === 'SETUP') {
+                  currentMessage = 'Cần hoàn thiện cấu hình trước khi mở phòng.';
+                } else if (operational.key === 'SUSPENDED') {
+                  currentMessage = 'Phòng đã được tạm ngừng khỏi lịch vận hành.';
+                }
                 return (
                   <article
                     key={room.publicId}
                     aria-labelledby={`room-${room.publicId}-title`}
-                    className="group flex min-h-full flex-col overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-900/30 transition-all hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900/50 hover:shadow-2xl hover:shadow-black/20"
+                    tabIndex={0}
+                    onClick={() => openDetail()}
+                    onKeyDown={(event) => { if (event.key === 'Enter') openDetail(); }}
+                    className="group relative flex min-h-full cursor-pointer flex-col rounded-3xl border border-zinc-800/80 bg-zinc-900/30 transition-all hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900/50 hover:shadow-2xl hover:shadow-black/20 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
                   >
-                    <header className="flex items-start justify-between gap-3 border-b border-zinc-800/80 p-5">
+                    <header className="flex items-start justify-between gap-3 border-b border-zinc-800/70 p-4">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand-orange/25 bg-brand-orange/10 transition-colors group-hover:bg-brand-orange/15">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-orange/25 bg-brand-orange/10 transition-colors group-hover:bg-brand-orange/15">
                           <DoorOpen className="h-5 w-5 text-brand-orange" />
                         </div>
                         <div className="min-w-0">
                           <h3 id={`room-${room.publicId}-title`} className="truncate font-black text-white" title={roomName}>{roomName}</h3>
-                          <p className="mt-1 truncate text-xs text-zinc-500">
+                          <p className="mt-1 truncate text-xs text-zinc-400">
                             {SCREEN_TYPE_LABELS[room.screenType] || 'Chưa rõ màn hình'}
                             {' · '}
                             {SOUND_TYPE_LABELS[room.soundType] || 'Chưa rõ âm thanh'}
                           </p>
                         </div>
                       </div>
-                      <span className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-black ${status.className}`}>
-                        {status.label}
+                      <span className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-black uppercase ${operational.className}`}>
+                        {operational.label}
                       </span>
                     </header>
 
-                    <div className="flex flex-1 flex-col gap-4 p-5">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                          <div className="flex items-center gap-2 text-zinc-500">
-                            <Armchair className="h-4 w-4" />
-                            <p className="text-[10px] font-black uppercase tracking-widest">Sơ đồ ghế</p>
-                          </div>
-                          <p className={`mt-2 text-lg font-black ${
-                            readiness.hasSeatLayout ? 'text-emerald-300' : 'text-amber-300'
-                          }`}>
-                            {readiness.hasSeatLayout ? `${Number(room.capacity || 0)} ghế` : 'Chưa có'}
-                          </p>
-                          <p className="mt-1 text-[11px] text-zinc-500">
-                            {readiness.hasSeatLayout ? 'Đã thiết lập sơ đồ' : 'Cần hoàn thiện cấu hình'}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                          <div className="flex items-center gap-2 text-zinc-500">
-                            <Clock3 className="h-4 w-4" />
-                            <p className="text-[10px] font-black uppercase tracking-widest">Dọn phòng</p>
-                          </div>
-                          <p className="mt-2 text-lg font-black text-zinc-100">
-                            {room.cleaningBufferMinutes != null
-                              ? `${Number(room.cleaningBufferMinutes)} phút`
-                              : 'Chưa đặt'}
-                          </p>
-                          <p className="mt-1 text-[11px] text-zinc-500">Khoảng đệm giữa hai suất</p>
-                        </div>
+                    <div className="flex flex-1 flex-col gap-3 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <p className="font-bold text-zinc-300">
+                          {Number(room.capacity || insight.totalSeats || 0)} chỗ
+                          <span className="mx-2 text-zinc-700">·</span>
+                          <span className={operational.lockedSeatCount > 0 ? 'text-amber-300' : 'text-zinc-500'}>
+                            {operational.lockedSeatCount} ghế tạm khóa
+                          </span>
+                        </p>
+                        <span className={`text-[10px] font-bold ${readiness.canServe ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                          Cấu hình: {readiness.canServe ? 'Sẵn sàng' : 'Chưa sẵn sàng'}
+                        </span>
                       </div>
 
-                      <section className="flex min-h-48 flex-1 flex-col rounded-2xl border border-zinc-800 bg-black/20 p-4" aria-label={`Suất chiếu kế tiếp của ${roomName}`}>
+                      <section className="rounded-2xl bg-black/25 p-4" aria-label={`Trạng thái hiện tại của ${roomName}`}>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Hiện tại</p>
+                        <div className="mt-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-base font-black uppercase text-white">{operational.label}</p>
+                            {currentShowtime && (
+                              <p className="mt-1 truncate text-xs font-bold text-zinc-300">{currentShowtime.movie?.title || 'Phim chưa xác định'}</p>
+                            )}
+                            <p className="mt-1 text-xs text-zinc-400">{currentMessage}</p>
+                          </div>
+                          {operational.key === 'ATTENTION' && <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" />}
+                          {operational.key === 'MAINTENANCE' && <Wrench className="h-5 w-5 shrink-0 text-amber-300" />}
+                        </div>
+                      </section>
+
+                      <section className="rounded-2xl bg-black/20 p-4" aria-label={`Suất chiếu kế tiếp của ${roomName}`}>
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2 text-zinc-400">
                             <CalendarClock className="h-4 w-4 text-brand-orange" />
@@ -429,21 +580,21 @@ export default function AdminRoomPage() {
                           )}
                         </div>
                       {isShowtimesLoading ? (
-                        <div className="flex flex-1 items-center justify-center">
+                        <div className="py-4 text-center">
                           <p className="inline-flex items-center gap-2 text-xs text-zinc-500">
                           <Clock3 className="h-3.5 w-3.5 animate-pulse" />
                           Đang cập nhật lịch...
                           </p>
                         </div>
                       ) : showtimesError ? (
-                        <div className="flex flex-1 items-center"><p className="text-xs leading-5 text-rose-300">
+                        <div className="py-3"><p className="text-xs leading-5 text-rose-300">
                           Không thể tải lịch chiếu. Hãy mở lịch để kiểm tra.
                         </p></div>
                       ) : nextShowtime ? (
                         <div className="mt-3 min-w-0">
                           <div className="flex items-end justify-between gap-3">
                             <p className="flex items-baseline gap-2">
-                              <span className="text-2xl font-black text-white">
+                              <span className="text-xl font-black text-white">
                                 {formatCinemaTime(nextShowtime.startTime, showtimeTimezone)}
                               </span>
                               <span className="text-[11px] text-zinc-500">
@@ -452,15 +603,11 @@ export default function AdminRoomPage() {
                                   : ''}
                               </span>
                             </p>
-                            <span className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-black ${
-                              showtimeState === 'SHOWING'
-                                ? 'border-brand-orange/30 bg-brand-orange/10 text-brand-orange'
-                                : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
-                            }`}>
-                              {showtimeState === 'SHOWING' ? 'Đang chiếu' : 'Sắp chiếu'}
+                            <span className="text-[11px] font-bold text-sky-300">
+                              Bắt đầu sau {minutesBetween(nextShowtime.startTime, now)} phút
                             </span>
                           </div>
-                          <p className="mt-3 truncate text-sm font-black text-zinc-200" title={nextShowtime.movie?.title}>
+                          <p className="mt-2 truncate text-sm font-black text-zinc-200" title={nextShowtime.movie?.title}>
                             {nextShowtime.movie?.title || 'Phim chưa xác định'}
                           </p>
                           <p className="mt-0.5 truncate text-[11px] text-zinc-500">
@@ -471,15 +618,17 @@ export default function AdminRoomPage() {
                           </p>
                         </div>
                       ) : (
-                        <div className="flex flex-1 flex-col items-center justify-center py-5 text-center">
-                          <CalendarClock className="h-7 w-7 text-zinc-700" />
-                          <p className="mt-2 text-xs text-zinc-500">Chưa có suất chiếu trong 7 ngày tới.</p>
+                        <div className="py-4 text-center">
+                          <p className="text-xs text-zinc-500">Chưa có suất chiếu trong 7 ngày tới.</p>
                         </div>
                       )}
                       <button
                         type="button"
-                        onClick={() => navigate(`/admin/showtimes?cinemaSlug=${encodeURIComponent(selectedCinema?.slug || '')}${showtimeDateKey ? `&date=${showtimeDateKey}` : ''}`)}
-                        className="mt-auto inline-flex w-fit items-center gap-1 pt-3 text-[11px] font-black text-brand-orange hover:text-orange-300"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(`/admin/showtimes?cinemaSlug=${encodeURIComponent(selectedCinema?.slug || '')}${showtimeDateKey ? `&date=${showtimeDateKey}` : ''}`);
+                        }}
+                        className="inline-flex w-fit items-center gap-1 pt-2 text-[11px] font-black text-brand-orange hover:text-orange-300"
                       >
                         Xem lịch chiếu
                         <ExternalLink className="h-3 w-3" />
@@ -487,26 +636,37 @@ export default function AdminRoomPage() {
                       </section>
                     </div>
 
-                    <footer className="grid grid-cols-2 gap-2 border-t border-zinc-800/80 bg-zinc-950/30 p-4">
+                    <footer className="grid grid-cols-[1fr_auto] gap-2 border-t border-zinc-800/70 bg-zinc-950/30 p-3">
                       <button
                         type="button"
-                        onClick={() => navigate(`/admin/rooms/edit/${room.publicId}`)}
-                        className={`${room.status === 'INACTIVE' ? 'col-span-2' : ''} inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:border-brand-orange hover:text-brand-orange`}
+                        onClick={(event) => { event.stopPropagation(); openDetail(); }}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:border-brand-orange hover:text-brand-orange"
                       >
-                        <Settings2 className="h-4 w-4" />
-                        Quản lý phòng
+                        Xem chi tiết
                       </button>
-                      {room.status !== 'INACTIVE' && (
+                      <div className="relative">
                         <button
                           type="button"
-                          disabled={isMutating}
-                          onClick={() => handlePauseRoom(room)}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-500/30 px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                      >
-                          <CirclePause className="h-4 w-4" />
-                          Tạm ngừng
+                          aria-label={`Mở menu tác vụ của ${roomName}`}
+                          aria-expanded={openMenuId === room.publicId}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenMenuId(current => current === room.publicId ? null : room.publicId);
+                          }}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-brand-orange hover:text-brand-orange"
+                        >
+                          <Ellipsis className="h-5 w-5" />
                         </button>
-                      )}
+                        {openMenuId === room.publicId && (
+                          <div className="absolute bottom-12 right-0 z-20 w-52 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950 p-1.5 shadow-2xl">
+                            <button type="button" onClick={(event) => { event.stopPropagation(); openDetail('seat-layout'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-zinc-300 hover:bg-zinc-800"><LayoutGrid className="h-4 w-4" /> Xem sơ đồ ghế</button>
+                            <button type="button" onClick={(event) => { event.stopPropagation(); openDetail('maintenance'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-zinc-300 hover:bg-zinc-800"><Wrench className="h-4 w-4" /> Lập lịch bảo trì</button>
+                            {room.status !== 'INACTIVE' && (
+                              <button type="button" disabled={isMutating} onClick={(event) => { event.stopPropagation(); void handlePauseRoom(room); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-bold text-red-300 hover:bg-red-500/10 disabled:opacity-50"><CirclePause className="h-4 w-4" /> Tạm ngừng phòng</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </footer>
                   </article>
                 );

@@ -307,4 +307,19 @@ describe('MaintenanceWorkspace', () => {
       }),
     ));
   });
+
+  it('uses a focused single-room operations view on auditorium detail', async () => {
+    renderWorkspace({ singleRoomMode: true, lockedSeatCount: 2 });
+
+    expect(await screen.findByText('Trạng thái hiện tại')).toBeInTheDocument();
+    expect(screen.getByText('Ghế tạm khóa')).toBeInTheDocument();
+    expect(screen.getByText('Bảo trì sắp tới')).toBeInTheDocument();
+    expect(screen.getByText('Bảo trì gần nhất')).toBeInTheDocument();
+    expect(screen.queryByText('Tổng số phòng')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chọn phòng để xem và bàn giao')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sắp tới' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đang diễn ra' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đã hoàn tất' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đã hủy' })).toBeInTheDocument();
+  });
 });

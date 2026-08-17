@@ -6,6 +6,8 @@ export default function AuditoriumMaintenanceTab({
   roomId,
   auditorium,
   triggerToast,
+  lockedSeatCount = 0,
+  operationalState,
 }) {
   const rooms = useMemo(() => auditorium ? [auditorium] : [], [auditorium]);
 
@@ -47,6 +49,9 @@ export default function AuditoriumMaintenanceTab({
         }}
         viewerRole="admin"
         onNotify={triggerToast}
+        singleRoomMode
+        lockedSeatCount={lockedSeatCount}
+        operationalState={operationalState}
       />
     </div>
   );

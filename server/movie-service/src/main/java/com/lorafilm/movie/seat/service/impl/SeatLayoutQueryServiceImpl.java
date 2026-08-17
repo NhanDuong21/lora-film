@@ -107,7 +107,9 @@ public class SeatLayoutQueryServiceImpl implements SeatLayoutQueryService {
         return new AdminSeatLayoutResponse(
                 auditorium.getPublicId(), auditorium.getName(), auditorium.getCapacity(),
                 auditorium.getScreenType(), auditorium.getSoundType(), auditorium.getCleaningBufferMinutes(),
-                auditorium.getStatus(), totalSeats, activeSeats, maintenanceSeats, rows
+                auditorium.getStatus(), auditorium.getCinema().getPublicId(), auditorium.getCinema().getName(),
+                auditorium.getCinema().getSlug(), auditorium.getCinema().getTimezone(),
+                totalSeats, activeSeats, maintenanceSeats, rows
         );
     }
 

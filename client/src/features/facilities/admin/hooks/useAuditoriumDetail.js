@@ -6,10 +6,12 @@ export default function useAuditoriumDetail(roomId, triggerToast) {
   const [auditorium, setAuditorium] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
 
-  const fetchAuditorium = useCallback(async () => {
+  const fetchAuditorium = useCallback(async (options = {}) => {
     if (!roomId) return;
-    setIsLoading(true);
+    const silent = Boolean(options?.silent);
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
       const response = await adminRoomService.getAdminSeatLayout(roomId);
@@ -17,15 +19,16 @@ export default function useAuditoriumDetail(roomId, triggerToast) {
         throw new Error('Dữ liệu phòng chiếu không hợp lệ');
       }
       setAuditorium(response.data);
+      setLastUpdatedAt(new Date());
     } catch (requestError) {
       const message = getErrorMessage(
         requestError,
         'Không thể tải thông tin phòng chiếu',
       );
       setError(message);
-      triggerToast?.(message, 'error');
+      if (!silent) triggerToast?.(message, 'error');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [roomId, triggerToast]);
 
@@ -75,6 +78,7 @@ export default function useAuditoriumDetail(roomId, triggerToast) {
     auditorium,
     isLoading,
     error,
+    lastUpdatedAt,
     fetchAuditorium,
     updateAuditoriumBasicInfo,
     changeAuditoriumStatus,

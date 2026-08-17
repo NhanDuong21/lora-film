@@ -17,16 +17,22 @@ export default function StatsPanel({ stats }) {
         </div>
         <div className="flex justify-between">
           <span className="text-zinc-400">Ghế đôi (Vàng):</span>
-          <span className="text-white font-bold">{stats.couple}</span>
+          <span className="text-white font-bold">{stats.coupleModules ?? Math.floor((stats.couple || 0) / 2)} module / {stats.couple || 0} người</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-zinc-400">Vị trí hỗ trợ (Xanh):</span>
+          <span className="text-zinc-400">Vị trí tiếp cận (Xanh):</span>
           <span className="text-white font-bold">{stats.disabled}</span>
         </div>
         <div className="flex justify-between border-t border-zinc-900 pt-1.5 mt-1.5 font-bold">
-          <span className="text-zinc-300">Tổng ghế hoạt động:</span>
-          <span className="text-brand-orange">{stats.activeSeats} ghế</span>
+          <span className="text-zinc-300">Sức chứa tối đa:</span>
+          <span className="text-brand-orange">{stats.activeSeats} người</span>
         </div>
+        {stats.ticketingPositions != null && (
+          <div className="flex justify-between">
+            <span className="text-zinc-400">Vị trí bán vé:</span>
+            <span className="font-bold text-white">{stats.ticketingPositions}</span>
+          </div>
+        )}
       </div>
     </div>
   );

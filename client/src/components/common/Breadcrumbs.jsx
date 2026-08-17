@@ -60,6 +60,10 @@ export default function Breadcrumbs() {
   const location = useLocation();
   const { user } = useAuth();
   const pathnames = location.pathname.split('/').filter(x => x);
+  const isRoomDetail = pathnames[0] === 'admin'
+    && pathnames[1] === 'rooms'
+    && pathnames[2] === 'edit'
+    && pathnames.length === 4;
   const permissions = user?.permissions || [];
   const hasAccountingAccess = permissions.some(permission => [
     'PAYMENT_RECONCILE', 'SETTLEMENT_IMPORT', 'SETTLEMENT_LOCK',
@@ -76,6 +80,7 @@ export default function Breadcrumbs() {
       </Link>
       
       {pathnames.map((value, index) => {
+        if (isRoomDetail && value === 'edit') return null;
         const isLast = index === pathnames.length - 1;
         const to = `/${pathnames.slice(0, index + 1).join('/')}`;
         
@@ -84,6 +89,9 @@ export default function Breadcrumbs() {
           && hasAccountingAccess
           ? getAccountingRoleLabel(permissions)
           : routeNameMap[value];
+        if (isRoomDetail && isLast && location.state?.breadcrumbLabel) {
+          label = location.state.breadcrumbLabel;
+        }
         if (!label) {
           // Check if it's a UUID or ID (e.g., number)
           if (value.length > 20 || !isNaN(value)) {

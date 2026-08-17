@@ -42,6 +42,13 @@ const FILTERS = [
   ['cancelled', 'Đã hủy'],
 ];
 
+const SINGLE_ROOM_FILTERS = [
+  ['upcoming', 'Sắp tới'],
+  ['current', 'Đang diễn ra'],
+  ['resolved', 'Đã hoàn tất'],
+  ['cancelled', 'Đã hủy'],
+];
+
 const toLocalInput = date => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
@@ -139,6 +146,9 @@ export default function MaintenanceWorkspace({
   viewerRole = 'operator',
   onNotify,
   loadAccountProfiles = getAccountDisplayNames,
+  singleRoomMode = false,
+  lockedSeatCount = 0,
+  operationalState = null,
 }) {
   const normalizedRooms = useMemo(() => rooms.map(normalizeRoom), [rooms]);
   const [windows, setWindows] = useState([]);
@@ -154,8 +164,9 @@ export default function MaintenanceWorkspace({
   const [extendTarget, setExtendTarget] = useState(null);
   const [extendForm, setExtendForm] = useState({ endTime: '', note: '' });
   const [extendImpact, setExtendImpact] = useState(null);
-  const [listFilter, setListFilter] = useState('active');
+  const [listFilter, setListFilter] = useState(singleRoomMode ? 'upcoming' : 'active');
   const [accountNames, setAccountNames] = useState({});
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [state, setState] = useState({
     loading: true,
     checking: false,
@@ -174,13 +185,15 @@ export default function MaintenanceWorkspace({
     }
   }, [normalizedRooms, selectedRoomId]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options = {}) => {
     if (typeof loadWindows !== 'function') return;
-    setState(current => ({ ...current, loading: true, error: '' }));
+    const silent = Boolean(options?.silent);
+    if (!silent) setState(current => ({ ...current, loading: true, error: '' }));
     try {
       const data = await loadWindows();
       setWindows(Array.isArray(data) ? data : []);
-      setState(current => ({ ...current, loading: false }));
+      setLastUpdatedAt(new Date());
+      if (!silent) setState(current => ({ ...current, loading: false }));
     } catch (error) {
       setState(current => ({
         ...current,
@@ -192,6 +205,11 @@ export default function MaintenanceWorkspace({
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => void refresh({ silent: true }), 20_000);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   const visibleAccountIds = useMemo(() => Array.from(new Set(
@@ -268,10 +286,40 @@ export default function MaintenanceWorkspace({
   const visibleWindows = useMemo(() => windows.filter(item => {
     if (selectedRoomId && item.auditoriumPublicId !== selectedRoomId) return false;
     if (listFilter === 'all') return true;
+    if (listFilter === 'upcoming') return item.status === 'ACTIVE' && new Date(item.startTime).getTime() > Date.now();
+    if (listFilter === 'current') return item.status === 'ACTIVE'
+      && new Date(item.startTime).getTime() <= Date.now()
+      && new Date(item.endTime).getTime() > Date.now();
     if (listFilter === 'resolved') return item.status === 'RESOLVED';
     if (listFilter === 'cancelled') return item.status === 'CANCELLED';
     return item.status === 'ACTIVE' && new Date(item.endTime).getTime() > Date.now();
   }), [listFilter, selectedRoomId, windows]);
+  const selectedRoomStatus = selectedRoom ? roomStatus(selectedRoom.publicId) : null;
+  const nextSelectedWindow = activeWindows
+    .filter(item => item.auditoriumPublicId === selectedRoomId && new Date(item.startTime).getTime() > Date.now())
+    .sort((left, right) => new Date(left.startTime) - new Date(right.startTime))[0] || null;
+  const lastResolvedWindow = windows
+    .filter(item => item.auditoriumPublicId === selectedRoomId && item.status === 'RESOLVED')
+    .sort((left, right) => new Date(right.actualEndTime || right.endTime) - new Date(left.actualEndTime || left.endTime))[0] || null;
+  const currentRoomLabel = operationalState?.label || selectedRoomStatus?.label || 'Sẵn sàng';
+  const currentRoomTone = operationalState?.tone || selectedRoomStatus?.tone || 'emerald';
+  const currentRoomToneClass = {
+    red: 'text-red-300',
+    amber: 'text-amber-300',
+    orange: 'text-brand-orange',
+    violet: 'text-violet-300',
+    blue: 'text-blue-300',
+    sky: 'text-sky-300',
+    emerald: 'text-emerald-300',
+    zinc: 'text-zinc-300',
+  }[currentRoomTone] || 'text-emerald-300';
+  const currentRoomDescription = selectedRoomStatus?.window
+    ? `${selectedRoomStatus.window.reason || 'Đang có lịch bảo trì'} · ${formatDateTime(selectedRoomStatus.window.startTime)} – ${formatDateTime(selectedRoomStatus.window.endTime)}`
+    : operationalState?.currentShowtime
+      ? `${operationalState.currentShowtime.movie?.title || 'Suất chiếu đang diễn ra'} · kết thúc ${formatDateTime(operationalState.currentShowtime.endTime)}`
+      : operationalState?.nextShowtime
+        ? `Suất tiếp theo lúc ${formatDateTime(operationalState.nextShowtime.startTime)}.`
+        : 'Không có lịch bảo trì hoặc hoạt động đang diễn ra.';
 
   const openForm = (roomId, maintenanceType = 'PLANNED') => {
     const targetRoomId = roomId || selectedRoomId || normalizedRooms[0]?.publicId || '';
@@ -563,6 +611,55 @@ export default function MaintenanceWorkspace({
 
   return (
     <div className="space-y-6">
+      {singleRoomMode && (
+        <>
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ['Trạng thái hiện tại', currentRoomLabel, Clock3, currentRoomToneClass],
+              ['Ghế tạm khóa', Number(lockedSeatCount || 0), ShieldCheck, Number(lockedSeatCount || 0) > 0 ? 'text-amber-300' : 'text-emerald-300'],
+              ['Bảo trì sắp tới', nextSelectedWindow ? formatDateTime(nextSelectedWindow.startTime) : 'Không có', CalendarClock, nextSelectedWindow ? 'text-blue-300' : 'text-zinc-300'],
+              ['Bảo trì gần nhất', lastResolvedWindow ? formatDateTime(lastResolvedWindow.actualEndTime || lastResolvedWindow.endTime) : 'Chưa có dữ liệu', Wrench, lastResolvedWindow ? 'text-zinc-200' : 'text-zinc-400'],
+            ].map(([label, value, Icon, tone]) => (
+              <article key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{label}</p>
+                    <p className={`mt-2 text-base font-black ${tone}`}>{value}</p>
+                  </div>
+                  <Icon className="h-5 w-5 text-zinc-600" />
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="rounded-3xl border border-zinc-800 bg-zinc-900/20 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Tình trạng phòng</p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <h2 className="text-lg font-black">{currentRoomLabel}</h2>
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${
+                    selectedRoomStatus?.tone === 'amber'
+                      ? 'bg-amber-500/10 text-amber-300'
+                      : selectedRoomStatus?.tone === 'blue'
+                        ? 'bg-blue-500/10 text-blue-300'
+                        : 'bg-emerald-500/10 text-emerald-300'
+                  }`}>{selectedRoom?.name}</span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-zinc-400">
+                  {currentRoomDescription}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="button" onClick={() => openForm(selectedRoomId, 'PLANNED')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 text-sm font-black text-zinc-950"><Plus className="h-4 w-4" /> Lập lịch bảo trì</button>
+                <button type="button" onClick={() => openForm(selectedRoomId, 'EMERGENCY')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-sm font-black text-red-200 hover:bg-red-500/20"><Siren className="h-4 w-4" /> Đóng phòng khẩn cấp</button>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
+      {!singleRoomMode && <>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ['Tổng số phòng', normalizedRooms.length, Building2, 'text-white'],
@@ -665,6 +762,7 @@ export default function MaintenanceWorkspace({
           })}
         </div>
       </section>
+      </>}
 
       {state.error && !formOpen && !cancelTarget && !resolveTarget && !extendTarget && (
         <div role="alert" className="flex gap-3 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-100">
@@ -686,8 +784,13 @@ export default function MaintenanceWorkspace({
               <CalendarClock className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="font-black">Lịch bảo trì của {selectedRoom?.name}</h2>
+              <h2 className="font-black">{singleRoomMode ? 'Lịch bảo trì' : `Lịch bảo trì của ${selectedRoom?.name}`}</h2>
               <p className="mt-1 text-xs text-zinc-500">Theo dõi lịch sắp tới, sự cố đang xử lý và lịch đã hoàn tất.</p>
+              {singleRoomMode && (
+                <p className="mt-1 text-[11px] text-zinc-600">
+                  Cập nhật {lastUpdatedAt ? `${Math.max(0, Math.floor((Date.now() - lastUpdatedAt.getTime()) / 1000))} giây trước` : 'đang đồng bộ'} · Tự động làm mới
+                </p>
+              )}
               <p className="mt-2 max-w-3xl text-[11px] leading-5 text-blue-200/70">
                 {permissionNote}
               </p>
@@ -695,7 +798,7 @@ export default function MaintenanceWorkspace({
           </div>
           <div className="flex items-center gap-2">
             <div className="grid grid-cols-2 rounded-xl border border-zinc-800 bg-black/20 p-1 sm:grid-cols-4">
-              {FILTERS.map(([value, label]) => (
+              {(singleRoomMode ? SINGLE_ROOM_FILTERS : FILTERS).map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
@@ -796,7 +899,7 @@ export default function MaintenanceWorkspace({
                           onClick={() => openResolveDialog(item)}
                           className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-zinc-950 hover:bg-emerald-400 disabled:opacity-40"
                         >
-                          <Power className="h-4 w-4" /> Phòng hoạt động trở lại
+                          <Power className="h-4 w-4" /> {singleRoomMode ? 'Kiểm tra & nhận bàn giao' : 'Phòng hoạt động trở lại'}
                         </button>
                       )}
                       <button

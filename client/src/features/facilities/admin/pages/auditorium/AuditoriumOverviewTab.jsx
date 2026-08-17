@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Edit3, Save, ShieldAlert, X } from 'lucide-react';
+import { Armchair, CalendarClock, CheckCircle2, Clock3, Edit3, Save, ShieldAlert, Wrench, X } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import RoomForm from '@/features/facilities/admin/components/RoomForm';
 import {
@@ -23,20 +23,7 @@ const STATUS_ACTIONS = {
       description: 'Giữ lại dữ liệu nhưng không cho phòng tham gia vận hành.',
     },
   ],
-  ACTIVE: [
-    {
-      target: 'MAINTENANCE',
-      label: 'Chuyển sang bảo trì',
-      description: 'Tạm ngừng phục vụ để xử lý thiết bị hoặc cơ sở vật chất.',
-      tone: 'warning',
-    },
-    {
-      target: 'INACTIVE',
-      label: 'Tạm ngừng phòng',
-      description: 'Ngừng xếp lịch và bán vé cho đến khi được mở lại.',
-      tone: 'danger',
-    },
-  ],
+  ACTIVE: [],
   MAINTENANCE: [
     {
       target: 'ACTIVE',
@@ -62,10 +49,23 @@ const STATUS_ACTIONS = {
   ],
 };
 
+const OPERATIONAL_TONE_CLASSES = {
+  red: 'text-red-300',
+  amber: 'text-amber-300',
+  orange: 'text-brand-orange',
+  violet: 'text-violet-300',
+  sky: 'text-sky-300',
+  emerald: 'text-emerald-300',
+  zinc: 'text-zinc-300',
+};
+
 export default function AuditoriumOverviewTab({
   auditorium,
+  operationalState,
+  maintenanceWindows = [],
   onUpdate,
   onChangeStatus,
+  onOpenMaintenance,
 }) {
   const { triggerConfirm, triggerToast } = useOutletContext() || {};
   const [isEditing, setIsEditing] = useState(false);
@@ -78,15 +78,24 @@ export default function AuditoriumOverviewTab({
   );
   const [approvedCapacity, setApprovedCapacity] = useState(auditorium?.capacity ?? 1);
 
-  const computedCapacity = useMemo(
-    () => (auditorium?.rows || []).reduce(
-      (total, row) => total + (row.seats || []).filter(
-        (seat) => seat.status !== 'INACTIVE',
-      ).length,
-      0,
-    ),
-    [auditorium],
-  );
+  const seatMetrics = useMemo(() => {
+    const seats = (auditorium?.rows || []).flatMap(row => row.seats || [])
+      .filter(seat => seat.status !== 'INACTIVE');
+    const byType = code => seats.filter(seat => seat.seatType?.code === code);
+    const coupleSeats = byType('COUPLE');
+    const pairGroups = new Set(coupleSeats.map(seat => seat.pairGroup).filter(Boolean));
+    const coupleModules = pairGroups.size || Math.floor(coupleSeats.length / 2);
+    return {
+      standard: byType('STANDARD').length,
+      vip: byType('VIP').length,
+      accessible: byType('DISABLED').length,
+      coupleSeats: coupleSeats.length,
+      coupleModules,
+      capacity: seats.length,
+      ticketingPositions: seats.length - coupleModules,
+    };
+  }, [auditorium]);
+  const computedCapacity = seatMetrics.capacity;
 
   const status = auditorium?.auditoriumStatus || 'DRAFT';
   const statusPresentation = getAuditoriumStatus(status);
@@ -97,6 +106,16 @@ export default function AuditoriumOverviewTab({
     { label: 'Đã có thời gian dọn phòng', complete: cleaningBuffer >= 0 },
   ];
   const completedChecks = checks.filter((item) => item.complete).length;
+  const isDraft = status === 'DRAFT';
+  const nextMaintenance = operationalState?.upcomingMaintenance;
+  const lastMaintenance = [...maintenanceWindows]
+    .filter(item => item.status === 'RESOLVED')
+    .sort((left, right) => new Date(right.actualEndTime || right.endTime) - new Date(left.actualEndTime || left.endTime))[0];
+  const formatDateTime = value => value
+    ? new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }).format(new Date(value))
+    : 'Không có';
 
   const handleSave = async (event) => {
     event.preventDefault();
@@ -136,28 +155,41 @@ export default function AuditoriumOverviewTab({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-20">
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 md:col-span-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-            Tình trạng vận hành
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <span className={`rounded-lg border px-3 py-1.5 text-xs font-black ${statusPresentation.className}`}>
-              {statusPresentation.label}
-            </span>
-            <p className="text-sm text-zinc-400">{statusPresentation.description}</p>
+      {isDraft ? (
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 md:col-span-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Tình trạng cấu hình</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span className={`rounded-lg border px-3 py-1.5 text-xs font-black ${statusPresentation.className}`}>{statusPresentation.label}</span>
+              <p className="text-sm text-zinc-300">{statusPresentation.description}</p>
+            </div>
           </div>
-        </div>
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-            Mức độ hoàn thiện
-          </p>
-          <p className="mt-2 text-2xl font-black text-white">
-            {completedChecks}/{checks.length}
-          </p>
-          <p className="text-xs text-zinc-500">hạng mục đã sẵn sàng</p>
-        </div>
-      </section>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Mức độ hoàn thiện</p>
+            <p className="mt-2 text-2xl font-black text-white">{completedChecks}/{checks.length}</p>
+            <p className="text-xs text-zinc-400">hạng mục đã sẵn sàng</p>
+          </div>
+        </section>
+      ) : (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ['Trạng thái hiện tại', operationalState?.label || 'Đang trống', Clock3, OPERATIONAL_TONE_CLASSES[operationalState?.tone] || 'text-emerald-300'],
+            ['Suất tiếp theo', operationalState?.nextShowtime ? formatDateTime(operationalState.nextShowtime.startTime) : 'Không có', CalendarClock, 'text-sky-300'],
+            ['Ghế tạm khóa', String(auditorium.maintenanceSeats || 0), Armchair, Number(auditorium.maintenanceSeats || 0) > 0 ? 'text-amber-300' : 'text-emerald-300'],
+            ['Bảo trì sắp tới', nextMaintenance ? formatDateTime(nextMaintenance.startTime) : 'Không có', Wrench, nextMaintenance ? 'text-amber-300' : 'text-zinc-300'],
+          ].map(([label, value, Icon, tone]) => (
+            <article key={label} className="rounded-2xl border border-zinc-800 bg-zinc-900/25 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{label}</p>
+                  <p className={`mt-2 text-base font-black ${tone}`}>{value}</p>
+                </div>
+                <Icon className="h-4 w-4 text-zinc-500" />
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -220,8 +252,10 @@ export default function AuditoriumOverviewTab({
               ['Công nghệ màn hình', SCREEN_TYPE_LABELS[auditorium.screenType] || 'Chưa xác định'],
               ['Hệ thống âm thanh', SOUND_TYPE_LABELS[auditorium.soundType] || 'Chưa xác định'],
               ['Thời gian dọn phòng', `${auditorium.cleaningBufferMinutes ?? 0} phút`],
-              ['Vị trí trong sơ đồ', `${computedCapacity} ghế`],
-              ['Sức chứa theo hồ sơ', `${auditorium.capacity ?? computedCapacity} người`],
+              ['Vị trí bán vé', seatMetrics.ticketingPositions],
+              ['Ghế đôi', `${seatMetrics.coupleModules} module / ${seatMetrics.coupleSeats} người`],
+              ['Vị trí xe lăn', seatMetrics.accessible],
+              ['Sức chứa tối đa', `${auditorium.capacity ?? computedCapacity} người`],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
                 <dt className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{label}</dt>
@@ -232,8 +266,8 @@ export default function AuditoriumOverviewTab({
         )}
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-6">
+      <section className={`grid gap-6 ${isDraft ? 'lg:grid-cols-2' : ''}`}>
+        {isDraft && <div className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-6">
           <h2 className="text-sm font-black uppercase text-white">Checklist trước khi mở phòng</h2>
           <div className="mt-4 space-y-3">
             {checks.map((item) => (
@@ -243,15 +277,29 @@ export default function AuditoriumOverviewTab({
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/20 p-6">
-          <h2 className="text-sm font-black uppercase text-white">Tác vụ vận hành</h2>
+          <h2 className="text-sm font-black uppercase text-white">{isDraft ? 'Tác vụ hoàn thiện' : 'Tác vụ vận hành'}</h2>
           <div className="mt-3 flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-100">
             <ShieldAlert className="h-5 w-5 shrink-0 text-amber-400" />
-            <p>Trước khi ngừng hoặc bảo trì phòng, hãy kiểm tra lịch chiếu và các đơn đã đặt.</p>
+            <p>{status === 'ACTIVE'
+              ? 'Mọi thao tác đóng phòng được thực hiện trong luồng bảo trì để hệ thống kiểm tra suất chiếu, ghế đã bán và phạm vi ảnh hưởng trước khi xác nhận.'
+              : 'Trước khi đổi trạng thái phòng, hãy kiểm tra lịch chiếu và các đơn đã đặt.'}</p>
           </div>
           <div className="mt-4 space-y-3">
+            {status === 'ACTIVE' && (
+              <button
+                type="button"
+                onClick={onOpenMaintenance}
+                className="w-full rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-left transition-colors hover:bg-amber-500/10"
+              >
+                <span className="text-sm font-black text-white">Mở trung tâm đóng phòng & bảo trì</span>
+                <span className="mt-1 block text-xs text-zinc-400">
+                  Lập lịch bảo trì hoặc đóng khẩn cấp với bước xem trước tác động đến lịch chiếu và đơn đặt vé.
+                </span>
+              </button>
+            )}
             {(STATUS_ACTIONS[status] || []).map((action) => {
               const disabled = isSubmitting || (action.requiresLayout && computedCapacity === 0);
               return (
@@ -280,6 +328,10 @@ export default function AuditoriumOverviewTab({
           </div>
         </div>
       </section>
+
+      {!isDraft && lastMaintenance && (
+        <p className="text-xs text-zinc-500">Bảo trì gần nhất hoàn tất lúc {formatDateTime(lastMaintenance.actualEndTime || lastMaintenance.endTime)}.</p>
+      )}
     </div>
   );
 }
