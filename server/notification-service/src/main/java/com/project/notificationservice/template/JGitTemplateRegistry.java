@@ -764,11 +764,20 @@ public class JGitTemplateRegistry implements TemplateRegistry {
         Path emailDirectory = safePath(workingDirectory.resolve("email"));
         if (!Files.isDirectory(emailDirectory, LinkOption.NOFOLLOW_LINKS))
             return List.of();
-        try (Stream<Path> paths = Files.walk(emailDirectory)) {
-            return paths.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-                    .filter(path -> path.getFileName().toString().endsWith(".html"))
-                    .toList();
+
+        List<Path> templates = new ArrayList<>();
+        for (String language : List.of("vi", "en")) {
+            Path localeDirectory = safePath(emailDirectory.resolve(language));
+            if (!Files.isDirectory(localeDirectory, LinkOption.NOFOLLOW_LINKS))
+                continue;
+            try (Stream<Path> paths = Files.walk(localeDirectory)) {
+                templates.addAll(paths
+                        .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                        .filter(path -> path.getFileName().toString().endsWith(".html"))
+                        .toList());
+            }
         }
+        return List.copyOf(templates);
     }
 
     private String legacyTemplateKey(Path path) {

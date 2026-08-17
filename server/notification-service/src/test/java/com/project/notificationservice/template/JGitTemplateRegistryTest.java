@@ -66,6 +66,13 @@ class JGitTemplateRegistryTest {
                     <html><head><title>Payment Failed - LoraFilm</title></head>
                     <body><h1>Hello {{user_name}}</h1><p>Payment {{transaction_id}} failed.</p></body></html>
                     """);
+            Path archived = repository.resolve("email/_archive/vi/auth/register_otp.html");
+            Files.createDirectories(archived.getParent());
+            Files.writeString(archived, """
+                    <!doctype html>
+                    <html><head><title>Archived registration OTP</title></head>
+                    <body><p>{{otp_code}}</p></body></html>
+                    """);
             git.add().addFilepattern(".").call();
             git.commit().setMessage("Initialize registry")
                     .setAuthor("Test", "test@example.com").call();
@@ -92,6 +99,14 @@ class JGitTemplateRegistryTest {
                 5,
                 true);
         registry.initialize();
+    }
+
+    @Test
+    void ignoresAuxiliaryEmailDirectoriesWhenListingPublishedTemplates() {
+        assertThat(registry.findTemplates(null))
+                .extracting(TemplateRegistry.TemplateSummary::templateKey)
+                .contains("BOOKING_CONFIRMED", "PAYMENT_FAILED")
+                .doesNotContain("REGISTER_OTP");
     }
 
     @Test

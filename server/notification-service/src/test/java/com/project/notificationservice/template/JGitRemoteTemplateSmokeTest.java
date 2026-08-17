@@ -71,13 +71,13 @@ class JGitRemoteTemplateSmokeTest {
             assertThat(renderer.render(email, adapter.adapt(payload, email)).htmlContent())
                     .contains("BK-001", "Lora Movie", "A1, A2");
 
-            TemplateRegistry.TemplateDocument registrationOtp = registry.getPublishedTemplate(
-                    "REGISTER_OTP", Channel.EMAIL, "vi-VN");
-            assertThat(renderer.render(registrationOtp, adapter.adapt(Map.of(
+            TemplateRegistry.TemplateDocument verifyEmail = registry.getPublishedTemplate(
+                    "VERIFY_EMAIL", Channel.EMAIL, "vi-VN");
+            assertThat(renderer.render(verifyEmail, adapter.adapt(Map.of(
                     "user_name", "An",
-                    "otp_code", "123456",
-                    "expiry_minutes", 5), registrationOtp)).htmlContent())
-                    .contains("An", "123456", "5");
+                    "verification_link", "https://example.com/verify",
+                    "expiry_hours", 1), verifyEmail)).htmlContent())
+                    .contains("An", "https://example.com/verify", "1");
 
             TemplateRegistry.TemplateDocument forgotPasswordOtp = registry.getPublishedTemplate(
                     "FORGOT_PASSWORD_OTP", Channel.EMAIL, "vi-VN");

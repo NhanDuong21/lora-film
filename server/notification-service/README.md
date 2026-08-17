@@ -31,14 +31,16 @@ The application validates the schema with `spring.jpa.hibernate.ddl-auto=validat
 ## Template registry
 
 The default published template source is
-[`vinhth05/temple-mail`](https://github.com/vinhth05/temple-mail.git). Its
+[`NhanDuong21/template-mail`](https://github.com/NhanDuong21/template-mail.git). Its
 `email/{language}/{domain}/*.html` layout is supported directly for delivery;
 native `templates/**/manifest.json` templates take precedence when both formats
 contain the same key/channel/locale. Template keys follow the uppercase file
 name, for example `BOOKING_CONFIRMED` resolves to `booking_confirmed.html`.
 When a requested locale is absent, the registry tries the repository's `vi`
 then `en` version. IN_APP and WEB_PUSH content is derived from the title, first
-heading, and first paragraph of the same HTML file and Git revision.
+heading, and first paragraph of the same HTML file and Git revision. Auxiliary
+directories such as `email/_archive`, `email/assets`, and `email/preview-data`
+are not exposed as published templates.
 
 Set `NOTIFICATION_TEMPLATE_GIT_URI`, `NOTIFICATION_TEMPLATE_GIT_WORKDIR`, and
 `NOTIFICATION_TEMPLATE_GIT_BRANCH` to override the source. Public read-only
@@ -48,6 +50,10 @@ write access. The work directory is runtime data and must stay outside this
 repository and the application artifact. Draft branches use optimistic SHA
 checks. Publishing creates a merge commit on protected `main` and an immutable
 version tag; rollback creates another commit and tag.
+
+The default work directory is `~/.lorafilm/template-mail-nhanduong21`. It is
+deliberately different from the previous registry cache so changing the default
+remote cannot leave an existing checkout attached to the old Git origin.
 
 Published templates are refreshed automatically from `origin/main`. The first
 check runs after 5 seconds and subsequent checks run every 30 seconds by
