@@ -7,6 +7,7 @@ import com.lorafilm.movie.auditorium.domain.enums.SoundType;
 import com.lorafilm.movie.auditorium.dto.AuditoriumResponse;
 import com.lorafilm.movie.auditorium.dto.CreateAuditoriumRequest;
 import com.lorafilm.movie.auditorium.dto.CreateAuditoriumWithLayoutRequest;
+import com.lorafilm.movie.auditorium.dto.CloneAuditoriumRequest;
 import com.lorafilm.movie.auditorium.repository.AuditoriumRepository;
 import com.lorafilm.movie.auditorium.service.impl.AuditoriumServiceImpl;
 import com.lorafilm.movie.cinema.domain.entity.Cinema;
@@ -20,6 +21,8 @@ import com.lorafilm.movie.seat.service.SeatService;
 import com.lorafilm.movie.seat.dto.BulkCreateSeatsRequest;
 import com.lorafilm.movie.seat.dto.BulkSeatItemRequest;
 import com.lorafilm.movie.seat.domain.enums.SeatStatus;
+import com.lorafilm.movie.seat.domain.entity.Seat;
+import com.lorafilm.movie.seat.domain.entity.SeatType;
 import com.lorafilm.movie.showtime.repository.ShowtimeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -134,6 +137,58 @@ public class AuditoriumServiceTest {
 
         assertEquals(ErrorCode.VALIDATION_ERROR, exception.getErrorCode());
         verifyNoInteractions(cinemaRepository, seatService);
+    }
+
+    @Test
+    void cloneAuditoriumLayout_resetsOperationalSeatStatusInNewDraft() {
+        Auditorium source = new Auditorium();
+        source.setId(20L);
+        source.setPublicId("source-room");
+        source.setCinema(activeCinema);
+
+        Auditorium target = new Auditorium();
+        target.setId(21L);
+        target.setPublicId("target-room");
+        target.setCinema(activeCinema);
+        target.setName("Screen 2");
+        target.setScreenType(ScreenType.STANDARD);
+        target.setSoundType(SoundType.STANDARD);
+        target.setCleaningBufferMinutes(15);
+        target.setStatus(AuditoriumStatus.DRAFT);
+
+        SeatType type = new SeatType();
+        Seat damagedSourceSeat = new Seat();
+        damagedSourceSeat.setPublicId("source-seat");
+        damagedSourceSeat.setAuditorium(source);
+        damagedSourceSeat.setSeatType(type);
+        damagedSourceSeat.setRowLabel("A");
+        damagedSourceSeat.setSeatNumber(1);
+        damagedSourceSeat.setSeatCode("A1");
+        damagedSourceSeat.setPositionRow(1);
+        damagedSourceSeat.setPositionColumn(1);
+        damagedSourceSeat.setStatus(SeatStatus.MAINTENANCE);
+
+        when(cinemaRepository.findByPublicIdAndDeletedAtIsNull("cinema-pub-id"))
+                .thenReturn(Optional.of(activeCinema));
+        when(auditoriumRepository.findByPublicIdAndDeletedAtIsNullForUpdate("target-room"))
+                .thenReturn(Optional.of(target));
+        when(auditoriumRepository.findByPublicIdAndDeletedAtIsNull("source-room"))
+                .thenReturn(Optional.of(source));
+        when(seatRepository.findByAuditoriumIdAndDeletedAtIsNull(21L)).thenReturn(List.of());
+        when(seatRepository.findByAuditoriumIdAndDeletedAtIsNull(20L))
+                .thenReturn(List.of(damagedSourceSeat));
+        when(seatRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        auditoriumService.cloneAuditoriumLayout(
+                "cinema-pub-id", "target-room", new CloneAuditoriumRequest("source-room"));
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<Seat>> seatCaptor =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(seatRepository).saveAll(seatCaptor.capture());
+        List<Seat> seats = seatCaptor.getValue();
+        assertEquals(SeatStatus.ACTIVE, seats.getFirst().getStatus());
+        assertNotEquals("source-seat", seats.getFirst().getPublicId());
     }
 
     @Test

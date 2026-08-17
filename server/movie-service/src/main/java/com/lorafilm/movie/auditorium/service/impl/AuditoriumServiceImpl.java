@@ -179,7 +179,9 @@ public class AuditoriumServiceImpl implements AuditoriumService {
             clone.setPositionRow(s.getPositionRow());
             clone.setPositionColumn(s.getPositionColumn());
             clone.setPairGroup(s.getPairGroup());
-            clone.setStatus(s.getStatus());
+            // Operational defects/maintenance belong to the source room. A cloned
+            // physical position always starts healthy in the new DRAFT room.
+            clone.setStatus(com.lorafilm.movie.seat.domain.enums.SeatStatus.ACTIVE);
             return clone;
         }).collect(Collectors.toList());
 

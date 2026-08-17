@@ -113,7 +113,7 @@ export function buildSeatItems({ matrix, rows, cols, skipIO = false, typeMapping
     let seatNumber = 1;
     for (let column = 0; column < cols; column++) {
       const cell = matrix[row]?.[column];
-      if (!cell || cell.type === 'AISLE' || cell.type === 'EXIT') continue;
+      if (!cell || cell.type === 'AISLE' || cell.type === 'EXIT' || cell.type === 'EMPTY') continue;
       if (!SEAT_TYPES.has(cell.type)) {
         throw new Error(`Loại ô "${cell.type}" không hợp lệ tại hàng ${rowLabel}, cột ${column + 1}.`);
       }

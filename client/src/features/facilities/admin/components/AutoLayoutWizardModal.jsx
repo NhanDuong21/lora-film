@@ -117,7 +117,7 @@ export default function AutoLayoutWizardModal({
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-white uppercase tracking-wider">Tạo bố cục khởi đầu</h2>
+              <h2 className="text-lg font-black text-white uppercase tracking-wider">Tạo lưới ghế thủ công</h2>
               <p className="text-xs text-zinc-400 font-bold mt-0.5">
                 Tạo một bản nháp để tiếp tục chỉnh sửa; không thay thế hồ sơ thiết kế hoặc phê duyệt an toàn.
               </p>

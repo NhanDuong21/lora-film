@@ -9,7 +9,8 @@ export default function SeatGridDesigner({
   isLayoutEditable = true,
   skipIO = false,
   onCellMouseDown,
-  onCellMouseEnter
+  onCellMouseEnter,
+  onCellClick,
 }) {
   const calculateRowLabel = (rIdx, skip) => {
     let letterCode = 65; // 'A'
@@ -80,9 +81,10 @@ export default function SeatGridDesigner({
                     let cellBg;
                     let labelColor = 'text-white/60';
                     let content;
+                    const isSeat = ['STANDARD', 'VIP', 'COUPLE', 'DISABLED'].includes(cell.type);
                     
                     let currentSeatNumber = seatNumber;
-                    if (cell.type !== 'AISLE' && cell.type !== 'EXIT') {
+                    if (isSeat) {
                         seatNumber++;
                     }
 
@@ -101,21 +103,24 @@ export default function SeatGridDesigner({
                     } else if (cell.type === 'EXIT') {
                       cellBg = 'bg-emerald-950 border border-emerald-500/50 hover:bg-emerald-900/60 text-emerald-400 flex flex-col justify-center items-center shadow-lg shadow-emerald-950/40';
                       content = '🚪';
-                    } else {
-                      // AISLE/WALKWAY
+                    } else if (cell.type === 'AISLE') {
                       cellBg = 'bg-zinc-950 border border-dashed border-zinc-900 text-transparent hover:bg-zinc-900/40 hover:border-zinc-800';
+                    } else {
+                      // EMPTY / structural clearance
+                      cellBg = 'bg-transparent border border-transparent text-transparent';
                     }
 
-                    const isDisabled = !isLayoutEditable;
+                    const isDisabled = !isLayoutEditable && !onCellClick;
 
                     return (
                       <button
                         key={cIdx}
                         disabled={isDisabled}
+                        onClick={() => onCellClick?.(rIdx, cIdx, cell)}
                         onMouseDown={() => onCellMouseDown?.(rIdx, cIdx)}
                         onMouseEnter={() => onCellMouseEnter?.(rIdx, cIdx)}
                         className={`w-9 h-9 rounded-lg flex items-center justify-center text-[9px] font-black uppercase tracking-tighter transition-all select-none ${cellBg} ${isDisabled ? 'cursor-default opacity-85' : 'cursor-pointer'}`}
-                        title={`Hàng ${rowLetter} - Ghế ${cell.type !== 'AISLE' && cell.type !== 'EXIT' ? currentSeatNumber : (cIdx + 1)} (${cell.type})`}
+                        title={`Hàng ${rowLetter} - ${isSeat ? `Ghế ${currentSeatNumber}` : `Cột ${cIdx + 1}`} (${cell.type})`}
                       >
                         <span className={labelColor}>
                           {content}

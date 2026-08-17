@@ -9,6 +9,7 @@ import java.util.Optional;
 
 public interface SeatTypeRepository extends JpaRepository<SeatType, Long> {
     Optional<SeatType> findByPublicIdAndDeletedAtIsNull(String publicId);
+    Optional<SeatType> findByCodeAndDeletedAtIsNull(SeatTypeCode code);
     boolean existsByCodeAndDeletedAtIsNull(SeatTypeCode code);
     List<SeatType> findAllByPublicIdInAndDeletedAtIsNull(List<String> publicIds);
 }

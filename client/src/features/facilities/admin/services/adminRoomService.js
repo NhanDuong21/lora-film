@@ -27,6 +27,31 @@ const adminRoomService = {
     return response.data;
   },
 
+  getLayoutTemplates: async () => {
+    const response = await apiClient.get('/api/admin/auditorium-layout-templates');
+    return response.data;
+  },
+
+  getClonePreview: async (auditoriumPublicId) => {
+    const response = await apiClient.get(
+      `/api/admin/auditoriums/${auditoriumPublicId}/clone-preview`,
+    );
+    return response.data;
+  },
+
+  createAuditoriumFromTemplate: async (payload) => {
+    const response = await apiClient.post('/api/admin/auditoriums/from-template', payload);
+    return response.data;
+  },
+
+  cloneAuditoriumAsNew: async (sourceAuditoriumPublicId, payload) => {
+    const response = await apiClient.post(
+      `/api/admin/auditoriums/${sourceAuditoriumPublicId}/clone`,
+      payload,
+    );
+    return response.data;
+  },
+
   cloneAuditoriumLayout: async (cinemaPublicId, targetAuditoriumPublicId, sourceAuditoriumPublicId) => {
     const response = await apiClient.post(
       `/api/admin/cinemas/${cinemaPublicId}/auditoriums/${targetAuditoriumPublicId}/clone`,

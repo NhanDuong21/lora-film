@@ -1,6 +1,6 @@
 // eslint-disable-next-line no-unused-vars
 import React from 'react';
-import { LogOut } from 'lucide-react';
+import { Eraser, LogOut } from 'lucide-react';
 
 export default function BrushToolbar({ activeBrush, setActiveBrush, orientation = 'horizontal' }) {
   const vertical = orientation === 'vertical';
@@ -8,7 +8,7 @@ export default function BrushToolbar({ activeBrush, setActiveBrush, orientation 
   return (
     <div className={`bg-zinc-900/60 border border-zinc-900 rounded-2xl p-3 flex gap-2 select-none shadow-2xl backdrop-blur-md ${vertical ? 'flex-col items-stretch' : 'mb-8 flex-wrap items-center'}`}>
       <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-2.5">
-        Cọ vẽ:
+        Phân loại ghế
       </div>
       
       {/* Standard Brush */}
@@ -60,10 +60,14 @@ export default function BrushToolbar({ activeBrush, setActiveBrush, orientation 
         }`}
       >
         <div className="w-3.5 h-3.5 rounded-md bg-sky-500 border border-sky-400"></div>
-        <span>Khuyết tật</span>
+        <span>Vị trí tiếp cận</span>
       </button>
 
       <div className={vertical ? 'h-px w-full bg-zinc-800 my-1' : 'h-6 w-px bg-zinc-800 mx-1'}></div>
+
+      <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-2.5">
+        Thành phần phòng
+      </div>
 
       {/* Aisle Brush */}
       <button
@@ -88,7 +92,19 @@ export default function BrushToolbar({ activeBrush, setActiveBrush, orientation 
         }`}
       >
         <LogOut className="w-3.5 h-3.5 text-emerald-400" />
-        <span>Cửa thoát</span>
+        <span>Cửa</span>
+      </button>
+
+      <button
+        onClick={() => setActiveBrush('EMPTY')}
+        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase transition-all ${buttonClass} ${
+          activeBrush === 'EMPTY'
+            ? 'bg-zinc-800 border border-zinc-600 text-white'
+            : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-zinc-900'
+        }`}
+      >
+        <Eraser className="w-3.5 h-3.5" />
+        <span>Vùng trống</span>
       </button>
     </div>
   );

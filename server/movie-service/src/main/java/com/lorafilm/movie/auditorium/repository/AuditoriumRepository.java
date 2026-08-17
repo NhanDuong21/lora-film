@@ -44,6 +44,8 @@ public interface AuditoriumRepository extends JpaRepository<Auditorium, Long> {
 
     List<Auditorium> findByCinemaIdAndDeletedAtIsNull(Long cinemaId);
 
+    List<Auditorium> findByCinemaPublicIdAndDeletedAtIsNull(String cinemaPublicId);
+
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.QueryHints(@jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
