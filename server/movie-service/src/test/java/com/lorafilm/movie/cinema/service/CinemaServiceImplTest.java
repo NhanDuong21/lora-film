@@ -546,11 +546,22 @@ class CinemaServiceImplTest {
         baseDto.setName("Draft Cinema");
         when(cinemaMapper.toDto(cinema)).thenReturn(baseDto);
 
+        Auditorium auditorium = new Auditorium();
+        auditorium.setPublicId("auditorium-uuid");
+        auditorium.setName("Phòng bự");
+        auditorium.setCapacity(120);
+        auditorium.setCleaningBufferMinutes(20);
+        auditorium.setStatus(AuditoriumStatus.ACTIVE);
+        when(auditoriumRepository.findByCinemaIdAndDeletedAtIsNull(1L))
+                .thenReturn(List.of(auditorium));
+
         CinemaDetailDto detail = cinemaService.getAdminCinemaDetail("cinema-uuid");
 
         assertNotNull(detail);
         assertEquals("cinema-uuid", detail.getPublicId());
         assertEquals("Draft Cinema", detail.getName());
+        assertEquals(1, detail.getActiveAuditoriums().size());
+        assertEquals(20, detail.getActiveAuditoriums().getFirst().getCleaningBufferMinutes());
     }
 
     @Test

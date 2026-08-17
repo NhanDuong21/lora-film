@@ -184,6 +184,18 @@ export default function AdminRoomPage() {
 
   const handlePauseRoom = async (room) => {
     const roomName = room.name || room.auditoriumName || 'phòng chiếu';
+    const cleaningBufferMinutes = Number(room.cleaningBufferMinutes);
+    if (
+      room.cleaningBufferMinutes == null
+      || !Number.isFinite(cleaningBufferMinutes)
+      || cleaningBufferMinutes < 0
+    ) {
+      triggerToast?.(
+        `Thiếu dữ liệu thời gian dọn phòng của ${roomName}. Vui lòng tải lại trang trước khi thay đổi trạng thái.`,
+        'error',
+      );
+      return;
+    }
     const confirmed = await triggerConfirm?.({
       title: `Tạm ngừng ${roomName}?`,
       message:
@@ -201,7 +213,7 @@ export default function AdminRoomPage() {
         screenType: room.screenType || 'STANDARD',
         soundType: room.soundType || 'STANDARD',
         capacity: Number(room.capacity || 1),
-        cleaningBufferMinutes: Number(room.cleaningBufferMinutes || 0),
+        cleaningBufferMinutes,
         status: 'INACTIVE',
       });
       if (response?.success) {

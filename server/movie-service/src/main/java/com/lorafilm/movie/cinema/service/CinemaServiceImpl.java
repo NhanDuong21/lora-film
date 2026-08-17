@@ -336,6 +336,7 @@ public class CinemaServiceImpl implements CinemaService {
             dto.setScreenType(a.getScreenType() != null ? a.getScreenType().getValue() : null);
             dto.setSoundType(a.getSoundType() != null ? a.getSoundType().name() : null);
             dto.setCapacity(a.getCapacity());
+            dto.setCleaningBufferMinutes(a.getCleaningBufferMinutes());
             dto.setStatus(a.getStatus() != null ? a.getStatus().name() : null);
             return dto;
         }).collect(Collectors.toList()));

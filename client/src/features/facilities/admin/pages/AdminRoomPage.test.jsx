@@ -89,6 +89,9 @@ describe('AdminRoomPage', () => {
     expect(screen.getByText('120 ghế')).toBeInTheDocument();
     expect(screen.getAllByText('Sơ đồ ghế')).toHaveLength(2);
     expect(screen.getAllByText('Dọn phòng')).toHaveLength(2);
+    expect(screen.getByText('15 phút')).toBeInTheDocument();
+    expect(screen.getByText('20 phút')).toBeInTheDocument();
+    expect(screen.queryByText('Chưa đặt')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Quản lý phòng' })).toHaveLength(2);
     expect(screen.queryByRole('button', { name: 'Mở phòng' })).not.toBeInTheDocument();
   });
