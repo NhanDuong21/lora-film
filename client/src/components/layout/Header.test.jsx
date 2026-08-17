@@ -72,11 +72,14 @@ describe('Header', () => {
   it('shows the complete mobile navigation', () => {
     renderHeader();
 
+    expect(screen.queryByRole('button', { name: 'Rạp Đặc Biệt' })).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Mở menu điều hướng' }));
 
     expect(screen.getByRole('heading', { name: 'Phim' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Góc Điện Ảnh' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Rạp/Giá Vé' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rạp Đặc Biệt' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Mua vé nhanh' })).toHaveLength(2);
   });
 

@@ -430,13 +430,6 @@ export default function Header() {
               )}
             </NavDropdown>
 
-            <button
-              type="button"
-              onClick={() => handleInfoOptionClick('Trải nghiệm Rạp Đặc Biệt')}
-              className={`min-h-11 rounded-lg px-1 text-[13px] font-bold whitespace-nowrap text-zinc-300 transition-colors hover:text-brand-orange ${focusRingClass}`}
-            >
-              Rạp Đặc Biệt
-            </button>
           </nav>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -738,13 +731,6 @@ export default function Header() {
                     className={dropdownItemClass}
                   >
                     Khuyến mãi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInfoOptionClick('Trải nghiệm Rạp Đặc Biệt')}
-                    className={dropdownItemClass}
-                  >
-                    Rạp Đặc Biệt
                   </button>
                 </section>
               </div>
