@@ -152,4 +152,48 @@ describe('AdminRoomCreatePage quick flow', () => {
       cleaningBufferMinutes: 15,
     }));
   });
+
+  it('auto-fits a wide layout and gives the scaled preview a centered footprint', async () => {
+    const wideTemplate = {
+      ...template,
+      sourcePublicId: 'system-large-180-v1',
+      name: 'Large 180',
+      rows: 12,
+      columns: 19,
+      capacity: 180,
+      matrix: Array.from({ length: 12 }, () => Array.from({ length: 19 }, () => 'STANDARD')),
+    };
+    adminRoomService.getLayoutTemplates.mockResolvedValue({ success: true, data: [template, wideTemplate] });
+
+    const offsetWidthSpy = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
+      .mockImplementation(function getOffsetWidth() {
+        return this.dataset.testid === 'seat-preview-content' ? 932 : 0;
+      });
+    const offsetHeightSpy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+      .mockImplementation(function getOffsetHeight() {
+        return this.dataset.testid === 'seat-preview-content' ? 760 : 0;
+      });
+    const clientWidthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function getClientWidth() {
+        return this.dataset.testid === 'seat-preview-viewport' ? 751 : 0;
+      });
+
+    try {
+      renderPage();
+      await screen.findByText('Preview chỉ đọc');
+      fireEvent.click(screen.getByRole('button', { name: /Dùng mẫu có sẵn/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Large 180/i }));
+
+      await waitFor(() => expect(screen.getByText('75%')).toBeInTheDocument());
+      expect(screen.getByTestId('seat-preview-content')).toHaveStyle({ transform: 'scale(0.75)' });
+      expect(screen.getByTestId('seat-preview-footprint')).toHaveStyle({
+        width: '699px',
+        height: '570px',
+      });
+    } finally {
+      offsetWidthSpy.mockRestore();
+      offsetHeightSpy.mockRestore();
+      clientWidthSpy.mockRestore();
+    }
+  });
 });

@@ -145,6 +145,7 @@ export default function AdminRoomCreatePage() {
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [previewScale, setPreviewScale] = useState(0.8);
+  const [previewDimensions, setPreviewDimensions] = useState({ width: 0, height: 0 });
   const [selectedCell, setSelectedCell] = useState(null);
 
   const [dbSeatTypes, setDbSeatTypes] = useState([]);
@@ -153,6 +154,8 @@ export default function AdminRoomCreatePage() {
   const [historyState, setHistoryState] = useState({ undoCount: 0, redoCount: 0 });
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
+  const previewViewportRef = useRef(null);
+  const previewContentRef = useRef(null);
 
   const stats = useMemo(() => summarizeMatrix(matrix), [matrix]);
   const isManualMode = sourceMode === SOURCE_MANUAL;
@@ -164,6 +167,36 @@ export default function AdminRoomCreatePage() {
   const sourceLabel = selectedSource
     ? `${selectedSource.name}${selectedSource.layoutVersion ? ` — Phiên bản ${selectedSource.layoutVersion}` : ''}`
     : (isManualMode ? 'Bố cục thủ công' : 'Chưa chọn nguồn');
+
+  useEffect(() => {
+    const viewport = previewViewportRef.current;
+    const content = previewContentRef.current;
+    if (!viewport || !content || matrix.length === 0) return undefined;
+
+    const fitPreview = () => {
+      const naturalWidth = content.offsetWidth;
+      const naturalHeight = content.offsetHeight;
+      const availableWidth = viewport.clientWidth - 48;
+      if (naturalWidth <= 0 || naturalHeight <= 0 || availableWidth <= 0) return;
+
+      setPreviewDimensions(current => (
+        current.width === naturalWidth && current.height === naturalHeight
+          ? current
+          : { width: naturalWidth, height: naturalHeight }
+      ));
+
+      const rawScale = Math.min(1, availableWidth / naturalWidth);
+      const fittedScale = Math.max(0.5, Math.floor(rawScale * 20) / 20);
+      setPreviewScale(fittedScale);
+    };
+
+    fitPreview();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+
+    const resizeObserver = new ResizeObserver(fitPreview);
+    resizeObserver.observe(viewport);
+    return () => resizeObserver.disconnect();
+  }, [cols, rows, sourceMode, selectedSource?.sourcePublicId, matrix.length]);
 
   const createSnapshot = () => ({ matrix: cloneMatrix(matrix), rows, cols });
   const restoreSnapshot = (snapshot) => {
@@ -602,11 +635,11 @@ export default function AdminRoomCreatePage() {
                     Chỉnh sửa nâng cao
                   </button>
                 )}
-                <button type="button" onClick={() => setPreviewScale(value => Math.max(0.55, value - 0.1))} aria-label="Thu nhỏ sơ đồ" className="rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:text-white">
+                <button type="button" onClick={() => setPreviewScale(value => Math.max(0.5, value - 0.05))} aria-label="Thu nhỏ sơ đồ" className="rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:text-white">
                   <Minus className="h-4 w-4" />
                 </button>
                 <span className="w-12 text-center text-xs font-bold text-zinc-400">{Math.round(previewScale * 100)}%</span>
-                <button type="button" onClick={() => setPreviewScale(value => Math.min(1.2, value + 0.1))} aria-label="Phóng to sơ đồ" className="rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:text-white">
+                <button type="button" onClick={() => setPreviewScale(value => Math.min(1.2, value + 0.05))} aria-label="Phóng to sơ đồ" className="rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:text-white">
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
@@ -617,18 +650,27 @@ export default function AdminRoomCreatePage() {
                 <p className="text-sm font-bold text-zinc-500">Đang dựng preview từ phòng nguồn...</p>
               </div>
             ) : matrix.length > 0 ? (
-              <div className="overflow-auto rounded-3xl border border-zinc-900 bg-black/20 p-6">
-                <div className="mx-auto w-max origin-top transition-transform" style={{ transform: `scale(${previewScale})` }}>
-                  <SeatGridDesigner
-                    matrix={matrix}
-                    rows={rows}
-                    cols={cols}
-                    skipIO={true}
-                    isLayoutEditable={isManualMode}
-                    onCellMouseDown={isManualMode ? handleCellMouseDown : undefined}
-                    onCellMouseEnter={isManualMode ? handleCellMouseEnter : undefined}
-                    onCellClick={!isManualMode ? (row, column, cell) => setSelectedCell({ row, column, type: cell.type }) : undefined}
-                  />
+              <div ref={previewViewportRef} data-testid="seat-preview-viewport" className="overflow-auto rounded-3xl border border-zinc-900 bg-black/20 p-6">
+                <div
+                  data-testid="seat-preview-footprint"
+                  className="mx-auto"
+                  style={previewDimensions.width > 0 ? {
+                    width: `${previewDimensions.width * previewScale}px`,
+                    height: `${previewDimensions.height * previewScale}px`,
+                  } : undefined}
+                >
+                  <div ref={previewContentRef} data-testid="seat-preview-content" className="w-max origin-top-left transition-transform" style={{ transform: `scale(${previewScale})` }}>
+                    <SeatGridDesigner
+                      matrix={matrix}
+                      rows={rows}
+                      cols={cols}
+                      skipIO={true}
+                      isLayoutEditable={isManualMode}
+                      onCellMouseDown={isManualMode ? handleCellMouseDown : undefined}
+                      onCellMouseEnter={isManualMode ? handleCellMouseEnter : undefined}
+                      onCellClick={!isManualMode ? (row, column, cell) => setSelectedCell({ row, column, type: cell.type }) : undefined}
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
