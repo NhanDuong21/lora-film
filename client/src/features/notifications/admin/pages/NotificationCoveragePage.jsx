@@ -9,22 +9,28 @@ import { channelBusinessName, localeBusinessName, notificationBusinessName, serv
 export default function NotificationCoveragePage() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
 
-    const load = useCallback(async () => {
-        setLoading(true);
+    const load = useCallback(async ({ forceRefresh = false, background = false } = {}) => {
+        if (background) setRefreshing(true);
+        else setLoading(true);
         setError('');
         try {
             const [dashboard, templates, emailProvider] = await Promise.all([
-                notificationAdminService.dashboard({ hours: 24, includeTest: false }),
-                notificationAdminService.templates({ archived: false }),
-                notificationAdminService.emailProvider(),
+                notificationAdminService.dashboard(
+                    { hours: 24, includeTest: false },
+                    { forceRefresh },
+                ),
+                notificationAdminService.templates({ archived: false }, { forceRefresh }),
+                notificationAdminService.emailProvider({ forceRefresh }),
             ]);
             setData({ ...dashboard, templates: templates || [], emailProvider });
         } catch (requestError) {
             setError(requestError?.message || 'Không thể kiểm tra cấu hình và độ phủ template.');
         } finally {
-            setLoading(false);
+            if (background) setRefreshing(false);
+            else setLoading(false);
         }
     }, []);
 
@@ -55,7 +61,7 @@ export default function NotificationCoveragePage() {
                 eyebrow="Kết nối và phạm vi"
                 title="Cấu hình và độ phủ"
                 description="Kiểm tra tài khoản gửi email và bảo đảm mọi luồng thông báo quan trọng đều có mẫu hoạt động."
-                actions={<button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-white"><RefreshCw className="h-4 w-4" /> Kiểm tra lại</button>}
+                actions={<button type="button" onClick={() => load({ forceRefresh: true, background: true })} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-white disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Đang kiểm tra' : 'Kiểm tra lại'}</button>}
             />
 
             <EmailProviderConfigurationPanel

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import apiClient from '@/services/apiClient';
+import queryCache from '@/utils/queryCache';
 import { notificationAdminService } from './notificationAdminService';
 
 vi.mock('@/services/apiClient', () => ({
@@ -14,6 +15,22 @@ vi.mock('@/services/apiClient', () => ({
 describe('notificationAdminService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        queryCache.clear();
+    });
+
+    it('reuses recent dashboard data and still supports an explicit refresh', async () => {
+        apiClient.get
+            .mockResolvedValueOnce({ data: { data: { totalRequests: 4 } } })
+            .mockResolvedValueOnce({ data: { data: { totalRequests: 5 } } });
+
+        await notificationAdminService.dashboard({ hours: 24, includeTest: false });
+        await notificationAdminService.dashboard({ includeTest: false, hours: 24 });
+        await expect(notificationAdminService.dashboard(
+            { hours: 24, includeTest: false },
+            { forceRefresh: true },
+        )).resolves.toEqual({ totalRequests: 5 });
+
+        expect(apiClient.get).toHaveBeenCalledTimes(2);
     });
 
     it('loads production dashboard metrics in the requested time window', async () => {

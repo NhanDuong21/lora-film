@@ -1,13 +1,32 @@
 import apiClient from '@/services/apiClient';
+import queryCache from '@/utils/queryCache';
+import { getUserAccountId } from '@/utils/authStorage';
 
 const templateBase = '/api/v1/admin/notification-templates';
 const operationBase = '/api/v1/admin/notifications';
 const emailProviderBase = '/api/v1/admin/notification-settings/email-provider';
 const unwrap = response => response?.data?.data;
+const cacheNamespace = () => `notification-admin:${getUserAccountId() || 'anonymous'}`;
+const paramsKey = params => Object.entries(params || {})
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join('&');
+const cachedGet = (name, url, params, options = {}) => queryCache.fetchQuery(
+    `${cacheNamespace()}:${name}:${paramsKey(params)}`,
+    async () => unwrap(await (params ? apiClient.get(url, { params }) : apiClient.get(url))),
+    {
+        staleTime: options.staleTime ?? 15_000,
+        forceRefresh: options.forceRefresh ?? false,
+        maxRetries: 0,
+    },
+);
+const invalidate = (...resources) => resources.forEach(resource =>
+    queryCache.invalidateQueries(`${cacheNamespace()}:${resource}`));
 
 export const notificationAdminService = {
-    async dashboard(params = {}) {
-        return unwrap(await apiClient.get(`${operationBase}/dashboard`, { params }));
+    async dashboard(params = {}, options = {}) {
+        return cachedGet('dashboard', `${operationBase}/dashboard`, params, options);
     },
     async requests(params = {}) {
         return unwrap(await apiClient.get(operationBase, { params }));
@@ -16,25 +35,35 @@ export const notificationAdminService = {
         return unwrap(await apiClient.get(`${operationBase}/${publicId}`));
     },
     async retryDelivery(deliveryPublicId) {
-        return unwrap(await apiClient.post(`${operationBase}/deliveries/${deliveryPublicId}/retry`));
+        const result = unwrap(await apiClient.post(`${operationBase}/deliveries/${deliveryPublicId}/retry`));
+        invalidate('dashboard', 'requests', 'dead-letters');
+        return result;
     },
     async deadLetters(params = {}) {
         return unwrap(await apiClient.get(`${operationBase}/dead-letters`, { params }));
     },
-    async templates(params = {}) {
-        return unwrap(await apiClient.get(templateBase, { params }));
+    async templates(params = {}, options = {}) {
+        return cachedGet('templates', templateBase, params, { staleTime: 30_000, ...options });
     },
-    async coverage() {
-        return unwrap(await apiClient.get(`${templateBase}/coverage`));
+    async coverage(options = {}) {
+        return cachedGet('coverage', `${templateBase}/coverage`, undefined, {
+            staleTime: 30_000,
+            ...options,
+        });
     },
-    async emailProvider() {
-        return unwrap(await apiClient.get(emailProviderBase));
+    async emailProvider(options = {}) {
+        return cachedGet('email-provider', emailProviderBase, undefined, {
+            staleTime: 30_000,
+            ...options,
+        });
     },
     async testEmailProvider(command) {
         return unwrap(await apiClient.post(`${emailProviderBase}/test`, command));
     },
     async updateEmailProvider(command) {
-        return unwrap(await apiClient.put(emailProviderBase, command));
+        const result = unwrap(await apiClient.put(emailProviderBase, command));
+        invalidate('email-provider');
+        return result;
     },
     async published(templateKey, channel, locale) {
         return unwrap(await apiClient.get(`${templateBase}/${templateKey}`, {
@@ -75,10 +104,12 @@ export const notificationAdminService = {
         ));
     },
     async publish(templateKey, draftId, expectedCommitSha) {
-        return unwrap(await apiClient.post(`${templateBase}/${templateKey}/publish`, {
+        const result = unwrap(await apiClient.post(`${templateBase}/${templateKey}/publish`, {
             draftId,
             expectedCommitSha,
         }));
+        invalidate('dashboard', 'templates', 'coverage');
+        return result;
     },
     async testSend(templateKey, command) {
         return unwrap(await apiClient.post(`${templateBase}/${templateKey}/test-send`, command));
@@ -99,10 +130,12 @@ export const notificationAdminService = {
         }));
     },
     async rollback(templateKey, channel, locale, version) {
-        return unwrap(await apiClient.post(`${templateBase}/${templateKey}/rollback`, {
+        const result = unwrap(await apiClient.post(`${templateBase}/${templateKey}/rollback`, {
             channel,
             locale,
             version,
         }));
+        invalidate('dashboard', 'templates', 'coverage');
+        return result;
     },
 };

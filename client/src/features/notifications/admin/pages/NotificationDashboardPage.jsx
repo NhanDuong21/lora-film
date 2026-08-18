@@ -28,17 +28,20 @@ export default function NotificationDashboardPage() {
     const [data, setData] = useState(null);
     const [filters, setFilters] = useState({ hours: 24, includeTest: false });
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
 
-    const load = useCallback(async () => {
-        setLoading(true);
+    const load = useCallback(async ({ forceRefresh = false, background = false } = {}) => {
+        if (background) setRefreshing(true);
+        else setLoading(true);
         setError('');
         try {
-            setData(await notificationAdminService.dashboard(filters));
+            setData(await notificationAdminService.dashboard(filters, { forceRefresh }));
         } catch (requestError) {
             setError(requestError?.message || 'Dịch vụ thông báo chưa trả về số liệu vận hành.');
         } finally {
-            setLoading(false);
+            if (background) setRefreshing(false);
+            else setLoading(false);
         }
     }, [filters]);
 
@@ -66,7 +69,7 @@ export default function NotificationDashboardPage() {
                 title="Trung tâm điều phối thông báo"
                 description="Biết ngay hệ thống có ổn không, luồng nào bị ảnh hưởng và hành động cần thực hiện."
                 actions={<>
-                    <button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:border-zinc-500"><RefreshCw className="h-4 w-4" /> Làm mới</button>
+                    <button type="button" onClick={() => load({ forceRefresh: true, background: true })} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 hover:border-zinc-500 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Đang cập nhật' : 'Làm mới'}</button>
                     <Link to={cta.to} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black text-white ${activeIncidents > 0 ? 'bg-red-500 hover:bg-red-400' : 'bg-orange-500 hover:bg-orange-400'}`}>{cta.label} <ArrowRight className="h-4 w-4" /></Link>
                 </>}
             />

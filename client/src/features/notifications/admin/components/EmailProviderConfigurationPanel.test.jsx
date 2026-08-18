@@ -25,21 +25,21 @@ describe('EmailProviderConfigurationPanel', () => {
         vi.clearAllMocks();
     });
 
-    it('never pre-fills the App Password and validates before calling the backend', () => {
+    it('never pre-fills the application password and validates before calling the backend', () => {
         render(<EmailProviderConfigurationPanel configuration={configuration} />);
 
         expect(screen.getByLabelText('Email người gửi')).toHaveValue('old@example.com');
-        expect(screen.getByLabelText('App Password mới')).toHaveAttribute('type', 'password');
-        expect(screen.getByLabelText('App Password mới')).toHaveValue('');
+        expect(screen.getByLabelText('Mật khẩu ứng dụng mới')).toHaveAttribute('type', 'password');
+        expect(screen.getByLabelText('Mật khẩu ứng dụng mới')).toHaveValue('');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra và lưu' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra và áp dụng' }));
 
-        expect(screen.getByText('Vui lòng nhập App Password hợp lệ của tài khoản email mới.'))
+        expect(screen.getByText('Vui lòng nhập Mật khẩu ứng dụng hợp lệ của tài khoản email mới.'))
             .toBeInTheDocument();
         expect(notificationAdminService.updateEmailProvider).not.toHaveBeenCalled();
     });
 
-    it('normalizes the App Password, saves it once and clears it from the form', async () => {
+    it('normalizes the application password, saves it once and clears it from the form', async () => {
         const onUpdated = vi.fn();
         notificationAdminService.updateEmailProvider.mockResolvedValue({
             ...configuration,
@@ -58,10 +58,10 @@ describe('EmailProviderConfigurationPanel', () => {
         fireEvent.change(screen.getByLabelText('Email người gửi'), {
             target: { value: 'new@example.com' },
         });
-        fireEvent.change(screen.getByLabelText('App Password mới'), {
+        fireEvent.change(screen.getByLabelText('Mật khẩu ứng dụng mới'), {
             target: { value: 'abcd efgh ijkl mnop' },
         });
-        fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra và lưu' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra và áp dụng' }));
 
         await waitFor(() => expect(notificationAdminService.updateEmailProvider)
             .toHaveBeenCalledWith({
@@ -69,7 +69,7 @@ describe('EmailProviderConfigurationPanel', () => {
                 appPassword: 'abcdefghijklmnop',
                 fromName: 'LoraFilm',
             }));
-        expect(screen.getByLabelText('App Password mới')).toHaveValue('');
+        expect(screen.getByLabelText('Mật khẩu ứng dụng mới')).toHaveValue('');
         expect(onUpdated).toHaveBeenCalledWith(expect.objectContaining({ source: 'ADMIN' }));
     });
 
@@ -79,13 +79,13 @@ describe('EmailProviderConfigurationPanel', () => {
         });
         render(<EmailProviderConfigurationPanel configuration={configuration} />);
 
-        fireEvent.change(screen.getByLabelText('App Password mới'), {
+        fireEvent.change(screen.getByLabelText('Mật khẩu ứng dụng mới'), {
             target: { value: 'invalid-app-password' },
         });
         fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra kết nối' }));
 
         expect(await screen.findByText(
-            'Email hoặc App Password không hợp lệ. Gmail đã từ chối đăng nhập SMTP.',
+            'Email hoặc Mật khẩu ứng dụng không hợp lệ. Gmail đã từ chối đăng nhập SMTP.',
         )).toBeInTheDocument();
     });
 });

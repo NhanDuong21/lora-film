@@ -21,15 +21,17 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
     const [loading, setLoading] = useState(true);
     const [detailLoading, setDetailLoading] = useState(false);
     const [error, setError] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoading(true);
+    const load = useCallback(async ({ forceRefresh = false, background = false } = {}) => {
+        if (background) setRefreshing(true);
+        else setLoading(true);
         setError('');
         try {
             if (mode === 'attention') {
                 const [deadLetterData, coverageData] = await Promise.all([
                     notificationAdminService.deadLetters({ page, size: 25 }),
-                    notificationAdminService.coverage(),
+                    notificationAdminService.coverage({ forceRefresh }),
                 ]);
                 setDeadLetters(deadLetterData);
                 setCoverage(coverageData);
@@ -41,7 +43,10 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                 if (params.test !== undefined && params.test !== '') params.test = params.test === 'true';
                 const [requestData, dashboardData] = await Promise.all([
                     notificationAdminService.requests(params),
-                    notificationAdminService.dashboard({ hours: 24, includeTest: false }),
+                    notificationAdminService.dashboard(
+                        { hours: 24, includeTest: false },
+                        { forceRefresh },
+                    ),
                 ]);
                 setData(requestData);
                 setActiveRevision(dashboardData?.templateRegistry?.headCommit || '');
@@ -49,14 +54,17 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
         } catch (requestError) {
             setError(requestError?.message || 'Không thể tải dữ liệu vận hành thông báo.');
         } finally {
-            setLoading(false);
+            if (background) setRefreshing(false);
+            else setLoading(false);
         }
     }, [filters, mode, page]);
 
     useEffect(() => {
-        const timer = setTimeout(load, mode === 'history' ? 250 : 0);
+        const hasTextFilter = mode === 'history'
+            && [filters.query, filters.sourceService, filters.templateKey].some(Boolean);
+        const timer = setTimeout(load, hasTextFilter ? 250 : 0);
         return () => clearTimeout(timer);
-    }, [load, mode]);
+    }, [filters.query, filters.sourceService, filters.templateKey, load, mode]);
 
     const open = async publicId => {
         setDetailLoading(true);
@@ -92,7 +100,7 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                 description={mode === 'attention'
                     ? 'Xem ai đang bị ảnh hưởng, hệ thống đã tự làm gì và hành động cần thực hiện tiếp theo.'
                     : 'Tìm một lượt gửi theo người nhận, mã đặt vé, loại thông báo hoặc mã đối chiếu.'}
-                actions={<button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-white"><RefreshCw className="h-4 w-4" /> Làm mới</button>}
+                actions={<button type="button" onClick={() => load({ forceRefresh: true, background: true })} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-white disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Đang cập nhật' : 'Làm mới'}</button>}
             />
 
             {mode === 'history' && (

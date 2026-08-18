@@ -23,15 +23,14 @@ public interface NotificationDeliveryRepository extends JpaRepository<Notificati
     long countByStatus(DeliveryStatus status);
 
     @Query("""
-            select count(delivery)
+            select delivery.status, count(delivery)
             from NotificationDelivery delivery, NotificationRequest request
             where delivery.notificationRequestId = request.id
-              and delivery.status = :status
               and delivery.createdAt >= :since
               and (:includeTest = true or request.test = false)
+            group by delivery.status
             """)
-    long countOperationalByStatus(
-            @Param("status") DeliveryStatus status,
+    List<Object[]> countOperationalByStatus(
             @Param("since") Instant since,
             @Param("includeTest") boolean includeTest);
 

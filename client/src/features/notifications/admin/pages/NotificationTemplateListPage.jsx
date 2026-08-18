@@ -43,9 +43,9 @@ export default function NotificationTemplateListPage() {
     }, [filters]);
 
     useEffect(() => {
-        const timer = setTimeout(load, 250);
+        const timer = setTimeout(load, filters.query ? 250 : 0);
         return () => clearTimeout(timer);
-    }, [load]);
+    }, [filters.query, load]);
 
     const groups = useMemo(() => {
         const byKey = new Map();

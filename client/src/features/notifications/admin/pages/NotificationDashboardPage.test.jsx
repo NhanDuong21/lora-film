@@ -73,7 +73,7 @@ describe('NotificationDashboardPage', () => {
         expect(notificationAdminService.dashboard).toHaveBeenCalledWith({
             hours: 24,
             includeTest: false,
-        });
+        }, { forceRefresh: false });
     });
 
     it('shows a recoverable error state when the operations API is unavailable', async () => {

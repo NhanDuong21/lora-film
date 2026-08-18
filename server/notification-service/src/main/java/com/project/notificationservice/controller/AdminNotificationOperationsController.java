@@ -65,9 +65,10 @@ public class AdminNotificationOperationsController {
         Instant since = Instant.now().minus(Duration.ofHours(safeHours));
         EnumMap<DeliveryStatus, Long> counts = new EnumMap<>(DeliveryStatus.class);
         for (DeliveryStatus status : DeliveryStatus.values()) {
-            counts.put(status, deliveryRepository.countOperationalByStatus(
-                    status, since, includeTest));
+            counts.put(status, 0L);
         }
+        deliveryRepository.countOperationalByStatus(since, includeTest).forEach(row ->
+                counts.put((DeliveryStatus) row[0], ((Number) row[1]).longValue()));
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
         long accepted = counts.get(DeliveryStatus.DELIVERED) + counts.get(DeliveryStatus.SENT);
         long confirmed = counts.get(DeliveryStatus.DELIVERED);

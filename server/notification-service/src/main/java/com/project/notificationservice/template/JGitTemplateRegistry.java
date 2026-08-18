@@ -341,7 +341,9 @@ public class JGitTemplateRegistry implements TemplateRegistry {
     public List<TemplateSummary> findTemplates(TemplateSearchCriteria criteria) {
         lock.lock();
         try {
-            fetch();
+            // Read requests use the local published snapshot. Remote changes are
+            // fetched by refreshFromRemote(), so opening an admin page never waits
+            // on GitHub and concurrent readers do not serialize network calls.
             checkoutPublished();
             String currentHead = head(requireGit());
             List<TemplateSummary> summaries = new ArrayList<>();
