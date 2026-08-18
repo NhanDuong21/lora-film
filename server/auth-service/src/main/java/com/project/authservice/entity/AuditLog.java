@@ -37,6 +37,24 @@ public class AuditLog {
 	@Column(name = "description", columnDefinition = "TEXT")
 	private String description;
 
+	@Column(name = "result", nullable = false, length = 20)
+	private String result = "SUCCESS";
+
+	@Column(name = "severity", nullable = false, length = 20)
+	private String severity = "NORMAL";
+
+	@Column(name = "review_status", nullable = false, length = 20)
+	private String reviewStatus = "NOT_REQUIRED";
+
+	@Column(name = "reviewed_by")
+	private Long reviewedBy;
+
+	@Column(name = "review_note", length = 500)
+	private String reviewNote;
+
+	@Column(name = "reviewed_at")
+	private LocalDateTime reviewedAt;
+
 	@Column(name = "ip_address", length = 45)
 	private String ipAddress;
 
@@ -79,6 +97,12 @@ public class AuditLog {
     public String getDescription() {
         return this.description;
     }
+    public String getResult() { return result; }
+    public String getSeverity() { return severity; }
+    public String getReviewStatus() { return reviewStatus; }
+    public Long getReviewedBy() { return reviewedBy; }
+    public String getReviewNote() { return reviewNote; }
+    public LocalDateTime getReviewedAt() { return reviewedAt; }
     public String getIpAddress() {
         return this.ipAddress;
     }
@@ -115,6 +139,12 @@ public class AuditLog {
     public void setDescription(String description) {
         this.description = description;
     }
+    public void setResult(String result) { this.result = result; }
+    public void setSeverity(String severity) { this.severity = severity; }
+    public void setReviewStatus(String reviewStatus) { this.reviewStatus = reviewStatus; }
+    public void setReviewedBy(Long reviewedBy) { this.reviewedBy = reviewedBy; }
+    public void setReviewNote(String reviewNote) { this.reviewNote = reviewNote; }
+    public void setReviewedAt(LocalDateTime reviewedAt) { this.reviewedAt = reviewedAt; }
     public void setIpAddress(String ipAddress) {
         this.ipAddress = ipAddress;
     }

@@ -15,6 +15,8 @@ public class AccountDto {
     private Set<String> assignedCinemaPublicIds = new LinkedHashSet<>();
     private Boolean enabled;
     private AccountStatus status;
+    private LocalDateTime lastLoginAt;
+    private LocalDateTime invitationExpiresAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     public Long getId() {
@@ -37,6 +39,8 @@ public class AccountDto {
     public AccountStatus getStatus() {
         return this.status;
     }
+    public LocalDateTime getLastLoginAt() { return lastLoginAt; }
+    public LocalDateTime getInvitationExpiresAt() { return invitationExpiresAt; }
     public LocalDateTime getCreatedAt() {
         return this.createdAt;
     }
@@ -67,6 +71,8 @@ public class AccountDto {
     public void setStatus(AccountStatus status) {
         this.status = status;
     }
+    public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
+    public void setInvitationExpiresAt(LocalDateTime invitationExpiresAt) { this.invitationExpiresAt = invitationExpiresAt; }
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
@@ -95,6 +101,8 @@ public class AccountDto {
         private Set<String> assignedCinemaPublicIds;
         private Boolean enabled;
         private AccountStatus status;
+        private LocalDateTime lastLoginAt;
+        private LocalDateTime invitationExpiresAt;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         AccountDtoBuilder() {}
@@ -130,6 +138,14 @@ public class AccountDto {
             this.status = status;
             return this;
         }
+        public AccountDtoBuilder lastLoginAt(LocalDateTime value) {
+            this.lastLoginAt = value;
+            return this;
+        }
+        public AccountDtoBuilder invitationExpiresAt(LocalDateTime value) {
+            this.invitationExpiresAt = value;
+            return this;
+        }
         public AccountDtoBuilder createdAt(LocalDateTime createdAt) {
             this.createdAt = createdAt;
             return this;
@@ -144,6 +160,8 @@ public class AccountDto {
             dto.setAccessProfile(this.accessProfile);
             dto.setAssignedCinemaPublicIds(this.assignedCinemaPublicIds);
             dto.setEnabled(this.enabled);
+            dto.setLastLoginAt(this.lastLoginAt);
+            dto.setInvitationExpiresAt(this.invitationExpiresAt);
             return dto;
         }
     }

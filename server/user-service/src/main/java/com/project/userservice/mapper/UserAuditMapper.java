@@ -15,6 +15,12 @@ public class UserAuditMapper {
                 entry.getTargetType(),
                 entry.getTargetId(),
                 entry.getDetails(),
+                entry.getResult(),
+                entry.getSeverity(),
+                entry.getReviewStatus(),
+                entry.getReviewedBy(),
+                entry.getReviewNote(),
+                entry.getReviewedAt(),
                 entry.getCreatedAt());
     }
 }

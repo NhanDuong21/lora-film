@@ -6,7 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface AccountService {
-    Page<AccountDto> getAccounts(String keyword, AccountStatus status, Long roleId, Pageable pageable);
+    Page<AccountDto> getAccounts(String keyword, AccountStatus status, Long roleId,
+                                 String accountScope, Pageable pageable);
     AccountDto getAccountById(Long id);
     AccountDto getAccountByEmail(String email);
     AccountDto updateAccountStatus(Long id, AccountStatus status);
@@ -14,4 +15,7 @@ public interface AccountService {
     AccountDto updateAccountAccessProfile(Long id, Long accessProfileId);
     AccountDto updateManagerCinemaAssignments(Long id, java.util.Set<String> cinemaPublicIds);
     AccountDto createEmployeeAccount(com.project.authservice.dto.request.EmployeeAccountRequest request);
+    AccountDto resendEmployeeInvitation(Long id);
+    void sendPasswordReset(Long id);
+    void revokeAllSessions(Long id);
 }

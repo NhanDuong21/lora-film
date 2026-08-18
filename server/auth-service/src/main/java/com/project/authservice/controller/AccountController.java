@@ -23,9 +23,10 @@ public class AccountController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) AccountStatus status,
             @RequestParam(required = false) Long roleId,
+            @RequestParam(required = false) String accountScope,
             Pageable pageable) {
         log.info("Get accounts called");
-        Page<AccountDto> accounts = accountService.getAccounts(keyword, status, roleId, pageable);
+        Page<AccountDto> accounts = accountService.getAccounts(keyword, status, roleId, accountScope, pageable);
         return ResponseEntity.ok(ApiResponse.success("Success", accounts));
     }
 
@@ -82,7 +83,28 @@ public class AccountController {
     public ResponseEntity<ApiResponse<AccountDto>> createEmployeeAccount(@jakarta.validation.Valid @RequestBody com.project.authservice.dto.request.EmployeeAccountRequest request) {
         log.info("Create employee account called: email={}", request.getEmail());
         AccountDto account = accountService.createEmployeeAccount(request);
-        return ResponseEntity.status(201).body(ApiResponse.success("Employee account created successfully", account));
+        return ResponseEntity.status(201).body(ApiResponse.success("Đã gửi lời mời sử dụng hệ thống", account));
+    }
+
+    @PostMapping("/{id}/resend-invitation")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')")
+    public ResponseEntity<ApiResponse<AccountDto>> resendInvitation(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã gửi lại lời mời kích hoạt", accountService.resendEmployeeInvitation(id)));
+    }
+
+    @PostMapping("/{id}/password-reset")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
+    public ResponseEntity<ApiResponse<Void>> sendPasswordReset(@PathVariable Long id) {
+        accountService.sendPasswordReset(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã gửi email đặt lại mật khẩu", null));
+    }
+
+    @PostMapping("/{id}/revoke-sessions")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
+    public ResponseEntity<ApiResponse<Void>> revokeSessions(@PathVariable Long id) {
+        accountService.revokeAllSessions(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã thu hồi toàn bộ phiên đăng nhập", null));
     }
     public AccountController(AccountService accountService) {
         this.accountService = accountService;

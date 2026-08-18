@@ -36,6 +36,9 @@ public class PasswordResetToken {
     @Column(name = "is_used", nullable = false)
     private Boolean isUsed = false;
 
+    @Column(name = "purpose", nullable = false, length = 30)
+    private String purpose = "PASSWORD_RESET";
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -59,10 +62,12 @@ public class PasswordResetToken {
 
     public Boolean getIsUsed() { return isUsed; }
     public void setIsUsed(Boolean isUsed) { this.isUsed = isUsed; }
+    public String getPurpose() { return purpose; }
+    public void setPurpose(String purpose) { this.purpose = purpose; }
 
     public PasswordResetToken() {}
 
-    public PasswordResetToken(Long id, Account account, String otpCode, LocalDateTime createdAt, LocalDateTime expiredAt, LocalDateTime usedAt, Integer attempts, Boolean isUsed) {
+    public PasswordResetToken(Long id, Account account, String otpCode, LocalDateTime createdAt, LocalDateTime expiredAt, LocalDateTime usedAt, Integer attempts, Boolean isUsed, String purpose) {
         this.id = id;
         this.account = account;
         this.otpCode = otpCode;
@@ -71,6 +76,7 @@ public class PasswordResetToken {
         this.usedAt = usedAt;
         this.attempts = attempts;
         this.isUsed = isUsed;
+        this.purpose = purpose == null ? "PASSWORD_RESET" : purpose;
     }
 
     public static PasswordResetTokenBuilder builder() {
@@ -86,6 +92,7 @@ public class PasswordResetToken {
         private LocalDateTime usedAt;
         private Integer attempts;
         private Boolean isUsed;
+        private String purpose;
 
         PasswordResetTokenBuilder() {}
 
@@ -97,9 +104,10 @@ public class PasswordResetToken {
         public PasswordResetTokenBuilder usedAt(LocalDateTime usedAt) { this.usedAt = usedAt; return this; }
         public PasswordResetTokenBuilder attempts(Integer attempts) { this.attempts = attempts; return this; }
         public PasswordResetTokenBuilder isUsed(Boolean isUsed) { this.isUsed = isUsed; return this; }
+        public PasswordResetTokenBuilder purpose(String purpose) { this.purpose = purpose; return this; }
 
         public PasswordResetToken build() {
-            return new PasswordResetToken(id, account, otpCode, createdAt, expiredAt, usedAt, attempts, isUsed);
+            return new PasswordResetToken(id, account, otpCode, createdAt, expiredAt, usedAt, attempts, isUsed, purpose);
         }
     }
 }

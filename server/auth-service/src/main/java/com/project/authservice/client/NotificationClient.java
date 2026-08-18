@@ -136,6 +136,20 @@ public class NotificationClient {
         }
     }
 
+    public void sendEmployeeInvitation(Long accountId, String email, String name, String otp) {
+        sendOtp(
+                accountId,
+                email,
+                "AUTH_EMPLOYEE_INVITATION",
+                "FORGOT_PASSWORD_OTP",
+                48 * 60,
+                Map.of(
+                        "user_name", name == null || name.isBlank() ? "Nhân viên" : name.trim(),
+                        "otp_code", otp,
+                        "email", email,
+                        "expiry_minutes", 48 * 60));
+    }
+
     private void waitForEmailDelivery(String notificationPublicId, HttpHeaders headers) {
         long deadline = System.nanoTime() + deliveryWaitMillis * 1_000_000L;
         while (System.nanoTime() < deadline) {

@@ -14,4 +14,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     List<PasswordResetToken> findAllByOtpCodeAndIsUsedFalseOrderByCreatedAtDesc(String otpCode);
 
     List<PasswordResetToken> findByAccountIdAndIsUsedFalse(Long accountId);
+
+    Optional<PasswordResetToken> findFirstByAccountIdAndIsUsedFalseOrderByCreatedAtDesc(Long accountId);
 }

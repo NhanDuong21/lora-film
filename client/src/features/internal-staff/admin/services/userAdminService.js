@@ -5,6 +5,14 @@ const data = (response) => response.data.data;
 export const getDashboard = async (params = {}) => data(await apiClient.get('/api/users/dashboard', { params }));
 export const getUserAudits = async (params = {}) =>
   data(await apiClient.get('/api/admin/user-audits', { params }));
+export const reviewUserAudit = async (id, payload) =>
+  data(await apiClient.put(`/api/admin/user-audits/${id}/review`, payload));
+export const getUserProfiles = async (accountIds) => {
+  if (!accountIds?.length) return [];
+  return data(await apiClient.get('/api/users/admin/batch', { params: { accountIds } }));
+};
+export const searchUserProfiles = async (query, limit = 20) =>
+  data(await apiClient.get('/api/users/admin/search', { params: { query, limit } }));
 export const getCustomer = async (id) => data(await apiClient.get(`/api/users/customers/${id}`));
 export const getCustomers = async (params = {}) => data(await apiClient.get('/api/users/customers', { params }));
 export const applyCustomerAccessAction = async (customerId, payload) =>

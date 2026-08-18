@@ -48,6 +48,10 @@ class AccountServiceImplTest {
     private com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher;
     @Mock
     private AccessProfileRepository accessProfileRepository;
+    @Mock
+    private com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository;
+    @Mock
+    private com.project.authservice.client.NotificationClient notificationClient;
 
     private AccountServiceImpl service;
 
@@ -55,7 +59,7 @@ class AccountServiceImplTest {
     void setUp() {
         service = new AccountServiceImpl(accountRepository, roleRepository, auditLogService,
                 request, credentialRevocationService, authOutboxService, passwordEncoder, eventPublisher,
-                accessProfileRepository);
+                accessProfileRepository, passwordResetTokenRepository, notificationClient);
     }
 
     @Test
@@ -66,7 +70,8 @@ class AccountServiceImplTest {
 
         service.updateAccountStatus(10L, AccountStatus.ACTIVE);
 
-        verify(auditLogService).log(10L, "UPDATE_ACCOUNT_STATUS", request);
+        verify(auditLogService).log(eq(10L), eq("UPDATE_ACCOUNT_STATUS"), eq(request),
+                eq("10"), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -82,7 +87,8 @@ class AccountServiceImplTest {
 
         verify(credentialRevocationService).revokeAll(10L);
         verify(authOutboxService).record(eq("ACCOUNT_ROLE_CHANGED"), eq(10L), any());
-        verify(auditLogService).log(10L, "UPDATE_ACCOUNT_ROLE", request);
+        verify(auditLogService).log(eq(10L), eq("UPDATE_ACCOUNT_ROLE"), eq(request),
+                eq("10"), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -116,7 +122,8 @@ class AccountServiceImplTest {
                 "b1576780-9081-11f1-bf65-0ebab02bf6f5");
         verify(credentialRevocationService).revokeAll(10L);
         verify(authOutboxService).record(eq("MANAGER_CINEMA_ASSIGNMENTS_CHANGED"), eq(10L), any());
-        verify(auditLogService).log(10L, "UPDATE_MANAGER_CINEMA_ASSIGNMENTS", request);
+        verify(auditLogService).log(eq(10L), eq("UPDATE_MANAGER_CINEMA_ASSIGNMENTS"), eq(request),
+                eq("10"), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -140,7 +147,6 @@ class AccountServiceImplTest {
         var employee = Role.builder().id(3L).code("EMPLOYEE").roleName("Employee").build();
         var createRequest = new com.project.authservice.dto.request.EmployeeAccountRequest();
         createRequest.setEmail("  new.staff@lorafilm.local ");
-        createRequest.setPassword("Temporary@123");
         createRequest.setFullName("New Staff");
         createRequest.setAccessProfileId(7L);
 
@@ -153,7 +159,11 @@ class AccountServiceImplTest {
         when(accountRepository.existsByEmail("new.staff@lorafilm.local")).thenReturn(false);
         when(roleRepository.findByCode("EMPLOYEE")).thenReturn(Optional.of(employee));
         when(accessProfileRepository.findById(7L)).thenReturn(Optional.of(accessProfile));
-        when(passwordEncoder.encode("Temporary@123")).thenReturn("encoded");
+        when(passwordEncoder.encode(org.mockito.ArgumentMatchers.anyString())).thenReturn("encoded");
+        when(passwordResetTokenRepository.findByAccountIdAndIsUsedFalse(20L))
+                .thenReturn(java.util.List.of());
+        when(passwordResetTokenRepository.findFirstByAccountIdAndIsUsedFalseOrderByCreatedAtDesc(20L))
+                .thenReturn(java.util.Optional.empty());
         when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
             Account saved = invocation.getArgument(0);
             saved.setId(20L);
@@ -166,8 +176,14 @@ class AccountServiceImplTest {
                         "new.staff@lorafilm.local".equals(account.getEmail())
                         && "EMPLOYEE".equals(account.getRole().getCode())
                         && "BOX_OFFICE".equals(account.getAccessProfile().getCode())
-                        && account.getAccountStatus() == AccountStatus.ACTIVE));
+                        && account.getAccountStatus() == AccountStatus.INACTIVE
+                        && !Boolean.TRUE.equals(account.getIsEnabled())));
         verify(eventPublisher).publishEmployeeAccountCreated(any(Account.class), eq("New Staff"));
+        verify(passwordResetTokenRepository).save(argThat(token ->
+                "EMPLOYEE_INVITATION".equals(token.getPurpose())
+                        && token.getExpiredAt().isAfter(java.time.LocalDateTime.now().plusHours(47))));
+        verify(notificationClient).sendEmployeeInvitation(eq(20L), eq("new.staff@lorafilm.local"),
+                eq("New Staff"), org.mockito.ArgumentMatchers.anyString());
     }
 
     private Account account(Long id, Role role, AccountStatus status) {

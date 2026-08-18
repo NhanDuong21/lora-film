@@ -22,8 +22,11 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 				OR LOWER(COALESCE(log.userAgent, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
 				OR LOWER(COALESCE(account.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
 				OR (:accountId IS NOT NULL AND account.id = :accountId))
+			  AND (:attentionOnly = FALSE OR (log.severity IN ('REVIEW', 'CRITICAL')
+			       AND log.reviewStatus = 'UNREVIEWED'))
 			""")
 	Page<AuditLog> search(@Param("keyword") String keyword,
 			@Param("accountId") Long accountId,
+			@Param("attentionOnly") boolean attentionOnly,
 			Pageable pageable);
 }

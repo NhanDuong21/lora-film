@@ -549,6 +549,8 @@ CREATE TABLE password_reset_tokens
 
     is_used BOOLEAN NOT NULL DEFAULT FALSE,
 
+    purpose VARCHAR(30) NOT NULL DEFAULT 'PASSWORD_RESET',
+
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 
@@ -640,6 +642,18 @@ CREATE TABLE audit_logs
     resource_id VARCHAR(100) NULL,
 
     description TEXT NULL,
+
+    result VARCHAR(20) NOT NULL DEFAULT 'SUCCESS',
+
+    severity VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+
+    review_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUIRED',
+
+    reviewed_by BIGINT NULL,
+
+    review_note VARCHAR(500) NULL,
+
+    reviewed_at TIMESTAMP NULL,
 
     ip_address VARCHAR(45) NULL,
 

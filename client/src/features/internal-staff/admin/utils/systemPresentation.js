@@ -200,6 +200,13 @@ const AUDIT_ACTION_LABELS = {
   PASSWORD_CHANGED: 'Đã đổi mật khẩu',
   REGISTER_SUCCESS: 'Đăng ký tài khoản thành công',
   CREATE_EMPLOYEE_ACCOUNT: 'Đã cấp tài khoản nhân viên',
+  CREATE_EMPLOYEE_INVITATION: 'Đã gửi lời mời cho nhân viên',
+  RESEND_EMPLOYEE_INVITATION: 'Đã gửi lại lời mời kích hoạt',
+  EMPLOYEE_INVITATION_ACCEPTED: 'Nhân viên đã kích hoạt tài khoản',
+  ADMIN_SENT_PASSWORD_RESET: 'Đã gửi email đặt lại mật khẩu',
+  ADMIN_REVOKED_ALL_SESSIONS: 'Đã thu hồi toàn bộ phiên đăng nhập',
+  UPDATE_ACCOUNT_ACCESS_PROFILE: 'Đã thay đổi nhóm nghiệp vụ',
+  UPDATE_MANAGER_CINEMA_ASSIGNMENTS: 'Đã thay đổi phạm vi rạp',
   UPDATE_ACCOUNT_ROLE: 'Đã thay đổi vai trò tài khoản',
   UPDATE_ACCOUNT_STATUS: 'Đã thay đổi trạng thái tài khoản',
   UPDATE_ROLE: 'Đã cập nhật quyền của vai trò',
@@ -215,6 +222,12 @@ const AUDIT_ACTION_LABELS = {
   USER_PROFILE_CREATED: 'Đã tạo hồ sơ người dùng',
   EMPLOYEE_CREATED: 'Đã tạo hồ sơ nhân viên',
   EMPLOYEE_UPDATED: 'Đã cập nhật hồ sơ nhân viên',
+  EMPLOYEE_CINEMA_ASSIGNED: 'Đã thay đổi rạp làm việc',
+  EMPLOYEE_RESIGNED: 'Đã ghi nhận nhân viên nghỉ việc',
+  EMPLOYEE_TRANSFERRED: 'Đã điều chuyển nhân viên',
+  CUSTOMER_PROFILE_CREATED: 'Đã tạo hồ sơ khách hàng',
+  AVATAR_DELETED: 'Đã xóa ảnh đại diện',
+  PII_BACKFILL_COMPLETED: 'Đã hoàn tất bổ sung dữ liệu bảo vệ riêng tư',
   PAYROLL_CREATED: 'Đã lập bảng lương',
   PAYROLL_UPDATED: 'Đã điều chỉnh bảng lương',
   PAYROLL_APPROVED: 'Đã duyệt bảng lương',
@@ -255,6 +268,7 @@ const TARGET_LABELS = {
   USER: 'Hồ sơ người dùng', CUSTOMER: 'Khách hàng', EMPLOYEE: 'Nhân viên', PAYROLL: 'Bảng lương',
   DEPARTMENT: 'Phòng ban', POSITION: 'Chức vụ', ATTENDANCE: 'Chấm công', WORK_SHIFT: 'Ca làm việc',
   LEAVE_REQUEST: 'Đơn nghỉ phép', ACCOUNT: 'Tài khoản', SYSTEM: 'Hệ thống',
+  ACCESS_CONTROL: 'Quyền truy cập', PII_GOVERNANCE: 'Bảo vệ dữ liệu cá nhân',
 };
 
 export const getTargetLabel = (type, id) => {
@@ -266,27 +280,48 @@ export const getTargetTypeLabel = type => TARGET_LABELS[type] || String(type || 
 
 export const getDeviceLabel = userAgent => {
   const value = String(userAgent || '');
+  if (!value) return 'Không ghi nhận';
   const browser = value.includes('Edg/') ? 'Edge' : value.includes('Chrome/') ? 'Chrome' : value.includes('Firefox/') ? 'Firefox' : value.includes('Safari/') ? 'Safari' : 'Trình duyệt khác';
   const system = value.includes('Windows') ? 'Windows' : value.includes('Android') ? 'Android' : /iPhone|iPad/.test(value) ? 'iOS' : value.includes('Mac OS') ? 'macOS' : 'thiết bị khác';
   return `${browser} trên ${system}`;
 };
 
 export const summarizeAuditDetails = details => {
-  if (!details) return 'Không có ghi chú bổ sung';
+  if (!details) return '';
+  const translatedPhrases = {
+    'Created from verified customer account': 'Được tạo sau khi tài khoản khách hàng xác minh email',
+    'Created from verified account': 'Được tạo sau khi tài khoản xác minh email',
+    'Email synchronized from auth-service': 'Email đã được đồng bộ từ hệ thống tài khoản',
+    'Synchronized from auth-service': 'Trạng thái đã được đồng bộ từ hệ thống tài khoản',
+    'PII backfill completed': 'Đã hoàn tất bổ sung dữ liệu bảo vệ riêng tư',
+    'retention-expired': 'Đã hết thời hạn lưu trữ theo chính sách',
+  };
+  if (translatedPhrases[String(details).trim()]) return translatedPhrases[String(details).trim()];
   const keyLabels = {
     employeeId: 'Nhân viên', batchSize: 'Số ca', sourceChecksum: 'Mã đối soát',
     departmentId: 'Phòng ban', positionId: 'Chức vụ', status: 'Trạng thái',
+    cinema: 'Rạp làm việc', reason: 'Lý do', before: 'Trước thay đổi', after: 'Sau thay đổi',
   };
   return String(details)
     .split(',')
     .map(part => {
       const [key, ...rest] = part.split('=');
       if (!rest.length) return part.trim();
+      const normalizedKey = key.trim();
       const value = rest.join('=').trim();
-      const displayValue = key.trim() === 'sourceChecksum' && value.length > 12
-        ? `${value.slice(0, 12)}…`
-        : value;
-      return `${keyLabels[key.trim()] || key.trim()}: ${displayValue}`;
+      if (normalizedKey === 'sourceChecksum' || normalizedKey.endsWith('Id')) return '';
+      if (normalizedKey === 'cinema' && /^[0-9a-f-]{20,}$/i.test(value)) {
+        return 'Rạp làm việc: Đã cập nhật theo phân công';
+      }
+      const cinemaIds = value.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi);
+      const translatedValues = {
+        ACTIVE: 'Hoạt động', INACTIVE: 'Chờ kích hoạt', LOCKED: 'Bị khóa bảo mật',
+        DELETED: 'Đã thu hồi', ADMIN: 'Quản trị hệ thống', MANAGER: 'Quản lý rạp',
+        EMPLOYEE: 'Nhân viên', CUSTOMER: 'Khách hàng', NONE: 'Chưa có',
+      };
+      const displayValue = cinemaIds?.length ? `${cinemaIds.length} rạp` : translatedValues[value] || value;
+      return `${keyLabels[normalizedKey] || normalizedKey}: ${displayValue}`;
     })
+    .filter(Boolean)
     .join(' · ');
 };

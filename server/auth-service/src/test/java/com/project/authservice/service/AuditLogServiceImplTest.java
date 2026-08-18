@@ -13,6 +13,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
 
 class AuditLogServiceImplTest {
     private final AuditLogRepository repository = mock(AuditLogRepository.class);
@@ -37,12 +39,16 @@ class AuditLogServiceImplTest {
 
         service.log(18L, "PASSWORD_CHANGED", request);
 
-        verify(writer, never()).write(18L, "PASSWORD_CHANGED", "ACCOUNT", "127.0.0.1", "JUnit");
+        verify(writer, never()).write(eq(18L), isNull(), eq("PASSWORD_CHANGED"), eq("ACCOUNT"),
+                eq("18"), isNull(), eq("SUCCESS"), eq("NORMAL"), eq("NOT_REQUIRED"),
+                eq("127.0.0.1"), eq("JUnit"));
         for (TransactionSynchronization synchronization
                 : TransactionSynchronizationManager.getSynchronizations()) {
             synchronization.afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
         }
-        verify(writer).write(18L, "PASSWORD_CHANGED", "ACCOUNT", "127.0.0.1", "JUnit");
+        verify(writer).write(eq(18L), isNull(), eq("PASSWORD_CHANGED"), eq("ACCOUNT"),
+                eq("18"), isNull(), eq("SUCCESS"), eq("NORMAL"), eq("NOT_REQUIRED"),
+                eq("127.0.0.1"), eq("JUnit"));
     }
 
     @Test
@@ -51,6 +57,8 @@ class AuditLogServiceImplTest {
 
         service.log(null, "REGISTER_FAILED", request);
 
-        verify(writer).write(null, "REGISTER_FAILED", "ACCOUNT", "127.0.0.1", null);
+        verify(writer).write(isNull(), isNull(), eq("REGISTER_FAILED"), eq("ACCOUNT"),
+                isNull(), isNull(), eq("FAILED"), eq("NORMAL"), eq("NOT_REQUIRED"),
+                eq("127.0.0.1"), isNull());
     }
 }

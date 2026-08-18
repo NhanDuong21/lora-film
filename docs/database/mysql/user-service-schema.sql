@@ -790,6 +790,18 @@ CREATE TABLE audit_logs
 
     details VARCHAR(1000) NULL,
 
+    result VARCHAR(20) NOT NULL DEFAULT 'SUCCESS',
+
+    severity VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+
+    review_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUIRED',
+
+    reviewed_by BIGINT NULL,
+
+    review_note VARCHAR(500) NULL,
+
+    reviewed_at TIMESTAMP NULL,
+
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 

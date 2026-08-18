@@ -14,6 +14,12 @@ export const updateManagerCinemaAssignments = async (id, cinemaPublicIds) =>
   data(await apiClient.put(`/api/accounts/${id}/cinema-assignments`, { cinemaPublicIds }));
 export const createEmployeeAccount = async (payload) => 
   data(await apiClient.post('/api/accounts/employee', payload));
+export const resendEmployeeInvitation = async (id) =>
+  data(await apiClient.post(`/api/accounts/${id}/resend-invitation`));
+export const sendAccountPasswordReset = async (id) =>
+  data(await apiClient.post(`/api/accounts/${id}/password-reset`));
+export const revokeAccountSessions = async (id) =>
+  data(await apiClient.post(`/api/accounts/${id}/revoke-sessions`));
 
 export const getRoles = async () => data(await apiClient.get('/api/roles'));
 export const getRole = async (id) => data(await apiClient.get(`/api/roles/${id}`));
@@ -32,3 +38,5 @@ export const updatePermission = async (id, payload) => data(await apiClient.put(
 export const deletePermission = async (id) => data(await apiClient.delete(`/api/permissions/${id}`));
 
 export const getAuthAudits = async (params = {}) => data(await apiClient.get('/api/audits', { params }));
+export const reviewAuthAudit = async (id, payload) =>
+  data(await apiClient.put(`/api/audits/${id}/review`, payload));

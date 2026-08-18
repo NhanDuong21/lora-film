@@ -17,6 +17,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.Base64;
 
 @Service
 public class AccountServiceImpl implements AccountService {
@@ -30,13 +33,23 @@ public class AccountServiceImpl implements AccountService {
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher;
     private final AccessProfileRepository accessProfileRepository;
+    private final com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository;
+    private final com.project.authservice.client.NotificationClient notificationClient;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
     @Transactional(readOnly = true)
-    public Page<AccountDto> getAccounts(String keyword, AccountStatus status, Long roleId, Pageable pageable) {
+    public Page<AccountDto> getAccounts(String keyword, AccountStatus status, Long roleId,
+                                        String accountScope, Pageable pageable) {
         Pageable safePageable = sanitize(pageable);
         String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
-        return accountRepository.search(normalizedKeyword, status, roleId, safePageable).map(this::mapToDto);
+        String normalizedScope = accountScope == null || accountScope.isBlank()
+                ? null : accountScope.trim().toUpperCase(java.util.Locale.ROOT);
+        if (normalizedScope != null && !java.util.Set.of("INTERNAL", "CUSTOMER").contains(normalizedScope)) {
+            throw new com.project.authservice.exception.BusinessException("Phạm vi tài khoản không hợp lệ");
+        }
+        return accountRepository.search(normalizedKeyword, status, roleId, normalizedScope, safePageable)
+                .map(this::mapToDto);
     }
 
     @Override
@@ -63,6 +76,7 @@ public class AccountServiceImpl implements AccountService {
         if (Boolean.TRUE.equals(account.getIsDeleted()) && status != AccountStatus.DELETED) {
             throw new com.project.authservice.exception.BusinessException("Deleted account cannot be reactivated");
         }
+        AccountStatus previousStatus = account.getAccountStatus();
         account.setAccountStatus(status);
         if (status == AccountStatus.DELETED) {
             account.setIsDeleted(true);
@@ -75,7 +89,8 @@ public class AccountServiceImpl implements AccountService {
         credentialRevocationService.revokeAll(account.getId());
         authOutboxService.record("ACCOUNT_STATUS_CHANGED", account.getId(),
                 java.util.Map.of("accountId", account.getId(), "status", status.name()));
-        auditLogService.log(account.getId(), "UPDATE_ACCOUNT_STATUS", servletRequest);
+        auditLogService.log(account.getId(), "UPDATE_ACCOUNT_STATUS", servletRequest,
+                account.getId().toString(), "before=" + previousStatus + ",after=" + status);
         return mapToDto(account);
     }
 
@@ -92,6 +107,7 @@ public class AccountServiceImpl implements AccountService {
             throw new com.project.authservice.exception.BusinessException("Role is already assigned to this account");
         }
                 
+        String previousRole = account.getRole() == null ? "NONE" : account.getRole().getCode();
         account.setRole(role);
         if (!"EMPLOYEE".equals(role.getCode())) {
             account.setAccessProfile(null);
@@ -105,7 +121,8 @@ public class AccountServiceImpl implements AccountService {
         String roleCode = role.getCode() == null ? role.getRoleName() : role.getCode();
         authOutboxService.record("ACCOUNT_ROLE_CHANGED", account.getId(),
                 java.util.Map.of("accountId", account.getId(), "role", roleCode));
-        auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ROLE", servletRequest);
+        auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ROLE", servletRequest,
+                account.getId().toString(), "before=" + previousRole + ",after=" + roleCode);
         return mapToDto(account);
     }
 
@@ -132,6 +149,7 @@ public class AccountServiceImpl implements AccountService {
             return mapToDto(account);
         }
 
+        java.util.Set<String> previousIds = new java.util.LinkedHashSet<>(account.getAssignedCinemaPublicIds());
         account.setAssignedCinemaPublicIds(normalizedIds);
         account = accountRepository.save(account);
         credentialRevocationService.revokeAll(account.getId());
@@ -139,7 +157,8 @@ public class AccountServiceImpl implements AccountService {
                 java.util.Map.of(
                         "accountId", account.getId(),
                         "cinemaPublicIds", normalizedIds));
-        auditLogService.log(account.getId(), "UPDATE_MANAGER_CINEMA_ASSIGNMENTS", servletRequest);
+        auditLogService.log(account.getId(), "UPDATE_MANAGER_CINEMA_ASSIGNMENTS", servletRequest,
+                account.getId().toString(), "before=" + previousIds + ",after=" + normalizedIds);
         return mapToDto(account);
     }
 
@@ -158,6 +177,8 @@ public class AccountServiceImpl implements AccountService {
         if (account.getAccessProfile() != null && account.getAccessProfile().getId().equals(profile.getId())) {
             return mapToDto(account);
         }
+        String previousProfile = account.getAccessProfile() == null
+                ? "NONE" : account.getAccessProfile().getName();
         account.setAccessProfile(profile);
         account = accountRepository.save(account);
         credentialRevocationService.revokeAll(account.getId());
@@ -166,7 +187,8 @@ public class AccountServiceImpl implements AccountService {
                         "accountId", account.getId(),
                         "role", "EMPLOYEE",
                         "accessProfile", profile.getCode()));
-        auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ACCESS_PROFILE", servletRequest);
+        auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ACCESS_PROFILE", servletRequest,
+                account.getId().toString(), "before=" + previousProfile + ",after=" + profile.getName());
         return mapToDto(account);
     }
 
@@ -184,6 +206,8 @@ public class AccountServiceImpl implements AccountService {
                 .assignedCinemaPublicIds(account.getAssignedCinemaPublicIds())
                 .enabled(account.getIsEnabled())
                 .status(account.getAccountStatus())
+                .lastLoginAt(account.getLastLoginAt())
+                .invitationExpiresAt(invitationExpiry(account))
                 .createdAt(account.getCreatedAt())
                 .updatedAt(account.getUpdatedAt())
                 .build();
@@ -212,32 +236,123 @@ public class AccountServiceImpl implements AccountService {
         String email = request.getEmail().trim().toLowerCase(java.util.Locale.ROOT);
         
         if (accountRepository.existsByEmail(email)) {
-            throw new com.project.authservice.exception.BusinessException("Email is already registered");
+            throw new com.project.authservice.exception.BusinessException("Email này đã có tài khoản trên hệ thống");
         }
 
         Role role = roleRepository.findByCode("EMPLOYEE")
-                .orElseThrow(() -> new ResourceNotFoundException("Workforce role EMPLOYEE not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Chưa cấu hình vai trò Nhân viên"));
         com.project.authservice.entity.AccessProfile accessProfile = accessProfileRepository
                 .findById(request.getAccessProfileId())
                 .filter(profile -> Boolean.TRUE.equals(profile.getActive()))
-                .orElseThrow(() -> new ResourceNotFoundException("Access profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm nghiệp vụ đã chọn"));
 
         Account account = new Account();
         account.setEmail(email);
-        account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        account.setPasswordHash(passwordEncoder.encode(randomUnavailablePassword()));
         account.setRole(role);
         account.setAccessProfile(accessProfile);
-        account.setAccountStatus(AccountStatus.ACTIVE);
-        account.setIsEnabled(true);
+        account.setAccountStatus(AccountStatus.INACTIVE);
+        account.setIsEnabled(false);
         account.setIsDeleted(false);
         
         account = accountRepository.save(account);
 
-        auditLogService.log(account.getId(), "CREATE_EMPLOYEE_ACCOUNT", servletRequest);
-        
         eventPublisher.publishEmployeeAccountCreated(account, request.getFullName());
 
+        createAndSendInvitation(account, request.getFullName());
+        auditLogService.log(account.getId(), "CREATE_EMPLOYEE_INVITATION", servletRequest,
+                account.getId().toString(), "after=Chờ kích hoạt,invitationExpiresAt=" + invitationExpiry(account));
+
         return mapToDto(account);
+    }
+
+    @Override
+    @Transactional
+    public AccountDto resendEmployeeInvitation(Long id) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        if (account.getAccountStatus() != AccountStatus.INACTIVE
+                || Boolean.TRUE.equals(account.getIsDeleted())
+                || account.getRole() == null
+                || !"EMPLOYEE".equals(account.getRole().getCode())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Chỉ có thể gửi lại lời mời cho tài khoản nhân viên đang chờ kích hoạt");
+        }
+        createAndSendInvitation(account, null);
+        auditLogService.log(account.getId(), "RESEND_EMPLOYEE_INVITATION", servletRequest,
+                account.getId().toString(), "invitationExpiresAt=" + invitationExpiry(account));
+        return mapToDto(account);
+    }
+
+    @Override
+    @Transactional
+    public void sendPasswordReset(Long id) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        if (account.getAccountStatus() != AccountStatus.ACTIVE || Boolean.TRUE.equals(account.getIsDeleted())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Chỉ có thể gửi email đặt lại mật khẩu cho tài khoản đang hoạt động");
+        }
+        invalidateUnusedResetTokens(account.getId());
+        String otp = sixDigitOtp();
+        passwordResetTokenRepository.save(com.project.authservice.entity.PasswordResetToken.builder()
+                .account(account)
+                .otpCode(otp)
+                .expiredAt(LocalDateTime.now().plusMinutes(15))
+                .isUsed(false)
+                .purpose("PASSWORD_RESET")
+                .attempts(0)
+                .build());
+        notificationClient.sendForgotPasswordOtp(account.getId(), account.getEmail(), otp);
+        auditLogService.log(account.getId(), "ADMIN_SENT_PASSWORD_RESET", servletRequest);
+    }
+
+    @Override
+    @Transactional
+    public void revokeAllSessions(Long id) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        credentialRevocationService.revokeAll(account.getId());
+        auditLogService.log(account.getId(), "ADMIN_REVOKED_ALL_SESSIONS", servletRequest);
+    }
+
+    private void createAndSendInvitation(Account account, String fullName) {
+        invalidateUnusedResetTokens(account.getId());
+        String otp = sixDigitOtp();
+        passwordResetTokenRepository.save(com.project.authservice.entity.PasswordResetToken.builder()
+                .account(account)
+                .otpCode(otp)
+                .expiredAt(LocalDateTime.now().plusHours(48))
+                .isUsed(false)
+                .purpose("EMPLOYEE_INVITATION")
+                .attempts(0)
+                .build());
+        notificationClient.sendEmployeeInvitation(account.getId(), account.getEmail(), fullName, otp);
+    }
+
+    private void invalidateUnusedResetTokens(Long accountId) {
+        passwordResetTokenRepository.findByAccountIdAndIsUsedFalse(accountId).forEach(token -> {
+            token.setIsUsed(true);
+            token.setUsedAt(LocalDateTime.now());
+        });
+    }
+
+    private LocalDateTime invitationExpiry(Account account) {
+        if (account.getAccountStatus() != AccountStatus.INACTIVE) return null;
+        return passwordResetTokenRepository
+                .findFirstByAccountIdAndIsUsedFalseOrderByCreatedAtDesc(account.getId())
+                .map(com.project.authservice.entity.PasswordResetToken::getExpiredAt)
+                .orElse(null);
+    }
+
+    private String randomUnavailablePassword() {
+        byte[] bytes = new byte[48];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String sixDigitOtp() {
+        return String.format(java.util.Locale.ROOT, "%06d", secureRandom.nextInt(1_000_000));
     }
     private Pageable sanitize(Pageable pageable) {
         java.util.Set<String> allowedSorts = java.util.Set.of("id", "email", "status", "createdAt", "updatedAt");
@@ -261,7 +376,9 @@ public class AccountServiceImpl implements AccountService {
                               AuthOutboxService authOutboxService,
                               org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
                               com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher,
-                              AccessProfileRepository accessProfileRepository) {
+                              AccessProfileRepository accessProfileRepository,
+                              com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository,
+                              com.project.authservice.client.NotificationClient notificationClient) {
         this.accountRepository = accountRepository;
         this.roleRepository = roleRepository;
         this.auditLogService = auditLogService;
@@ -271,5 +388,7 @@ public class AccountServiceImpl implements AccountService {
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
         this.accessProfileRepository = accessProfileRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
+        this.notificationClient = notificationClient;
     }
 }

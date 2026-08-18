@@ -22,6 +22,9 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 			WHERE (:keyword IS NULL OR LOWER(a.email) LIKE LOWER(CONCAT('%', :keyword, '%')))
 			  AND (:status IS NULL OR a.status = :status)
 			  AND (:roleId IS NULL OR r.id = :roleId)
+			  AND (:accountScope IS NULL
+			       OR (:accountScope = 'INTERNAL' AND r.code IN ('ADMIN', 'MANAGER', 'EMPLOYEE', 'ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_EMPLOYEE'))
+			       OR (:accountScope = 'CUSTOMER' AND r.code IN ('CUSTOMER', 'ROLE_CUSTOMER')))
 			""",
 			countQuery = """
 			SELECT COUNT(DISTINCT a.id) FROM Account a
@@ -29,10 +32,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 			WHERE (:keyword IS NULL OR LOWER(a.email) LIKE LOWER(CONCAT('%', :keyword, '%')))
 			  AND (:status IS NULL OR a.status = :status)
 			  AND (:roleId IS NULL OR r.id = :roleId)
+			  AND (:accountScope IS NULL
+			       OR (:accountScope = 'INTERNAL' AND r.code IN ('ADMIN', 'MANAGER', 'EMPLOYEE', 'ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_EMPLOYEE'))
+			       OR (:accountScope = 'CUSTOMER' AND r.code IN ('CUSTOMER', 'ROLE_CUSTOMER')))
 			""")
 	Page<Account> search(@Param("keyword") String keyword,
 			@Param("status") AccountStatus status,
 			@Param("roleId") Long roleId,
+			@Param("accountScope") String accountScope,
 			Pageable pageable);
 
 	java.util.List<Account> findAllByRolesId(Long roleId);

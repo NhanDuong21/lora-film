@@ -30,7 +30,10 @@ describe('system operation presentation', () => {
     expect(getAuditTone('LOGIN_FAILED_INVALID_PASSWORD')).toBe('danger');
     expect(getAuditActionLabel('WORK_SHIFT_CREATED')).toBe('Đã tạo ca làm việc');
     expect(getTargetLabel('WORK_SHIFT', '5')).toBe('Ca làm việc #5');
-    expect(summarizeAuditDetails('employeeId=3,batchSize=1')).toBe('Nhân viên: 3 · Số ca: 1');
+    expect(summarizeAuditDetails('employeeId=3,batchSize=1')).toBe('Số ca: 1');
+    expect(summarizeAuditDetails('Created from verified customer account'))
+      .toBe('Được tạo sau khi tài khoản khách hàng xác minh email');
+    expect(summarizeAuditDetails(null)).toBe('');
   });
 
   it('summarizes browser user agents without exposing the raw string', () => {

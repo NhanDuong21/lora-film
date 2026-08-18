@@ -30,12 +30,21 @@ public class UserAuditService {
         entry.setTargetType(targetType);
         entry.setTargetId(targetId == null ? null : targetId.toString());
         entry.setDetails(details);
+        String normalizedAction = action == null ? "" : action.toUpperCase(java.util.Locale.ROOT);
+        boolean failed = normalizedAction.contains("FAILED") || normalizedAction.contains("REJECTED")
+                || normalizedAction.contains("BLOCKED") || normalizedAction.contains("ERROR");
+        boolean needsReview = java.util.Set.of("EMPLOYEE_RESIGNED", "PII_ERASED",
+                "EMPLOYEE_DOCUMENT_DELETED", "PAYROLL_CANCELLED").contains(normalizedAction);
+        entry.setResult(failed ? "FAILED" : "SUCCESS");
+        entry.setSeverity(needsReview ? "REVIEW" : "NORMAL");
+        entry.setReviewStatus(needsReview ? "UNREVIEWED" : "NOT_REQUIRED");
         repository.save(entry);
     }
 
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<com.project.userservice.dto.response.UserAuditResponse> search(
-            String keyword, String targetType, org.springframework.data.domain.Pageable pageable) {
+            String keyword, String targetType, boolean attentionOnly,
+            org.springframework.data.domain.Pageable pageable) {
         String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
         String normalizedType = targetType == null || targetType.isBlank()
                 ? null : targetType.trim().toUpperCase(java.util.Locale.ROOT);
@@ -44,7 +53,26 @@ public class UserAuditService {
                 Math.min(Math.max(1, pageable.getPageSize()), 100),
                 org.springframework.data.domain.Sort.by(
                         org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
-        return repository.search(normalizedKeyword, normalizedType, safe)
+        return repository.search(normalizedKeyword, normalizedType, attentionOnly, safe)
                 .map(userAuditMapper::toResponse);
+    }
+
+    @Transactional
+    public com.project.userservice.dto.response.UserAuditResponse review(
+            Long id, com.project.userservice.dto.request.UserAuditReviewRequest request) {
+        UserAuditLog entry = repository.findById(id)
+                .orElseThrow(() -> new com.project.userservice.exception.BusinessException(
+                        "Không tìm thấy nhật ký", "USER_AUDIT_NOT_FOUND"));
+        String status = request.status().trim().toUpperCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of("REVIEWED", "RESOLVED").contains(status)) {
+            throw new com.project.userservice.exception.BusinessException(
+                    "Trạng thái rà soát không hợp lệ", "USER_AUDIT_REVIEW_INVALID");
+        }
+        entry.setReviewStatus(status);
+        entry.setReviewedBy(CurrentActor.accountId());
+        entry.setReviewNote(request.note() == null || request.note().isBlank()
+                ? null : request.note().trim());
+        entry.setReviewedAt(java.time.LocalDateTime.now());
+        return userAuditMapper.toResponse(repository.save(entry));
     }
 }

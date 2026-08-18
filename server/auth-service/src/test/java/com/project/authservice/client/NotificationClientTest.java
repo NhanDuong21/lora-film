@@ -79,6 +79,27 @@ class NotificationClientTest {
     }
 
     @Test
+    void employeeInvitationUsesVietnameseRecipientAndFortyEightHourExpiry() {
+        server.expect(once(), requestTo(
+                        "http://notification-service/api/v1/internal/notifications"))
+                .andExpect(jsonPath("$.eventType").value("AUTH_EMPLOYEE_INVITATION"))
+                .andExpect(jsonPath("$.locale").value("vi-VN"))
+                .andExpect(jsonPath("$.payload.user_name").value("Nguyễn Văn An"))
+                .andExpect(jsonPath("$.payload.otp_code").value("112233"))
+                .andExpect(jsonPath("$.payload.expiry_minutes").value(2880))
+                .andRespond(withSuccess(
+                        "{\"success\":true,\"data\":{\"publicId\":\"employee-invitation-1\"}}",
+                        MediaType.APPLICATION_JSON));
+
+        expectDelivery("employee-invitation-1", "SENT", null);
+
+        client.sendEmployeeInvitation(
+                77L, "nhanvien@example.com", "Nguyễn Văn An", "112233");
+
+        server.verify();
+    }
+
+    @Test
     void failedSmtpDeliveryIsNotReportedAsOtpSent() {
         server.expect(once(), requestTo(
                         "http://notification-service/api/v1/internal/notifications"))

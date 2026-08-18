@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Continue'
 $pidFile = Join-Path $env:TEMP 'lorafilm-backend-pids.json'
 
 if (Test-Path $pidFile) {
-    $records = @(Get-Content -LiteralPath $pidFile -Raw | ConvertFrom-Json)
+    $records = Get-Content -LiteralPath $pidFile -Raw | ConvertFrom-Json
     foreach ($record in $records) {
         $process = Get-Process -Id ([int]$record.Pid) -ErrorAction SilentlyContinue
         if ($null -ne $process) {

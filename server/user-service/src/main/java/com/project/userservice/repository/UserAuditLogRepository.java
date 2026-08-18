@@ -15,8 +15,11 @@ public interface UserAuditLogRepository extends JpaRepository<UserAuditLog, Long
                 OR LOWER(log.targetType) LIKE LOWER(CONCAT('%', :keyword, '%'))
                 OR LOWER(COALESCE(log.targetId, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
               AND (:targetType IS NULL OR log.targetType = :targetType)
+              AND (:attentionOnly = FALSE OR (log.severity IN ('REVIEW', 'CRITICAL')
+                   AND log.reviewStatus = 'UNREVIEWED'))
             """)
     Page<UserAuditLog> search(@Param("keyword") String keyword,
                               @Param("targetType") String targetType,
+                              @Param("attentionOnly") boolean attentionOnly,
                               Pageable pageable);
 }

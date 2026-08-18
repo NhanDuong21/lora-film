@@ -144,7 +144,7 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO access_profiles (code, name, description)
 VALUES ('ACCOUNTING_CONTROL', 'Kế toán kiểm soát',
-        'Duyệt độc lập, khóa settlement, phê duyệt hoàn tiền và khóa kỳ kế toán.')
+        'Duyệt độc lập, khóa đối soát, phê duyệt hoàn tiền và khóa kỳ kế toán.')
 ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), is_active = TRUE;
 
 DELETE app

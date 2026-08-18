@@ -645,6 +645,7 @@ public class AuthServiceImpl implements AuthService {
 				.otpCode(otp)
 				.expiredAt(LocalDateTime.now().plusMinutes(15))
 				.isUsed(false)
+				.purpose("PASSWORD_RESET")
 				.attempts(0)
 				.build();
 		passwordResetTokenRepository.save(resetToken);
@@ -673,11 +674,18 @@ public class AuthServiceImpl implements AuthService {
 		}
 
 		Account account = resetToken.getAccount();
+		boolean activatingInvitation = account.getAccountStatus()
+				== com.project.authservice.enums.AccountStatus.INACTIVE
+				&& "EMPLOYEE_INVITATION".equals(resetToken.getPurpose());
 		if (passwordEncoder.matches(request.getNewPassword(), account.getPasswordHash())) {
 			throw new com.project.authservice.exception.BusinessException(
 					"New password must be different from the current password");
 		}
 		account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+		if (activatingInvitation) {
+			account.setAccountStatus(com.project.authservice.enums.AccountStatus.ACTIVE);
+			account.setIsEnabled(true);
+		}
 		accountRepository.save(account);
 		
 		resetToken.setIsUsed(true);
@@ -687,7 +695,12 @@ public class AuthServiceImpl implements AuthService {
 		credentialRevocationService.revokeAll(account.getId());
 		authOutboxService.record("ACCOUNT_PASSWORD_RESET", account.getId(),
 				java.util.Map.of("accountId", account.getId()));
-		auditLogService.log(account.getId(), "PASSWORD_RESET_SUCCESS", servletRequest);
+		if (activatingInvitation) {
+			authOutboxService.record("ACCOUNT_STATUS_CHANGED", account.getId(),
+					java.util.Map.of("accountId", account.getId(), "status", "ACTIVE"));
+		}
+		auditLogService.log(account.getId(), activatingInvitation
+				? "EMPLOYEE_INVITATION_ACCEPTED" : "PASSWORD_RESET_SUCCESS", servletRequest);
 	}
 
 	@Override

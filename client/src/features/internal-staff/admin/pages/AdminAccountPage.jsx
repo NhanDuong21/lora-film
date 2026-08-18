@@ -6,37 +6,49 @@ import {
   Info,
   KeyRound,
   LockKeyhole,
+  LogOut,
+  Mail,
   Search,
   Settings2,
   ShieldCheck,
+  ShieldAlert,
   UserPlus,
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   createEmployeeAccount,
+  getAccount,
   getAccessProfiles,
   getAccounts,
+  getAuthAudits,
   getPermissions,
   getRoles,
+  resendEmployeeInvitation,
+  revokeAccountSessions,
+  sendAccountPasswordReset,
   updateAccessProfile,
   updateAccountAccessProfile,
   updateAccountRole,
   updateAccountStatus,
   updateManagerCinemaAssignments,
 } from '../services/authAdminService';
+import { getEmployees, getUserProfiles, searchUserProfiles } from '../services/userAdminService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import {
   ActionModal,
   ConsolePagination,
   ConsolePanel,
   DetailDrawer,
+  DetailGrid,
+  MetricStrip,
   OperationsHeader,
 } from '../components/OperationsConsole';
 import { AsyncState, Input, Select, StatusBadge } from '@/components/common/ui/uiKit';
 import useAdminAccess from '../hooks/useAdminAccess';
 import {
   SYSTEM_ROLE_ORDER,
+  getAuditActionLabel,
   getPermissionGroupKey,
   getPermissionGroupLabel,
   getPermissionLabel,
@@ -44,7 +56,7 @@ import {
   normalizeRoleCode,
 } from '../utils/systemPresentation';
 
-const EMPTY_FORM = { fullName: '', email: '', password: '', accessProfileId: '' };
+const EMPTY_FORM = { fullName: '', email: '', accessProfileId: '' };
 const COMMON_EMPLOYEE_PERMISSION_CODES = new Set([
   'EMPLOYEE_DASHBOARD_VIEW',
   'EMPLOYEE_SCHEDULE_VIEW',
@@ -55,9 +67,36 @@ const COMMON_EMPLOYEE_PERMISSION_CODES = new Set([
 ]);
 const STATUS_LABELS = {
   ACTIVE: 'Hoạt động',
-  INACTIVE: 'Chưa kích hoạt',
-  LOCKED: 'Đã khóa',
-  DELETED: 'Đã xóa',
+  INACTIVE: 'Chờ kích hoạt',
+  LOCKED: 'Bị khóa bảo mật',
+  DELETED: 'Đã thu hồi',
+};
+
+const formatDateTime = value => value
+  ? new Date(value).toLocaleString('vi-VN')
+  : 'Chưa ghi nhận';
+
+const operationalStatus = account => {
+  if (account.status === 'INACTIVE' && account.invitationExpiresAt
+      && new Date(account.invitationExpiresAt) < new Date()) {
+    return { label: 'Lời mời hết hạn', status: 'LOCKED', needsAttention: true };
+  }
+  return {
+    label: STATUS_LABELS[account.status] || 'Cần kiểm tra',
+    status: account.status,
+    needsAttention: ['LOCKED', 'DELETED'].includes(account.status),
+  };
+};
+
+const personCode = account => {
+  const roleCode = normalizeRoleCode(account.role);
+  if (roleCode === 'CUSTOMER' && account.person?.customerCode) return account.person.customerCode;
+  if (['ADMIN', 'MANAGER'].includes(roleCode)) {
+    return `${roleCode === 'ADMIN' ? 'QT' : 'QL'}-${String(account.id).padStart(4, '0')}`;
+  }
+  if (account.person?.employeeCode) return account.person.employeeCode.replace(/^EMP[-_]?/i, 'NV-');
+  const prefix = roleCode === 'CUSTOMER' ? 'KH' : 'NV';
+  return `${prefix}-${String(account.id).padStart(4, '0')}`;
 };
 
 const orderedRoles = roles => SYSTEM_ROLE_ORDER
@@ -80,6 +119,7 @@ export default function AdminAccountPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const activeTab = ['access', 'roles', 'permissions'].includes(requestedTab) ? 'access' : 'accounts';
+  const accountScope = requestedTab === 'customers' ? 'CUSTOMER' : 'INTERNAL';
   const { user } = useAuth();
   const can = useAdminAccess();
   const canUpdateEmployeeAccess = can('ROLE_UPDATE');
@@ -94,8 +134,12 @@ export default function AdminAccountPage() {
   const [updatingId, setUpdatingId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createStep, setCreateStep] = useState(1);
+  const [createResult, setCreateResult] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedAccount, setSelectedAccount] = useState(null);
+  const [drawerTab, setDrawerTab] = useState('overview');
+  const [accountHistory, setAccountHistory] = useState([]);
   const [draftRoleId, setDraftRoleId] = useState('');
   const [draftAccessProfileId, setDraftAccessProfileId] = useState('');
   const [draftCinemaPublicIds, setDraftCinemaPublicIds] = useState([]);
@@ -111,19 +155,66 @@ export default function AdminAccountPage() {
   const loadAccounts = useCallback(async () => {
     setAccountState({ loading: true, error: '' });
     try {
-      const data = await getAccounts({
-        keyword: query.keyword || undefined,
-        roleId: query.roleId || undefined,
-        status: query.status || undefined,
-        page: query.page,
-        size: query.size,
+      if (accountScope === 'CUSTOMER' && !query.keyword.trim()) {
+        setAccounts({ content: [], totalPages: 0, totalElements: 0 });
+        setAccountState({ loading: false, error: '' });
+        return;
+      }
+
+      let accountRows;
+      if (accountScope === 'CUSTOMER') {
+        const profileMatches = await searchUserProfiles(query.keyword.trim(), 50);
+        const fetched = await Promise.all((profileMatches || []).map(profile =>
+          getAccount(profile.accountId).catch(() => null)));
+        accountRows = fetched.filter(account => account
+          && normalizeRoleCode(account.role) === 'CUSTOMER'
+          && (!query.status || account.status === query.status));
+      } else {
+        const data = await getAccounts({
+          accountScope,
+          roleId: query.roleId || undefined,
+          status: query.status || undefined,
+          page: 0,
+          size: 100,
+        });
+        accountRows = data?.content || [];
+      }
+
+      const accountIds = accountRows.map(account => account.id);
+      const [profiles, employeePage] = await Promise.all([
+        getUserProfiles(accountIds).catch(() => []),
+        accountScope === 'INTERNAL'
+          ? getEmployees({ page: 0, size: 100 }).catch(() => ({ content: [] }))
+          : Promise.resolve({ content: [] }),
+      ]);
+      const profileById = new Map((profiles || []).map(profile => [Number(profile.accountId), profile]));
+      const employeeById = new Map((employeePage?.content || []).map(employee => [Number(employee.accountId), employee]));
+      let enriched = accountRows.map(account => ({
+        ...account,
+        person: employeeById.get(Number(account.id)) || profileById.get(Number(account.id)) || null,
+      }));
+      const keyword = query.keyword.trim().toLocaleLowerCase('vi');
+      if (keyword && accountScope === 'INTERNAL') {
+        enriched = enriched.filter(account => [
+          account.person?.fullName,
+          account.person?.employeeCode,
+          account.person?.phoneNumber,
+          account.email,
+        ].filter(Boolean).join(' ').toLocaleLowerCase('vi').includes(keyword));
+      }
+      const start = query.page * query.size;
+      const totalElements = enriched.length;
+      setAccounts({
+        content: enriched.slice(start, start + query.size),
+        allContent: enriched,
+        totalElements,
+        totalPages: Math.ceil(totalElements / query.size),
       });
-      setAccounts(data || { content: [], totalPages: 0, totalElements: 0 });
       setAccountState({ loading: false, error: '' });
     } catch (error) {
       setAccountState({ loading: false, error: error?.message || 'Không thể tải danh sách tài khoản.' });
     }
-  }, [query]);
+  }, [accountScope, query]);
 
   const loadAccessConfiguration = useCallback(async (preferredProfileId = '') => {
     setAccessState({ loading: true, error: '' });
@@ -217,19 +308,27 @@ export default function AdminAccountPage() {
 
   const handleCreate = async event => {
     event.preventDefault();
+    if (createResult) {
+      setCreateOpen(false);
+      openAccount({ ...createResult, person: { fullName: createResult.fullName } });
+      setCreateResult(null);
+      setCreateStep(1);
+      return;
+    }
+    if (createStep < 3) {
+      setCreateStep(step => step + 1);
+      return;
+    }
     setCreating(true);
     try {
-      await createEmployeeAccount({
+      const created = await createEmployeeAccount({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
-        password: form.password,
         accessProfileId: Number(form.accessProfileId),
       });
-      const createdEmail = form.email.trim();
-      setCreateOpen(false);
-      setForm(EMPTY_FORM);
-      setQuery(value => ({ ...value, keyword: createdEmail, roleId: '', page: 0 }));
-      notify('Đã cấp tài khoản và gán nhóm nghiệp vụ cho nhân viên.');
+      setCreateResult({ ...created, fullName: form.fullName.trim() });
+      await loadAccounts();
+      notify('Đã gửi lời mời sử dụng hệ thống cho nhân viên.');
     } catch (error) {
       notify(error?.message || 'Không thể cấp tài khoản nhân viên.', 'error');
     } finally {
@@ -245,9 +344,53 @@ export default function AdminAccountPage() {
 
   const openAccount = account => {
     setSelectedAccount(account);
+    setDrawerTab('overview');
+    setAccountHistory([]);
     setDraftRoleId(String(account.role?.id || ''));
     setDraftAccessProfileId(String(account.accessProfile?.id || ''));
     setDraftCinemaPublicIds(account.assignedCinemaPublicIds || []);
+    getAuthAudits({ keyword: String(account.id), page: 0, size: 20 })
+      .then(data => setAccountHistory(data?.content || []))
+      .catch(() => setAccountHistory([]));
+  };
+
+  const runSecurityAction = async (account, action) => {
+    const config = {
+      invitation: {
+        title: 'Gửi lại lời mời kích hoạt?',
+        message: `Một lời mời mới có hiệu lực 48 giờ sẽ được gửi đến ${account.email}.`,
+        confirmLabel: 'Gửi lại lời mời',
+        call: () => resendEmployeeInvitation(account.id),
+        success: 'Đã gửi lại lời mời kích hoạt.',
+      },
+      password: {
+        title: 'Gửi email đặt lại mật khẩu?',
+        message: `${account.email} sẽ nhận mã đặt lại mật khẩu có hiệu lực 15 phút. Admin không thể xem mật khẩu mới.`,
+        confirmLabel: 'Gửi email',
+        call: () => sendAccountPasswordReset(account.id),
+        success: 'Đã gửi email đặt lại mật khẩu.',
+      },
+      sessions: {
+        title: 'Đăng xuất khỏi tất cả thiết bị?',
+        message: `${account.email} sẽ phải đăng nhập lại trên mọi thiết bị đang sử dụng.`,
+        confirmLabel: 'Đăng xuất tất cả',
+        call: () => revokeAccountSessions(account.id),
+        success: 'Đã thu hồi toàn bộ phiên đăng nhập.',
+      },
+    }[action];
+    if (!config) return;
+    const approved = await confirmAction({ ...config, tone: 'warning' });
+    if (!approved) return;
+    setUpdatingId(account.id);
+    try {
+      await config.call();
+      notify(config.success);
+      await loadAccounts();
+    } catch (error) {
+      notify(error?.message || 'Không thể thực hiện thao tác bảo mật.', 'error');
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   const handleAccountAccessSave = async () => {
@@ -396,23 +539,35 @@ export default function AdminAccountPage() {
     || (normalizeRoleCode(selectedRole) === 'MANAGER'
       && !sameStrings(selectedAccount.assignedCinemaPublicIds || [], draftCinemaPublicIds))
   );
+  const accountSummary = useMemo(() => {
+    const rows = accounts.allContent || accounts.content || [];
+    return {
+      active: rows.filter(account => account.status === 'ACTIVE').length,
+      pending: rows.filter(account => account.status === 'INACTIVE').length,
+      attention: rows.filter(account => operationalStatus(account).needsAttention).length,
+      locked: rows.filter(account => account.status === 'LOCKED').length,
+    };
+  }, [accounts]);
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-zinc-950 p-6 text-white md:p-8">
       <OperationsHeader
         eyebrow="Hệ thống · Tài khoản và truy cập"
-        title="Tài khoản & phân quyền"
-        description="Cấp tài khoản, chọn đúng loại người dùng và kiểm soát những nghiệp vụ nhân viên được phép thực hiện bằng một quy trình thống nhất."
-        actions={activeTab === 'accounts' ? (
-          <button type="button" onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500">
-            <UserPlus size={17} /> Cấp tài khoản nhân viên
+        title="Tài khoản & quyền truy cập"
+        description="Theo dõi trạng thái truy cập của từng người, xử lý lời mời và kiểm soát đúng phạm vi công việc."
+        actions={activeTab === 'accounts' && accountScope === 'INTERNAL' ? (
+          <button type="button" onClick={() => { setCreateOpen(true); setCreateStep(1); setCreateResult(null); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500">
+            <UserPlus size={17} /> Mời nhân viên sử dụng hệ thống
           </button>
         ) : null}
       />
 
       <div className="flex w-fit gap-1 rounded-xl border border-white/10 bg-white/[0.025] p-1">
-        <button type="button" onClick={() => setSearchParams({ tab: 'accounts' })} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'accounts' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
-          Danh sách tài khoản
+        <button type="button" onClick={() => { setQuery(value => ({ ...value, page: 0, keyword: '', roleId: '' })); setSearchParams({ tab: 'accounts' }); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'accounts' && accountScope === 'INTERNAL' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
+          Tài khoản nội bộ
+        </button>
+        <button type="button" onClick={() => { setQuery(value => ({ ...value, page: 0, keyword: '', roleId: '' })); setSearchParams({ tab: 'customers' }); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'accounts' && accountScope === 'CUSTOMER' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
+          Khách hàng
         </button>
         <button type="button" onClick={() => setSearchParams({ tab: 'access' })} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'access' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
           Nhóm nghiệp vụ & quyền
@@ -421,53 +576,56 @@ export default function AdminAccountPage() {
 
       {activeTab === 'accounts' ? (
         <>
-          <ConsolePanel className="grid gap-px overflow-hidden bg-white/10 md:grid-cols-3">
-            {[
-              { step: '01', title: 'Cấp tài khoản', description: 'Tài khoản mới luôn bắt đầu với vai trò Nhân viên.' },
-              { step: '02', title: 'Chọn đúng vai trò', description: 'Chỉ chuyển sang Quản lý rạp hoặc Quản trị khi thực sự cần.' },
-              { step: '03', title: 'Gán nhóm nghiệp vụ', description: 'Chọn Bán vé, Soát vé, Kế toán… để cấp đúng quyền công việc.' },
-            ].map(item => (
-              <div key={item.step} className="bg-[#0b0b0e] p-5">
-                <span className="text-[10px] font-black tracking-[0.2em] text-brand-orange">BƯỚC {item.step}</span>
-                <p className="mt-2 font-black text-white">{item.title}</p>
-                <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>
-              </div>
-            ))}
-          </ConsolePanel>
+          {accountScope === 'INTERNAL' ? (
+            <MetricStrip items={[
+              { label: 'Đang hoạt động', value: accountSummary.active, hint: 'Có thể đăng nhập', icon: Users, tone: 'green' },
+              { label: 'Chờ kích hoạt', value: accountSummary.pending, hint: 'Đã gửi lời mời', icon: Mail, tone: 'orange' },
+              { label: 'Cần kiểm tra', value: accountSummary.attention, hint: 'Hết hạn hoặc bị khóa', icon: ShieldAlert, tone: 'amber' },
+              { label: 'Bị khóa bảo mật', value: accountSummary.locked, hint: 'Không thể đăng nhập', icon: LockKeyhole, tone: 'red' },
+            ]} />
+          ) : (
+            <ConsolePanel className="flex items-start gap-3 p-5 text-sm leading-6 text-zinc-400">
+              <Info size={18} className="mt-0.5 shrink-0 text-brand-orange" />
+              <p>Nhập tên, email hoặc số điện thoại để tìm khách hàng cần hỗ trợ. Hệ thống không tải toàn bộ khách hàng vào khu vực phân quyền nội bộ.</p>
+            </ConsolePanel>
+          )}
 
-          <div className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 md:grid-cols-3">
-            <Input aria-label="Tìm tài khoản" placeholder="Tìm theo email tài khoản…" value={query.keyword} onChange={event => setQuery(value => ({ ...value, keyword: event.target.value, page: 0 }))} />
-            <Select aria-label="Lọc vai trò" value={query.roleId} onChange={event => setQuery(value => ({ ...value, roleId: event.target.value, page: 0 }))}>
+          <div className={`grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 ${accountScope === 'INTERNAL' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+            <Input aria-label="Tìm tài khoản" placeholder={accountScope === 'INTERNAL' ? 'Tìm theo tên, email, mã nhân viên hoặc số điện thoại…' : 'Tìm khách hàng theo tên, email hoặc số điện thoại…'} value={query.keyword} onChange={event => setQuery(value => ({ ...value, keyword: event.target.value, page: 0 }))} />
+            {accountScope === 'INTERNAL' ? <Select aria-label="Lọc vai trò" value={query.roleId} onChange={event => setQuery(value => ({ ...value, roleId: event.target.value, page: 0 }))}>
               <option value="">Tất cả vai trò</option>
-              {systemRoles.map(role => <option key={role.id} value={role.id}>{getRolePresentation(role).label}</option>)}
-            </Select>
+              {systemRoles.filter(role => normalizeRoleCode(role) !== 'CUSTOMER').map(role => <option key={role.id} value={role.id}>{getRolePresentation(role).label}</option>)}
+            </Select> : null}
             <Select aria-label="Lọc trạng thái" value={query.status} onChange={event => setQuery(value => ({ ...value, status: event.target.value, page: 0 }))}>
               <option value="">Tất cả trạng thái</option>
               <option value="ACTIVE">Hoạt động</option>
-              <option value="INACTIVE">Chưa kích hoạt</option>
-              <option value="LOCKED">Đã khóa</option>
-              <option value="DELETED">Đã xóa</option>
+              <option value="INACTIVE">Chờ kích hoạt</option>
+              <option value="LOCKED">Bị khóa bảo mật</option>
+              <option value="DELETED">Đã thu hồi</option>
             </Select>
           </div>
 
-          <AsyncState loading={accountState.loading} error={accountState.error} onRetry={loadAccounts} empty={!accounts.content?.length} emptyMessage="Không tìm thấy tài khoản" emptyDescription="Hãy thay đổi từ khóa hoặc bộ lọc và thử lại.">
+          <AsyncState loading={accountState.loading} error={accountState.error} onRetry={loadAccounts} empty={!accounts.content?.length} emptyMessage={accountScope === 'CUSTOMER' && !query.keyword ? 'Tìm khách hàng khi cần hỗ trợ' : 'Không tìm thấy tài khoản'} emptyDescription={accountScope === 'CUSTOMER' && !query.keyword ? 'Nhập tên, email hoặc số điện thoại ở ô tìm kiếm phía trên.' : 'Hãy thay đổi từ khóa hoặc bộ lọc và thử lại.'}>
             <ConsolePanel className="overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-white/[0.035] text-[10px] uppercase tracking-wider text-zinc-500">
-                    <tr><th className="p-4">Tài khoản</th><th className="p-4">Loại người dùng</th><th className="p-4">Nghiệp vụ / phạm vi</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Thao tác</th></tr>
+                    <tr><th className="p-4">{accountScope === 'INTERNAL' ? 'Nhân sự' : 'Khách hàng'}</th><th className="p-4">Công việc</th><th className="p-4">Phạm vi làm việc</th><th className="p-4">Trạng thái truy cập</th><th className="p-4">Hoạt động gần nhất</th><th className="p-4 text-right">Thao tác</th></tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
                     {accounts.content?.map(account => {
                       const role = roles.find(item => item.id === account.role?.id) || account.role;
                       const roleInfo = getRolePresentation(role);
+                      const accessStatus = operationalStatus(account);
+                      const displayName = account.person?.fullName || account.email?.split('@')[0] || 'Chưa cập nhật họ tên';
+                      const cinemaName = cinemaByPublicId.get(String(account.person?.cinemaPublicId))?.name;
                       return (
                         <tr key={account.id} className="hover:bg-white/[0.025]">
-                          <td className="p-4"><p className="font-bold text-white">{account.email}</p><p className="mt-1 text-[10px] text-zinc-600">Mã tài khoản #{account.id} · {account.enabled ? 'Đã xác minh' : 'Chưa xác minh'}</p></td>
-                          <td className="p-4"><span className="inline-flex rounded-full border border-brand-orange/25 bg-brand-orange/10 px-2.5 py-1 text-xs font-bold text-brand-orange">{roleInfo.label}</span></td>
+                          <td className="p-4"><p className="font-bold text-white">{displayName}</p><p className="mt-1 text-[10px] text-zinc-600">{personCode(account)} · {account.email}</p></td>
+                          <td className="p-4"><p className="font-semibold text-zinc-200">{normalizeRoleCode(role) === 'EMPLOYEE' ? account.accessProfile?.name || account.person?.positionName || 'Chưa phân nhóm nghiệp vụ' : roleInfo.label}</p><p className="mt-1 text-xs text-zinc-600">{account.person?.positionName && normalizeRoleCode(role) === 'EMPLOYEE' ? account.person.positionName : roleInfo.description}</p></td>
                           <td className="p-4">
                             {normalizeRoleCode(role) === 'EMPLOYEE' ? (
-                              <><p className={`font-bold ${account.accessProfile?.code === 'GENERAL_STAFF' ? 'text-amber-300' : 'text-zinc-200'}`}>{account.accessProfile?.name || 'Chưa phân nhóm nghiệp vụ'}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{account.accessProfile?.description || 'Cần chọn công việc để cấp đúng quyền.'}</p></>
+                              <><p className={`font-bold ${cinemaName ? 'text-zinc-200' : 'text-amber-300'}`}>{cinemaName || 'Chưa phân công rạp'}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{account.person?.departmentName || 'Phạm vi theo hồ sơ nhân sự'}</p></>
                             ) : normalizeRoleCode(role) === 'MANAGER' ? (
                               <>
                                 <p className={`font-bold ${(account.assignedCinemaPublicIds || []).length ? 'text-zinc-200' : 'text-amber-300'}`}>
@@ -486,8 +644,9 @@ export default function AdminAccountPage() {
                               <><p className="text-zinc-300">{roleInfo.scope}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{roleInfo.description}</p></>
                             )}
                           </td>
-                          <td className="p-4"><StatusBadge status={account.status} label={STATUS_LABELS[account.status]} /></td>
-                          <td className="p-4 text-right"><button type="button" onClick={() => openAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-brand-orange/40 hover:text-brand-orange"><Settings2 size={14} /> Quản lý</button></td>
+                          <td className="p-4"><StatusBadge status={accessStatus.status} label={accessStatus.label} />{account.status === 'INACTIVE' ? <p className="mt-1.5 text-[10px] text-zinc-600">Hết hạn {formatDateTime(account.invitationExpiresAt)}</p> : null}</td>
+                          <td className="p-4"><p className="font-semibold text-zinc-300">{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : 'Chưa đăng nhập'}</p><p className="mt-1 text-xs text-zinc-600">{account.lastLoginAt ? 'Lần đăng nhập gần nhất' : 'Chưa có hoạt động'}</p></td>
+                          <td className="p-4 text-right"><button type="button" onClick={() => openAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-brand-orange/40 hover:text-brand-orange"><Settings2 size={14} /> Chi tiết</button></td>
                         </tr>
                       );
                     })}
@@ -615,109 +774,91 @@ export default function AdminAccountPage() {
       <DetailDrawer
         open={Boolean(selectedAccount)}
         onClose={() => setSelectedAccount(null)}
-        title="Quản lý tài khoản"
-        subtitle={selectedAccount?.email}
-        footer={selectedAccount ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {selectedAccount.status === 'LOCKED' ? (
-              <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => handleStatusChange(selectedAccount, 'ACTIVE')} className="rounded-xl border border-emerald-500/30 px-4 py-2.5 text-sm font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40">Mở khóa tài khoản</button>
-            ) : selectedAccount.status !== 'DELETED' ? (
-              <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => handleStatusChange(selectedAccount, 'LOCKED')} className="rounded-xl border border-red-500/30 px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-40">Khóa tài khoản</button>
-            ) : <span className="text-xs text-zinc-600">Tài khoản đã xóa</span>}
-            <button type="button" disabled={updatingId === selectedAccount.id || selectedAccount.status === 'DELETED' || !accountAccessChanged} onClick={handleAccountAccessSave} className="rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500 disabled:opacity-40">Lưu phân quyền</button>
+        title={selectedAccount?.person?.fullName || selectedAccount?.email?.split('@')[0] || 'Chi tiết tài khoản'}
+        subtitle={selectedAccount ? `${personCode(selectedAccount)} · ${selectedAccount.email}` : ''}
+        footer={selectedAccount && drawerTab === 'access' ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-zinc-500">Thay đổi quyền sẽ làm mới phiên đăng nhập.</span>
+            <button type="button" disabled={updatingId === selectedAccount.id || selectedAccount.status === 'DELETED' || !accountAccessChanged} onClick={handleAccountAccessSave} className="rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500 disabled:opacity-40">Lưu quyền truy cập</button>
           </div>
         ) : null}
       >
         {selectedAccount ? (
           <div className="space-y-6">
-            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
-              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Tài khoản</p><p className="mt-1 font-bold text-white">{selectedAccount.email}</p>
-              <div className="mt-3 flex items-center gap-2"><StatusBadge status={selectedAccount.status} label={STATUS_LABELS[selectedAccount.status]} /><span className="text-xs text-zinc-600">Mã #{selectedAccount.id}</span></div>
+            <div className="flex gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.025] p-1">
+              {[
+                ['overview', 'Tổng quan'], ['access', 'Quyền truy cập'],
+                ['security', 'Bảo mật'], ['history', 'Lịch sử thay đổi'],
+              ].map(([key, label]) => <button key={key} type="button" onClick={() => setDrawerTab(key)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold ${drawerTab === key ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>{label}</button>)}
             </div>
-            <div>
-              <h3 className="text-sm font-black text-white">Chọn loại người dùng</h3>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">Vai trò quyết định phạm vi lớn của tài khoản. Không dùng vai trò để thể hiện chức danh công việc.</p>
-              <div className="mt-3 space-y-2">
-                {systemRoles.map(role => {
-                  const info = getRolePresentation(role);
-                  const checked = String(role.id) === draftRoleId;
-                  return (
-                    <button key={role.id} type="button" disabled={selectedAccount.status === 'DELETED'} onClick={() => setDraftRoleId(String(role.id))} className={`w-full rounded-xl border p-4 text-left transition-colors ${checked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}>
-                      <span className="flex items-center justify-between gap-3"><span className="font-bold text-white">{info.label}</span>{checked ? <CheckCircle2 size={17} className="text-brand-orange" /> : null}</span>
-                      <span className="mt-1 block text-xs leading-5 text-zinc-500">{info.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {normalizeRoleCode(selectedRole) === 'EMPLOYEE' ? (
-              <div className="space-y-3">
-                <div><h3 className="text-sm font-black text-white">Chọn nhóm nghiệp vụ</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Nhóm nghiệp vụ quyết định nhân viên được thao tác những công việc nào trong ca.</p></div>
-                <div className="space-y-2">
-                  {accessProfiles.map(profile => {
-                    const checked = String(profile.id) === draftAccessProfileId;
-                    return <button key={profile.id} type="button" onClick={() => setDraftAccessProfileId(String(profile.id))} className={`w-full rounded-xl border p-4 text-left ${checked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}><span className="flex items-center justify-between gap-3"><span className="font-bold text-white">{profile.name}</span>{checked ? <CheckCircle2 size={17} className="text-brand-orange" /> : null}</span><span className="mt-1 block text-xs leading-5 text-zinc-500">{profile.description}</span></button>;
-                  })}
+
+            {drawerTab === 'overview' ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                  <div><p className="font-black text-white">{selectedAccount.person?.fullName || 'Chưa cập nhật họ tên'}</p><p className="mt-1 text-xs text-zinc-500">{selectedAccount.email}</p></div>
+                  <StatusBadge status={operationalStatus(selectedAccount).status} label={operationalStatus(selectedAccount).label} />
                 </div>
-                <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100"><Info size={18} className="mt-0.5 shrink-0" /><p>Tài khoản sẽ nhận <strong>quyền cá nhân dùng chung</strong> cộng với quyền của nhóm nghiệp vụ đã chọn.</p></div>
+                <DetailGrid items={[
+                  { label: 'Mã nhân sự', value: personCode(selectedAccount) },
+                  { label: 'Số điện thoại', value: selectedAccount.person?.phoneNumber || 'Chưa cập nhật' },
+                  { label: 'Công việc', value: selectedAccount.accessProfile?.name || getRolePresentation(selectedAccount.role).label },
+                  { label: 'Rạp làm việc', value: cinemaByPublicId.get(String(selectedAccount.person?.cinemaPublicId))?.name || selectedCinemaNames.join(' · ') || 'Toàn hệ thống' },
+                  { label: 'Lần đăng nhập gần nhất', value: selectedAccount.lastLoginAt ? formatDateTime(selectedAccount.lastLoginAt) : 'Chưa đăng nhập' },
+                  { label: 'Trạng thái lời mời', value: selectedAccount.status === 'INACTIVE' ? `Hết hạn ${formatDateTime(selectedAccount.invitationExpiresAt)}` : 'Đã kích hoạt' },
+                ]} />
               </div>
             ) : null}
-            {normalizeRoleCode(selectedRole) === 'MANAGER' ? (
+
+            {drawerTab === 'access' ? (
+              <div className="space-y-5">
+                <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Loại người dùng<Select className="mt-2" value={draftRoleId} onChange={event => setDraftRoleId(event.target.value)} disabled={selectedAccount.status === 'DELETED'}>{systemRoles.map(role => <option key={role.id} value={role.id}>{getRolePresentation(role).label}</option>)}</Select></label>
+                {normalizeRoleCode(selectedRole) === 'EMPLOYEE' ? (
+                  <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Nhóm nghiệp vụ<Select className="mt-2" value={draftAccessProfileId} onChange={event => setDraftAccessProfileId(event.target.value)}>{accessProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.permissions?.length || 0} quyền công việc</option>)}</Select></label>
+                ) : null}
+                {normalizeRoleCode(selectedRole) === 'MANAGER' ? <div className="space-y-2"><p className="text-xs font-black uppercase tracking-wide text-zinc-500">Rạp được phân công</p>{cinemas.map(cinema => { const checked = draftCinemaPublicIds.includes(String(cinema.publicId)); return <button key={cinema.publicId} type="button" onClick={() => setDraftCinemaPublicIds(current => checked ? current.filter(id => id !== String(cinema.publicId)) : [...current, String(cinema.publicId)])} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${checked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-white/10'}`}><span className="font-semibold text-zinc-200">{cinema.name}</span>{checked ? <CheckCircle2 size={16} className="text-brand-orange" /> : null}</button>; })}</div> : null}
+                {normalizeRoleCode(selectedRole) === 'ADMIN' ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><AlertTriangle size={18} className="mt-0.5 shrink-0" /><p>Quản trị hệ thống có toàn quyền. Thao tác nâng quyền cần được kiểm tra trong nhật ký hoạt động.</p></div> : null}
+                <div className="rounded-xl border border-white/10 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Phạm vi sau khi lưu</p><p className="mt-2 font-bold text-zinc-200">{normalizeRoleCode(selectedRole) === 'MANAGER' ? selectedCinemaNames.join(' · ') || 'Chưa chọn rạp' : selectedRoleInfo.scope}</p></div>
+              </div>
+            ) : null}
+
+            {drawerTab === 'security' ? (
               <div className="space-y-3">
-                <div>
-                  <h3 className="text-sm font-black text-white">Chọn rạp được phân công</h3>
-                  <p className="mt-1 text-xs leading-5 text-zinc-500">Quản lý rạp chỉ xem và điều hành dữ liệu của những rạp được chọn tại đây. Hệ thống sẽ chặn truy cập sang rạp khác.</p>
-                </div>
-                {cinemas.length ? (
-                  <div className="space-y-2">
-                    {cinemas.map(cinema => {
-                      const checked = draftCinemaPublicIds.includes(String(cinema.publicId));
-                      return (
-                        <button
-                          key={cinema.publicId}
-                          type="button"
-                          onClick={() => setDraftCinemaPublicIds(current => checked
-                            ? current.filter(publicId => publicId !== String(cinema.publicId))
-                            : [...current, String(cinema.publicId)])}
-                          className={`w-full rounded-xl border p-4 text-left transition-colors ${checked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}
-                        >
-                          <span className="flex items-center justify-between gap-3">
-                            <span className="font-bold text-white">{cinema.name}</span>
-                            {checked ? <CheckCircle2 size={17} className="shrink-0 text-brand-orange" /> : null}
-                          </span>
-                          <span className="mt-1 block text-xs leading-5 text-zinc-500">{[cinema.address, cinema.city].filter(Boolean).join(', ') || 'Chưa cập nhật địa chỉ'}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><AlertTriangle size={18} className="mt-0.5 shrink-0" /><p>Chưa tải được danh sách rạp. Vui lòng kiểm tra dịch vụ rạp trước khi phân quyền.</p></div>
-                )}
-                <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100"><Info size={18} className="mt-0.5 shrink-0" /><p>Đã chọn <strong>{draftCinemaPublicIds.length} rạp</strong>. Khi đổi phạm vi, tài khoản Manager sẽ phải đăng nhập lại để nhận quyền mới.</p></div>
+                {selectedAccount.status === 'INACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'invitation')} className="flex w-full items-start gap-3 rounded-xl border border-brand-orange/25 bg-brand-orange/10 p-4 text-left"><Mail size={19} className="mt-0.5 text-brand-orange" /><span><strong className="block text-white">Gửi lại lời mời kích hoạt</strong><span className="mt-1 block text-xs leading-5 text-zinc-400">Lời mời mới có hiệu lực 48 giờ; lời mời cũ sẽ hết hiệu lực.</span></span></button> : null}
+                {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'password')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20"><KeyRound size={19} className="mt-0.5 text-sky-400" /><span><strong className="block text-white">Gửi email đặt lại mật khẩu</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Nhân viên tự đặt mật khẩu mới; admin không thể xem mật khẩu.</span></span></button> : null}
+                {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'sessions')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20"><LogOut size={19} className="mt-0.5 text-amber-400" /><span><strong className="block text-white">Đăng xuất khỏi tất cả thiết bị</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Thu hồi ngay mọi phiên đăng nhập đang hoạt động.</span></span></button> : null}
+                {selectedAccount.status === 'LOCKED' ? <button type="button" onClick={() => handleStatusChange(selectedAccount, 'ACTIVE')} className="w-full rounded-xl border border-emerald-500/30 p-4 text-left font-bold text-emerald-300">Mở khóa tài khoản</button> : selectedAccount.status !== 'DELETED' ? <button type="button" onClick={() => handleStatusChange(selectedAccount, 'LOCKED')} className="w-full rounded-xl border border-red-500/30 p-4 text-left font-bold text-red-300">Tạm khóa tài khoản</button> : <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-500">Quyền truy cập đã được thu hồi. Lịch sử vẫn được giữ nguyên.</p>}
               </div>
             ) : null}
-            {normalizeRoleCode(selectedRole) === 'ADMIN' ? (
-              <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><AlertTriangle size={18} className="mt-0.5 shrink-0" /><p>Quản trị hệ thống có toàn quyền. Chỉ cấp vai trò này cho người chịu trách nhiệm cao nhất.</p></div>
+
+            {drawerTab === 'history' ? (
+              <div className="space-y-2">{accountHistory.length ? accountHistory.map(entry => <article key={entry.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-start justify-between gap-3"><p className="font-bold text-zinc-200">{getAuditActionLabel(entry.action)}</p><span className="whitespace-nowrap text-[10px] text-zinc-600">{formatDateTime(entry.createdAt)}</span></div>{entry.description ? <p className="mt-2 text-xs leading-5 text-zinc-500">{entry.description}</p> : null}</article>) : <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-500">Chưa có thay đổi quyền hoặc bảo mật được ghi nhận.</p>}</div>
             ) : null}
-            <div className="rounded-xl border border-white/10 p-4">
-              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Phạm vi sau khi lưu</p>
-              <p className="mt-2 font-bold text-zinc-200">
-                {normalizeRoleCode(selectedRole) === 'MANAGER'
-                  ? selectedCinemaNames.join(' · ') || 'Chưa chọn rạp'
-                  : selectedRoleInfo.scope}
-              </p>
-            </div>
           </div>
         ) : null}
       </DetailDrawer>
 
-      <ActionModal open={createOpen} onClose={() => setCreateOpen(false)} title="Cấp tài khoản nhân viên" description="Tài khoản mới luôn có vai trò Nhân viên. Admin chỉ cần chọn đúng nhóm công việc để hệ thống cấp quyền phù hợp." onSubmit={handleCreate} submitLabel="Cấp tài khoản" submitting={creating}>
-        <div className="flex items-start gap-3 rounded-xl border border-brand-orange/20 bg-brand-orange/10 p-4 text-xs leading-5 text-orange-100"><KeyRound size={17} className="mt-0.5 shrink-0" /><span>Vai trò xác định đây là nhân viên; nhóm nghiệp vụ xác định họ được phép làm gì.</span></div>
-        <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Họ và tên<Input className="mt-2" value={form.fullName} onChange={event => setForm(value => ({ ...value, fullName: event.target.value }))} required minLength={2} autoComplete="name" placeholder="Ví dụ: Nguyễn Văn An" /></label>
-        <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Email công việc<Input className="mt-2" type="email" value={form.email} onChange={event => setForm(value => ({ ...value, email: event.target.value }))} required autoComplete="email" placeholder="ten.nhanvien@gmail.com" /></label>
-        <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Nhóm nghiệp vụ<Select className="mt-2" value={form.accessProfileId} onChange={event => setForm(value => ({ ...value, accessProfileId: event.target.value }))} required><option value="">Chọn công việc của nhân viên</option>{accessProfiles.filter(profile => profile.code !== 'GENERAL_STAFF').map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</Select></label>
-        <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Mật khẩu tạm thời<Input className="mt-2" type="password" value={form.password} onChange={event => setForm(value => ({ ...value, password: event.target.value }))} required minLength={6} autoComplete="new-password" /></label>
-        <p className="text-xs leading-5 text-zinc-500">Gửi mật khẩu qua kênh nội bộ an toàn và yêu cầu nhân viên đổi mật khẩu ngay lần đăng nhập đầu tiên.</p>
+      <ActionModal open={createOpen} onClose={() => { setCreateOpen(false); setCreateResult(null); setCreateStep(1); setForm(EMPTY_FORM); }} title={createResult ? 'Đã gửi lời mời' : 'Mời nhân viên sử dụng hệ thống'} description={createResult ? `Lời mời đặt mật khẩu đã được gửi đến ${createResult.email}.` : `Bước ${createStep}/3 · Nhân viên sẽ tự đặt mật khẩu qua email; admin không cần và không thể biết mật khẩu.`} onSubmit={handleCreate} submitLabel={createResult ? 'Xem tài khoản' : createStep < 3 ? 'Tiếp tục' : 'Gửi lời mời và cấp quyền'} submitting={creating} wide>
+        {!createResult ? <div className="grid grid-cols-3 gap-2">{['Xác nhận nhân viên', 'Công việc & phạm vi', 'Gửi lời mời'].map((label, index) => <div key={label} className={`rounded-lg border px-2 py-2 text-center text-[10px] font-bold ${createStep === index + 1 ? 'border-brand-orange/50 bg-brand-orange/10 text-brand-orange' : createStep > index + 1 ? 'border-emerald-500/20 text-emerald-400' : 'border-white/10 text-zinc-600'}`}>{index + 1}. {label}</div>)}</div> : null}
+        {!createResult && createStep === 1 ? <>
+          <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-xs leading-5 text-sky-100"><Info size={17} className="mt-0.5 shrink-0" /><span>Thông tin này sẽ được dùng làm hồ sơ nhân sự duy nhất và đồng bộ sang tài khoản truy cập.</span></div>
+          <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Họ và tên nhân viên<Input className="mt-2" value={form.fullName} onChange={event => setForm(value => ({ ...value, fullName: event.target.value }))} required minLength={2} autoComplete="name" placeholder="Ví dụ: Nguyễn Văn An" /></label>
+          <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Email công việc<Input className="mt-2" type="email" value={form.email} onChange={event => setForm(value => ({ ...value, email: event.target.value }))} required autoComplete="email" placeholder="ten.nhanvien@gmail.com" /></label>
+        </> : null}
+        {!createResult && createStep === 2 ? <>
+          <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Nhóm nghiệp vụ<Select className="mt-2" value={form.accessProfileId} onChange={event => setForm(value => ({ ...value, accessProfileId: event.target.value }))} required><option value="">Chọn công việc của nhân viên</option>{accessProfiles.filter(profile => profile.code !== 'GENERAL_STAFF').map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.permissions?.length || 0} quyền công việc</option>)}</Select></label>
+          <div className="rounded-xl border border-white/10 p-4"><p className="text-sm font-bold text-white">Quyền sẽ được cấp</p><p className="mt-2 text-xs leading-5 text-zinc-500">Quyền cá nhân dùng chung cộng với quyền công việc của nhóm đã chọn. Phạm vi rạp sẽ lấy theo hồ sơ nhân sự.</p></div>
+          <button type="button" onClick={() => setCreateStep(1)} className="text-xs font-bold text-zinc-400 hover:text-white">← Quay lại xác nhận nhân viên</button>
+        </> : null}
+        {!createResult && createStep === 3 ? <>
+          <DetailGrid items={[
+            { label: 'Nhân viên', value: form.fullName }, { label: 'Email đăng nhập', value: form.email },
+            { label: 'Nhóm nghiệp vụ', value: accessProfiles.find(profile => String(profile.id) === String(form.accessProfileId))?.name || 'Chưa chọn' },
+            { label: 'Hiệu lực lời mời', value: '48 giờ' },
+          ]} />
+          <div className="flex items-start gap-3 rounded-xl border border-brand-orange/20 bg-brand-orange/10 p-4 text-sm leading-6 text-orange-100"><Mail size={18} className="mt-0.5 shrink-0" /><p>Hệ thống tạo tài khoản ở trạng thái <strong>Chờ kích hoạt</strong>. Nhân viên tự đặt mật khẩu bằng mã gửi qua email.</p></div>
+          <button type="button" onClick={() => setCreateStep(2)} className="text-xs font-bold text-zinc-400 hover:text-white">← Quay lại công việc & phạm vi</button>
+        </> : null}
+        {createResult ? <div className="space-y-4"><div className="flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4"><CheckCircle2 size={24} className="text-emerald-400" /><div><p className="font-black text-white">Đã mời {createResult.fullName}</p><p className="mt-1 text-xs text-emerald-200">Trạng thái: Chờ kích hoạt</p></div></div><DetailGrid items={[{ label: 'Email nhận lời mời', value: createResult.email }, { label: 'Hết hạn', value: formatDateTime(createResult.invitationExpiresAt) }]} /></div> : null}
       </ActionModal>
     </section>
   );

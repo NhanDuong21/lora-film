@@ -23,8 +23,9 @@ public class AuditLogWriter {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void write(Long accountId, String action, String resource,
-                      String ipAddress, String userAgent) {
+    public void write(Long accountId, Long actorAccountId, String action, String resource,
+                      String resourceId, String description, String result, String severity,
+                      String reviewStatus, String ipAddress, String userAgent) {
         Account account = accountId == null
                 ? null
                 : accountRepository.findById(accountId).orElse(null);
@@ -35,6 +36,12 @@ public class AuditLogWriter {
                 .ipAddress(ipAddress)
                 .userAgent(userAgent)
                 .build();
+        auditLog.setResourceId(resourceId);
+        auditLog.setDescription(description);
+        auditLog.setResult(result);
+        auditLog.setSeverity(severity);
+        auditLog.setReviewStatus(reviewStatus);
+        auditLog.setCreatedBy(actorAccountId);
         auditLogRepository.saveAndFlush(auditLog);
     }
 }
