@@ -7,6 +7,7 @@ import jakarta.mail.Session;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailSendException;
@@ -49,6 +50,28 @@ class EmailNotificationSenderTest {
 
         assertThat(result.failureCategory()).isEqualTo(FailureCategory.INVALID_RECIPIENT);
         assertThat(result.failureCode()).isEqualTo("SMTP_RECIPIENT_REJECTED");
+    }
+
+    @Test
+    void reportsGmailPolicyRejectionSeparately() {
+        SMTPSendFailedException providerFailure = new SMTPSendFailedException(
+                ".", 550,
+                "550-5.7.1 Message rejected under policy for customer@example.com",
+                null, null, null, null);
+        DeliveryResult result = sendWith(new MailSendException("send failed", providerFailure));
+
+        assertThat(result.failureCategory()).isEqualTo(FailureCategory.PROVIDER_REJECTED);
+        assertThat(result.failureCode()).isEqualTo("SMTP_POLICY_REJECTED");
+        assertThat(result.failureMessage()).contains("[email]").doesNotContain("customer@example.com");
+    }
+
+    @Test
+    void reportsSendingQuotaSeparately() {
+        SMTPSendFailedException providerFailure = new SMTPSendFailedException(
+                ".", 550, "550-5.4.5 Daily user sending limit exceeded", null, null, null, null);
+        DeliveryResult result = sendWith(new MailSendException("send failed", providerFailure));
+
+        assertThat(result.failureCode()).isEqualTo("SMTP_QUOTA_EXCEEDED");
     }
 
     private DeliveryResult sendWith(RuntimeException failure) {

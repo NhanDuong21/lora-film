@@ -41,6 +41,7 @@ import com.project.authservice.entity.Role;
 import com.project.authservice.entity.RefreshToken;
 import com.project.authservice.exception.AccountInactiveException;
 import com.project.authservice.exception.AccountNotVerifiedException;
+import com.project.authservice.exception.BaseAuthException;
 import com.project.authservice.exception.InvalidBirthdayFormatException;
 import com.project.authservice.exception.InvalidRefreshTokenException;
 import com.project.authservice.exception.CccdException.BirthdayCccdMismatchException;
@@ -50,6 +51,8 @@ import com.project.authservice.exception.ResourceNotFoundException;
 import com.project.authservice.exception.DuplicateResourceException;
 import com.project.authservice.exception.RegistrationConflictException;
 import com.project.authservice.exception.RegistrationAlreadyPendingException;
+import com.project.authservice.exception.OtpDeliveryPendingException;
+import com.project.authservice.exception.RegistrationExpiredException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.repository.RefreshTokenRepository;
@@ -283,10 +286,15 @@ public class AuthServiceImpl implements AuthService {
 				}
 			} catch (TimeoutException e) {
 				throw new com.project.authservice.exception.common.GatewayTimeoutException("Gateway timeout. Please try again later.");
+			} catch (OtpDeliveryPendingException e) {
+				registrationInitiated = true;
+				throw e;
 			} catch (RegistrationConflictException e) {
 				throw e;
 			} catch (DuplicateResourceException e) {
 				auditLogService.log(null, "REGISTER_FAILED_DUPLICATE", servletRequest);
+				throw e;
+			} catch (BaseAuthException e) {
 				throw e;
 			} catch (Exception e) {
 				log.error("Error during registration validation", e);
@@ -334,14 +342,17 @@ public class AuthServiceImpl implements AuthService {
 	@Transactional
 	public void verify(VerifyRequest request) {
 		request.setEmail(normalizeEmail(request.getEmail()));
-		verificationService.verify(request);
-
 		String email = normalizeEmail(request.getEmail());
 		String pendingKey = "pending_registration:" + email;
+		if (!Boolean.TRUE.equals(redisTemplate.hasKey(pendingKey))) {
+			throw new RegistrationExpiredException();
+		}
+
+		verificationService.verify(request);
 
 		String json = redisTemplate.opsForValue().get(pendingKey);
 		if (json == null) {
-			return; // Not a registration verification, just regular OTP verification
+			throw new RegistrationExpiredException();
 		}
 
 		PendingRegistrationData data;
@@ -751,8 +762,15 @@ public class AuthServiceImpl implements AuthService {
 			throw new RuntimeException("Internal error saving OTP");
 		}
 
-		verificationService.sendChangeEmailOtp(account.getId(), normalizedCurrentEmail, newEmail, otp);
-		log.info("Requested change email for accountId={}, OTP sent to {}", account.getId(), maskEmail(normalizedCurrentEmail));
+		try {
+			verificationService.sendChangeEmailOtp(account.getId(), normalizedCurrentEmail, newEmail, otp);
+			log.info("Requested change email for accountId={}, OTP sent to {}", account.getId(), maskEmail(normalizedCurrentEmail));
+		} catch (OtpDeliveryPendingException exception) {
+			throw exception;
+		} catch (RuntimeException exception) {
+			redisTemplate.delete(key);
+			throw exception;
+		}
 	}
 
 	@Override

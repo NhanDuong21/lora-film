@@ -22,6 +22,8 @@ import com.project.authservice.exception.AccountAlreadyVerifiedException;
 import com.project.authservice.exception.AccountNotFoundException;
 import com.project.authservice.exception.InvalidOtpException;
 import com.project.authservice.exception.OtpRateLimitException;
+import com.project.authservice.exception.OtpDeliveryPendingException;
+import com.project.authservice.exception.RegistrationExpiredException;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.service.VerificationService;
 
@@ -90,6 +92,11 @@ public class OtpVerificationServiceImpl implements VerificationService {
         }
         Long accountId = account.getId();
 
+        String pendingKey = "pending_registration:" + email;
+        if (!Boolean.TRUE.equals(redisTemplate.hasKey(pendingKey))) {
+            throw new RegistrationExpiredException();
+        }
+
         String key = getRedisKey(email);
 
         RedisOtpData existingData = getRedisOtpData(key);
@@ -118,7 +125,6 @@ public class OtpVerificationServiceImpl implements VerificationService {
         log.info("OTP generated for email={}", maskEmail(email));
         if (account.getAccountStatus() == com.project.authservice.enums.AccountStatus.INACTIVE) {
             String name = "Khách hàng";
-            String pendingKey = "pending_registration:" + email;
             String pendingJson = redisTemplate.opsForValue().get(pendingKey);
             if (pendingJson != null) {
                 try {
@@ -133,11 +139,21 @@ public class OtpVerificationServiceImpl implements VerificationService {
                 }
             }
 
-            notificationClient.sendRegistrationOtp(accountId, email, name, otp);
-            log.info("OTP registration email accepted for email={}", maskEmail(email));
+            try {
+                notificationClient.sendRegistrationOtp(accountId, email, name, otp);
+                log.info("OTP registration email delivered to SMTP provider for email={}", maskEmail(email));
+            } catch (OtpDeliveryPendingException exception) {
+                log.warn("OTP delivery status is still pending for email={}", maskEmail(email));
+                throw exception;
+            } catch (RuntimeException exception) {
+                redisTemplate.delete(key);
+                log.warn("OTP delivery failed; removed OTP and resend cooldown for email={} causeType={}",
+                        maskEmail(email), exception.getClass().getSimpleName());
+                throw exception;
+            }
         }
 
-        return new com.project.authservice.dto.response.SendOtpResponse(accountId, 300L);
+        return new com.project.authservice.dto.response.SendOtpResponse(accountId, 300L, 60L);
     }
 
     @Override
@@ -197,13 +213,13 @@ public class OtpVerificationServiceImpl implements VerificationService {
     @Override
     public void sendForgotPasswordEmail(Long accountId, String email, String otp) {
         notificationClient.sendForgotPasswordOtp(accountId, email, otp);
-        log.info("Forgot password OTP email accepted for email={}", maskEmail(email));
+        log.info("Forgot password OTP email delivered to SMTP provider for email={}", maskEmail(email));
     }
 
     @Override
     public void sendChangeEmailOtp(Long accountId, String currentEmail, String newEmail, String otp) {
         notificationClient.sendChangeEmailOtp(accountId, currentEmail, newEmail, otp);
-        log.info("Change email OTP accepted for email={}", maskEmail(currentEmail));
+        log.info("Change email OTP delivered to SMTP provider for email={}", maskEmail(currentEmail));
     }
 
     private String normalizeEmail(String email) {

@@ -19,6 +19,18 @@ const failureMessages = {
         title: 'Máy chủ SMTP từ chối nội dung thư',
         description: 'Nhà cung cấp từ chối thư vĩnh viễn. Kiểm tra chính sách người gửi, nội dung và phản hồi SMTP trong log dịch vụ.',
     },
+    SMTP_POLICY_REJECTED: {
+        title: 'Gmail chặn thư theo chính sách gửi mail',
+        description: 'Gmail đã nhận kết nối nhưng từ chối thư sau khi kiểm tra nội dung hoặc uy tín người gửi. Kiểm tra cảnh báo tài khoản gửi, chính sách chống spam và phản hồi SMTP đã lưu trong log.',
+    },
+    SMTP_QUOTA_EXCEEDED: {
+        title: 'Tài khoản gửi đã vượt hạn mức email',
+        description: 'Nhà cung cấp không nhận thêm thư do tài khoản gửi đã chạm hạn mức. Chờ hạn mức được khôi phục hoặc chuyển sang nhà cung cấp email giao dịch.',
+    },
+    SMTP_SENDER_AUTHENTICATION_REQUIRED: {
+        title: 'Người gửi chưa đáp ứng xác thực email',
+        description: 'Nhà cung cấp yêu cầu xác thực miền hoặc danh tính người gửi. Kiểm tra địa chỉ From, SPF, DKIM và DMARC trước khi gửi lại.',
+    },
     SMTP_SEND_FAILED: {
         title: 'Không thể gửi email qua SMTP',
         description: 'Nhà cung cấp không nhận thư trong lần gửi này nhưng hệ thống cũ chưa lưu được nguyên nhân cụ thể. Kiểm tra log SMTP; hệ thống sẽ tự thử lại nếu yêu cầu còn hiệu lực.',

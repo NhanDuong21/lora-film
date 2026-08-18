@@ -28,8 +28,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class EmailNotificationSender implements NotificationChannelSender {
@@ -37,6 +40,10 @@ public class EmailNotificationSender implements NotificationChannelSender {
     private static final Logger log = LoggerFactory.getLogger(EmailNotificationSender.class);
     private static final String QR_API_BASE = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=";
     private static final Duration QR_FETCH_TIMEOUT = Duration.ofSeconds(3);
+    private static final Pattern ENHANCED_SMTP_STATUS = Pattern.compile("(?<!\\d)([245]\\.\\d{1,3}\\.\\d{1,3})(?!\\d)");
+    private static final Pattern EMAIL_IN_DIAGNOSTIC = Pattern.compile(
+            "(?i)[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\\.[a-z]{2,}");
+    private static final int MAX_DIAGNOSTIC_LENGTH = 300;
 
     private final JavaMailSender mailSender;
     private final String fromAddress;
@@ -88,9 +95,9 @@ public class EmailNotificationSender implements NotificationChannelSender {
                     "SMTP_AUTHENTICATION_FAILED", "Email provider authentication failed", null);
         } catch (MailSendException exception) {
             DeliveryResult failure = classifySendFailure(exception);
-            log.warn("SMTP delivery failed deliveryPublicId={} failureCode={} causeType={} smtpStatus={}",
+            log.warn("SMTP delivery failed deliveryPublicId={} failureCode={} causeType={} smtpStatus={} diagnostic={}",
                     notification.deliveryPublicId(), failure.failureCode(),
-                    diagnosticCauseType(exception), smtpStatus(exception));
+                    diagnosticCauseType(exception), smtpStatus(exception), smtpDiagnostic(exception));
             return failure;
         } catch (Exception exception) {
             return DeliveryResult.failure("smtp", FailureCategory.PROVIDER_REJECTED,
@@ -120,11 +127,40 @@ public class EmailNotificationSender implements NotificationChannelSender {
                     "SMTP_TEMPORARILY_UNAVAILABLE", "SMTP provider returned a temporary error", null);
         }
         if (isPermanentStatus(status)) {
-            return DeliveryResult.failure("smtp", FailureCategory.PROVIDER_REJECTED,
-                    "SMTP_MESSAGE_REJECTED", "SMTP provider permanently rejected the message", null);
+            return classifyPermanentFailure(exception);
         }
         return DeliveryResult.failure("smtp", FailureCategory.TRANSIENT,
                 "SMTP_SEND_FAILED", "SMTP provider could not accept the message", null);
+    }
+
+    private DeliveryResult classifyPermanentFailure(MailSendException exception) {
+        String diagnostic = smtpDiagnostic(exception);
+        String normalized = diagnostic.toLowerCase(Locale.ROOT);
+        String enhancedStatus = enhancedSmtpStatus(diagnostic);
+        if ("5.4.5".equals(enhancedStatus)
+                || normalized.contains("daily user sending limit")
+                || normalized.contains("quota exceeded")
+                || normalized.contains("sending quota")) {
+            return DeliveryResult.failure("smtp", FailureCategory.PROVIDER_REJECTED,
+                    "SMTP_QUOTA_EXCEEDED", "SMTP provider sending quota was exceeded: " + diagnostic, null);
+        }
+        if ("5.7.26".equals(enhancedStatus)
+                || normalized.contains("unauthenticated email")
+                || normalized.contains("does not pass authentication checks")) {
+            return DeliveryResult.failure("smtp", FailureCategory.AUTHENTICATION_ERROR,
+                    "SMTP_SENDER_AUTHENTICATION_REQUIRED",
+                    "SMTP provider requires sender authentication: " + diagnostic, null);
+        }
+        if (enhancedStatus.startsWith("5.7.")
+                || normalized.contains("spam")
+                || normalized.contains("policy")
+                || normalized.contains("unsolicited")
+                || normalized.contains("blocked")) {
+            return DeliveryResult.failure("smtp", FailureCategory.PROVIDER_REJECTED,
+                    "SMTP_POLICY_REJECTED", "SMTP provider policy rejected the message: " + diagnostic, null);
+        }
+        return DeliveryResult.failure("smtp", FailureCategory.PROVIDER_REJECTED,
+                "SMTP_MESSAGE_REJECTED", "SMTP provider permanently rejected the message: " + diagnostic, null);
     }
 
     private boolean hasConnectionCause(Throwable exception) {
@@ -157,6 +193,27 @@ public class EmailNotificationSender implements NotificationChannelSender {
             type = current.getClass().getSimpleName();
         }
         return type;
+    }
+
+    private String smtpDiagnostic(Throwable exception) {
+        SMTPAddressFailedException addressFailure = findCause(exception, SMTPAddressFailedException.class);
+        SMTPSendFailedException sendFailure = findCause(exception, SMTPSendFailedException.class);
+        Throwable source = addressFailure != null ? addressFailure
+                : sendFailure != null ? sendFailure : firstNestedFailure(exception);
+        String raw = source == null ? null : source.getMessage();
+        if (raw == null || raw.isBlank()) return "no provider response";
+        String sanitized = EMAIL_IN_DIAGNOSTIC.matcher(raw).replaceAll("[email]")
+                .replaceAll("[\\r\\n\\t]+", " ")
+                .replaceAll("\\s{2,}", " ")
+                .trim();
+        return sanitized.length() <= MAX_DIAGNOSTIC_LENGTH
+                ? sanitized
+                : sanitized.substring(0, MAX_DIAGNOSTIC_LENGTH) + "…";
+    }
+
+    private String enhancedSmtpStatus(String diagnostic) {
+        Matcher matcher = ENHANCED_SMTP_STATUS.matcher(diagnostic);
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     private boolean hasCauseNamed(Throwable exception, String simpleName) {

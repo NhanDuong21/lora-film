@@ -67,12 +67,14 @@ export default function Login() {
       if (errorCode === 'AUTH_ACCOUNT_NOT_VERIFIED') {
         sessionStorage.setItem('pending_otp_email', email.trim());
         sessionStorage.setItem('pending_otp_purpose', 'REGISTRATION');
+        sessionStorage.setItem('pending_otp_resend_immediately', 'true');
         setErrorMsg('Tài khoản chưa xác minh email. Bạn có thể nhập mã hoặc yêu cầu gửi lại mã mới.');
         window.setTimeout(() => {
           navigate('/verify-otp', {
             state: {
               email: email.trim(),
               purpose: 'REGISTRATION',
+              resendImmediately: true,
               from: location.state?.from,
             },
           });

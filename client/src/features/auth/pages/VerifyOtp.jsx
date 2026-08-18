@@ -22,8 +22,12 @@ export default function VerifyOtp() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [countdown, setCountdown] = useState(60);
+  const resendImmediately = location.state?.resendImmediately === true
+    || sessionStorage.getItem('pending_otp_resend_immediately') === 'true';
+  const [countdown, setCountdown] = useState(resendImmediately ? 0 : 60);
   const [isResending, setIsResending] = useState(false);
+  const [deliveryConfirmed, setDeliveryConfirmed] = useState(!resendImmediately);
+  const [registrationExpired, setRegistrationExpired] = useState(false);
   const activeEmail = email || inputEmail;
   const otpDigits = useMemo(() => Array.from({ length: 6 }, (_, index) => otpCode[index] || ''), [otpCode]);
 
@@ -36,6 +40,7 @@ export default function VerifyOtp() {
   const handleResend = async () => {
     setError('');
     setSuccess('');
+    setRegistrationExpired(false);
     if (!activeEmail.trim()) {
       setError('Vui lòng nhập địa chỉ email để nhận mã.');
       return;
@@ -51,6 +56,8 @@ export default function VerifyOtp() {
       setSuccess('Mã mới đã được gửi. Vui lòng kiểm tra cả thư mục spam.');
       setOtpCode('');
       setCountdown(response.data?.resendAvailableIn || 60);
+      setDeliveryConfirmed(true);
+      sessionStorage.setItem('pending_otp_resend_immediately', 'false');
       window.setTimeout(() => otpInputRef.current?.focus(), 0);
     } catch (requestError) {
       const errorCode = requestError?.errorCode || requestError?.code || requestError?.error;
@@ -64,6 +71,27 @@ export default function VerifyOtp() {
         setError(`Bạn vừa yêu cầu mã. Vui lòng thử lại sau ${retryAfter} giây.`);
         return;
       }
+      if (errorCode === 'AUTH_REGISTRATION_EXPIRED') {
+        setCountdown(0);
+        setDeliveryConfirmed(false);
+        setRegistrationExpired(true);
+        sessionStorage.setItem('pending_otp_resend_immediately', 'true');
+        setError('Phiên đăng ký đã hết hạn nên tài khoản chưa thể kích hoạt. Vui lòng đăng ký lại để tạo một phiên xác minh mới.');
+        return;
+      }
+      if (errorCode === 'AUTH_OTP_DELIVERY_FAILED') {
+        setCountdown(0);
+        setDeliveryConfirmed(false);
+        sessionStorage.setItem('pending_otp_resend_immediately', 'true');
+        setError('Máy chủ email đã từ chối thư nên mã chưa được gửi. Bạn có thể bấm “Gửi lại mã” ngay sau khi cấu hình email được xử lý.');
+        return;
+      }
+      if (errorCode === 'AUTH_OTP_DELIVERY_PENDING') {
+        setCountdown(60);
+        setError('Yêu cầu gửi mã vẫn đang được xử lý. Vui lòng kiểm tra hộp thư và thư mục spam trước khi yêu cầu mã khác.');
+        return;
+      }
+      setCountdown(0);
       setError(getCustomerErrorMessage(requestError, 'Không thể gửi lại mã lúc này. Vui lòng thử lại sau.'));
     } finally {
       setIsResending(false);
@@ -93,6 +121,7 @@ export default function VerifyOtp() {
       }
       sessionStorage.removeItem('pending_otp_email');
       sessionStorage.removeItem('pending_otp_purpose');
+      sessionStorage.removeItem('pending_otp_resend_immediately');
       setSuccess('Email đã được xác minh. Đang chuyển sang đăng nhập…');
       window.setTimeout(() => {
         navigate('/login', {
@@ -125,7 +154,9 @@ export default function VerifyOtp() {
         <h1 className="text-2xl font-black uppercase tracking-[0.07em] text-white sm:text-3xl">Xác minh email</h1>
         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-500">
           {activeEmail
-            ? <>Nhập mã gồm 6 chữ số đã gửi tới <strong className="font-bold text-zinc-300">{maskEmail(activeEmail)}</strong>.</>
+            ? deliveryConfirmed
+              ? <>Nhập mã gồm 6 chữ số đã gửi tới <strong className="font-bold text-zinc-300">{maskEmail(activeEmail)}</strong>.</>
+              : <>Tài khoản <strong className="font-bold text-zinc-300">{maskEmail(activeEmail)}</strong> chưa được xác minh. Hãy yêu cầu một mã mới.</>
             : 'Nhập email và mã gồm 6 chữ số để kích hoạt tài khoản.'}
         </p>
       </header>
@@ -141,6 +172,15 @@ export default function VerifyOtp() {
           <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
           <span>{success}</span>
         </div>
+      )}
+      {registrationExpired && (
+        <button
+          type="button"
+          onClick={() => navigate('/register', { replace: true })}
+          className="mb-5 flex min-h-11 w-full items-center justify-center rounded-xl border border-brand-orange/40 px-4 py-3 text-xs font-black uppercase tracking-wider text-brand-orange transition hover:bg-brand-orange/10"
+        >
+          Quay lại đăng ký
+        </button>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>

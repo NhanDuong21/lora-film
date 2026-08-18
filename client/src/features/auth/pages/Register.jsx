@@ -293,6 +293,7 @@ export default function Register() {
 
       sessionStorage.setItem('pending_otp_email', formData.email.trim());
       sessionStorage.setItem('pending_otp_purpose', 'REGISTRATION');
+      sessionStorage.setItem('pending_otp_resend_immediately', 'false');
       rememberAuthReturn(location.state?.from);
       setGlobalSuccess('Thông tin đã được ghi nhận. Đang chuyển sang bước xác minh email…');
       window.setTimeout(() => {
@@ -330,6 +331,16 @@ export default function Register() {
         navigate('/verify-otp', {
           state: { email: formData.email.trim(), purpose: 'REGISTRATION', from: location.state?.from },
         });
+        return;
+      }
+
+      if (errorCode === 'AUTH_OTP_DELIVERY_FAILED') {
+        setGlobalError('Không thể gửi mã xác minh vì máy chủ email đã từ chối thư. Thông tin đăng ký chưa hoàn tất; bạn có thể thử lại ngay sau khi cấu hình email được xử lý.');
+        return;
+      }
+
+      if (errorCode === 'AUTH_OTP_DELIVERY_PENDING') {
+        setGlobalError('Yêu cầu gửi mã vẫn đang được xử lý. Vui lòng kiểm tra hộp thư và thư mục spam trước khi thử lại.');
         return;
       }
 

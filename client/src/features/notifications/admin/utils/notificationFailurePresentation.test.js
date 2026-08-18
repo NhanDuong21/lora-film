@@ -17,4 +17,12 @@ describe('getNotificationFailurePresentation', () => {
             description: expect.stringContaining('tra log notification-service'),
         });
     });
+
+    it('explains Gmail policy rejection in Vietnamese', () => {
+        expect(getNotificationFailurePresentation('SMTP_POLICY_REJECTED')).toEqual({
+            code: 'SMTP_POLICY_REJECTED',
+            title: 'Gmail chặn thư theo chính sách gửi mail',
+            description: expect.stringContaining('chính sách chống spam'),
+        });
+    });
 });
