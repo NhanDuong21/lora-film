@@ -52,10 +52,10 @@ describe('NotificationOperationsPage', () => {
         });
         render(<MemoryRouter><NotificationOperationsPage mode="attention" /></MemoryRouter>);
 
-        expect(await screen.findByText('REGISTER_OTP chưa có template đang hoạt động'))
+        expect(await screen.findByText('Không thể gửi OTP đăng ký tài khoản'))
             .toBeInTheDocument();
         expect(screen.getByText('Cấu hình 1')).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Tạo template' }))
+        expect(screen.getByRole('link', { name: 'Tạo mẫu còn thiếu' }))
             .toHaveAttribute('href', '/admin/notification-templates?contract=REGISTER_OTP');
     });
 
@@ -84,11 +84,11 @@ describe('NotificationOperationsPage', () => {
         });
         render(<MemoryRouter><NotificationOperationsPage mode="history" /></MemoryRouter>);
 
-        fireEvent.click(await screen.findByText('AUTH_REGISTRATION_OTP'));
+        fireEvent.click(await screen.findByText('OTP đăng ký tài khoản'));
 
         expect((await screen.findAllByText('Không thể gửi email qua SMTP')).length).toBeGreaterThan(0);
-        expect(screen.getByText(/EMAIL · lần thử 3: Không thể gửi email qua SMTP/)).toBeInTheDocument();
-        expect(screen.getByText('Mã kỹ thuật: SMTP_SEND_FAILED')).toBeInTheDocument();
+        expect(screen.getByText(/Email · lần thử 3: Không thể gửi email qua SMTP/)).toBeInTheDocument();
+        expect(screen.getAllByText('Mã kỹ thuật: SMTP_SEND_FAILED').length).toBeGreaterThan(0);
         expect(screen.queryByText('Email provider is temporarily unavailable')).not.toBeInTheDocument();
     });
 });

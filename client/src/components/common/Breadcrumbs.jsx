@@ -2,6 +2,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAccountingRoleLabel } from '@/features/internal-staff/admin/permissionAccess';
+import { notificationBusinessName } from '@/features/notifications/admin/utils/notificationBusinessPresentation';
 
 const routeNameMap = {
   'admin': 'Quản trị viên',
@@ -89,7 +90,7 @@ export default function Breadcrumbs() {
       { label: 'Thông báo', to: '/admin/notifications' },
       { label: pageLabels[pathnames[1]], to: pathnames[1] === 'notification-templates' ? '/admin/notification-templates' : location.pathname },
       ...(pathnames[1] === 'notification-templates' && pathnames[2]
-        ? [{ label: decodeURIComponent(pathnames[2]), to: location.pathname }]
+        ? [{ label: notificationBusinessName(null, decodeURIComponent(pathnames[2])), to: location.pathname }]
         : []),
     ];
 

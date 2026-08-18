@@ -44,6 +44,7 @@ import {
   hasPermissionAccess,
 } from '@/features/internal-staff/admin/permissionAccess';
 import RoleAvatar from '@/components/common/RoleAvatar';
+import { notificationAdminService } from '@/features/notifications/admin/services/notificationAdminService';
 
 const sidebarStateStorageKey = 'lorafilm.admin.sidebar.sections.v1';
 
@@ -74,6 +75,18 @@ export default function AdminSidebar({
   const can = (...requiredPermissions) =>
     hasPermissionAccess(normalizedRole, permissions, ...requiredPermissions);
   const isFullAdmin = normalizedRole === 'ADMIN' || permissions.includes('PERM_ROOT_ACCESS');
+  const [notificationAttentionCount, setNotificationAttentionCount] = useState(0);
+
+  useEffect(() => {
+    if (!isFullAdmin) return undefined;
+    let active = true;
+    notificationAdminService.dashboard({ hours: 24, includeTest: false })
+      .then(result => {
+        if (active) setNotificationAttentionCount(Number(result?.activeIncidents || 0));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [isFullAdmin]);
   const canViewPayments = can('PERM_VIEW_FINANCE', 'PAYMENT_VIEW', 'PAYMENT_RECONCILE');
   const canReconcilePayments = can('PAYMENT_RECONCILE');
   const canViewAnalytics = can('PERM_VIEW_FINANCE', 'ANALYTICS_VIEW');
@@ -277,7 +290,7 @@ export default function AdminSidebar({
       visible: isFullAdmin,
       items: [
         { key: 'notification-dashboard', label: 'Tổng quan', path: '/admin/notifications', icon: BellRing },
-        { key: 'notification-attention', label: 'Cần xử lý', path: '/admin/notification-attention', icon: Inbox },
+        { key: 'notification-attention', label: 'Cần xử lý', path: '/admin/notification-attention', icon: Inbox, badge: notificationAttentionCount },
         { key: 'notification-operations', label: 'Lịch sử gửi', path: '/admin/notification-operations', icon: History },
         { key: 'notification-templates', label: 'Mẫu thông báo', path: '/admin/notification-templates', icon: Mail },
         { key: 'notification-coverage', label: 'Cấu hình & độ phủ', path: '/admin/notification-coverage', icon: ClipboardCheck },
@@ -380,6 +393,7 @@ export default function AdminSidebar({
                         <button key={item.key} onClick={() => handleTabClick(item.key, item.path)} className={getLinkClass(item.key, true)}>
                           <Icon className="w-4 h-4 shrink-0" />
                           <span>{item.label}</span>
+                          {Number(item.badge) > 0 && <span className="ml-auto min-w-5 rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[10px] font-black text-white">{item.badge}</span>}
                         </button>
                       );
                     })}

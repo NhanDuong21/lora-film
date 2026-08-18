@@ -10,6 +10,7 @@ import com.project.notificationservice.domain.NotificationTypes.Priority;
 import com.project.notificationservice.domain.NotificationTypes.RequestStatus;
 import com.project.notificationservice.entity.NotificationDelivery;
 import com.project.notificationservice.entity.NotificationDeliveryAttempt;
+import com.project.notificationservice.entity.NotificationDeadLetter;
 import com.project.notificationservice.entity.InAppNotification;
 import com.project.notificationservice.entity.NotificationPreference;
 import com.project.notificationservice.entity.NotificationRecipient;
@@ -17,6 +18,7 @@ import com.project.notificationservice.entity.NotificationRequest;
 import com.project.notificationservice.exception.NotificationException;
 import com.project.notificationservice.repository.NotificationDeliveryRepository;
 import com.project.notificationservice.repository.NotificationDeliveryAttemptRepository;
+import com.project.notificationservice.repository.NotificationDeadLetterRepository;
 import com.project.notificationservice.repository.InAppNotificationRepository;
 import com.project.notificationservice.repository.NotificationPreferenceRepository;
 import com.project.notificationservice.repository.NotificationRecipientRepository;
@@ -42,6 +44,7 @@ public class NotificationApplicationService {
     private final NotificationRecipientRepository recipientRepository;
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationDeliveryAttemptRepository attemptRepository;
+    private final NotificationDeadLetterRepository deadLetterRepository;
     private final NotificationPreferenceRepository preferenceRepository;
     private final InAppNotificationRepository inAppNotificationRepository;
     private final RecipientCryptoService cryptoService;
@@ -53,6 +56,7 @@ public class NotificationApplicationService {
             NotificationRecipientRepository recipientRepository,
             NotificationDeliveryRepository deliveryRepository,
             NotificationDeliveryAttemptRepository attemptRepository,
+            NotificationDeadLetterRepository deadLetterRepository,
             NotificationPreferenceRepository preferenceRepository,
             InAppNotificationRepository inAppNotificationRepository,
             RecipientCryptoService cryptoService,
@@ -62,6 +66,7 @@ public class NotificationApplicationService {
         this.recipientRepository = recipientRepository;
         this.deliveryRepository = deliveryRepository;
         this.attemptRepository = attemptRepository;
+        this.deadLetterRepository = deadLetterRepository;
         this.preferenceRepository = preferenceRepository;
         this.inAppNotificationRepository = inAppNotificationRepository;
         this.cryptoService = cryptoService;
@@ -234,14 +239,16 @@ public class NotificationApplicationService {
                 .orElseThrow(() -> notFound("Notification request was not found"));
         List<DeliveryDetails> deliveries = deliveryRepository
                 .findByNotificationRequestIdOrderByCreatedAtAsc(request.getId()).stream()
-                .map(this::toDetails)
+                .map(delivery -> toDetails(delivery, request))
                 .toList();
+        RecipientSummary recipient = recipientSummary(request.getId());
         return new RequestDetails(request.getPublicId(), request.getIdempotencyKey(),
                 request.getSourceService(), request.getSourceEventId(), request.getEventType(),
                 request.getCorrelationId(), request.getTemplateKey(), request.getTemplateCommitSha(),
                 request.getTemplateVersion(), request.getLocale(), request.getCategory().name(),
                 request.getPriority().name(), request.getStatus().name(), request.isTest(),
-                request.getCreatedAt(), request.getUpdatedAt(), deliveries);
+                recipient, request.getExpiresAt(), request.getCreatedAt(), request.getUpdatedAt(),
+                deliveries);
     }
 
     @Transactional
@@ -264,18 +271,11 @@ public class NotificationApplicationService {
     public DeliveryDetails retryDelivery(String deliveryPublicId) {
         NotificationDelivery delivery = deliveryRepository.findByPublicId(deliveryPublicId)
                 .orElseThrow(() -> notFound("Notification delivery was not found"));
-        if (delivery.getStatus() != DeliveryStatus.FAILED
-                && delivery.getStatus() != DeliveryStatus.DEAD_LETTERED) {
-            throw new NotificationException("DELIVERY_NOT_RETRYABLE",
-                    "Only failed or dead-lettered deliveries can be reprocessed", HttpStatus.CONFLICT);
-        }
-        if (delivery.getFailureCategory() != null
-                && delivery.getFailureCategory() != FailureCategory.TRANSIENT
-                && delivery.getFailureCategory() != FailureCategory.RATE_LIMITED
-                && delivery.getFailureCategory() != FailureCategory.AUTHENTICATION_ERROR) {
-            throw new NotificationException("DELIVERY_FAILURE_NOT_RETRYABLE",
-                    "This failure requires correcting the recipient, payload, template, or provider response before creating a new request",
-                    HttpStatus.CONFLICT);
+        NotificationRequest request = requestRepository.findById(delivery.getNotificationRequestId())
+                .orElseThrow(() -> notFound("Notification request was not found"));
+        RetryDecision decision = retryDecision(delivery, request);
+        if (!decision.allowed()) {
+            throw new NotificationException(decision.code(), decision.reason(), HttpStatus.CONFLICT);
         }
         delivery.setStatus(DeliveryStatus.PENDING);
         delivery.setAttemptCount(0);
@@ -283,7 +283,41 @@ public class NotificationApplicationService {
         delivery.setFailureCategory(null);
         delivery.setFailureCode(null);
         delivery.setFailureMessage(null);
-        return toDetails(delivery);
+        deadLetterRepository.findByNotificationDeliveryId(delivery.getId()).ifPresent(deadLetter -> {
+            deadLetter.setReprocessCount(deadLetter.getReprocessCount() + 1);
+            deadLetter.setReprocessedAt(Instant.now());
+            deadLetterRepository.save(deadLetter);
+        });
+        return toDetails(delivery, request);
+    }
+
+    @Transactional(readOnly = true)
+    public AttentionDetails attentionDetails(NotificationDeadLetter deadLetter) {
+        NotificationDelivery delivery = deliveryRepository.findById(deadLetter.getNotificationDeliveryId())
+                .orElse(null);
+        NotificationRequest request = delivery == null ? null
+                : requestRepository.findById(delivery.getNotificationRequestId()).orElse(null);
+        RecipientSummary recipient = request == null ? null : recipientSummary(request.getId());
+        RetryDecision decision = delivery == null || request == null
+                ? new RetryDecision(false, "DELIVERY_NOT_FOUND",
+                "Không còn tìm thấy lượt gửi gốc để xử lý lại.")
+                : retryDecision(delivery, request);
+        return new AttentionDetails(
+                deadLetter.getId(), deadLetter.getNotificationDeliveryId(),
+                delivery == null ? null : delivery.getPublicId(),
+                request == null ? null : request.getPublicId(),
+                request == null ? null : request.getEventType(),
+                request == null ? null : request.getTemplateKey(),
+                request == null ? null : request.getSourceService(),
+                request == null ? null : request.getExpiresAt(),
+                delivery == null || delivery.getChannel() == null ? null : delivery.getChannel().name(),
+                delivery == null || delivery.getStatus() == null ? null : delivery.getStatus().name(),
+                recipient, deadLetter.getReason(),
+                delivery == null || delivery.getFailureCategory() == null
+                        ? null : delivery.getFailureCategory().name(),
+                delivery == null ? 0 : delivery.getAttemptCount(),
+                deadLetter.getReprocessCount(), deadLetter.getCreatedAt(),
+                decision.allowed(), decision.allowed() ? null : decision.reason());
     }
 
     private boolean isMarketingSuppressed(CreateNotificationCommand command, Channel channel) {
@@ -326,18 +360,72 @@ public class NotificationApplicationService {
         };
     }
 
-    private DeliveryDetails toDetails(NotificationDelivery delivery) {
+    private DeliveryDetails toDetails(NotificationDelivery delivery, NotificationRequest request) {
         List<AttemptDetails> attempts = delivery.getId() == null ? List.of() : attemptRepository
                 .findByNotificationDeliveryIdOrderByAttemptNumberAsc(delivery.getId()).stream()
                 .map(this::toAttemptDetails)
                 .toList();
+        RetryDecision decision = retryDecision(delivery, request);
         return new DeliveryDetails(delivery.getPublicId(), delivery.getChannel().name(),
                 delivery.getProvider(), delivery.getStatus().name(), delivery.getProviderMessageId(),
                 delivery.getTemplateCommitSha(), delivery.getTemplateVersion(),
                 delivery.getTemplateCommitSha() != null,
                 delivery.getFailureCategory() == null ? null : delivery.getFailureCategory().name(),
                 delivery.getFailureCode(), delivery.getFailureMessage(), delivery.getAttemptCount(),
-                delivery.getNextRetryAt(), delivery.getSentAt(), delivery.getDeliveredAt(), attempts);
+                delivery.getNextRetryAt(), delivery.getSentAt(), delivery.getDeliveredAt(),
+                decision.allowed(), decision.allowed() ? null : decision.reason(), attempts);
+    }
+
+    private RetryDecision retryDecision(
+            NotificationDelivery delivery, NotificationRequest request) {
+        if (delivery.getStatus() != DeliveryStatus.FAILED
+                && delivery.getStatus() != DeliveryStatus.DEAD_LETTERED) {
+            return new RetryDecision(false, "DELIVERY_NOT_RETRYABLE",
+                    "Lượt gửi này không ở trạng thái có thể thử lại.");
+        }
+        if (request.getExpiresAt() != null && !request.getExpiresAt().isAfter(Instant.now())) {
+            String reason = isOtp(request)
+                    ? "Không thể gửi lại vì mã OTP đã hết hạn. Người dùng cần yêu cầu một mã mới."
+                    : "Không thể gửi lại vì thông báo này đã hết hiệu lực. Hãy tạo một yêu cầu mới sau khi kiểm tra nghiệp vụ.";
+            return new RetryDecision(false, "NOTIFICATION_EXPIRED_RETRY_FORBIDDEN", reason);
+        }
+        if (delivery.getFailureCategory() != null
+                && delivery.getFailureCategory() != FailureCategory.TRANSIENT
+                && delivery.getFailureCategory() != FailureCategory.RATE_LIMITED
+                && delivery.getFailureCategory() != FailureCategory.AUTHENTICATION_ERROR) {
+            return new RetryDecision(false, "DELIVERY_FAILURE_NOT_RETRYABLE",
+                    "Cần sửa người nhận, nội dung mẫu hoặc dữ liệu đầu vào trước khi tạo yêu cầu mới.");
+        }
+        return new RetryDecision(true, null, null);
+    }
+
+    private boolean isOtp(NotificationRequest request) {
+        return String.valueOf(request.getEventType()).toUpperCase().contains("OTP")
+                || String.valueOf(request.getTemplateKey()).toUpperCase().contains("OTP");
+    }
+
+    @Transactional(readOnly = true)
+    public RecipientSummary recipientSummary(Long requestId) {
+        return recipientRepository.findFirstByNotificationRequestId(requestId)
+                .map(recipient -> new RecipientSummary(
+                        recipient.getUserPublicId(),
+                        maskEmail(cryptoService.decrypt(recipient.getEmailEncrypted())),
+                        maskPhone(cryptoService.decrypt(recipient.getPhoneEncrypted())),
+                        recipient.getRecipientType()))
+                .orElse(null);
+    }
+
+    private String maskEmail(String value) {
+        if (value == null || value.isBlank()) return null;
+        int separator = value.indexOf('@');
+        if (separator <= 0) return "***";
+        return value.substring(0, 1) + "***" + value.substring(separator);
+    }
+
+    private String maskPhone(String value) {
+        if (value == null || value.isBlank()) return null;
+        int visible = Math.min(3, value.length());
+        return "***" + value.substring(value.length() - visible);
     }
 
     private AttemptDetails toAttemptDetails(NotificationDeliveryAttempt attempt) {
@@ -374,6 +462,8 @@ public class NotificationApplicationService {
             String priority,
             String status,
             boolean test,
+            RecipientSummary recipient,
+            Instant expiresAt,
             Instant createdAt,
             Instant updatedAt,
             List<DeliveryDetails> deliveries) {
@@ -395,7 +485,40 @@ public class NotificationApplicationService {
             Instant nextRetryAt,
             Instant sentAt,
             Instant deliveredAt,
+            boolean retryAllowed,
+            String retryBlockedReason,
             List<AttemptDetails> attempts) {
+    }
+
+    public record RecipientSummary(
+            String userPublicId,
+            String maskedEmail,
+            String maskedPhone,
+            String recipientType) {
+    }
+
+    public record AttentionDetails(
+            Long id,
+            Long notificationDeliveryId,
+            String deliveryPublicId,
+            String requestPublicId,
+            String eventType,
+            String templateKey,
+            String sourceService,
+            Instant expiresAt,
+            String channel,
+            String status,
+            RecipientSummary recipient,
+            String reason,
+            String failureCategory,
+            int attemptCount,
+            int reprocessCount,
+            Instant createdAt,
+            boolean retryAllowed,
+            String retryBlockedReason) {
+    }
+
+    private record RetryDecision(boolean allowed, String code, String reason) {
     }
 
     public record AttemptDetails(

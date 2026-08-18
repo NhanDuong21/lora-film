@@ -1,6 +1,7 @@
 package com.project.notificationservice.controller;
 
 import com.project.notificationservice.api.ApiResponse;
+import com.project.notificationservice.domain.NotificationTypes.Channel;
 import com.project.notificationservice.domain.NotificationTypes.DeliveryStatus;
 import com.project.notificationservice.domain.NotificationTypes.RequestStatus;
 import com.project.notificationservice.entity.NotificationDeadLetter;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -73,6 +75,24 @@ public class AdminNotificationOperationsController {
         long requests = includeTest
                 ? requestRepository.countByCreatedAtGreaterThanEqual(since)
                 : requestRepository.countByTestFalseAndCreatedAtGreaterThanEqual(since);
+        Map<Channel, long[]> channelCounters = new EnumMap<>(Channel.class);
+        deliveryRepository.countOperationalByChannelAndStatus(since, includeTest).forEach(row -> {
+            Channel channel = (Channel) row[0];
+            DeliveryStatus status = (DeliveryStatus) row[1];
+            long count = ((Number) row[2]).longValue();
+            long[] values = channelCounters.computeIfAbsent(channel, ignored -> new long[5]);
+            values[0] += count;
+            if (status == DeliveryStatus.SENT || status == DeliveryStatus.DELIVERED) values[1] += count;
+            if (status == DeliveryStatus.DELIVERED) values[2] += count;
+            if (status == DeliveryStatus.FAILED || status == DeliveryStatus.DEAD_LETTERED) values[3] += count;
+            if (status == DeliveryStatus.PENDING || status == DeliveryStatus.RETRY_SCHEDULED) values[4] += count;
+        });
+        Map<Channel, ChannelSummary> channels = new LinkedHashMap<>();
+        channelCounters.forEach((channel, values) -> channels.put(channel,
+                new ChannelSummary(values[0], values[1], values[2], values[3], values[4])));
+        TemplateContractCoverageService.CoverageReport coverage = coverageService.inspect();
+        long openDeadLetters = deadLetterRepository.countByReprocessedAtIsNull();
+        long activeIncidents = openDeadLetters + coverage.blockedRequirements();
         return ApiResponse.success(new Dashboard(
                 requests,
                 total,
@@ -82,10 +102,12 @@ public class AdminNotificationOperationsController {
                 failures,
                 counts.get(DeliveryStatus.PENDING) + counts.get(DeliveryStatus.RETRY_SCHEDULED),
                 counts.get(DeliveryStatus.DEAD_LETTERED),
+                activeIncidents,
                 Math.round(rate * 100.0) / 100.0,
                 Map.copyOf(counts),
+                Map.copyOf(channels),
                 templateRegistry.health(),
-                coverageService.inspect(),
+                coverage,
                 safeHours,
                 includeTest,
                 Instant.now()));
@@ -112,7 +134,8 @@ public class AdminNotificationOperationsController {
                     criteria.like(criteria.lower(root.get("eventType")), pattern),
                     criteria.like(criteria.lower(root.get("correlationId")), pattern),
                     criteria.like(criteria.lower(root.get("templateKey")), pattern),
-                    criteria.like(criteria.lower(root.get("sourceService")), pattern)));
+                    criteria.like(criteria.lower(root.get("sourceService")), pattern),
+                    criteria.like(criteria.lower(root.get("payloadJson")), pattern)));
         }
         if (sourceService != null && !sourceService.isBlank()) {
             specification = specification.and((root, ignored, criteria) -> criteria.equal(
@@ -149,7 +172,8 @@ public class AdminNotificationOperationsController {
                 request.getEventType(), request.getCorrelationId(), request.getTemplateKey(),
                 request.getTemplateCommitSha(), request.getTemplateVersion(), request.getLocale(),
                 request.getCategory().name(), request.getPriority().name(), request.getStatus().name(),
-                request.isTest(), request.getCreatedAt())));
+                request.isTest(), service.recipientSummary(request.getId()),
+                request.getExpiresAt(), request.getCreatedAt())));
     }
 
     @GetMapping("/{publicId}")
@@ -165,12 +189,12 @@ public class AdminNotificationOperationsController {
     }
 
     @GetMapping("/dead-letters")
-    public ApiResponse<Page<NotificationDeadLetter>> deadLetters(
+    public ApiResponse<Page<NotificationApplicationService.AttentionDetails>> deadLetters(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size) {
-        return ApiResponse.success(deadLetterRepository.findAll(PageRequest.of(
+        return ApiResponse.success(deadLetterRepository.findAllByReprocessedAtIsNull(PageRequest.of(
                 Math.max(page, 0), Math.min(Math.max(size, 1), 100),
-                Sort.by(Sort.Direction.DESC, "createdAt"))));
+                Sort.by(Sort.Direction.DESC, "createdAt"))).map(service::attentionDetails));
     }
 
     public record Dashboard(
@@ -182,13 +206,23 @@ public class AdminNotificationOperationsController {
             long failed,
             long pending,
             long deadLetters,
+            long activeIncidents,
             double deliveryRate,
             Map<DeliveryStatus, Long> deliveryStatuses,
+            Map<Channel, ChannelSummary> channels,
             TemplateRegistry.RegistryHealth templateRegistry,
             TemplateContractCoverageService.CoverageReport coverage,
             int windowHours,
             boolean includeTest,
             Instant generatedAt) {
+    }
+
+    public record ChannelSummary(
+            long total,
+            long accepted,
+            long confirmed,
+            long failed,
+            long pending) {
     }
 
     public record RequestSummary(
@@ -205,6 +239,8 @@ public class AdminNotificationOperationsController {
             String priority,
             String status,
             boolean test,
+            NotificationApplicationService.RecipientSummary recipient,
+            Instant expiresAt,
             Instant createdAt) {
     }
 }

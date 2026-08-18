@@ -32,7 +32,7 @@ describe('NotificationTemplateListPage', () => {
         expect(screen.queryByText('Có cảnh báo')).not.toBeInTheDocument();
         expect(screen.getByText('Đã phát hành')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Tạo từ yêu cầu tích hợp' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu còn thiếu' }));
         expect(screen.getByText('Không có yêu cầu tích hợp đang thiếu template.'))
             .toBeInTheDocument();
     });

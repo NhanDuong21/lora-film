@@ -7,7 +7,7 @@ export function PageHeading({ eyebrow, title, description, actions }) {
             <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-orange-400">{eyebrow}</p>
                 <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">{title}</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">{description}</p>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-300">{description}</p>
             </div>
             {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
@@ -115,9 +115,28 @@ export function StatusPill({ value }) {
     );
 }
 
+export function TechnicalDetails({ summary = 'Xem thông tin kỹ thuật', children, className = '' }) {
+    return (
+        <details className={`group rounded-2xl border border-zinc-800 bg-zinc-950/45 ${className}`}>
+            <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-zinc-400 transition hover:text-white">
+                <span className="inline-flex items-center gap-2 before:text-orange-400 before:content-['+'] group-open:before:content-['−']">{summary}</span>
+            </summary>
+            <div className="border-t border-zinc-800 px-4 py-4 text-xs text-zinc-400">{children}</div>
+        </details>
+    );
+}
+
 export const formatNumber = value => new Intl.NumberFormat('vi-VN').format(Number(value || 0));
 export const formatPercent = value => `${Number(value || 0).toFixed(1)}%`;
-export const formatDateTime = value => value
-    ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
-    : '—';
+export const formatDateTime = value => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    const parts = new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    }).formatToParts(date);
+    const part = type => parts.find(item => item.type === type)?.value || '';
+    return `${part('day')}/${part('month')}/${part('year')}, ${part('hour')}:${part('minute')}:${part('second')}`;
+};
 export const shortSha = value => value ? String(value).slice(0, 10) : '—';

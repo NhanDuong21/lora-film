@@ -143,9 +143,6 @@ public class NotificationDeliveryWorker {
                 rendered = renderer.render(template, payloadAdapter.adapt(payload, template));
                 delivery.setTemplateCommitSha(template.commitSha());
                 delivery.setTemplateVersion(template.version());
-                delivery.setRenderedSubject(rendered.subject());
-                delivery.setRenderedHtml(rendered.htmlContent());
-                delivery.setRenderedText(rendered.textContent());
                 if (request.getTemplateCommitSha() == null) {
                     request.setTemplateCommitSha(template.commitSha());
                     request.setTemplateVersion(template.version());
@@ -156,6 +153,10 @@ public class NotificationDeliveryWorker {
                         delivery.getRenderedHtml(),
                         delivery.getRenderedText());
             }
+            if (request.isTest()) rendered = markAsTest(rendered);
+            delivery.setRenderedSubject(rendered.subject());
+            delivery.setRenderedHtml(rendered.htmlContent());
+            delivery.setRenderedText(rendered.textContent());
             Map<String, Object> providerPayload = new HashMap<>(payload);
             providerPayload.put("_deliveryDatabaseId", delivery.getId());
             NotificationChannelSender sender = senderResolver.resolve(delivery.getChannel());
@@ -189,6 +190,22 @@ public class NotificationDeliveryWorker {
             handleFailure(request, delivery, result, durationMs);
         }
         updateRequestStatus(request);
+    }
+
+    private RenderedTemplate markAsTest(RenderedTemplate rendered) {
+        String subject = rendered.subject() == null ? "" : rendered.subject();
+        if (!subject.startsWith("[THỬ NGHIỆM]")) subject = "[THỬ NGHIỆM] " + subject;
+        String banner = "<div style=\"padding:12px;text-align:center;background:#7c3aed;color:#fff;"
+                + "font:700 13px Arial,sans-serif;letter-spacing:.08em\">THỬ NGHIỆM — KHÔNG PHẢI THÔNG BÁO THẬT</div>";
+        String html = rendered.htmlContent() == null ? "" : rendered.htmlContent();
+        if (!html.contains("KHÔNG PHẢI THÔNG BÁO THẬT")) {
+            int body = html.toLowerCase(java.util.Locale.ROOT).indexOf("<body");
+            int bodyEnd = body < 0 ? -1 : html.indexOf('>', body);
+            html = bodyEnd < 0 ? banner + html : html.substring(0, bodyEnd + 1) + banner + html.substring(bodyEnd + 1);
+        }
+        String text = rendered.textContent() == null ? "" : rendered.textContent();
+        if (!text.startsWith("[THỬ NGHIỆM]")) text = "[THỬ NGHIỆM — KHÔNG PHẢI THÔNG BÁO THẬT]\n\n" + text;
+        return new RenderedTemplate(subject, html, text);
     }
 
     private void handleSuccess(

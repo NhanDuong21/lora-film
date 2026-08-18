@@ -67,7 +67,7 @@ describe('NotificationDashboardPage', () => {
         expect(screen.getByText('83.3%')).toBeInTheDocument();
         expect(screen.getByText('1234567890')).toBeInTheDocument();
         expect(screen.getByText('Đang thử lại')).toBeInTheDocument();
-        expect(screen.getByText('REGISTER_OTP chưa có template đang hoạt động'))
+        expect(screen.getByText('OTP đăng ký tài khoản chưa sẵn sàng'))
             .toBeInTheDocument();
         expect(notificationAdminService.dashboard).toHaveBeenCalledWith({
             hours: 24,

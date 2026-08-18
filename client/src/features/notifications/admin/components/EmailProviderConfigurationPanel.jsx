@@ -95,7 +95,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
     const connected = configuration?.connectionStatus === 'CONNECTED';
 
     return (
-        <section className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/60">
+        <section id="email-provider" className="scroll-mt-24 overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/60">
             <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
                 <div className="border-b border-zinc-800 p-5 lg:border-b-0 lg:border-r">
                     <div className="flex items-center gap-3">
@@ -197,7 +197,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
                             className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {workingAction === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                            Kiểm tra kết nối
+                            Kiểm tra thử
                         </button>
                         <button
                             type="submit"
@@ -205,9 +205,10 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
                             className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {workingAction === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                            Kiểm tra và lưu
+                            Kiểm tra và áp dụng
                         </button>
                     </div>
+                    <p className="mt-3 text-right text-xs text-zinc-400">Nếu kiểm tra thất bại, tài khoản gửi hiện tại vẫn tiếp tục được sử dụng.</p>
                 </form>
             </div>
         </section>

@@ -2,15 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Archive, ArrowRight, FilePlus2, GitCommit, Search, X } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { notificationAdminService } from '../services/notificationAdminService';
-import { EmptyState, ErrorState, LoadingState, PageHeading, StatusPill, shortSha } from '../components/NotificationAdminUi';
+import { EmptyState, ErrorState, LoadingState, PageHeading, StatusPill, TechnicalDetails, shortSha } from '../components/NotificationAdminUi';
+import { categoryBusinessName, channelBusinessName, localeBusinessName, notificationBusinessName, notificationVariantSummary, serviceBusinessName } from '../utils/notificationBusinessPresentation';
 
 const blankContent = {
     displayName: '', description: '', category: 'TRANSACTIONAL', channel: 'EMAIL', locale: 'vi-VN',
     variablesSchema: {}, sampleData: {}, subject: '', htmlContent: '', textContent: '',
-};
-
-const categoryLabels = {
-    TRANSACTIONAL: 'Giao dịch', SECURITY: 'Bảo mật', MARKETING: 'Ưu đãi', OPERATIONAL: 'Vận hành',
 };
 
 export default function NotificationTemplateListPage() {
@@ -144,14 +141,14 @@ export default function NotificationTemplateListPage() {
             <PageHeading
                 eyebrow="Nội dung thông báo"
                 title="Mẫu thông báo"
-                description="Mỗi mã template được gom thành một mục; kênh và ngôn ngữ là các biến thể bên trong."
-                actions={<button type="button" onClick={() => openCreate()} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-zinc-200 hover:border-zinc-500"><FilePlus2 className="h-4 w-4" /> Tạo từ yêu cầu tích hợp</button>}
+                description="Kiểm tra nội dung khách hàng đang nhận và quản lý từng phiên bản theo kênh, ngôn ngữ."
+                actions={<button type="button" onClick={() => openCreate()} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-zinc-200 hover:border-zinc-500"><FilePlus2 className="h-4 w-4" /> Tạo mẫu còn thiếu</button>}
             />
 
             {blocked.length > 0 && (
                 <section className="flex flex-col gap-4 rounded-2xl border border-red-400/25 bg-red-400/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" /><div><p className="text-sm font-black text-white">{blocked.length} yêu cầu bắt buộc chưa có template hoạt động</p><p className="mt-1 text-xs leading-5 text-zinc-400">{blocked.map(item => `${item.templateKey} · ${item.locale}`).join(', ')}</p></div></div>
-                    <Link to="/admin/notification-coverage" className="inline-flex shrink-0 items-center gap-2 text-xs font-black text-red-300">Xem độ phủ <ArrowRight className="h-4 w-4" /></Link>
+                    <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" /><div><p className="text-sm font-black text-white">{blocked.length} luồng quan trọng chưa có mẫu hoạt động</p><p className="mt-1 text-xs leading-5 text-zinc-400">{blocked.map(item => notificationBusinessName(item.eventTypes?.[0], item.templateKey)).join(', ')}</p></div></div>
+                    <Link to="/admin/notification-coverage" className="inline-flex shrink-0 items-center gap-2 text-xs font-black text-red-300">Xem phạm vi <ArrowRight className="h-4 w-4" /></Link>
                 </section>
             )}
 
@@ -174,16 +171,16 @@ export default function NotificationTemplateListPage() {
                         return (
                             <article key={group.templateKey} className="rounded-3xl border border-zinc-800 bg-zinc-900/55 p-5 transition hover:border-zinc-700">
                                 <div className="grid gap-5 lg:grid-cols-[0.85fr_1.35fr_0.65fr] lg:items-center">
-                                    <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-black text-white">{group.displayName}</h2><StatusPill value={group.readiness} /></div><p className="mt-1 font-mono text-[11px] text-orange-300">{group.templateKey}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-zinc-600">{categoryLabels[group.category] || group.category}</p></div>
+                                    <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-black text-white">{notificationBusinessName(group.contracts?.[0]?.eventTypes?.[0], group.templateKey)}</h2><StatusPill value={group.readiness} /></div><p className="mt-1 text-xs text-zinc-400">{notificationVariantSummary(group.variants)}</p><p className="mt-2 text-xs font-bold text-zinc-500">{categoryBusinessName(group.category)}</p><TechnicalDetails className="mt-3"><p className="font-mono text-orange-300">{group.templateKey}</p>{group.displayName && <p className="mt-2">Tên trong kho: {group.displayName}</p>}</TechnicalDetails></div>
                                     <div className="flex flex-wrap gap-2">
                                         {group.variants.map(variant => (
                                             <Link key={`${variant.channel}-${variant.locale}`} to={`/admin/notification-templates/${variant.templateKey}?channel=${variant.channel}&locale=${variant.locale}`} className="group rounded-2xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 hover:border-orange-400/40">
-                                                <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-zinc-200">{variant.channel.replaceAll('_', ' ')}</span><span className="font-mono text-[10px] text-zinc-400">{variant.locale}</span><StatusPill value={variant.status || 'PUBLISHED'} /></div>
-                                                <p className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] text-zinc-500"><GitCommit className="h-3 w-3" /> Revision {shortSha(variant.commitSha)}</p>
+                                                <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-zinc-200">{channelBusinessName(variant.channel)}</span><span className="text-xs text-zinc-400">{localeBusinessName(variant.locale)}</span><StatusPill value={variant.status || 'PUBLISHED'} /></div>
+                                                <p className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] text-zinc-500"><GitCommit className="h-3 w-3" /> Phiên bản {shortSha(variant.commitSha)}</p>
                                             </Link>
                                         ))}
                                     </div>
-                                    <div className="lg:text-right"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Được sử dụng bởi</p><p className="mt-2 text-xs font-bold text-zinc-300">{services.length ? services.join(', ') : 'Chưa liên kết yêu cầu tích hợp'}</p><p className="mt-1 text-[10px] text-zinc-500">{group.variants.length} biến thể đang hiển thị</p></div>
+                                    <div className="lg:text-right"><p className="text-xs font-bold text-zinc-500">Nhóm sử dụng</p><p className="mt-2 text-xs font-bold text-zinc-300">{services.length ? services.map(serviceBusinessName).join(', ') : 'Hiện chưa được luồng nào sử dụng'}</p><p className="mt-1 text-xs text-zinc-500">{group.variants.length} phiên bản theo kênh/ngôn ngữ</p></div>
                                 </div>
                             </article>
                         );
@@ -194,8 +191,8 @@ export default function NotificationTemplateListPage() {
             {createModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
                     <form onSubmit={createDraft} className="w-full max-w-xl rounded-3xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
-                        <div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-orange-400">Quản trị kỹ thuật</p><h2 className="mt-2 text-xl font-black text-white">Tạo mẫu từ yêu cầu tích hợp</h2></div><button type="button" aria-label="Đóng" onClick={() => setCreateModalOpen(false)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-white"><X className="h-4 w-4" /></button></div>
-                        <p className="mt-3 text-xs leading-5 text-zinc-400">Mã template, kênh và ngôn ngữ được lấy từ yêu cầu đã khai báo để tránh tạo nhầm biến thể.</p>
+                        <div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-orange-400">Nội dung thông báo</p><h2 className="mt-2 text-xl font-black text-white">Tạo mẫu còn thiếu</h2></div><button type="button" aria-label="Đóng" onClick={() => setCreateModalOpen(false)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-white"><X className="h-4 w-4" /></button></div>
+                        <p className="mt-3 text-xs leading-5 text-zinc-400">Chọn một luồng hệ thống chưa có mẫu; mã kỹ thuật, kênh và ngôn ngữ sẽ được điền tự động.</p>
 
                         {!advancedCreate && missingContracts.length === 0 ? (
                             <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">

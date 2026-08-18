@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Clock3, RefreshCw, RotateCcw, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Clock3, RefreshCw, RotateCcw, Search, ShieldAlert, Users } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { notificationAdminService } from '../services/notificationAdminService';
-import { EmptyState, ErrorState, LoadingState, PageHeading, StatusPill, formatDateTime, shortSha } from '../components/NotificationAdminUi';
+import { EmptyState, ErrorState, LoadingState, PageHeading, StatusPill, TechnicalDetails, formatDateTime, formatNumber, shortSha } from '../components/NotificationAdminUi';
 import { getNotificationFailurePresentation } from '../utils/notificationFailurePresentation';
+import { channelBusinessName, deliveryOutcome, notificationBusinessName, recipientDisplay, serviceBusinessName } from '../utils/notificationBusinessPresentation';
 
 export default function NotificationOperationsPage({ mode = 'history' }) {
+    const [searchParams] = useSearchParams();
     const [page, setPage] = useState(0);
     const [data, setData] = useState(null);
     const [selected, setSelected] = useState(null);
-    const [filters, setFilters] = useState({ query: '', sourceService: '', templateKey: '', status: '', test: 'false', timeRange: '168', from: '', to: '' });
+    const [filters, setFilters] = useState({
+        query: searchParams.get('query') || '', sourceService: '', templateKey: '',
+        status: searchParams.get('status') || '', test: 'false', timeRange: '168', from: '', to: '',
+    });
     const [deadLetters, setDeadLetters] = useState(null);
     const [coverage, setCoverage] = useState(null);
     const [activeRevision, setActiveRevision] = useState('');
@@ -64,10 +69,10 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
         }
     };
 
-    const retry = async deliveryPublicId => {
+    const retry = async (deliveryPublicId, requestPublicId = selected?.publicId) => {
         try {
             await notificationAdminService.retryDelivery(deliveryPublicId);
-            await open(selected.publicId);
+            if (requestPublicId) await open(requestPublicId);
             await load();
         } catch (requestError) {
             setError(requestError?.message || 'Không thể gửi lại thông báo.');
@@ -85,8 +90,8 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                 eyebrow={mode === 'attention' ? 'Trung tâm hành động' : 'Theo dõi lượt gửi'}
                 title={mode === 'attention' ? 'Cần xử lý' : 'Lịch sử gửi'}
                 description={mode === 'attention'
-                    ? 'Gom lỗi cấu hình và lượt gửi đã hết khả năng tự phục hồi vào cùng một nơi.'
-                    : 'Tra cứu yêu cầu theo mã, sự kiện nguồn hoặc mã đối chiếu; mọi lần gửi lại đều được lưu vết.'}
+                    ? 'Xem ai đang bị ảnh hưởng, hệ thống đã tự làm gì và hành động cần thực hiện tiếp theo.'
+                    : 'Tìm một lượt gửi theo người nhận, mã đặt vé, loại thông báo hoặc mã đối chiếu.'}
                 actions={<button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-white"><RefreshCw className="h-4 w-4" /> Làm mới</button>}
             />
 
@@ -94,17 +99,17 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                 <div className="flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
                     <label className="relative w-full sm:w-96">
                         <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-600" />
-                        <input aria-label="Tìm yêu cầu thông báo" value={filters.query} onChange={event => { setPage(0); setFilters(current => ({ ...current, query: event.target.value })); }} placeholder="Tìm toàn bộ theo request, event, correlation…" className="w-full rounded-xl border border-zinc-700 bg-zinc-950 py-2 pl-10 pr-3 text-sm text-white outline-none focus:border-orange-400" />
+                        <input aria-label="Tìm yêu cầu thông báo" value={filters.query} onChange={event => { setPage(0); setFilters(current => ({ ...current, query: event.target.value })); }} placeholder="Loại thông báo, mã đặt vé, mã yêu cầu hoặc đối chiếu…" className="w-full rounded-xl border border-zinc-700 bg-zinc-950 py-2 pl-10 pr-3 text-sm text-white outline-none focus:border-orange-400" />
                     </label>
                 </div>
             )}
 
             {mode === 'history' && (
                 <section className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:grid-cols-2 xl:grid-cols-5">
-                    <input aria-label="Lọc theo dịch vụ nguồn" value={filters.sourceService} onChange={event => { setPage(0); setFilters(current => ({ ...current, sourceService: event.target.value })); }} placeholder="Dịch vụ nguồn" className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-400" />
-                    <input aria-label="Lọc theo template" value={filters.templateKey} onChange={event => { setPage(0); setFilters(current => ({ ...current, templateKey: event.target.value.toUpperCase() })); }} placeholder="Template code" className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 font-mono text-sm text-white outline-none focus:border-orange-400" />
-                    <select aria-label="Lọc theo trạng thái" value={filters.status} onChange={event => { setPage(0); setFilters(current => ({ ...current, status: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="">Mọi trạng thái</option>{['ACCEPTED', 'PROCESSING', 'COMPLETED', 'PARTIALLY_FAILED', 'FAILED', 'CANCELLED'].map(value => <option key={value}>{value}</option>)}</select>
-                    <select aria-label="Lọc dữ liệu thật hoặc gửi thử" value={filters.test} onChange={event => { setPage(0); setFilters(current => ({ ...current, test: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="false">Chỉ vận hành thật</option><option value="true">Chỉ gửi thử</option><option value="">Vận hành thật và gửi thử</option></select>
+                    <input aria-label="Lọc theo dịch vụ nguồn" value={filters.sourceService} onChange={event => { setPage(0); setFilters(current => ({ ...current, sourceService: event.target.value })); }} placeholder="Nhóm nghiệp vụ" className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-400" />
+                    <input aria-label="Lọc theo template" value={filters.templateKey} onChange={event => { setPage(0); setFilters(current => ({ ...current, templateKey: event.target.value.toUpperCase() })); }} placeholder="Mã mẫu (nâng cao)" className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 font-mono text-sm text-white outline-none focus:border-orange-400" />
+                    <select aria-label="Lọc theo trạng thái" value={filters.status} onChange={event => { setPage(0); setFilters(current => ({ ...current, status: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="">Mọi trạng thái</option><option value="ACCEPTED">Đã tiếp nhận</option><option value="PROCESSING">Đang xử lý</option><option value="COMPLETED">Hoàn tất</option><option value="PARTIALLY_FAILED">Hoàn tất một phần</option><option value="FAILED">Thất bại</option><option value="CANCELLED">Đã hủy</option></select>
+                    <select aria-label="Lọc dữ liệu thật hoặc gửi thử" value={filters.test} onChange={event => { setPage(0); setFilters(current => ({ ...current, test: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="false">Ẩn dữ liệu gửi thử</option><option value="true">Chỉ dữ liệu gửi thử</option><option value="">Hiện tất cả dữ liệu</option></select>
                     <select aria-label="Khoảng thời gian" value={filters.timeRange} onChange={event => { setPage(0); setFilters(current => ({ ...current, timeRange: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="24">Hôm nay</option><option value="168">7 ngày</option><option value="720">30 ngày</option><option value="custom">Khoảng tùy chọn</option></select>
                     {filters.timeRange === 'custom' && <div className="grid gap-2 sm:col-span-2 xl:col-span-5 sm:grid-cols-2"><label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Từ thời điểm<input type="datetime-local" value={filters.from} onChange={event => setFilters(current => ({ ...current, from: event.target.value }))} className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Đến thời điểm<input type="datetime-local" value={filters.to} onChange={event => setFilters(current => ({ ...current, to: event.target.value }))} className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200" /></label></div>}
                 </section>
@@ -126,16 +131,17 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
             {!error && !loading && mode === 'history' && requests.length > 0 && (
                 <div className="grid gap-5 xl:grid-cols-[1fr_0.8fr]">
                     <section className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50">
-                        <div className="hidden grid-cols-[1.2fr_0.8fr_0.55fr] gap-3 border-b border-zinc-800 bg-zinc-950/40 px-5 py-3 text-[10px] font-black uppercase tracking-wider text-zinc-500 md:grid"><span>Sự kiện / yêu cầu</span><span>Mẫu / nguồn</span><span className="text-right">Trạng thái</span></div>
+                        <div className="hidden grid-cols-[1.2fr_0.8fr_0.55fr] gap-3 border-b border-zinc-800 bg-zinc-950/40 px-5 py-3 text-xs font-bold text-zinc-400 md:grid"><span>Thông báo / người nhận</span><span>Nhóm nghiệp vụ</span><span className="text-right">Kết quả</span></div>
                         {requests.map(item => (
                             <button type="button" key={item.publicId} onClick={() => open(item.publicId)} className={`grid w-full gap-3 border-b border-zinc-800/70 px-5 py-4 text-left hover:bg-zinc-800/40 last:border-0 md:grid-cols-[1.2fr_0.8fr_0.55fr] md:items-center ${selected?.publicId === item.publicId ? 'bg-orange-500/5' : ''}`}>
                                 <div className="min-w-0">
-                                    <div className="flex items-center gap-2"><p className="truncate text-sm font-black text-white">{item.eventType}</p>{item.test && <StatusPill value="TEST" />}</div>
-                                    <p className="mt-1 truncate font-mono text-[10px] text-zinc-500">{item.publicId}</p>
+                                    <div className="flex items-center gap-2"><p className="truncate text-sm font-black text-white">{notificationBusinessName(item.eventType, item.templateKey)}</p>{item.test && <StatusPill value="TEST" />}</div>
+                                    <p className="mt-1 truncate text-xs text-zinc-400">Gửi tới: {recipientDisplay(item.recipient)}</p>
+                                    <p className="mt-1 truncate font-mono text-[10px] text-zinc-600">{item.eventType} · {item.publicId}</p>
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="truncate text-xs font-bold text-zinc-300">{item.templateKey}</p>
-                                    <p className="mt-1 truncate text-[10px] text-zinc-600">{item.sourceService} · <span className="font-mono">{item.correlationId || item.sourceEventId || 'không có mã đối chiếu'}</span></p>
+                                    <p className="truncate text-xs font-bold text-zinc-300">{serviceBusinessName(item.sourceService)}</p>
+                                    <p className="mt-1 truncate text-[10px] text-zinc-500">Mẫu <span className="font-mono">{item.templateKey}</span>{(item.correlationId || item.sourceEventId) && <> · <span className="font-mono">{item.correlationId || item.sourceEventId}</span></>}</p>
                                 </div>
                                 <div className="md:text-right"><StatusPill value={item.status} /><p className="mt-1 text-[10px] text-zinc-600">{formatDateTime(item.createdAt)}</p></div>
                             </button>
@@ -151,14 +157,12 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                 <section className="space-y-3">
                     {blockedContracts.map(item => (
                         <article key={`${item.templateKey}-${item.locale}`} className="rounded-3xl border border-red-400/20 bg-red-400/5 p-5">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-white">{item.templateKey} chưa có template đang hoạt động</h2><StatusPill value="BLOCKED" /></div><p className="mt-2 text-xs text-zinc-300">Ảnh hưởng: {item.displayName}</p><p className="mt-1 text-[10px] text-zinc-500">{item.sourceService} · {item.eventTypes?.join(', ')} · {item.channels?.join(' · ')} · {item.locale}</p></div><div className="flex flex-wrap gap-2"><Link to={`/admin/notification-templates?contract=${item.templateKey}`} className="rounded-xl bg-red-500 px-3 py-2 text-xs font-black text-white">Tạo template</Link><Link to="/admin/notification-coverage" className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-black text-zinc-200">Xem độ phủ <ArrowRight className="h-3.5 w-3.5" /></Link></div></div>
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div className="max-w-3xl"><div className="flex flex-wrap items-center gap-2"><ShieldAlert className="h-5 w-5 text-red-300" /><h2 className="text-base font-black text-white">Không thể gửi {notificationBusinessName(item.eventTypes?.[0], item.templateKey)}</h2><StatusPill value="BLOCKED" /></div><p className="mt-3 text-sm text-zinc-200">Nguyên nhân: Luồng này chưa có mẫu thông báo đang hoạt động.</p><p className="mt-2 text-xs leading-5 text-zinc-400">Ảnh hưởng: mọi yêu cầu mới từ {serviceBusinessName(item.sourceService)}. Hệ thống chưa thể tự khắc phục cho đến khi mẫu được tạo và phát hành.</p><p className="mt-3 text-xs font-bold text-orange-200">Đề xuất: tạo mẫu còn thiếu, kiểm tra nội dung rồi phát hành.</p><TechnicalDetails className="mt-4"><p>{item.templateKey} chưa có template đang hoạt động · {item.sourceService} · {item.eventTypes?.join(', ')} · {item.channels?.join(' · ')} · {item.locale}</p></TechnicalDetails></div><div className="flex shrink-0 flex-wrap gap-2"><Link to={`/admin/notification-templates?contract=${item.templateKey}`} className="rounded-xl bg-red-500 px-3 py-2 text-xs font-black text-white">Tạo mẫu còn thiếu</Link><Link to="/admin/notification-coverage" className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-black text-zinc-200">Xem phạm vi <ArrowRight className="h-3.5 w-3.5" /></Link></div></div>
                         </article>
                     ))}
                     {deadLetterItems.map(item => (
-                        <article key={item.id} className="grid gap-3 rounded-3xl border border-amber-400/20 bg-zinc-900/60 px-5 py-4 md:grid-cols-[0.8fr_1fr_0.5fr]">
-                            <div><p className="text-xs font-black text-amber-200">{getNotificationFailurePresentation(item.reason).title}</p><p className="mt-1 font-mono text-[10px] text-zinc-500">Mã kỹ thuật: {item.reason || 'UNKNOWN_FAILURE'} · Lượt gửi #{item.notificationDeliveryId}</p></div>
-                            <p className="text-xs leading-5 text-zinc-300">{getNotificationFailurePresentation(item.reason).description}</p>
-                            <div className="md:text-right"><p className="text-xs font-bold text-zinc-300">Đã xử lý lại {item.reprocessCount} lần</p><p className="mt-1 text-[10px] text-zinc-500">{formatDateTime(item.createdAt)}</p></div>
+                        <article key={item.id} className="rounded-3xl border border-amber-400/20 bg-zinc-900/60 p-5">
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div className="max-w-3xl"><div className="flex flex-wrap items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-300" /><h2 className="text-base font-black text-white">Không thể gửi {notificationBusinessName(item.eventType, item.templateKey)}</h2><span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-200">Cần xử lý</span></div><div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-zinc-400"><span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" /> Bắt đầu {formatDateTime(item.createdAt)}</span><span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> 1 người nhận bị ảnh hưởng: {recipientDisplay(item.recipient)}</span></div><p className="mt-4 text-sm font-bold text-zinc-100">{getNotificationFailurePresentation(item.reason).title}</p><p className="mt-1 text-xs leading-5 text-zinc-300">{getNotificationFailurePresentation(item.reason).description}</p><p className="mt-3 text-xs text-zinc-400">Hệ thống đã thử gửi {formatNumber(item.attemptCount)} lần và không còn tự thử lại.</p><p className="mt-3 text-xs font-bold text-orange-200">{item.retryAllowed ? 'Đề xuất: thử gửi lại sau khi đã xác nhận nguyên nhân được xử lý.' : item.retryBlockedReason}</p><TechnicalDetails className="mt-4"><dl className="space-y-2"><DetailLine label="Mã kỹ thuật" value={item.reason || 'UNKNOWN_FAILURE'} /><DetailLine label="Dịch vụ nguồn" value={item.sourceService || '—'} /><DetailLine label="Mã yêu cầu" value={item.requestPublicId || '—'} /><DetailLine label="Mã lượt gửi" value={item.deliveryPublicId || `#${item.notificationDeliveryId}`} /></dl></TechnicalDetails></div><div className="flex shrink-0 flex-wrap gap-2">{item.retryAllowed && <button type="button" onClick={() => retry(item.deliveryPublicId, item.requestPublicId)} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white"><RotateCcw className="h-3.5 w-3.5" /> Thử gửi lại</button>}<Link to={`/admin/notification-operations?query=${item.requestPublicId || ''}`} className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-black text-zinc-200">Xem lượt bị ảnh hưởng <ArrowRight className="h-3.5 w-3.5" /></Link></div></div>
                         </article>
                     ))}
                 </section>
@@ -180,48 +184,57 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
 function RequestDetail({ data, loading, onRetry, activeRevision }) {
     if (loading) return <LoadingState label="Đang tải chi tiết lượt gửi…" />;
     if (!data) return <div className="flex min-h-72 items-center justify-center rounded-3xl border border-dashed border-zinc-700 text-sm text-zinc-600">Chọn một yêu cầu để xem các lượt gửi.</div>;
-    const firstAttemptAt = data.deliveries
+    const deliveries = data.deliveries || [];
+    const firstAttemptAt = deliveries
         .flatMap(delivery => delivery.attempts || [])
         .map(attempt => attempt.createdAt)
         .filter(Boolean)
         .sort()[0];
+    const finalDelivery = deliveries.find(delivery => ['FAILED', 'DEAD_LETTERED'].includes(delivery.status))
+        || deliveries.find(delivery => delivery.status === 'DELIVERED')
+        || deliveries[deliveries.length - 1];
+    const totalAttempts = deliveries.reduce((total, delivery) => total + Number(delivery.attemptCount || 0), 0);
+    const durationMs = deliveries.flatMap(delivery => delivery.attempts || [])
+        .reduce((total, attempt) => total + Number(attempt.durationMs || 0), 0);
     return (
         <aside className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-orange-400">Chi tiết yêu cầu</p><h2 className="mt-2 text-lg font-black text-white">{data.eventType}</h2></div><StatusPill value={data.status} /></div>
+            <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-orange-400">Kết quả thông báo</p><h2 className="mt-2 text-lg font-black text-white">{notificationBusinessName(data.eventType, data.templateKey)}</h2><p className="mt-1 font-mono text-[10px] text-zinc-500">{data.eventType}</p></div><StatusPill value={data.status} /></div>
             <dl className="mt-5 grid grid-cols-2 gap-3 text-xs">
-                <Detail label="Dịch vụ nguồn" value={data.sourceService} />
-                <Detail label="Mẫu" value={data.templateKey} />
-                <Detail label="Revision tại thời điểm gửi" value={shortSha(data.templateCommitSha)} mono />
-                {data.templateVersion && <Detail label="Phiên bản template" value={data.templateVersion} mono />}
-                <Detail label="Mã đối chiếu" value={data.correlationId || '—'} mono wide />
+                <Detail label="Người nhận" value={recipientDisplay(data.recipient)} wide />
+                <Detail label="Kênh" value={deliveries.map(delivery => channelBusinessName(delivery.channel)).join(' · ') || '—'} />
+                <Detail label="Kết quả cuối" value={deliveryOutcome(finalDelivery)} />
+                <Detail label="Số lần thử" value={`${formatNumber(totalAttempts)} lần`} />
+                <Detail label="Thời gian xử lý" value={durationMs > 0 ? `${(durationMs / 1000).toFixed(1).replace('.', ',')} giây` : 'Chưa có dữ liệu'} />
                 <Detail label="Thời điểm tạo" value={formatDateTime(data.createdAt)} wide />
             </dl>
+            {finalDelivery?.failureCode && <FailureNotice code={finalDelivery.failureCode} />}
+            {finalDelivery && ['FAILED', 'DEAD_LETTERED'].includes(finalDelivery.status) && finalDelivery.retryAllowed === false && <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs font-bold leading-5 text-amber-100">{finalDelivery.retryBlockedReason}</p>}
+            <TechnicalDetails className="mt-4" summary="Thông tin kỹ thuật của yêu cầu"><dl className="space-y-3"><DetailLine label="Dịch vụ nguồn" value={data.sourceService} /><DetailLine label="Mẫu" value={data.templateKey} /><DetailLine label="Revision tại thời điểm gửi" value={shortSha(data.templateCommitSha)} mono />{data.templateVersion && <DetailLine label="Phiên bản mẫu" value={data.templateVersion} mono />}{data.correlationId && <DetailLine label="Mã đối chiếu" value={data.correlationId} mono />}<DetailLine label="Mã yêu cầu" value={data.publicId} mono /></dl></TechnicalDetails>
             {data.templateCommitSha && activeRevision && data.templateCommitSha !== activeRevision && <p className="mt-3 rounded-xl border border-sky-400/15 bg-sky-400/5 px-3 py-2 text-[10px] leading-5 text-sky-200">Revision này được lưu tại thời điểm gửi và không còn là revision đang hoạt động ({shortSha(activeRevision)}).</p>}
             <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Timeline xử lý</p>
-                <Timeline at={data.createdAt} label="Tiếp nhận yêu cầu" detail={`${data.sourceService} · ${data.eventType}`} />
-                {data.templateCommitSha && <Timeline at={firstAttemptAt || data.updatedAt} label={`Resolve ${data.templateKey} · ${data.locale}`} detail={`Template revision ${shortSha(data.templateCommitSha)}`} />}
-                {data.deliveries.flatMap(delivery => [
-                    delivery.sentAt && <Timeline key={`${delivery.publicId}-sent`} at={delivery.sentAt} label={`${delivery.channel}: provider chấp nhận`} detail={`${delivery.provider} · lần thử ${delivery.attemptCount}`} />,
-                    delivery.deliveredAt && <Timeline key={`${delivery.publicId}-delivered`} at={delivery.deliveredAt} label={`${delivery.channel}: xác nhận giao`} detail={delivery.providerMessageId || delivery.publicId} />,
+                <Timeline at={data.createdAt} label="Tiếp nhận yêu cầu" detail={notificationBusinessName(data.eventType, data.templateKey)} />
+                {data.templateCommitSha && <Timeline at={firstAttemptAt || data.updatedAt} label="Chuẩn bị nội dung gửi" detail={`Đã dùng phiên bản mẫu ${shortSha(data.templateCommitSha)}`} />}
+                {deliveries.flatMap(delivery => [
+                    delivery.sentAt && <Timeline key={`${delivery.publicId}-sent`} at={delivery.sentAt} label={`${channelBusinessName(delivery.channel)}: nhà cung cấp đã nhận`} detail={`Lần thử ${delivery.attemptCount}`} />,
+                    delivery.deliveredAt && <Timeline key={`${delivery.publicId}-delivered`} at={delivery.deliveredAt} label={`${channelBusinessName(delivery.channel)}: đã có xác nhận giao`} detail={delivery.providerMessageId || 'Hoàn tất'} />,
                     ...(delivery.attempts || []).filter(attempt => attempt.failureCode).map(attempt => {
                         const failure = getNotificationFailurePresentation(attempt.failureCode);
-                        return <Timeline key={`${delivery.publicId}-attempt-${attempt.attemptNumber}`} at={attempt.createdAt} label={`${delivery.channel} · lần thử ${attempt.attemptNumber}: ${failure.title}`} detail={`${failure.description} · ${attempt.durationMs} ms`} error />;
+                        return <Timeline key={`${delivery.publicId}-attempt-${attempt.attemptNumber}`} at={attempt.createdAt} label={`${channelBusinessName(delivery.channel)} · lần thử ${attempt.attemptNumber}: ${failure.title}`} detail={failure.description} error />;
                     }),
-                    delivery.failureCode && !delivery.attempts?.length && <Timeline key={`${delivery.publicId}-failed`} at={data.updatedAt} label={`${delivery.channel}: ${getNotificationFailurePresentation(delivery.failureCode).title}`} detail={getNotificationFailurePresentation(delivery.failureCode).description} error />,
+                    delivery.failureCode && !delivery.attempts?.length && <Timeline key={`${delivery.publicId}-failed`} at={data.updatedAt} label={`${channelBusinessName(delivery.channel)}: ${getNotificationFailurePresentation(delivery.failureCode).title}`} detail={getNotificationFailurePresentation(delivery.failureCode).description} error />,
                 ]).filter(Boolean)}
             </div>
             <div className="mt-6 space-y-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Các lượt gửi</p>
-                {data.deliveries.map(delivery => (
+                {deliveries.map(delivery => (
                     <div key={delivery.publicId} className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-                        <div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-white">{delivery.channel} · {delivery.provider}</p><StatusPill value={delivery.status} /></div>
-                        <p className="mt-2 font-mono text-[10px] text-zinc-600">{delivery.publicId}</p>
-                        {delivery.renderedSnapshotAvailable && <p className="mt-2 text-[10px] text-sky-200">Đã lưu nội dung render · revision <span className="font-mono">{shortSha(delivery.templateCommitSha)}</span>. Thử lại sẽ dùng đúng snapshot này.</p>}
+                        <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black text-white">{channelBusinessName(delivery.channel)}</p><p className="mt-1 text-xs text-zinc-400">{deliveryOutcome(delivery)}</p></div><StatusPill value={delivery.status} /></div>
                         {delivery.failureCode && <FailureNotice code={delivery.failureCode} />}
                         {delivery.nextRetryAt && <p className="mt-2 inline-flex items-center gap-1.5 text-[10px] text-amber-300"><Clock3 className="h-3.5 w-3.5" /> Tự thử lại {formatDateTime(delivery.nextRetryAt)}</p>}
-                        <div className="mt-3 flex items-center justify-between"><span className="text-[10px] text-zinc-500">Lần thử {delivery.attemptCount}</span>{['FAILED', 'DEAD_LETTERED'].includes(delivery.status) && isRetryable(delivery.failureCategory) && <button type="button" onClick={() => onRetry(delivery.publicId)} className="inline-flex items-center gap-1.5 text-[10px] font-black text-orange-300"><RotateCcw className="h-3.5 w-3.5" /> Thử lại ngay</button>}</div>
-                        {['FAILED', 'DEAD_LETTERED'].includes(delivery.status) && !isRetryable(delivery.failureCategory) && <p className="mt-2 text-[10px] font-bold text-red-200">Cần sửa template, payload hoặc người nhận trước khi tạo yêu cầu mới.</p>}
+                        <div className="mt-3 flex items-center justify-between"><span className="text-xs text-zinc-400">Đã thử {delivery.attemptCount} lần</span>{['FAILED', 'DEAD_LETTERED'].includes(delivery.status) && (delivery.retryAllowed ?? isRetryable(delivery.failureCategory)) && <button type="button" onClick={() => onRetry(delivery.publicId)} className="inline-flex items-center gap-1.5 text-xs font-black text-orange-300"><RotateCcw className="h-3.5 w-3.5" /> Thử gửi lại</button>}</div>
+                        {['FAILED', 'DEAD_LETTERED'].includes(delivery.status) && !(delivery.retryAllowed ?? isRetryable(delivery.failureCategory)) && <p className="mt-2 text-xs font-bold leading-5 text-red-200">{delivery.retryBlockedReason || 'Cần sửa người nhận, nội dung mẫu hoặc dữ liệu đầu vào trước khi tạo yêu cầu mới.'}</p>}
+                        <TechnicalDetails className="mt-3"><dl className="space-y-2"><DetailLine label="Nhà cung cấp" value={delivery.provider} /><DetailLine label="Mã lượt gửi" value={delivery.publicId} mono />{delivery.renderedSnapshotAvailable && <DetailLine label="Nội dung đã lưu" value={`Revision ${shortSha(delivery.templateCommitSha)}; gửi lại sẽ dùng đúng snapshot này`} />}</dl></TechnicalDetails>
                     </div>
                 ))}
             </div>
@@ -230,6 +243,9 @@ function RequestDetail({ data, loading, onRetry, activeRevision }) {
 }
 function Detail({ label, value, mono, wide }) {
     return <div className={`rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 ${wide ? 'col-span-2' : ''}`}><dt className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{label}</dt><dd className={`mt-1 truncate text-zinc-300 ${mono ? 'font-mono' : 'font-bold'}`}>{value}</dd></div>;
+}
+function DetailLine({ label, value, mono }) {
+    return <div className="flex items-start justify-between gap-4"><dt className="shrink-0 text-zinc-500">{label}</dt><dd className={`max-w-[70%] break-all text-right text-zinc-200 ${mono ? 'font-mono' : 'font-bold'}`}>{value}</dd></div>;
 }
 function Timeline({ at, label, detail, error }) {
     return <div className="relative mt-4 border-l border-zinc-800 pl-4"><span className={`absolute -left-1 top-1 h-2 w-2 rounded-full ${error ? 'bg-red-400' : 'bg-emerald-400'}`} /><p className="text-xs font-bold text-zinc-200">{label}</p><p className="mt-1 text-[10px] text-zinc-600">{formatDateTime(at)} · {detail}</p></div>;

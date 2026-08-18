@@ -35,6 +35,18 @@ public interface NotificationDeliveryRepository extends JpaRepository<Notificati
             @Param("since") Instant since,
             @Param("includeTest") boolean includeTest);
 
+    @Query("""
+            select delivery.channel, delivery.status, count(delivery)
+            from NotificationDelivery delivery, NotificationRequest request
+            where delivery.notificationRequestId = request.id
+              and delivery.createdAt >= :since
+              and (:includeTest = true or request.test = false)
+            group by delivery.channel, delivery.status
+            """)
+    List<Object[]> countOperationalByChannelAndStatus(
+            @Param("since") Instant since,
+            @Param("includeTest") boolean includeTest);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select delivery from NotificationDelivery delivery

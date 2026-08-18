@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { notificationAdminService } from '../services/notificationAdminService';
-import { ErrorState, LoadingState, PageHeading, StatusPill, formatDateTime, shortSha } from '../components/NotificationAdminUi';
+import { ErrorState, LoadingState, PageHeading, StatusPill, TechnicalDetails, formatDateTime, shortSha } from '../components/NotificationAdminUi';
+import { categoryBusinessName, channelBusinessName, localeBusinessName, notificationBusinessName, serviceBusinessName } from '../utils/notificationBusinessPresentation';
 
 const stringify = value => JSON.stringify(value || {}, null, 2);
 const parseJson = value => {
@@ -170,7 +171,7 @@ export default function NotificationTemplateEditorPage() {
 
     const publish = async () => {
         if (!draftMeta || dirty) { setError('Hãy lưu bản nháp trước khi phát hành.'); return; }
-        if (!window.confirm('Phát hành bản nháp đã kiểm tra lên nhánh được bảo vệ?')) return;
+        if (!window.confirm('Phát hành nội dung này cho khách hàng?\n\nHãy xác nhận bạn đã xem trước trên desktop/mobile, kiểm tra dữ liệu mẫu và gửi bản thử. Phiên bản hiện tại vẫn được lưu trong lịch sử để có thể khôi phục.')) return;
         setSaving(true);
         try {
             const result = await notificationAdminService.publish(templateKey, draftMeta.draftId, draftMeta.commitSha);
@@ -219,9 +220,9 @@ export default function NotificationTemplateEditorPage() {
         <div className={`${fullScreen ? 'fixed inset-0 z-50 overflow-y-auto bg-zinc-950 p-4 sm:p-6' : 'mx-auto max-w-[1600px] pb-12'} space-y-6`}>
             <Link to="/admin/notification-templates" className="inline-flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-white"><ChevronLeft className="h-4 w-4" /> Quay lại danh sách mẫu</Link>
             <PageHeading
-                eyebrow={draftMeta ? 'Không gian bản nháp' : 'Template đang phát hành'}
-                title={form.displayName || templateKey}
-                description={`${templateKey} · ${form.channel} · ${form.locale}`}
+                eyebrow={draftMeta ? 'Bản nháp đang chỉnh sửa' : 'Phiên bản khách hàng đang nhận'}
+                title={notificationBusinessName(coverageItems?.[0]?.eventTypes?.[0], templateKey)}
+                description={`${channelBusinessName(form.channel)} · ${localeBusinessName(form.locale)} · ${categoryBusinessName(form.category)}`}
                 actions={<>
                     <button type="button" onClick={() => setFullScreen(value => !value)} className="rounded-xl border border-zinc-700 p-2.5 text-zinc-300 hover:border-zinc-500" aria-label="Bật hoặc tắt toàn màn hình"><Maximize2 className="h-4 w-4" /></button>
                     {!draftMeta && <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50"><Save className="h-4 w-4" /> Tạo bản nháp từ phiên bản này</button>}
@@ -229,7 +230,8 @@ export default function NotificationTemplateEditorPage() {
                 </>}
             />
 
-            <div className="flex flex-wrap items-center gap-2"><StatusPill value={draftMeta ? 'DRAFT' : 'PUBLISHED'} /><StatusPill value={readiness} />{services.length > 0 && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400"><Users className="h-4 w-4" /> Được sử dụng bởi {services.join(', ')}</span>}<span className="font-mono text-xs text-zinc-600">Template revision {shortSha(sourceDocument?.commitSha)}</span></div>
+            {!draftMeta && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3"><p className="text-sm font-black text-emerald-100">Đây là phiên bản đang được gửi cho khách hàng.</p><p className="mt-1 text-xs leading-5 text-zinc-300">Muốn thay đổi nội dung, hãy tạo bản nháp mới. Phiên bản hiện tại sẽ tiếp tục hoạt động cho đến khi bản nháp được kiểm tra và phát hành.</p></div>}
+            <div className="flex flex-wrap items-center gap-2"><StatusPill value={draftMeta ? 'DRAFT' : 'PUBLISHED'} /><StatusPill value={readiness} />{services.length > 0 && <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400"><Users className="h-4 w-4" /> Dùng cho {services.map(serviceBusinessName).join(', ')}</span>}<TechnicalDetails><p className="font-mono">{templateKey} · {form.channel} · {form.locale} · revision {shortSha(sourceDocument?.commitSha)}</p></TechnicalDetails></div>
             {dirty && <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-xs font-bold text-amber-200">Có thay đổi chưa lưu — preview và phát hành vẫn dùng revision bản nháp gần nhất.</div>}
             {conflict && <div className="flex items-start gap-3 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-100"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>Một quản trị viên khác đã thay đổi draft hoặc base revision. Không có nội dung nào bị ghi đè; hãy tải lại trước khi hợp nhất.</span></div>}
             {error && <div className="rounded-xl border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-200">{error}</div>}
@@ -237,7 +239,7 @@ export default function NotificationTemplateEditorPage() {
 
             <nav className="flex flex-wrap gap-1 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-1.5" aria-label="Khu vực template">
                 <Tab active={activeTab === 'content'} onClick={() => setActiveTab('content')} icon={Monitor}>Nội dung & xem trước</Tab>
-                <Tab active={activeTab === 'variables'} onClick={() => setActiveTab('variables')} icon={FileJson2}>Biến dữ liệu</Tab>
+                <Tab active={activeTab === 'variables'} onClick={() => setActiveTab('variables')} icon={FileJson2}>Thông tin được chèn</Tab>
                 <Tab active={activeTab === 'versions'} onClick={() => setActiveTab('versions')} icon={History}>Phiên bản</Tab>
                 <Tab active={activeTab === 'technical'} onClick={() => setActiveTab('technical')} icon={Code2}>Kỹ thuật</Tab>
             </nav>
@@ -245,11 +247,11 @@ export default function NotificationTemplateEditorPage() {
             {activeTab === 'content' && (
                 <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
                     <section className="space-y-5 rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5">
-                        <div className="grid gap-4 sm:grid-cols-2"><Field label="Tên hiển thị" value={form.displayName} onChange={value => change('displayName', value)} readOnly={!draftMeta} /><Field label="Nhóm nghiệp vụ" value={form.category} onChange={value => change('category', value)} readOnly={!draftMeta} /></div>
+                        <div className="grid gap-4 sm:grid-cols-2"><Field label="Tên hiển thị" value={form.displayName} onChange={value => change('displayName', value)} readOnly={!draftMeta} /><Field label="Nhóm nghiệp vụ" value={categoryBusinessName(form.category)} onChange={() => {}} readOnly /></div>
                         <Field label="Mô tả nghiệp vụ" value={form.description} onChange={value => change('description', value)} readOnly={!draftMeta} />
                         <Field label="Tiêu đề gửi" value={form.subject} onChange={value => change('subject', value)} readOnly={!draftMeta} mono />
                         <div className={`rounded-2xl border p-4 ${validation?.valid === false ? 'border-red-400/20 bg-red-400/5' : 'border-emerald-400/20 bg-emerald-400/5'}`}><div className="flex items-center justify-between"><p className="text-sm font-black text-white">Kiểm tra nội dung</p><StatusPill value={validation?.valid === false ? 'INVALID' : 'VALID'} /></div><p className="mt-2 text-xs leading-5 text-zinc-400">{validation?.valid === false ? `${validation.errors?.length || 0} lỗi cần sửa trước khi phát hành.` : 'Không phát hiện lỗi render trong dữ liệu mẫu hiện tại.'}</p></div>
-                        <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4"><p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Gửi thử</p><div className="mt-3 flex gap-2"><input value={testDestination} onChange={event => setTestDestination(event.target.value)} placeholder={form.channel === 'EMAIL' ? 'qa@example.com' : 'Đích gửi thử'} className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-400" /><button type="button" onClick={testSend} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-zinc-950"><Send className="h-4 w-4" /> Gửi</button></div><p className="mt-2 text-[11px] leading-5 text-zinc-500">Yêu cầu thử được gắn <code>is_test=true</code> và mặc định không tính vào KPI production. Hiện thao tác này dùng bản đã phát hành.</p></section>
+                        <section className="rounded-2xl border border-violet-400/20 bg-violet-400/5 p-4"><p className="text-xs font-black text-violet-200">Gửi email thử nghiệm</p><div className="mt-3 flex gap-2"><input value={testDestination} onChange={event => setTestDestination(event.target.value)} placeholder={form.channel === 'EMAIL' ? 'Email nhận bản thử' : 'Đích nhận bản thử'} className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-400" /><button type="button" onClick={testSend} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-zinc-950"><Send className="h-4 w-4" /> Gửi bản thử</button></div><p className="mt-2 text-xs leading-5 text-zinc-400">Bản thử dùng phiên bản đang phát hành, có tiền tố [THỬ NGHIỆM] và watermark trong nội dung. Dữ liệu này không tính vào KPI vận hành.</p></section>
                     </section>
 
                     <section className="sticky top-24 h-fit rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5">
@@ -260,7 +262,7 @@ export default function NotificationTemplateEditorPage() {
             )}
 
             {activeTab === 'variables' && (
-                <section className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-widest text-zinc-500">Dữ liệu render</p><h2 className="mt-1 text-lg font-black text-white">Schema và dữ liệu mẫu</h2></div><button type="button" onClick={renderPreview} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white">Render lại preview</button></div><div className="mt-5 overflow-hidden rounded-2xl border border-zinc-800"><div className="hidden grid-cols-[1fr_0.5fr_0.5fr_1.4fr] gap-3 border-b border-zinc-800 bg-zinc-950/60 px-4 py-3 text-[10px] font-black uppercase tracking-wider text-zinc-600 md:grid"><span>Biến</span><span>Kiểu</span><span>Bắt buộc</span><span>Dữ liệu mẫu</span></div>{variables.map(([key, definition]) => <div key={key} className="grid gap-3 border-b border-zinc-800/70 px-4 py-4 last:border-0 md:grid-cols-[1fr_0.5fr_0.5fr_1.4fr] md:items-center"><code className="text-xs font-bold text-orange-300">{key}</code><span className="text-xs text-zinc-400">{definition.type || 'string'}</span><span className="text-xs text-zinc-400">{definition.required ? 'Có' : 'Không'}</span>{draftMeta ? <input value={sampleData[key] ?? ''} onChange={event => changeSample(key, event.target.value)} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white outline-none focus:border-orange-400" /> : <span className="truncate text-xs text-zinc-300">{String(sampleData[key] ?? 'Chưa có dữ liệu mẫu')}</span>}</div>)}</div></section>
+                <section className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-widest text-zinc-500">Thông tin cá nhân hóa</p><h2 className="mt-1 text-lg font-black text-white">Thông tin được chèn vào nội dung</h2><p className="mt-2 text-xs text-zinc-400">Trường bắt buộc phải có dữ liệu trước khi hệ thống có thể gửi.</p></div><button type="button" onClick={renderPreview} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white">Cập nhật xem trước</button></div><div className="mt-5 overflow-hidden rounded-2xl border border-zinc-800"><div className="hidden grid-cols-[1fr_0.5fr_0.5fr_1.4fr] gap-3 border-b border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs font-bold text-zinc-500 md:grid"><span>Tên trường</span><span>Loại dữ liệu</span><span>Bắt buộc</span><span>Ví dụ hiển thị</span></div>{variables.map(([key, definition]) => <div key={key} className="grid gap-3 border-b border-zinc-800/70 px-4 py-4 last:border-0 md:grid-cols-[1fr_0.5fr_0.5fr_1.4fr] md:items-center"><div><code className="text-xs font-bold text-orange-300">{key}</code><p className="mt-1 text-[10px] text-zinc-500">Dữ liệu do {services.length ? services.map(serviceBusinessName).join(', ') : 'dịch vụ nguồn'} cung cấp</p></div><span className="text-xs text-zinc-400">{definition.type || 'string'}</span><span className="text-xs text-zinc-400">{definition.required ? 'Có' : 'Không'}</span>{draftMeta ? <input value={sampleData[key] ?? ''} onChange={event => changeSample(key, event.target.value)} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white outline-none focus:border-orange-400" /> : <span className="truncate text-xs text-zinc-300">{String(sampleData[key] ?? 'Chưa có dữ liệu mẫu')}</span>}</div>)}</div></section>
             )}
 
             {activeTab === 'versions' && (
