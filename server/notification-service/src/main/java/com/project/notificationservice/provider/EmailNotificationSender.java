@@ -2,6 +2,8 @@ package com.project.notificationservice.provider;
 
 import com.project.notificationservice.domain.NotificationTypes.Channel;
 import com.project.notificationservice.domain.NotificationTypes.FailureCategory;
+import com.project.notificationservice.service.EmailProviderConfigurationService;
+import com.project.notificationservice.service.EmailProviderConfigurationService.ActiveEmailSender;
 import jakarta.mail.AuthenticationFailedException;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -9,7 +11,6 @@ import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
 import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -45,18 +46,11 @@ public class EmailNotificationSender implements NotificationChannelSender {
             "(?i)[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\\.[a-z]{2,}");
     private static final int MAX_DIAGNOSTIC_LENGTH = 300;
 
-    private final JavaMailSender mailSender;
-    private final String fromAddress;
-    private final String fromName;
+    private final EmailProviderConfigurationService providerConfigurationService;
     private final HttpClient httpClient;
 
-    public EmailNotificationSender(
-            JavaMailSender mailSender,
-            @Value("${notification.delivery.from-address:notifications@lorafilm.local}") String fromAddress,
-            @Value("${notification.delivery.from-name:LoraFilm}") String fromName) {
-        this.mailSender = mailSender;
-        this.fromAddress = fromAddress;
-        this.fromName = fromName;
+    public EmailNotificationSender(EmailProviderConfigurationService providerConfigurationService) {
+        this.providerConfigurationService = providerConfigurationService;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(QR_FETCH_TIMEOUT)
                 .build();
@@ -75,12 +69,14 @@ public class EmailNotificationSender implements NotificationChannelSender {
                     "INVALID_EMAIL", "Email destination is invalid", null);
         }
         try {
+            ActiveEmailSender activeSender = providerConfigurationService.currentSender();
+            JavaMailSender mailSender = activeSender.mailSender();
             String finalHtml = notification.htmlContent();
 
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(
                     message, MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED, StandardCharsets.UTF_8.name());
-            helper.setFrom(fromAddress, fromName);
+            helper.setFrom(activeSender.senderEmail(), activeSender.fromName());
             helper.setTo(notification.destination());
             helper.setSubject(notification.subject());
             helper.setText(notification.textContent(), finalHtml);

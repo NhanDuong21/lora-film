@@ -2,6 +2,7 @@ import apiClient from '@/services/apiClient';
 
 const templateBase = '/api/v1/admin/notification-templates';
 const operationBase = '/api/v1/admin/notifications';
+const emailProviderBase = '/api/v1/admin/notification-settings/email-provider';
 const unwrap = response => response?.data?.data;
 
 export const notificationAdminService = {
@@ -25,6 +26,15 @@ export const notificationAdminService = {
     },
     async coverage() {
         return unwrap(await apiClient.get(`${templateBase}/coverage`));
+    },
+    async emailProvider() {
+        return unwrap(await apiClient.get(emailProviderBase));
+    },
+    async testEmailProvider(command) {
+        return unwrap(await apiClient.post(`${emailProviderBase}/test`, command));
+    },
+    async updateEmailProvider(command) {
+        return unwrap(await apiClient.put(emailProviderBase, command));
     },
     async published(templateKey, channel, locale) {
         return unwrap(await apiClient.get(`${templateBase}/${templateKey}`, {

@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, GitBranch, RefreshCw, ShieldAl
 import { Link } from 'react-router-dom';
 import { notificationAdminService } from '../services/notificationAdminService';
 import { ErrorState, LoadingState, PageHeading, StatusPill, formatDateTime, formatNumber, shortSha } from '../components/NotificationAdminUi';
+import EmailProviderConfigurationPanel from '../components/EmailProviderConfigurationPanel';
 
 export default function NotificationCoveragePage() {
     const [data, setData] = useState(null);
@@ -13,11 +14,12 @@ export default function NotificationCoveragePage() {
         setLoading(true);
         setError('');
         try {
-            const [dashboard, templates] = await Promise.all([
+            const [dashboard, templates, emailProvider] = await Promise.all([
                 notificationAdminService.dashboard({ hours: 24, includeTest: false }),
                 notificationAdminService.templates({ archived: false }),
+                notificationAdminService.emailProvider(),
             ]);
-            setData({ ...dashboard, templates: templates || [] });
+            setData({ ...dashboard, templates: templates || [], emailProvider });
         } catch (requestError) {
             setError(requestError?.message || 'Không thể kiểm tra cấu hình và độ phủ template.');
         } finally {
@@ -53,6 +55,12 @@ export default function NotificationCoveragePage() {
                 title="Cấu hình và độ phủ"
                 description="Đối chiếu cấu hình đang chạy với các mẫu mà dịch vụ xác thực, đặt vé và khuyến mãi đã khai báo."
                 actions={<button type="button" onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-white"><RefreshCw className="h-4 w-4" /> Kiểm tra độ phủ</button>}
+            />
+
+            <EmailProviderConfigurationPanel
+                key={`${data?.emailProvider?.source}-${data?.emailProvider?.updatedAt || 'initial'}-${data?.emailProvider?.senderEmail || ''}`}
+                configuration={data?.emailProvider}
+                onUpdated={emailProvider => setData(current => ({ ...current, emailProvider }))}
             />
 
             <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">

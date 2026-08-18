@@ -3,6 +3,8 @@ package com.project.notificationservice.provider;
 import com.project.notificationservice.domain.NotificationTypes.FailureCategory;
 import com.project.notificationservice.provider.NotificationChannelSender.DeliveryResult;
 import com.project.notificationservice.provider.NotificationChannelSender.RenderedNotification;
+import com.project.notificationservice.service.EmailProviderConfigurationService;
+import com.project.notificationservice.service.EmailProviderConfigurationService.ActiveEmailSender;
 import jakarta.mail.Session;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
@@ -78,8 +80,10 @@ class EmailNotificationSenderTest {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
         doThrow(failure).when(mailSender).send(any(MimeMessage.class));
-        EmailNotificationSender sender = new EmailNotificationSender(
-                mailSender, "notifications@example.com", "LoraFilm");
+        EmailProviderConfigurationService configurationService = mock(EmailProviderConfigurationService.class);
+        when(configurationService.currentSender()).thenReturn(new ActiveEmailSender(
+                mailSender, "notifications@example.com", "LoraFilm", "TEST"));
+        EmailNotificationSender sender = new EmailNotificationSender(configurationService);
 
         return sender.send(new RenderedNotification(
                 "request-1", "delivery-1", "user-1", "recipient@example.com",

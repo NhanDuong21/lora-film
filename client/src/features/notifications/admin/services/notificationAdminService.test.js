@@ -45,6 +45,33 @@ describe('notificationAdminService', () => {
         );
     });
 
+    it('loads, tests and updates the admin-managed email provider', async () => {
+        apiClient.get.mockResolvedValue({ data: { data: { source: 'ENV' } } });
+        apiClient.post.mockResolvedValue({ data: { data: { connected: true } } });
+        apiClient.put.mockResolvedValue({ data: { data: { source: 'ADMIN' } } });
+        const command = {
+            senderEmail: 'notifications@example.com',
+            appPassword: 'secret-app-password',
+            fromName: 'LoraFilm',
+        };
+
+        await expect(notificationAdminService.emailProvider()).resolves.toEqual({ source: 'ENV' });
+        await expect(notificationAdminService.testEmailProvider(command)).resolves.toEqual({ connected: true });
+        await expect(notificationAdminService.updateEmailProvider(command)).resolves.toEqual({ source: 'ADMIN' });
+
+        expect(apiClient.get).toHaveBeenCalledWith(
+            '/api/v1/admin/notification-settings/email-provider',
+        );
+        expect(apiClient.post).toHaveBeenCalledWith(
+            '/api/v1/admin/notification-settings/email-provider/test',
+            command,
+        );
+        expect(apiClient.put).toHaveBeenCalledWith(
+            '/api/v1/admin/notification-settings/email-provider',
+            command,
+        );
+    });
+
     it('sends the expected Git commit as an If-Match header when saving a draft', async () => {
         apiClient.put.mockResolvedValue({
             data: { data: { commitSha: 'next-sha' } },
