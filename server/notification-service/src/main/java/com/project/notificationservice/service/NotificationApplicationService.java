@@ -9,12 +9,14 @@ import com.project.notificationservice.domain.NotificationTypes.FailureCategory;
 import com.project.notificationservice.domain.NotificationTypes.Priority;
 import com.project.notificationservice.domain.NotificationTypes.RequestStatus;
 import com.project.notificationservice.entity.NotificationDelivery;
+import com.project.notificationservice.entity.NotificationDeliveryAttempt;
 import com.project.notificationservice.entity.InAppNotification;
 import com.project.notificationservice.entity.NotificationPreference;
 import com.project.notificationservice.entity.NotificationRecipient;
 import com.project.notificationservice.entity.NotificationRequest;
 import com.project.notificationservice.exception.NotificationException;
 import com.project.notificationservice.repository.NotificationDeliveryRepository;
+import com.project.notificationservice.repository.NotificationDeliveryAttemptRepository;
 import com.project.notificationservice.repository.InAppNotificationRepository;
 import com.project.notificationservice.repository.NotificationPreferenceRepository;
 import com.project.notificationservice.repository.NotificationRecipientRepository;
@@ -39,6 +41,7 @@ public class NotificationApplicationService {
     private final NotificationRequestRepository requestRepository;
     private final NotificationRecipientRepository recipientRepository;
     private final NotificationDeliveryRepository deliveryRepository;
+    private final NotificationDeliveryAttemptRepository attemptRepository;
     private final NotificationPreferenceRepository preferenceRepository;
     private final InAppNotificationRepository inAppNotificationRepository;
     private final RecipientCryptoService cryptoService;
@@ -49,6 +52,7 @@ public class NotificationApplicationService {
             NotificationRequestRepository requestRepository,
             NotificationRecipientRepository recipientRepository,
             NotificationDeliveryRepository deliveryRepository,
+            NotificationDeliveryAttemptRepository attemptRepository,
             NotificationPreferenceRepository preferenceRepository,
             InAppNotificationRepository inAppNotificationRepository,
             RecipientCryptoService cryptoService,
@@ -57,6 +61,7 @@ public class NotificationApplicationService {
         this.requestRepository = requestRepository;
         this.recipientRepository = recipientRepository;
         this.deliveryRepository = deliveryRepository;
+        this.attemptRepository = attemptRepository;
         this.preferenceRepository = preferenceRepository;
         this.inAppNotificationRepository = inAppNotificationRepository;
         this.cryptoService = cryptoService;
@@ -322,13 +327,23 @@ public class NotificationApplicationService {
     }
 
     private DeliveryDetails toDetails(NotificationDelivery delivery) {
+        List<AttemptDetails> attempts = delivery.getId() == null ? List.of() : attemptRepository
+                .findByNotificationDeliveryIdOrderByAttemptNumberAsc(delivery.getId()).stream()
+                .map(this::toAttemptDetails)
+                .toList();
         return new DeliveryDetails(delivery.getPublicId(), delivery.getChannel().name(),
                 delivery.getProvider(), delivery.getStatus().name(), delivery.getProviderMessageId(),
                 delivery.getTemplateCommitSha(), delivery.getTemplateVersion(),
                 delivery.getTemplateCommitSha() != null,
                 delivery.getFailureCategory() == null ? null : delivery.getFailureCategory().name(),
                 delivery.getFailureCode(), delivery.getFailureMessage(), delivery.getAttemptCount(),
-                delivery.getNextRetryAt(), delivery.getSentAt(), delivery.getDeliveredAt());
+                delivery.getNextRetryAt(), delivery.getSentAt(), delivery.getDeliveredAt(), attempts);
+    }
+
+    private AttemptDetails toAttemptDetails(NotificationDeliveryAttempt attempt) {
+        return new AttemptDetails(attempt.getAttemptNumber(), attempt.getProvider(), attempt.getOutcome(),
+                attempt.getFailureCategory() == null ? null : attempt.getFailureCategory().name(),
+                attempt.getFailureCode(), attempt.getDurationMs(), attempt.getCreatedAt());
     }
 
     private String writeJson(Object value) {
@@ -379,6 +394,17 @@ public class NotificationApplicationService {
             int attemptCount,
             Instant nextRetryAt,
             Instant sentAt,
-            Instant deliveredAt) {
+            Instant deliveredAt,
+            List<AttemptDetails> attempts) {
+    }
+
+    public record AttemptDetails(
+            int attemptNumber,
+            String provider,
+            String outcome,
+            String failureCategory,
+            String failureCode,
+            long durationMs,
+            Instant createdAt) {
     }
 }

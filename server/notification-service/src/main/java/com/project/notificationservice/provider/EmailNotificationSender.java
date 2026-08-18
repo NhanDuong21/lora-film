@@ -2,7 +2,11 @@ package com.project.notificationservice.provider;
 
 import com.project.notificationservice.domain.NotificationTypes.Channel;
 import com.project.notificationservice.domain.NotificationTypes.FailureCategory;
+import jakarta.mail.AuthenticationFailedException;
+import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +17,9 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -80,12 +87,111 @@ public class EmailNotificationSender implements NotificationChannelSender {
             return DeliveryResult.failure("smtp", FailureCategory.AUTHENTICATION_ERROR,
                     "SMTP_AUTHENTICATION_FAILED", "Email provider authentication failed", null);
         } catch (MailSendException exception) {
-            return DeliveryResult.failure("smtp", FailureCategory.TRANSIENT,
-                    "SMTP_SEND_FAILED", "Email provider is temporarily unavailable", null);
+            DeliveryResult failure = classifySendFailure(exception);
+            log.warn("SMTP delivery failed deliveryPublicId={} failureCode={} causeType={} smtpStatus={}",
+                    notification.deliveryPublicId(), failure.failureCode(),
+                    diagnosticCauseType(exception), smtpStatus(exception));
+            return failure;
         } catch (Exception exception) {
             return DeliveryResult.failure("smtp", FailureCategory.PROVIDER_REJECTED,
                     "SMTP_REJECTED", "Email provider rejected the message", null);
         }
+    }
+
+    private DeliveryResult classifySendFailure(MailSendException exception) {
+        if (findCause(exception, AuthenticationFailedException.class) != null) {
+            return DeliveryResult.failure("smtp", FailureCategory.AUTHENTICATION_ERROR,
+                    "SMTP_AUTHENTICATION_FAILED", "Email provider authentication failed", null);
+        }
+        if (hasConnectionCause(exception)) {
+            return DeliveryResult.failure("smtp", FailureCategory.TRANSIENT,
+                    "SMTP_CONNECTION_FAILED", "Could not connect to the SMTP server", null);
+        }
+
+        SMTPAddressFailedException addressFailure = findCause(exception, SMTPAddressFailedException.class);
+        if (addressFailure != null && isPermanentStatus(addressFailure.getReturnCode())) {
+            return DeliveryResult.failure("smtp", FailureCategory.INVALID_RECIPIENT,
+                    "SMTP_RECIPIENT_REJECTED", "SMTP provider rejected the recipient address", null);
+        }
+
+        int status = smtpStatus(exception);
+        if (isTemporaryStatus(status)) {
+            return DeliveryResult.failure("smtp", FailureCategory.TRANSIENT,
+                    "SMTP_TEMPORARILY_UNAVAILABLE", "SMTP provider returned a temporary error", null);
+        }
+        if (isPermanentStatus(status)) {
+            return DeliveryResult.failure("smtp", FailureCategory.PROVIDER_REJECTED,
+                    "SMTP_MESSAGE_REJECTED", "SMTP provider permanently rejected the message", null);
+        }
+        return DeliveryResult.failure("smtp", FailureCategory.TRANSIENT,
+                "SMTP_SEND_FAILED", "SMTP provider could not accept the message", null);
+    }
+
+    private boolean hasConnectionCause(Throwable exception) {
+        return findCause(exception, ConnectException.class) != null
+                || findCause(exception, SocketTimeoutException.class) != null
+                || findCause(exception, UnknownHostException.class) != null
+                || hasCauseNamed(exception, "MailConnectException");
+    }
+
+    private int smtpStatus(Throwable exception) {
+        SMTPAddressFailedException addressFailure = findCause(exception, SMTPAddressFailedException.class);
+        if (addressFailure != null) return addressFailure.getReturnCode();
+        SMTPSendFailedException sendFailure = findCause(exception, SMTPSendFailedException.class);
+        return sendFailure == null ? 0 : sendFailure.getReturnCode();
+    }
+
+    private boolean isTemporaryStatus(int status) {
+        return status >= 400 && status < 500;
+    }
+
+    private boolean isPermanentStatus(int status) {
+        return status >= 500 && status < 600;
+    }
+
+    private String diagnosticCauseType(MailSendException exception) {
+        Throwable current = firstNestedFailure(exception);
+        String type = current.getClass().getSimpleName();
+        for (int depth = 0; depth < 20 && nextCause(current) != null; depth++) {
+            current = nextCause(current);
+            type = current.getClass().getSimpleName();
+        }
+        return type;
+    }
+
+    private boolean hasCauseNamed(Throwable exception, String simpleName) {
+        Throwable current = firstNestedFailure(exception);
+        for (int depth = 0; current != null && depth < 20; depth++) {
+            if (current.getClass().getSimpleName().equals(simpleName)) return true;
+            current = nextCause(current);
+        }
+        return false;
+    }
+
+    private <T extends Throwable> T findCause(Throwable exception, Class<T> type) {
+        Throwable current = firstNestedFailure(exception);
+        for (int depth = 0; current != null && depth < 20; depth++) {
+            if (type.isInstance(current)) return type.cast(current);
+            current = nextCause(current);
+        }
+        return null;
+    }
+
+    private Throwable firstNestedFailure(Throwable exception) {
+        if (exception instanceof MailSendException mailSendException
+                && !mailSendException.getFailedMessages().isEmpty()) {
+            return mailSendException.getFailedMessages().values().iterator().next();
+        }
+        return exception;
+    }
+
+    private Throwable nextCause(Throwable current) {
+        if (current.getCause() != null && current.getCause() != current) return current.getCause();
+        if (current instanceof MessagingException messagingException
+                && messagingException.getNextException() != current) {
+            return messagingException.getNextException();
+        }
+        return null;
     }
 
     /**

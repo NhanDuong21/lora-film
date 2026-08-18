@@ -12,6 +12,7 @@ import com.project.notificationservice.entity.NotificationRecipient;
 import com.project.notificationservice.entity.NotificationRequest;
 import com.project.notificationservice.entity.InAppNotification;
 import com.project.notificationservice.repository.NotificationDeliveryRepository;
+import com.project.notificationservice.repository.NotificationDeliveryAttemptRepository;
 import com.project.notificationservice.repository.InAppNotificationRepository;
 import com.project.notificationservice.repository.NotificationPreferenceRepository;
 import com.project.notificationservice.repository.NotificationRecipientRepository;
@@ -72,7 +73,8 @@ class NotificationApplicationServiceTest {
             return delivery;
         });
         service = new NotificationApplicationService(
-                requestRepository, recipientRepository, deliveryRepository, preferenceRepository,
+                requestRepository, recipientRepository, deliveryRepository,
+                mock(NotificationDeliveryAttemptRepository.class), preferenceRepository,
                 inAppNotificationRepository,
                 crypto, new ObjectMapper(), new SimpleMeterRegistry());
     }

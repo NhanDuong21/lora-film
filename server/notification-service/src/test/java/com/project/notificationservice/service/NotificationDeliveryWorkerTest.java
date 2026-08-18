@@ -44,6 +44,52 @@ import static org.mockito.Mockito.when;
 class NotificationDeliveryWorkerTest {
 
     @Test
+    void expiredRequestCancelsDeliveryAndRequestInsteadOfLeavingRequestProcessing() {
+        NotificationRequestRepository requestRepository = mock(NotificationRequestRepository.class);
+        NotificationRecipientRepository recipientRepository = mock(NotificationRecipientRepository.class);
+        NotificationDeliveryRepository deliveryRepository = mock(NotificationDeliveryRepository.class);
+        NotificationDeliveryAttemptRepository attemptRepository = mock(NotificationDeliveryAttemptRepository.class);
+        NotificationDeadLetterRepository deadLetterRepository = mock(NotificationDeadLetterRepository.class);
+        NotificationOutboxRepository outboxRepository = mock(NotificationOutboxRepository.class);
+
+        NotificationRequest request = new NotificationRequest();
+        ReflectionTestUtils.setField(request, "id", 10L);
+        request.setPublicId("request-expired");
+        request.setStatus(RequestStatus.PROCESSING);
+        request.setExpiresAt(Instant.now().minusSeconds(1));
+
+        NotificationRecipient recipient = new NotificationRecipient();
+        ReflectionTestUtils.setField(recipient, "id", 20L);
+
+        NotificationDelivery delivery = new NotificationDelivery();
+        ReflectionTestUtils.setField(delivery, "id", 30L);
+        ReflectionTestUtils.setField(delivery, "publicId", "delivery-expired");
+        delivery.setNotificationRequestId(10L);
+        delivery.setNotificationRecipientId(20L);
+        delivery.setChannel(Channel.EMAIL);
+        delivery.setStatus(DeliveryStatus.RETRY_SCHEDULED);
+        delivery.setNextRetryAt(Instant.now().minusSeconds(1));
+
+        when(deliveryRepository.findDue(any(), any(), any())).thenReturn(List.of(delivery));
+        when(requestRepository.findById(10L)).thenReturn(Optional.of(request));
+        when(recipientRepository.findById(20L)).thenReturn(Optional.of(recipient));
+
+        NotificationDeliveryWorker worker = new NotificationDeliveryWorker(
+                requestRepository, recipientRepository, deliveryRepository, attemptRepository,
+                deadLetterRepository, outboxRepository, mock(TemplateRegistry.class),
+                mock(SafeTemplateRenderer.class), mock(TemplatePayloadAdapter.class),
+                mock(NotificationSenderResolver.class), mock(RecipientCryptoService.class),
+                new ObjectMapper(), new SimpleMeterRegistry(), 10, 5);
+
+        worker.deliverDueNotifications();
+
+        assertThat(delivery.getStatus()).isEqualTo(DeliveryStatus.CANCELLED);
+        assertThat(delivery.getNextRetryAt()).isNull();
+        assertThat(request.getStatus()).isEqualTo(RequestStatus.CANCELLED);
+        verify(outboxRepository).save(any());
+    }
+
+    @Test
     void retryReusesTheFirstRenderedSnapshotInsteadOfResolvingTheLatestTemplate() {
         NotificationRequestRepository requestRepository = mock(NotificationRequestRepository.class);
         NotificationRecipientRepository recipientRepository = mock(NotificationRecipientRepository.class);

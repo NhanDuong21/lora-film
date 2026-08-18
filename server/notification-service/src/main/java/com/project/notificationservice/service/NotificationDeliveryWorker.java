@@ -123,6 +123,9 @@ public class NotificationDeliveryWorker {
         if (request.getStatus() == RequestStatus.CANCELLED
                 || request.getExpiresAt() != null && !request.getExpiresAt().isAfter(Instant.now())) {
             delivery.setStatus(DeliveryStatus.CANCELLED);
+            delivery.setNextRetryAt(null);
+            request.setStatus(RequestStatus.CANCELLED);
+            outbox(request, delivery, "notification.cancelled");
             return;
         }
         delivery.setStatus(DeliveryStatus.PROCESSING);

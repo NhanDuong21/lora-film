@@ -3,6 +3,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, Clock3, RefreshCw, RotateCcw, Se
 import { Link } from 'react-router-dom';
 import { notificationAdminService } from '../services/notificationAdminService';
 import { EmptyState, ErrorState, LoadingState, PageHeading, StatusPill, formatDateTime, shortSha } from '../components/NotificationAdminUi';
+import { getNotificationFailurePresentation } from '../utils/notificationFailurePresentation';
 
 export default function NotificationOperationsPage({ mode = 'history' }) {
     const [page, setPage] = useState(0);
@@ -155,8 +156,8 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                     ))}
                     {deadLetterItems.map(item => (
                         <article key={item.id} className="grid gap-3 rounded-3xl border border-amber-400/20 bg-zinc-900/60 px-5 py-4 md:grid-cols-[0.8fr_1fr_0.5fr]">
-                            <div><p className="text-xs font-black text-amber-200">{item.reason}</p><p className="mt-1 font-mono text-[10px] text-zinc-500">Lượt gửi #{item.notificationDeliveryId}</p></div>
-                            <p className="text-xs leading-5 text-zinc-300">{item.failureMessage || 'Không có chi tiết lỗi từ nhà cung cấp.'}</p>
+                            <div><p className="text-xs font-black text-amber-200">{getNotificationFailurePresentation(item.reason).title}</p><p className="mt-1 font-mono text-[10px] text-zinc-500">Mã kỹ thuật: {item.reason || 'UNKNOWN_FAILURE'} · Lượt gửi #{item.notificationDeliveryId}</p></div>
+                            <p className="text-xs leading-5 text-zinc-300">{getNotificationFailurePresentation(item.reason).description}</p>
                             <div className="md:text-right"><p className="text-xs font-bold text-zinc-300">Đã xử lý lại {item.reprocessCount} lần</p><p className="mt-1 text-[10px] text-zinc-500">{formatDateTime(item.createdAt)}</p></div>
                         </article>
                     ))}
@@ -179,6 +180,11 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
 function RequestDetail({ data, loading, onRetry, activeRevision }) {
     if (loading) return <LoadingState label="Đang tải chi tiết lượt gửi…" />;
     if (!data) return <div className="flex min-h-72 items-center justify-center rounded-3xl border border-dashed border-zinc-700 text-sm text-zinc-600">Chọn một yêu cầu để xem các lượt gửi.</div>;
+    const firstAttemptAt = data.deliveries
+        .flatMap(delivery => delivery.attempts || [])
+        .map(attempt => attempt.createdAt)
+        .filter(Boolean)
+        .sort()[0];
     return (
         <aside className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
             <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-orange-400">Chi tiết yêu cầu</p><h2 className="mt-2 text-lg font-black text-white">{data.eventType}</h2></div><StatusPill value={data.status} /></div>
@@ -194,11 +200,15 @@ function RequestDetail({ data, loading, onRetry, activeRevision }) {
             <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Timeline xử lý</p>
                 <Timeline at={data.createdAt} label="Tiếp nhận yêu cầu" detail={`${data.sourceService} · ${data.eventType}`} />
-                {data.templateCommitSha && <Timeline at={data.updatedAt} label={`Resolve ${data.templateKey} · ${data.locale}`} detail={`Template revision ${shortSha(data.templateCommitSha)}`} />}
+                {data.templateCommitSha && <Timeline at={firstAttemptAt || data.updatedAt} label={`Resolve ${data.templateKey} · ${data.locale}`} detail={`Template revision ${shortSha(data.templateCommitSha)}`} />}
                 {data.deliveries.flatMap(delivery => [
                     delivery.sentAt && <Timeline key={`${delivery.publicId}-sent`} at={delivery.sentAt} label={`${delivery.channel}: provider chấp nhận`} detail={`${delivery.provider} · lần thử ${delivery.attemptCount}`} />,
                     delivery.deliveredAt && <Timeline key={`${delivery.publicId}-delivered`} at={delivery.deliveredAt} label={`${delivery.channel}: xác nhận giao`} detail={delivery.providerMessageId || delivery.publicId} />,
-                    delivery.failureCode && <Timeline key={`${delivery.publicId}-failed`} at={delivery.nextRetryAt || data.updatedAt} label={`${delivery.channel}: ${delivery.failureCode}`} detail={delivery.failureMessage || 'Không có mô tả lỗi'} error />,
+                    ...(delivery.attempts || []).filter(attempt => attempt.failureCode).map(attempt => {
+                        const failure = getNotificationFailurePresentation(attempt.failureCode);
+                        return <Timeline key={`${delivery.publicId}-attempt-${attempt.attemptNumber}`} at={attempt.createdAt} label={`${delivery.channel} · lần thử ${attempt.attemptNumber}: ${failure.title}`} detail={`${failure.description} · ${attempt.durationMs} ms`} error />;
+                    }),
+                    delivery.failureCode && !delivery.attempts?.length && <Timeline key={`${delivery.publicId}-failed`} at={data.updatedAt} label={`${delivery.channel}: ${getNotificationFailurePresentation(delivery.failureCode).title}`} detail={getNotificationFailurePresentation(delivery.failureCode).description} error />,
                 ]).filter(Boolean)}
             </div>
             <div className="mt-6 space-y-3">
@@ -208,7 +218,7 @@ function RequestDetail({ data, loading, onRetry, activeRevision }) {
                         <div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-white">{delivery.channel} · {delivery.provider}</p><StatusPill value={delivery.status} /></div>
                         <p className="mt-2 font-mono text-[10px] text-zinc-600">{delivery.publicId}</p>
                         {delivery.renderedSnapshotAvailable && <p className="mt-2 text-[10px] text-sky-200">Đã lưu nội dung render · revision <span className="font-mono">{shortSha(delivery.templateCommitSha)}</span>. Thử lại sẽ dùng đúng snapshot này.</p>}
-                        {delivery.failureMessage && <p className="mt-3 rounded-lg bg-red-400/5 p-2 text-xs leading-5 text-red-200">{delivery.failureCode}: {delivery.failureMessage}</p>}
+                        {delivery.failureCode && <FailureNotice code={delivery.failureCode} />}
                         {delivery.nextRetryAt && <p className="mt-2 inline-flex items-center gap-1.5 text-[10px] text-amber-300"><Clock3 className="h-3.5 w-3.5" /> Tự thử lại {formatDateTime(delivery.nextRetryAt)}</p>}
                         <div className="mt-3 flex items-center justify-between"><span className="text-[10px] text-zinc-500">Lần thử {delivery.attemptCount}</span>{['FAILED', 'DEAD_LETTERED'].includes(delivery.status) && isRetryable(delivery.failureCategory) && <button type="button" onClick={() => onRetry(delivery.publicId)} className="inline-flex items-center gap-1.5 text-[10px] font-black text-orange-300"><RotateCcw className="h-3.5 w-3.5" /> Thử lại ngay</button>}</div>
                         {['FAILED', 'DEAD_LETTERED'].includes(delivery.status) && !isRetryable(delivery.failureCategory) && <p className="mt-2 text-[10px] font-bold text-red-200">Cần sửa template, payload hoặc người nhận trước khi tạo yêu cầu mới.</p>}
@@ -223,6 +233,10 @@ function Detail({ label, value, mono, wide }) {
 }
 function Timeline({ at, label, detail, error }) {
     return <div className="relative mt-4 border-l border-zinc-800 pl-4"><span className={`absolute -left-1 top-1 h-2 w-2 rounded-full ${error ? 'bg-red-400' : 'bg-emerald-400'}`} /><p className="text-xs font-bold text-zinc-200">{label}</p><p className="mt-1 text-[10px] text-zinc-600">{formatDateTime(at)} · {detail}</p></div>;
+}
+function FailureNotice({ code }) {
+    const failure = getNotificationFailurePresentation(code);
+    return <div className="mt-3 rounded-xl border border-red-400/10 bg-red-400/5 p-3"><p className="text-xs font-black text-red-200">{failure.title}</p><p className="mt-1 text-xs leading-5 text-zinc-300">{failure.description}</p><p className="mt-2 font-mono text-[10px] text-zinc-500">Mã kỹ thuật: {failure.code}</p></div>;
 }
 const isRetryable = category => !category || ['TRANSIENT', 'RATE_LIMITED', 'AUTHENTICATION_ERROR'].includes(category);
 const buildRangeParams = filters => {
