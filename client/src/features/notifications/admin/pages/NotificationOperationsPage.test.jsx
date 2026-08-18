@@ -59,6 +59,28 @@ describe('NotificationOperationsPage', () => {
             .toHaveAttribute('href', '/admin/notification-templates?contract=REGISTER_OTP');
     });
 
+    it('shows the outcome of every channel for a partially successful request', async () => {
+        notificationAdminService.requests.mockResolvedValue({
+            content: [{
+                publicId: 'request-partial', eventType: 'TICKET_ISSUED',
+                templateKey: 'BOOKING_CONFIRMED', sourceService: 'booking-service',
+                status: 'PARTIALLY_FAILED', createdAt: '2026-08-18T06:21:00Z',
+                channelOutcomes: [
+                    { channel: 'EMAIL', status: 'FAILED' },
+                    { channel: 'IN_APP', status: 'DELIVERED' },
+                ],
+            }],
+            totalPages: 1, number: 0, first: true, last: true,
+        });
+
+        render(<MemoryRouter><NotificationOperationsPage mode="history" /></MemoryRouter>);
+
+        expect(await screen.findByText('Xác nhận đặt vé')).toBeInTheDocument();
+        expect(screen.getByRole('button', {
+            name: /Một số kênh chưa thành công.*Email: Gửi không thành công.*Trong ứng dụng: Đã có xác nhận giao/,
+        })).toBeInTheDocument();
+    });
+
     it('explains SMTP failures in Vietnamese and keeps the code for diagnostics', async () => {
         notificationAdminService.requests.mockResolvedValue({
             content: [{

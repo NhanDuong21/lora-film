@@ -87,16 +87,29 @@ export default function NotificationCoveragePage() {
                     <span>Luồng thông báo</span><span>Nhóm nghiệp vụ</span><span>Kênh sử dụng</span><span>Trạng thái</span><span>Kết quả kiểm tra</span>
                 </div>
                 {items.map(item => (
-                    <article key={`${item.templateKey}-${item.locale}`} className={`grid gap-4 border-b border-zinc-800/70 px-5 py-5 last:border-0 lg:grid-cols-[1fr_0.8fr_0.8fr_0.55fr_1.2fr] lg:items-center ${item.readiness === 'BLOCKED' ? 'bg-red-500/[0.035]' : ''}`}>
-                        <div><p className="text-sm font-black text-white">{notificationBusinessName(item.eventTypes?.[0], item.templateKey)}</p><TechnicalDetails className="mt-2"><p className="font-mono text-orange-300">{item.templateKey}</p><p className="mt-1">{item.eventTypes?.join(', ')}</p></TechnicalDetails></div>
-                        <div><p className="text-xs font-bold text-zinc-300">{serviceBusinessName(item.sourceService)}</p></div>
-                        <div><p className="text-xs font-bold text-zinc-300">{item.channels?.map(channelBusinessName).join(' · ')}</p><p className="mt-1 text-xs text-zinc-500">{localeBusinessName(item.locale)}</p></div>
-                        <StatusPill value={item.readiness} />
-                        <div className="flex items-start justify-between gap-3">
-                            {item.readiness === 'READY' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /> : <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />}
-                            <div className="min-w-0 flex-1"><p className="text-xs leading-5 text-zinc-300">{coverageMessage(item)}</p>{item.readiness === 'BLOCKED' && <div className="mt-3 flex flex-wrap gap-3"><Link to={`/admin/notification-templates?contract=${item.templateKey}`} className="text-xs font-black text-red-200 hover:text-white">Tạo mẫu còn thiếu</Link><Link to="/admin/notification-attention" className="text-xs font-black text-orange-300 hover:text-white">Mở trung tâm xử lý</Link></div>}{item.activeRevision && <TechnicalDetails className="mt-2"><p className="font-mono">Revision {shortSha(item.activeRevision)}</p></TechnicalDetails>}</div>
+                    <details key={`${item.templateKey}-${item.locale}`} className={`group border-b border-zinc-800/70 last:border-0 ${item.readiness === 'BLOCKED' ? 'bg-red-500/[0.035]' : ''}`}>
+                        <summary className="grid cursor-pointer list-none gap-4 px-5 py-5 transition hover:bg-zinc-800/25 lg:grid-cols-[1fr_0.8fr_0.8fr_0.55fr_1.2fr] lg:items-center">
+                            <div><p className="text-sm font-black text-white">{notificationBusinessName(item.eventTypes?.[0], item.templateKey)}</p></div>
+                            <div><p className="text-xs font-bold text-zinc-300">{serviceBusinessName(item.sourceService)}</p></div>
+                            <div><p className="text-xs font-bold text-zinc-300">{item.channels?.map(channelBusinessName).join(' · ')}</p><p className="mt-1 text-xs text-zinc-500">{localeBusinessName(item.locale)}</p></div>
+                            <StatusPill value={item.readiness} />
+                            <div className="flex items-start gap-3">
+                                {item.readiness === 'READY' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /> : <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />}
+                                <div className="min-w-0 flex-1"><p className="text-xs leading-5 text-zinc-300">{coverageMessage(item)}</p><span className="mt-2 inline-flex text-[10px] font-black text-orange-300 before:mr-1.5 before:content-['+'] group-open:before:content-['−']">Xem thông tin kỹ thuật</span></div>
+                            </div>
+                        </summary>
+                        <div className="border-t border-zinc-800/70 bg-zinc-950/35 px-5 py-5">
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                <TechnicalFact label="Mã sự kiện" value={item.eventTypes?.join(', ') || '—'} mono />
+                                <TechnicalFact label="Dịch vụ nguồn" value={item.sourceService || '—'} mono />
+                                <TechnicalFact label="Template code" value={item.templateKey || '—'} mono />
+                                <TechnicalFact label="Revision" value={shortSha(item.activeRevision)} mono />
+                                <TechnicalFact label="Kênh và ngôn ngữ yêu cầu" value={`${item.channels?.join(' · ') || '—'} · ${item.locale || '—'}`} mono />
+                                <TechnicalFact label="Lý do kiểm tra" value={coverageMessage(item)} />
+                            </div>
+                            {item.readiness === 'BLOCKED' && <div className="mt-4 flex flex-wrap gap-4"><Link to={`/admin/notification-templates?contract=${item.templateKey}`} className="text-xs font-black text-red-200 hover:text-white">Tạo mẫu còn thiếu</Link><Link to="/admin/notification-attention" className="text-xs font-black text-orange-300 hover:text-white">Mở trung tâm xử lý</Link></div>}
                         </div>
-                    </article>
+                    </details>
                 ))}
             </section>
 
@@ -112,6 +125,9 @@ function Row({ label, value, mono, last }) {
 }
 function Metric({ label, value, tone }) {
     return <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"><p className={`text-2xl font-black ${tone}`}>{formatNumber(value)}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wider text-zinc-600">{label}</p></div>;
+}
+function TechnicalFact({ label, value, mono }) {
+    return <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{label}</p><p className={`mt-1 break-all text-xs text-zinc-300 ${mono ? 'font-mono text-orange-200' : 'font-bold'}`}>{value}</p></div>;
 }
 const coverageMessage = item => item.readiness === 'READY'
     ? 'Yêu cầu đã có template đang hoạt động.'

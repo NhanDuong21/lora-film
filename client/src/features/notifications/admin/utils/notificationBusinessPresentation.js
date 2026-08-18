@@ -79,7 +79,7 @@ export const recipientDisplay = recipient => recipient?.maskedEmail
 export const deliveryOutcome = delivery => {
     const status = String(delivery?.status || '').toUpperCase();
     if (status === 'DELIVERED') return 'Đã có xác nhận giao';
-    if (status === 'SENT') return 'Nhà cung cấp đã nhận yêu cầu';
+    if (status === 'SENT') return 'Đã chuyển tới nhà cung cấp';
     if (status === 'RETRY_SCHEDULED') return 'Hệ thống đang tự thử lại';
     if (status === 'PENDING' || status === 'PROCESSING') return 'Đang chờ xử lý';
     if (status === 'FAILED' || status === 'DEAD_LETTERED') return 'Gửi không thành công';
@@ -87,6 +87,11 @@ export const deliveryOutcome = delivery => {
     if (status === 'SUPPRESSED') return 'Không gửi theo chính sách';
     return 'Đang cập nhật kết quả';
 };
+
+export const channelOutcomeLines = outcomes => (outcomes || []).map(outcome => ({
+    channel: channelBusinessName(outcome.channel),
+    outcome: deliveryOutcome(outcome),
+}));
 
 export const notificationVariantSummary = variants => (variants || [])
     .map(variant => `${channelBusinessName(variant.channel)} ${localeBusinessName(variant.locale)}`)

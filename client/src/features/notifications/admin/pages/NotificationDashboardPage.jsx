@@ -13,9 +13,12 @@ import {
     channelBusinessName, notificationBusinessName, serviceBusinessName,
 } from '../utils/notificationBusinessPresentation';
 
-const funnel = [
+const journeyStages = [
     { key: 'totalRequests', label: 'Yêu cầu thông báo', icon: BellRing },
     { key: 'totalDeliveries', label: 'Lượt gửi theo kênh', icon: Send },
+];
+
+const resultStages = [
     { key: 'accepted', fallback: 'delivered', label: 'Nhà cung cấp đã nhận', icon: CheckCheck },
     { key: 'confirmed', label: 'Có xác nhận giao', icon: ShieldCheck },
     { key: 'failed', label: 'Lượt gửi thất bại', icon: AlertOctagon },
@@ -83,7 +86,7 @@ export default function NotificationDashboardPage() {
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <HealthCard label="Dịch vụ thông báo" value="Đang hoạt động" badge="Bình thường" tone="success" detail={`Cập nhật ${formatDateTime(data?.generatedAt)}`} />
-                <HealthCard label="Kho mẫu" value={data?.templateRegistry?.available ? 'Đã đồng bộ' : 'Không khả dụng'} badge={data?.templateRegistry?.available ? 'Sẵn sàng' : 'Cần xử lý'} tone={data?.templateRegistry?.available ? 'success' : 'danger'} detail={`Cập nhật ${formatDateTime(data?.templateRegistry?.lastSyncedAt)}`} />
+                <HealthCard label="Mẫu thông báo" value={data?.templateRegistry?.available ? 'Đã đồng bộ' : 'Không khả dụng'} badge={data?.templateRegistry?.available ? 'Sẵn sàng' : 'Cần xử lý'} tone={data?.templateRegistry?.available ? 'success' : 'danger'} detail={`Cập nhật ${formatDateTime(data?.templateRegistry?.lastSyncedAt)}`} />
                 <HealthCard label="Luồng thông báo quan trọng" value={`${formatNumber(data?.coverage?.readyRequirements)}/${formatNumber(data?.coverage?.totalRequirements)} đã có mẫu hoạt động`} badge={Number(data?.coverage?.blockedRequirements) > 0 ? `Thiếu ${formatNumber(data?.coverage?.blockedRequirements)}` : 'Đầy đủ'} tone={Number(data?.coverage?.blockedRequirements) > 0 ? 'danger' : 'success'} detail="Theo phạm vi tích hợp đang khai báo" />
             </div>
 
@@ -92,8 +95,16 @@ export default function NotificationDashboardPage() {
                     <div><p className="text-xs font-black uppercase tracking-widest text-zinc-500">Luồng xử lý trong phạm vi đã chọn</p><h2 className="mt-2 text-lg font-black text-white">Từ yêu cầu đến kết quả gửi</h2></div>
                     <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-right"><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Tỷ lệ nhà cung cấp tiếp nhận</p><p className="mt-1 text-2xl font-black text-white">{formatPercent(data?.deliveryRate)}</p></div>
                 </div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    {funnel.map(({ key, fallback, label, icon: Icon }, index) => <article key={key} className={`relative rounded-2xl border p-4 ${key === 'failed' && Number(data?.failed) > 0 ? 'border-red-400/25 bg-red-400/5' : 'border-zinc-800 bg-zinc-950/60'}`}><div className="flex items-center justify-between"><Icon className={`h-4 w-4 ${key === 'failed' ? 'text-red-300' : 'text-orange-300'}`} />{index < funnel.length - 1 && <ArrowRight className="hidden h-4 w-4 text-zinc-700 xl:block" />}</div><p className="mt-4 text-2xl font-black text-white">{formatNumber(data?.[key] ?? data?.[fallback])}</p><p className="mt-1 text-xs font-bold text-zinc-400">{label}</p></article>)}
+                <div className="mt-6 grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {journeyStages.map((stage, index) => <FunnelCard key={stage.key} stage={stage} data={data} arrow={index === 0} />)}
+                    </div>
+                    <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/25 p-3">
+                        <p className="px-1 text-[10px] font-black uppercase tracking-widest text-zinc-500">Kết quả của {formatNumber(data?.totalDeliveries)} lượt gửi</p>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                            {resultStages.map(stage => <FunnelCard key={stage.key} stage={stage} data={data} />)}
+                        </div>
+                    </div>
                 </div>
                 <p className="mt-4 text-xs leading-5 text-zinc-400">Một yêu cầu có thể tạo nhiều lượt gửi theo kênh. “Nhà cung cấp đã nhận” chưa đồng nghĩa khách hàng đã mở hoặc đọc email.</p>
                 {Number(data?.pending) > 0 && <p className="mt-3 inline-flex items-center gap-2 text-xs text-amber-200"><Clock3 className="h-4 w-4" /><StatusPill value="RETRY_SCHEDULED" /> {formatNumber(data.pending)} lượt đang chờ hoặc được hệ thống tự thử lại.</p>}
@@ -103,11 +114,11 @@ export default function NotificationDashboardPage() {
                 <section className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
                     <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Sức khỏe theo kênh</p>
                     <h2 className="mt-2 text-lg font-black text-white">Kênh nào đang gặp vấn đề?</h2>
-                    {channels.length === 0 ? <p className="mt-5 text-sm text-zinc-500">Chưa có lượt gửi trong phạm vi đã chọn.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2">{channels.map(([channel, values]) => <article key={channel} className={`rounded-2xl border p-4 ${Number(values.failed) > 0 ? 'border-red-400/20 bg-red-400/5' : 'border-zinc-800 bg-zinc-950/60'}`}><div className="flex items-center justify-between gap-3"><p className="font-black text-white">{channelBusinessName(channel)}</p><StatusPill value={Number(values.failed) > 0 ? 'WARNING' : 'HEALTHY'} /></div><p className="mt-3 text-xs text-zinc-300">{formatNumber(values.total)} lượt · {formatNumber(values.accepted)} được tiếp nhận · <span className={Number(values.failed) > 0 ? 'font-bold text-red-300' : ''}>{formatNumber(values.failed)} thất bại</span></p>{Number(values.pending) > 0 && <p className="mt-2 text-xs text-amber-300">{formatNumber(values.pending)} lượt đang chờ hoặc thử lại</p>}</article>)}</div>}
+                    {channels.length === 0 ? <p className="mt-5 text-sm text-zinc-500">Chưa có lượt gửi trong phạm vi đã chọn.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2">{channels.map(([channel, values]) => <article key={channel} className={`rounded-2xl border p-4 ${Number(values.failed) > 0 ? 'border-amber-400/20 bg-amber-400/5' : 'border-zinc-800 bg-zinc-950/60'}`}><div className="flex items-center justify-between gap-3"><p className="font-black text-white">{channelBusinessName(channel)}</p><StatusPill value={Number(values.failed) > 0 ? 'PERIOD_ERRORS' : 'HEALTHY'} /></div><p className="mt-3 text-xs text-zinc-300">{formatNumber(values.total)} lượt · {formatNumber(values.accepted)} được tiếp nhận · <span className={Number(values.failed) > 0 ? 'font-bold text-amber-200' : ''}>{formatNumber(values.failed)} thất bại</span></p>{Number(values.failed) > 0 && activeIncidents === 0 && <p className="mt-2 text-xs font-bold text-emerald-300">Không còn sự cố cần can thiệp</p>}{Number(values.pending) > 0 && <p className="mt-2 text-xs text-amber-300">{formatNumber(values.pending)} lượt đang chờ hoặc thử lại</p>}</article>)}</div>}
                 </section>
 
                 <section className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5 sm:p-6">
-                    <div className="flex items-center gap-3"><div className={`rounded-2xl p-3 ${data?.templateRegistry?.available ? 'bg-emerald-400/10 text-emerald-300' : 'bg-red-400/10 text-red-300'}`}><GitBranch className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-zinc-500">Nguồn nội dung</p><h2 className="mt-1 text-lg font-black text-white">Kho mẫu {data?.templateRegistry?.available ? 'đã đồng bộ' : 'đang gián đoạn'}</h2></div></div>
+                    <div className="flex items-center gap-3"><div className={`rounded-2xl p-3 ${data?.templateRegistry?.available ? 'bg-emerald-400/10 text-emerald-300' : 'bg-red-400/10 text-red-300'}`}><GitBranch className="h-5 w-5" /></div><div><p className="text-xs font-black uppercase tracking-widest text-zinc-500">Nguồn nội dung</p><h2 className="mt-1 text-lg font-black text-white">Kho mẫu thông báo {data?.templateRegistry?.available ? 'đã đồng bộ' : 'đang gián đoạn'}</h2></div></div>
                     <p className="mt-4 text-sm leading-6 text-zinc-300">Phiên bản mẫu đang hoạt động được cập nhật {formatDateTime(data?.templateRegistry?.lastSyncedAt)}.</p>
                     <TechnicalDetails className="mt-5"><dl className="space-y-3"><RegistryRow label="Repository" value={data?.templateRegistry?.repository || '—'} /><RegistryRow label="Nhánh" value={data?.templateRegistry?.branch || 'main'} mono /><RegistryRow label="Remote HEAD" value={shortSha(data?.templateRegistry?.remoteHeadCommit)} mono /><RegistryRow label="Revision đang hoạt động" value={shortSha(data?.templateRegistry?.headCommit)} mono /></dl></TechnicalDetails>
                     <Link to="/admin/notification-coverage" className="mt-5 inline-flex items-center gap-2 text-xs font-black text-orange-300 hover:text-orange-200">Xem cấu hình và phạm vi <ArrowRight className="h-3.5 w-3.5" /></Link>
@@ -115,6 +126,12 @@ export default function NotificationDashboardPage() {
             </div>
         </div>
     );
+}
+
+function FunnelCard({ stage, data, arrow = false }) {
+    const { key, fallback, label, icon: Icon } = stage;
+    const failed = key === 'failed' && Number(data?.failed) > 0;
+    return <article className={`relative rounded-2xl border p-4 ${failed ? 'border-red-400/25 bg-red-400/5' : 'border-zinc-800 bg-zinc-950/60'}`}><div className="flex items-center justify-between"><Icon className={`h-4 w-4 ${failed ? 'text-red-300' : 'text-orange-300'}`} />{arrow && <ArrowRight className="hidden h-4 w-4 text-zinc-600 sm:block" />}</div><p className="mt-4 text-2xl font-black text-white">{formatNumber(data?.[key] ?? data?.[fallback])}</p><p className="mt-1 text-xs font-bold text-zinc-400">{label}</p></article>;
 }
 
 function OperationsConclusion({ activeIncidents, failed, blockedItems, hours }) {

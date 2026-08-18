@@ -65,6 +65,7 @@ describe('NotificationDashboardPage', () => {
             name: 'Trung tâm điều phối thông báo',
         })).toBeInTheDocument();
         expect(screen.getByText('83.3%')).toBeInTheDocument();
+        expect(screen.getByText('Kết quả của 18 lượt gửi')).toBeInTheDocument();
         expect(screen.getByText('1234567890')).toBeInTheDocument();
         expect(screen.getByText('Đang thử lại')).toBeInTheDocument();
         expect(screen.getByText('OTP đăng ký tài khoản chưa sẵn sàng'))

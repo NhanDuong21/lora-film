@@ -14,9 +14,9 @@ import { notificationAdminService } from '../services/notificationAdminService';
 import { formatDateTime } from './NotificationAdminUi';
 
 const errorMessages = {
-    SMTP_AUTHENTICATION_FAILED: 'Email hoặc App Password không hợp lệ. Gmail đã từ chối đăng nhập SMTP.',
+    SMTP_AUTHENTICATION_FAILED: 'Email hoặc Mật khẩu ứng dụng không hợp lệ. Gmail đã từ chối đăng nhập SMTP.',
     SMTP_CONNECTION_FAILED: 'Không thể kết nối máy chủ SMTP. Vui lòng kiểm tra mạng và thử lại.',
-    SMTP_CONFIGURATION_TEST_FAILED: 'Không thể xác nhận cấu hình SMTP. Kiểm tra email, App Password và trạng thái tài khoản gửi.',
+    SMTP_CONFIGURATION_TEST_FAILED: 'Không thể xác nhận cấu hình SMTP. Kiểm tra email, Mật khẩu ứng dụng và trạng thái tài khoản gửi.',
     VALIDATION_ERROR: 'Thông tin cấu hình chưa hợp lệ. Vui lòng kiểm tra lại các trường bên dưới.',
     VALIDATION_FAILED: 'Thông tin cấu hình chưa hợp lệ. Vui lòng kiểm tra lại các trường bên dưới.',
 };
@@ -39,7 +39,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
         if (!senderEmail.trim()) return 'Vui lòng nhập email dùng để gửi thông báo.';
         if (!/^\S+@\S+\.\S+$/.test(senderEmail.trim())) return 'Email người gửi không đúng định dạng.';
         if (!fromName.trim()) return 'Vui lòng nhập tên người gửi.';
-        if (command().appPassword.length < 8) return 'Vui lòng nhập App Password hợp lệ của tài khoản email mới.';
+        if (command().appPassword.length < 8) return 'Vui lòng nhập Mật khẩu ứng dụng hợp lệ của tài khoản email mới.';
         return '';
     };
 
@@ -102,7 +102,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
                         <div className="rounded-2xl bg-sky-400/10 p-3 text-sky-300"><Mail className="h-5 w-5" /></div>
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nhà cung cấp email</p>
-                            <h2 className="mt-1 text-lg font-black text-white">Tài khoản gửi SMTP</h2>
+                            <h2 className="mt-1 text-lg font-black text-white">Tài khoản gửi email</h2>
                         </div>
                     </div>
 
@@ -120,7 +120,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
 
                     <div className="mt-5 flex gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-4">
                         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
-                        <p className="text-xs leading-5 text-zinc-400">App Password được mã hóa tại backend, không ghi log và không bao giờ được trả ngược về trình duyệt.</p>
+                        <p className="text-xs leading-5 text-zinc-400">Mật khẩu ứng dụng được mã hóa tại backend, không ghi log và không bao giờ được trả ngược về trình duyệt.</p>
                     </div>
                 </div>
 
@@ -128,7 +128,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
                     <div className="flex items-start justify-between gap-4">
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-orange-300">Thay tài khoản gửi</p>
-                            <h3 className="mt-1 text-base font-black text-white">Nhập email và App Password mới</h3>
+                            <h3 className="mt-1 text-base font-black text-white">Nhập email và Mật khẩu ứng dụng mới</h3>
                             <p className="mt-2 max-w-2xl text-xs leading-5 text-zinc-500">Hệ thống sẽ đăng nhập thử vào SMTP trước. Nếu bị từ chối, cấu hình đang chạy được giữ nguyên.</p>
                         </div>
                     </div>
@@ -158,7 +158,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
                         </Field>
                     </div>
 
-                    <Field label="App Password mới" htmlFor="smtp-app-password" className="mt-4">
+                    <Field label="Mật khẩu ứng dụng mới" htmlFor="smtp-app-password" className="mt-4">
                         <div className="relative">
                             <input
                                 id="smtp-app-password"
@@ -173,13 +173,13 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(value => !value)}
-                                aria-label={showPassword ? 'Ẩn App Password' : 'Hiện App Password'}
+                                aria-label={showPassword ? 'Ẩn Mật khẩu ứng dụng' : 'Hiện Mật khẩu ứng dụng'}
                                 className="absolute inset-y-0 right-0 px-4 text-zinc-500 hover:text-white"
                             >
                                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                         </div>
-                        <p className="mt-2 text-[11px] leading-5 text-zinc-600">Với Gmail, hãy dùng App Password 16 ký tự; không nhập mật khẩu đăng nhập Google thông thường.</p>
+                        <p className="mt-2 text-[11px] leading-5 text-zinc-600">Với Gmail, hãy dùng Mật khẩu ứng dụng (App Password) 16 ký tự; không nhập mật khẩu đăng nhập Google thông thường.</p>
                     </Field>
 
                     {feedback && (
@@ -197,7 +197,7 @@ export default function EmailProviderConfigurationPanel({ configuration, onUpdat
                             className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {workingAction === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                            Kiểm tra thử
+                            Kiểm tra kết nối
                         </button>
                         <button
                             type="submit"

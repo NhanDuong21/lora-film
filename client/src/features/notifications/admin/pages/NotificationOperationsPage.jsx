@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { notificationAdminService } from '../services/notificationAdminService';
 import { EmptyState, ErrorState, LoadingState, PageHeading, StatusPill, TechnicalDetails, formatDateTime, formatNumber, shortSha } from '../components/NotificationAdminUi';
 import { getNotificationFailurePresentation } from '../utils/notificationFailurePresentation';
-import { channelBusinessName, deliveryOutcome, notificationBusinessName, recipientDisplay, serviceBusinessName } from '../utils/notificationBusinessPresentation';
+import { channelBusinessName, channelOutcomeLines, deliveryOutcome, notificationBusinessName, recipientDisplay, serviceBusinessName } from '../utils/notificationBusinessPresentation';
 
 export default function NotificationOperationsPage({ mode = 'history' }) {
     const [searchParams] = useSearchParams();
@@ -108,7 +108,7 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                 <section className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3 sm:grid-cols-2 xl:grid-cols-5">
                     <input aria-label="Lọc theo dịch vụ nguồn" value={filters.sourceService} onChange={event => { setPage(0); setFilters(current => ({ ...current, sourceService: event.target.value })); }} placeholder="Nhóm nghiệp vụ" className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-400" />
                     <input aria-label="Lọc theo template" value={filters.templateKey} onChange={event => { setPage(0); setFilters(current => ({ ...current, templateKey: event.target.value.toUpperCase() })); }} placeholder="Mã mẫu (nâng cao)" className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 font-mono text-sm text-white outline-none focus:border-orange-400" />
-                    <select aria-label="Lọc theo trạng thái" value={filters.status} onChange={event => { setPage(0); setFilters(current => ({ ...current, status: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="">Mọi trạng thái</option><option value="ACCEPTED">Đã tiếp nhận</option><option value="PROCESSING">Đang xử lý</option><option value="COMPLETED">Hoàn tất</option><option value="PARTIALLY_FAILED">Hoàn tất một phần</option><option value="FAILED">Thất bại</option><option value="CANCELLED">Đã hủy</option></select>
+                    <select aria-label="Lọc theo trạng thái" value={filters.status} onChange={event => { setPage(0); setFilters(current => ({ ...current, status: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="">Mọi trạng thái</option><option value="ACCEPTED">Đã tiếp nhận</option><option value="PROCESSING">Đang xử lý</option><option value="COMPLETED">Đã xử lý</option><option value="PARTIALLY_FAILED">Một số kênh chưa thành công</option><option value="FAILED">Thất bại</option><option value="CANCELLED">Đã hủy</option></select>
                     <select aria-label="Lọc dữ liệu thật hoặc gửi thử" value={filters.test} onChange={event => { setPage(0); setFilters(current => ({ ...current, test: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="false">Ẩn dữ liệu gửi thử</option><option value="true">Chỉ dữ liệu gửi thử</option><option value="">Hiện tất cả dữ liệu</option></select>
                     <select aria-label="Khoảng thời gian" value={filters.timeRange} onChange={event => { setPage(0); setFilters(current => ({ ...current, timeRange: event.target.value })); }} className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200"><option value="24">Hôm nay</option><option value="168">7 ngày</option><option value="720">30 ngày</option><option value="custom">Khoảng tùy chọn</option></select>
                     {filters.timeRange === 'custom' && <div className="grid gap-2 sm:col-span-2 xl:col-span-5 sm:grid-cols-2"><label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Từ thời điểm<input type="datetime-local" value={filters.from} onChange={event => setFilters(current => ({ ...current, from: event.target.value }))} className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200" /></label><label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Đến thời điểm<input type="datetime-local" value={filters.to} onChange={event => setFilters(current => ({ ...current, to: event.target.value }))} className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200" /></label></div>}
@@ -131,9 +131,9 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
             {!error && !loading && mode === 'history' && requests.length > 0 && (
                 <div className="grid gap-5 xl:grid-cols-[1fr_0.8fr]">
                     <section className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50">
-                        <div className="hidden grid-cols-[1.2fr_0.8fr_0.55fr] gap-3 border-b border-zinc-800 bg-zinc-950/40 px-5 py-3 text-xs font-bold text-zinc-400 md:grid"><span>Thông báo / người nhận</span><span>Nhóm nghiệp vụ</span><span className="text-right">Kết quả</span></div>
+                        <div className="hidden grid-cols-[1.15fr_0.75fr_0.9fr] gap-3 border-b border-zinc-800 bg-zinc-950/40 px-5 py-3 text-xs font-bold text-zinc-400 md:grid"><span>Thông báo / người nhận</span><span>Nhóm nghiệp vụ</span><span className="text-right">Kết quả theo kênh</span></div>
                         {requests.map(item => (
-                            <button type="button" key={item.publicId} onClick={() => open(item.publicId)} className={`grid w-full gap-3 border-b border-zinc-800/70 px-5 py-4 text-left hover:bg-zinc-800/40 last:border-0 md:grid-cols-[1.2fr_0.8fr_0.55fr] md:items-center ${selected?.publicId === item.publicId ? 'bg-orange-500/5' : ''}`}>
+                            <button type="button" key={item.publicId} onClick={() => open(item.publicId)} className={`grid w-full gap-3 border-b border-zinc-800/70 px-5 py-4 text-left hover:bg-zinc-800/40 last:border-0 md:grid-cols-[1.15fr_0.75fr_0.9fr] md:items-center ${selected?.publicId === item.publicId ? 'bg-orange-500/5' : ''}`}>
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2"><p className="truncate text-sm font-black text-white">{notificationBusinessName(item.eventType, item.templateKey)}</p>{item.test && <StatusPill value="TEST" />}</div>
                                     <p className="mt-1 truncate text-xs text-zinc-400">Gửi tới: {recipientDisplay(item.recipient)}</p>
@@ -143,7 +143,7 @@ export default function NotificationOperationsPage({ mode = 'history' }) {
                                     <p className="truncate text-xs font-bold text-zinc-300">{serviceBusinessName(item.sourceService)}</p>
                                     <p className="mt-1 truncate text-[10px] text-zinc-500">Mẫu <span className="font-mono">{item.templateKey}</span>{(item.correlationId || item.sourceEventId) && <> · <span className="font-mono">{item.correlationId || item.sourceEventId}</span></>}</p>
                                 </div>
-                                <div className="md:text-right"><StatusPill value={item.status} /><p className="mt-1 text-[10px] text-zinc-600">{formatDateTime(item.createdAt)}</p></div>
+                                <RequestResultSummary item={item} />
                             </button>
                         ))}
                     </section>
@@ -210,11 +210,11 @@ function RequestDetail({ data, loading, onRetry, activeRevision }) {
             {finalDelivery?.failureCode && <FailureNotice code={finalDelivery.failureCode} />}
             {finalDelivery && ['FAILED', 'DEAD_LETTERED'].includes(finalDelivery.status) && finalDelivery.retryAllowed === false && <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs font-bold leading-5 text-amber-100">{finalDelivery.retryBlockedReason}</p>}
             <TechnicalDetails className="mt-4" summary="Thông tin kỹ thuật của yêu cầu"><dl className="space-y-3"><DetailLine label="Dịch vụ nguồn" value={data.sourceService} /><DetailLine label="Mẫu" value={data.templateKey} /><DetailLine label="Revision tại thời điểm gửi" value={shortSha(data.templateCommitSha)} mono />{data.templateVersion && <DetailLine label="Phiên bản mẫu" value={data.templateVersion} mono />}{data.correlationId && <DetailLine label="Mã đối chiếu" value={data.correlationId} mono />}<DetailLine label="Mã yêu cầu" value={data.publicId} mono /></dl></TechnicalDetails>
-            {data.templateCommitSha && activeRevision && data.templateCommitSha !== activeRevision && <p className="mt-3 rounded-xl border border-sky-400/15 bg-sky-400/5 px-3 py-2 text-[10px] leading-5 text-sky-200">Revision này được lưu tại thời điểm gửi và không còn là revision đang hoạt động ({shortSha(activeRevision)}).</p>}
+            {data.templateCommitSha && activeRevision && data.templateCommitSha !== activeRevision && <p className="mt-3 rounded-xl border border-sky-400/15 bg-sky-400/5 px-3 py-2 text-xs leading-5 text-sky-100">Lượt gửi này sử dụng phiên bản cũ của mẫu. Nội dung đã gửi vẫn được lưu nguyên để đối chiếu.</p>}
             <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Timeline xử lý</p>
                 <Timeline at={data.createdAt} label="Tiếp nhận yêu cầu" detail={notificationBusinessName(data.eventType, data.templateKey)} />
-                {data.templateCommitSha && <Timeline at={firstAttemptAt || data.updatedAt} label="Chuẩn bị nội dung gửi" detail={`Đã dùng phiên bản mẫu ${shortSha(data.templateCommitSha)}`} />}
+                {data.templateCommitSha && <Timeline at={firstAttemptAt || data.updatedAt} label="Chuẩn bị nội dung gửi" detail="Đã lưu nội dung tại thời điểm gửi" />}
                 {deliveries.flatMap(delivery => [
                     delivery.sentAt && <Timeline key={`${delivery.publicId}-sent`} at={delivery.sentAt} label={`${channelBusinessName(delivery.channel)}: nhà cung cấp đã nhận`} detail={`Lần thử ${delivery.attemptCount}`} />,
                     delivery.deliveredAt && <Timeline key={`${delivery.publicId}-delivered`} at={delivery.deliveredAt} label={`${channelBusinessName(delivery.channel)}: đã có xác nhận giao`} detail={delivery.providerMessageId || 'Hoàn tất'} />,
@@ -240,6 +240,10 @@ function RequestDetail({ data, loading, onRetry, activeRevision }) {
             </div>
         </aside>
     );
+}
+function RequestResultSummary({ item }) {
+    const lines = channelOutcomeLines(item.channelOutcomes);
+    return <div className="md:text-right"><StatusPill value={item.status} />{lines.length > 0 && <div className="mt-2 space-y-1">{lines.map(line => <p key={`${line.channel}-${line.outcome}`} className="text-[10px] leading-4 text-zinc-400"><span className="font-bold text-zinc-300">{line.channel}:</span> {line.outcome}</p>)}</div>}<p className="mt-1 text-[10px] text-zinc-600">{formatDateTime(item.createdAt)}</p></div>;
 }
 function Detail({ label, value, mono, wide }) {
     return <div className={`rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 ${wide ? 'col-span-2' : ''}`}><dt className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{label}</dt><dd className={`mt-1 truncate text-zinc-300 ${mono ? 'font-mono' : 'font-bold'}`}>{value}</dd></div>;

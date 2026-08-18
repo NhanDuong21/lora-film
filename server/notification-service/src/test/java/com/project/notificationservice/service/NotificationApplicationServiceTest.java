@@ -201,6 +201,23 @@ class NotificationApplicationServiceTest {
                 });
     }
 
+    @Test
+    void channelOutcomesExposeTheFinalResultOfEveryRequestedChannel() {
+        NotificationDelivery email = new NotificationDelivery();
+        email.setChannel(Channel.EMAIL);
+        email.setStatus(DeliveryStatus.FAILED);
+        NotificationDelivery inApp = new NotificationDelivery();
+        inApp.setChannel(Channel.IN_APP);
+        inApp.setStatus(DeliveryStatus.DELIVERED);
+        when(deliveryRepository.findByNotificationRequestIdOrderByCreatedAtAsc(10L))
+                .thenReturn(List.of(email, inApp));
+
+        assertThat(service.channelOutcomes(10L))
+                .containsExactly(
+                        new NotificationApplicationService.ChannelOutcome("EMAIL", "FAILED"),
+                        new NotificationApplicationService.ChannelOutcome("IN_APP", "DELIVERED"));
+    }
+
     private CreateNotificationCommand command(Category category) {
         return new CreateNotificationCommand(
                 "ticket-1", "booking-service", "event-1", "TICKET_PURCHASED",

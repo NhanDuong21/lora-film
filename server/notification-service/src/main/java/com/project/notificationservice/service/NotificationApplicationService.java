@@ -415,6 +415,15 @@ public class NotificationApplicationService {
                 .orElse(null);
     }
 
+    @Transactional(readOnly = true)
+    public List<ChannelOutcome> channelOutcomes(Long requestId) {
+        return deliveryRepository.findByNotificationRequestIdOrderByCreatedAtAsc(requestId).stream()
+                .map(delivery -> new ChannelOutcome(
+                        delivery.getChannel().name(),
+                        delivery.getStatus().name()))
+                .toList();
+    }
+
     private String maskEmail(String value) {
         if (value == null || value.isBlank()) return null;
         int separator = value.indexOf('@');
@@ -495,6 +504,9 @@ public class NotificationApplicationService {
             String maskedEmail,
             String maskedPhone,
             String recipientType) {
+    }
+
+    public record ChannelOutcome(String channel, String status) {
     }
 
     public record AttentionDetails(

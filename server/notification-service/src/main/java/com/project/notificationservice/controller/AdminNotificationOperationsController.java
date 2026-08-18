@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -170,10 +171,10 @@ public class AdminNotificationOperationsController {
         return ApiResponse.success(requests.map(request -> new RequestSummary(
                 request.getPublicId(), request.getSourceService(), request.getSourceEventId(),
                 request.getEventType(), request.getCorrelationId(), request.getTemplateKey(),
-                request.getTemplateCommitSha(), request.getTemplateVersion(), request.getLocale(),
-                request.getCategory().name(), request.getPriority().name(), request.getStatus().name(),
-                request.isTest(), service.recipientSummary(request.getId()),
-                request.getExpiresAt(), request.getCreatedAt())));
+                 request.getTemplateCommitSha(), request.getTemplateVersion(), request.getLocale(),
+                 request.getCategory().name(), request.getPriority().name(), request.getStatus().name(),
+                 request.isTest(), service.recipientSummary(request.getId()),
+                 service.channelOutcomes(request.getId()), request.getExpiresAt(), request.getCreatedAt())));
     }
 
     @GetMapping("/{publicId}")
@@ -237,10 +238,11 @@ public class AdminNotificationOperationsController {
             String locale,
             String category,
             String priority,
-            String status,
-            boolean test,
-            NotificationApplicationService.RecipientSummary recipient,
-            Instant expiresAt,
+             String status,
+             boolean test,
+             NotificationApplicationService.RecipientSummary recipient,
+             List<NotificationApplicationService.ChannelOutcome> channelOutcomes,
+             Instant expiresAt,
             Instant createdAt) {
     }
 }
