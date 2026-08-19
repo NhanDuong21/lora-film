@@ -12,8 +12,8 @@ const adminPromotionService = {
   createCampaign: async payload => unwrap(await apiClient.post('/api/admin/promotion-campaigns', payload)),
   updateCampaign: async (id, payload) => unwrap(await apiClient.put(`/api/admin/promotion-campaigns/${id}`, payload)),
   deleteCampaign: async id => unwrap(await apiClient.delete(`/api/admin/promotion-campaigns/${id}`)),
-  transitionCampaign: async (id, action, comment) => unwrap(await apiClient.patch(
-    `/api/admin/promotion-campaigns/${id}/status`, null, { params: cleanParams({ action, comment }) }
+  transitionCampaign: async (id, action, comment, expectedVersion) => unwrap(await apiClient.patch(
+    `/api/admin/promotion-campaigns/${id}/status`, null, { params: cleanParams({ action, comment, expectedVersion }) }
   )),
   approveCampaign: async (id, comment) => unwrap(await apiClient.post(
     `/api/admin/promotion-campaigns/${id}/approve`, { comment }
@@ -24,14 +24,19 @@ const adminPromotionService = {
   getApprovalHistory: async id => unwrap(await apiClient.get(
     `/api/admin/promotion-campaigns/${id}/approval-history`
   )),
-  overrideCampaignApproval: async (id, campaignCode, reason) => unwrap(await apiClient.post(
-    `/api/admin/promotion-campaigns/${id}/override-approval`, { campaignCode, reason }
+  overrideCampaignApproval: async (id, campaignCode, incidentReference, reason) => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/override-approval`, { campaignCode, incidentReference, reason }
   )),
   getForceReleaseImpact: async id => unwrap(await apiClient.get(
     `/api/admin/promotion-campaigns/${id}/force-release-impact`
   )),
-  forceReleaseCampaignHolds: async (id, campaignCode, reason) => unwrap(await apiClient.post(
-    `/api/admin/promotion-campaigns/${id}/force-release`, { campaignCode, reason }
+  forceReleaseCampaignHolds: async (id, campaignCode, reason, impact, idempotencyKey) => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/force-release`, {
+      campaignCode,
+      reason,
+      impactToken: impact?.impactToken,
+      campaignVersion: impact?.campaignVersion,
+    }, { headers: { 'Idempotency-Key': idempotencyKey } }
   )),
   reviewCampaignLegal: async (id, status, comment, legalNotificationRef = null) => unwrap(await apiClient.post(
     `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment, legalNotificationRef }

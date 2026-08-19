@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +27,12 @@ public interface PromotionReservationRepository extends
 
     Optional<PromotionReservation> findByReservationScopeKeyAndDeletedAtIsNull(
             String reservationScopeKey);
+
+    boolean existsByBookingPublicIdAndStatusInAndDeletedAtIsNull(
+            String bookingPublicId, Collection<ReservationStatus> statuses);
+
+    boolean existsByOrderPublicIdAndStatusInAndDeletedAtIsNull(
+            String orderPublicId, Collection<ReservationStatus> statuses);
 
     @Query("""
             select count(distinct reservation.id)
@@ -52,6 +59,20 @@ public interface PromotionReservationRepository extends
             order by reservation.publicId
             """)
     List<String> findIdsByCampaignAndStatus(
+            @Param("campaignPublicId") String campaignPublicId,
+            @Param("status") ReservationStatus status);
+
+    @Query("""
+            select distinct reservation
+            from PromotionReservation reservation, PromotionRedemption redemption
+            where redemption.reservationPublicId = reservation.publicId
+              and redemption.campaignPublicId = :campaignPublicId
+              and reservation.status = :status
+              and reservation.deletedAt is null
+              and redemption.deletedAt is null
+            order by reservation.publicId
+            """)
+    List<PromotionReservation> findByCampaignAndStatus(
             @Param("campaignPublicId") String campaignPublicId,
             @Param("status") ReservationStatus status);
 

@@ -12,9 +12,19 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /** Single source of truth for admin campaign actions and availability. */
+@Component
 public final class CampaignStatePolicy {
+
+    private BigDecimal highBudgetThreshold = new BigDecimal("50000000.00");
+
+    @Value("${promotion.approval.high-budget-threshold:50000000.00}")
+    void setHighBudgetThreshold(BigDecimal highBudgetThreshold) {
+        this.highBudgetThreshold = highBudgetThreshold;
+    }
 
     public CampaignResponse decorate(CampaignResponse campaign, UserPrincipal principal) {
         if (campaign == null) return null;
@@ -87,6 +97,10 @@ public final class CampaignStatePolicy {
 
     private List<String> pendingTasks(CampaignResponse campaign) {
         List<String> tasks = new ArrayList<>();
+        if (campaign.getStatus() == CampaignStatus.KILLED
+                || Boolean.TRUE.equals(campaign.getKillSwitch())) {
+            tasks.add("MONITOR_ACTIVE_HOLDS");
+        }
         if (campaign.getApprovalStatus() == CampaignApprovalStatus.PENDING) {
             tasks.add("APPROVAL_DECISION");
         }
@@ -116,9 +130,13 @@ public final class CampaignStatePolicy {
             }
             boolean selfApproval = actor != null && actor.equalsIgnoreCase(campaign.getCreatedBy());
             if (campaign.getApprovalStatus() == CampaignApprovalStatus.PENDING && !selfApproval) {
-                String approvalCapability = campaign.getBudgetAmount() != null
-                        && campaign.getBudgetAmount().compareTo(new BigDecimal("50000000")) > 0
-                        ? "PROMOTION_APPROVE_HIGH_BUDGET" : "PROMOTION_APPROVE_STANDARD";
+                String approvalCapability = campaign.getRequiredApprovalCapability();
+                if (approvalCapability == null || approvalCapability.isBlank()) {
+                    approvalCapability = campaign.getBudgetAmount() != null
+                            && campaign.getBudgetAmount().compareTo(highBudgetThreshold) > 0
+                            ? "PROMOTION_APPROVE_HIGH_BUDGET"
+                            : "PROMOTION_APPROVE_STANDARD";
+                }
                 if (permissions.contains(approvalCapability)) {
                     actions.add("APPROVE");
                     actions.add("REJECT");
@@ -136,7 +154,9 @@ public final class CampaignStatePolicy {
             if (campaign.getStatus() == CampaignStatus.SCHEDULED) actions.add("PAUSE");
             if (campaign.getStatus() == CampaignStatus.ACTIVE) actions.add("PAUSE");
             if (campaign.getStatus() == CampaignStatus.PAUSED
-                    && !Boolean.TRUE.equals(campaign.getKillSwitch())) actions.add("RESUME");
+                    && !Boolean.TRUE.equals(campaign.getKillSwitch())
+                    && (campaign.getEndAt() == null
+                    || Instant.now().isBefore(campaign.getEndAt()))) actions.add("RESUME");
             if (campaign.getStatus() == CampaignStatus.SCHEDULED
                     || campaign.getStatus() == CampaignStatus.ACTIVE
                     || campaign.getStatus() == CampaignStatus.PAUSED) actions.add("CANCEL");
@@ -147,7 +167,7 @@ public final class CampaignStatePolicy {
                 || campaign.getStatus() == CampaignStatus.PAUSED)) {
             actions.add("KILL_SWITCH");
         }
-        if (permissions.contains("PROMOTION_EMERGENCY_STOP")
+        if (permissions.contains("PROMOTION_FORCE_RELEASE")
                 && (campaign.getStatus() == CampaignStatus.KILLED
                 || Boolean.TRUE.equals(campaign.getKillSwitch()))) {
             actions.add("FORCE_RELEASE_HOLDS");

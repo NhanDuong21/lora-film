@@ -5,6 +5,7 @@ import com.project.promotionservice.promotion.enums.CampaignStatus;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
+import java.util.Collection;
 
 public final class CampaignSpecification {
 
@@ -57,6 +58,14 @@ public final class CampaignSpecification {
                 return null;
             }
             return cb.lessThanOrEqualTo(root.get("endAt"), to);
+        };
+    }
+
+    public static Specification<PromotionCampaign> publicIdIn(Collection<String> publicIds) {
+        return (root, query, cb) -> {
+            if (publicIds == null) return null;
+            if (publicIds.isEmpty()) return cb.disjunction();
+            return root.get("publicId").in(publicIds);
         };
     }
 }

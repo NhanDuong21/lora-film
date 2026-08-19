@@ -484,7 +484,7 @@ export default function AdminAccountPage() {
       draftCinemaPublicIds,
     );
     if (!roleChanged
-      && !(nextRoleCode === 'EMPLOYEE' && profileChanged)
+      && !(['EMPLOYEE', 'MANAGER'].includes(nextRoleCode) && profileChanged)
       && !(nextRoleCode === 'MANAGER' && cinemaAssignmentsChanged)) {
       setSelectedAccount(null);
       return;
@@ -529,6 +529,12 @@ export default function AdminAccountPage() {
       }
       if (nextRoleCode === 'EMPLOYEE' && (roleChanged || profileChanged)) {
         await updateAccountAccessProfile(selectedAccount.id, Number(draftAccessProfileId));
+      }
+      if (nextRoleCode === 'MANAGER' && (roleChanged || profileChanged)) {
+        await updateAccountAccessProfile(
+          selectedAccount.id,
+          draftAccessProfileId ? Number(draftAccessProfileId) : null,
+        );
       }
       if (nextRoleCode === 'MANAGER' && (roleChanged || cinemaAssignmentsChanged)) {
         await updateManagerCinemaAssignments(selectedAccount.id, draftCinemaPublicIds);
@@ -977,8 +983,8 @@ export default function AdminAccountPage() {
               <div className="space-y-5">
                 {selectedRoleProtectionReason ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><ShieldAlert size={18} className="mt-0.5 shrink-0" /><p>{selectedRoleProtectionReason}</p></div> : null}
                 <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Loại người dùng<Select className="mt-2" value={draftRoleId} onChange={event => { setDraftRoleId(event.target.value); setAccessReason(''); }} disabled={selectedAccount.status === 'DELETED' || Boolean(selectedRoleProtectionReason)}>{systemRoles.filter(role => normalizeRoleCode(role) !== 'CUSTOMER').map(role => <option key={role.id} value={role.id}>{getRolePresentation(role).label}</option>)}</Select></label>
-                {normalizeRoleCode(selectedRole) === 'EMPLOYEE' ? (
-                  <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Nhóm nghiệp vụ<Select className="mt-2" value={draftAccessProfileId} onChange={event => setDraftAccessProfileId(event.target.value)}>{accessProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.permissions?.length || 0} quyền công việc</option>)}</Select></label>
+                {['EMPLOYEE', 'MANAGER'].includes(normalizeRoleCode(selectedRole)) ? (
+                  <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">{normalizeRoleCode(selectedRole) === 'MANAGER' ? 'Hồ sơ quyền bổ sung' : 'Nhóm nghiệp vụ'}<Select className="mt-2" value={draftAccessProfileId} onChange={event => setDraftAccessProfileId(event.target.value)}>{normalizeRoleCode(selectedRole) === 'MANAGER' ? <option value="">Không cấp quyền bổ sung</option> : null}{accessProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.permissions?.length || 0} quyền công việc</option>)}</Select></label>
                 ) : null}
                 {normalizeRoleCode(selectedRole) === 'MANAGER' ? <div className="space-y-2"><p className="text-xs font-black uppercase tracking-wide text-zinc-500">Rạp được phân công</p>{cinemas.map(cinema => { const checked = draftCinemaPublicIds.includes(String(cinema.publicId)); return <button key={cinema.publicId} type="button" onClick={() => setDraftCinemaPublicIds(current => checked ? current.filter(id => id !== String(cinema.publicId)) : [...current, String(cinema.publicId)])} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${checked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-white/10'}`}><span className="font-semibold text-zinc-200">{cinema.name}</span>{checked ? <CheckCircle2 size={16} className="text-brand-orange" /> : null}</button>; })}</div> : null}
                 {normalizeRoleCode(selectedRole) === 'ADMIN' ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><AlertTriangle size={18} className="mt-0.5 shrink-0" /><p>Quản trị hệ thống có toàn quyền. Thao tác nâng quyền cần được kiểm tra trong nhật ký hoạt động.</p></div> : null}

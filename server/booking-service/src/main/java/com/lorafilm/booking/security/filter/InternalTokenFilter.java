@@ -25,6 +25,9 @@ public class InternalTokenFilter extends OncePerRequestFilter {
     @Value("${app.internal-payment-token:${app.internal-token}}")
     private String internalPaymentToken;
 
+    @Value("${app.internal-promotion-audit-token:}")
+    private String internalPromotionAuditToken;
+
     @PostConstruct
     public void init() {
         if (internalToken == null || internalToken.isBlank()) {
@@ -32,6 +35,9 @@ public class InternalTokenFilter extends OncePerRequestFilter {
         }
         if (internalPaymentToken == null || internalPaymentToken.isBlank()) {
             throw new IllegalStateException("CRITICAL SECURITY FAILURE: 'app.internal-payment-token' configuration is missing! Must configure PAYMENT_TO_BOOKING_INTERNAL_TOKEN environment variable.");
+        }
+        if (internalPromotionAuditToken == null || internalPromotionAuditToken.isBlank()) {
+            throw new IllegalStateException("CRITICAL SECURITY FAILURE: promotion audit token is missing");
         }
     }
 
@@ -65,7 +71,9 @@ public class InternalTokenFilter extends OncePerRequestFilter {
                 mapper.findAndRegisterModules();
                 mapper.writeValue(response.getOutputStream(), errorResponse);
                 return;
-            } else if (!isConstantTimeEquals(tokenHeader, expectedToken)) {
+            } else if (!isConstantTimeEquals(tokenHeader, expectedToken)
+                    && !(isPromotionAuditPath(request, path)
+                    && isConstantTimeEquals(tokenHeader, internalPromotionAuditToken))) {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setCharacterEncoding("UTF-8");
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -90,6 +98,12 @@ public class InternalTokenFilter extends OncePerRequestFilter {
                 || normalized.endsWith("/payment-results")
                 || normalized.endsWith("/refund-results")
                 || normalized.endsWith("/refund"));
+    }
+
+    private boolean isPromotionAuditPath(HttpServletRequest request, String path) {
+        return "GET".equalsIgnoreCase(request.getMethod())
+                && path.toLowerCase().startsWith("/internal/bookings/")
+                && path.toLowerCase().endsWith("/lifecycle-context");
     }
 
     private boolean isConstantTimeEquals(String tokenA, String tokenB) {

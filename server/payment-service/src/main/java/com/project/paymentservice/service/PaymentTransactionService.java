@@ -324,9 +324,35 @@ public class PaymentTransactionService {
         return new EmergencyPaymentStopResult(stoppedCount, alreadySuccessfulBookingPublicIds);
     }
 
+    @Transactional(readOnly = true)
+    public EmergencyPaymentAssessmentResult assessPaymentsForEmergency(
+            List<String> bookingPublicIds) {
+        if (bookingPublicIds == null || bookingPublicIds.isEmpty()) {
+            return new EmergencyPaymentAssessmentResult(List.of(), List.of());
+        }
+        List<Payment> payments = paymentRepository
+                .findByBookingPublicIdIn(bookingPublicIds);
+        List<String> active = payments.stream()
+                .filter(payment -> transitionService.isActive(payment.getStatus()))
+                .map(Payment::getBookingPublicId)
+                .distinct()
+                .toList();
+        List<String> successful = payments.stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.SUCCESS)
+                .map(Payment::getBookingPublicId)
+                .distinct()
+                .toList();
+        return new EmergencyPaymentAssessmentResult(active, successful);
+    }
+
     public record EmergencyPaymentStopResult(
             int stoppedPaymentAttemptCount,
             List<String> alreadySuccessfulBookingPublicIds) {
+    }
+
+    public record EmergencyPaymentAssessmentResult(
+            List<String> activePaymentBookingPublicIds,
+            List<String> successfulPaymentBookingPublicIds) {
     }
 
     @Transactional

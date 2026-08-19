@@ -85,14 +85,20 @@ const looksLikeEnglishSeedCopy = (value) =>
   /\b(welcome|save|discount|automatic|promotion|applied|order|instant|off)\b/i.test(String(value || ""));
 
 const customerPromotionTitle = (promotion) => {
-  const original = promotion?.name || "";
+  const original = promotion?.name || promotion?.promotionName || "";
   if (/welcome/i.test(original) && /10\s*%/i.test(original)) return "Chào thành viên mới – giảm 10%";
-  if (/(50\s*k|50[.,]?000)/i.test(original) && /discount|save/i.test(original)) return "Giảm ngay 50.000đ";
+  if (/(50\s*k|50[.,]?000)/i.test(original) && /discount|save|off|gift/i.test(original)) return "Giảm ngay 50.000đ";
   if (/combo/i.test(original) && /20\s*%/i.test(original)) return "Combo tối – giảm 20%";
   if (!looksLikeEnglishSeedCopy(original)) return original || "Ưu đãi LoraFilm";
   return promotion?.promotionType === "AUTO"
     ? `Ưu đãi tự động ${voucherDiscountSummary(promotion)}`
     : `Ưu đãi giảm ${voucherDiscountSummary(promotion)}`;
+};
+
+const compactHistoryReference = (value) => {
+  const text = String(value || "");
+  if (text.length <= 26) return text;
+  return `${text.slice(0, 14)}…${text.slice(-6)}`;
 };
 
 const customerPromotionDescription = (promotion) => {
@@ -335,7 +341,9 @@ function PromotionCard({
         </p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-semibold text-zinc-600">
           <span>Đến {formatDateTime(promotion.validTo)}</span>
-          {remaining !== null && <span>Còn {remaining} lượt phát hành</span>}
+          {remaining !== null && (
+            <span>Còn {remaining} lượt {system ? "áp dụng" : "phát hành"}</span>
+          )}
           {usageRemaining !== null && (
             <span>Còn {usageRemaining} lượt dùng</span>
           )}
@@ -359,7 +367,7 @@ function PromotionCard({
           {remaining === 0 ? "Đã hết lượt" : "Nhận vào ví"}
         </button>
       ) : system ? (
-        <span className="inline-flex h-9 items-center gap-2 self-center rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-bold text-sky-200">
+        <span className="inline-flex items-center gap-2 self-center px-1 text-xs font-bold text-sky-200">
           <Globe2 className="h-4 w-4" /> Tự động khi đủ điều kiện
         </span>
       ) : (
@@ -384,7 +392,7 @@ function PromotionHistoryRow({ item }) {
         <div className="flex flex-wrap items-center gap-2">
           <History className="h-4 w-4 text-zinc-500" />
           <h3 className="break-words text-sm font-black text-white">
-            {item.promotionName || "Ưu đãi LoraFilm"}
+            {customerPromotionTitle(item)}
           </h3>
           <span className={`rounded border px-2 py-0.5 text-[10px] font-black ${badgeClass(item.eventType)}`}>
             {labels[item.eventType] || labelFor(item.eventType)}
@@ -395,10 +403,15 @@ function PromotionHistoryRow({ item }) {
             {item.promotionCode}
           </p>
         )}
-        <p className="mt-2 text-xs leading-5 text-zinc-400">{item.detail}</p>
-        {item.bookingPublicId && (
-          <p className="mt-1 break-all text-[10px] text-zinc-600">
-            Đơn hàng: {item.bookingPublicId}
+        {Number(item.discountAmount || 0) > 0 && (
+          <p className="mt-2 text-sm font-black text-emerald-300">
+            Bạn đã tiết kiệm {currency(item.discountAmount)}
+          </p>
+        )}
+        <p className="mt-1 text-xs leading-5 text-zinc-400">{item.detail}</p>
+        {item.bookingReference && (
+          <p className="mt-1 text-[10px] font-bold text-zinc-500" title={item.bookingReference}>
+            Mã lượt ưu đãi {compactHistoryReference(item.bookingReference)}
           </p>
         )}
       </div>

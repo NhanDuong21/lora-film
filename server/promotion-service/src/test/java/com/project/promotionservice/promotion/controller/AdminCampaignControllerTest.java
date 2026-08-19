@@ -10,8 +10,12 @@ import com.project.promotionservice.promotion.dto.response.CampaignDetailRespons
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.service.CampaignService;
 import com.project.promotionservice.promotion.service.ApprovalService;
+import com.project.promotionservice.promotion.service.PromotionResourceScopeService;
+import com.project.promotionservice.promotion.service.CampaignStatePolicy;
+import com.project.promotionservice.promotion.enums.CampaignScopeType;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -22,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -44,6 +49,12 @@ class AdminCampaignControllerTest {
     @MockBean
     private ApprovalService approvalService;
 
+    @MockBean
+    private PromotionResourceScopeService resourceScope;
+
+    @MockBean
+    private CampaignStatePolicy statePolicy;
+
     // Mock security-related beans to prevent bootstrap failures
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -53,6 +64,12 @@ class AdminCampaignControllerTest {
     private RequestLoggingFilter requestLoggingFilter;
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @BeforeEach
+    void preserveControllerResponses() {
+        when(statePolicy.decorate(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     @Test
     void createCampaign_success() throws Exception {
@@ -69,7 +86,11 @@ class AdminCampaignControllerTest {
         response.setCode("WINTER2026");
         response.setName("Winter 2026 Promo");
 
-        when(campaignService.createCampaign(any(), any())).thenReturn(response);
+        when(resourceScope.creationScope(any(), any())).thenReturn(
+                new PromotionResourceScopeService.CreationScope(
+                        CampaignScopeType.GLOBAL, Set.of()));
+        when(campaignService.createCampaign(any(), any(), any(), any()))
+                .thenReturn(response);
 
         mockMvc.perform(post("/api/admin/promotion-campaigns")
                         .contentType(MediaType.APPLICATION_JSON)

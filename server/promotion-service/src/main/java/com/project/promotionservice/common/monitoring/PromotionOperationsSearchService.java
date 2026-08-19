@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 @Service
@@ -47,18 +48,35 @@ public class PromotionOperationsSearchService {
             String paymentPublicId, String customerReference,
             ReleaseReasonType releaseReasonType, String status,
             Instant from, Instant to, int limit) {
+        return search(queryText, campaignPublicId, promotionPublicId,
+                reservationPublicId, bookingPublicId, paymentPublicId,
+                customerReference, releaseReasonType, status, from, to, limit,
+                null);
+    }
+
+    @Transactional(readOnly = true)
+    public PromotionOperationsSearchResponse search(
+            String queryText, String campaignPublicId, String promotionPublicId,
+            String reservationPublicId, String bookingPublicId,
+            String paymentPublicId, String customerReference,
+            ReleaseReasonType releaseReasonType, String status,
+            Instant from, Instant to, int limit,
+            Collection<String> accessibleCampaignIds) {
         PageRequest pageable = PageRequest.of(0, limit,
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<PromotionReservation> reservations = reservationRepository.findAll(
                 reservationSpec(queryText, campaignPublicId, promotionPublicId,
                         reservationPublicId, bookingPublicId, paymentPublicId,
-                        customerReference, releaseReasonType, status, from, to), pageable);
+                        customerReference, releaseReasonType, status, from, to,
+                        accessibleCampaignIds), pageable);
         Page<PromotionRedemption> redemptions = redemptionRepository.findAll(
                 redemptionSpec(queryText, campaignPublicId, promotionPublicId,
                         reservationPublicId, bookingPublicId, paymentPublicId,
-                        customerReference, status, from, to), pageable);
+                        customerReference, status, from, to,
+                        accessibleCampaignIds), pageable);
         Page<PromotionRedemptionAdjustment> adjustments = adjustmentRepository.findAll(
-                adjustmentSpec(queryText, reservationPublicId, status, from, to), pageable);
+                adjustmentSpec(queryText, reservationPublicId, status, from, to,
+                        accessibleCampaignIds), pageable);
         return new PromotionOperationsSearchResponse(
                 reservations.map(this::reservationItem).getContent(),
                 redemptions.map(this::redemptionItem).getContent(),
@@ -70,7 +88,8 @@ public class PromotionOperationsSearchService {
     private Specification<PromotionReservation> reservationSpec(
             String text, String campaignId, String promotionId, String reservationId,
             String bookingId, String paymentId, String customer,
-            ReleaseReasonType reasonType, String status, Instant from, Instant to) {
+            ReleaseReasonType reasonType, String status, Instant from, Instant to,
+            Collection<String> accessibleCampaignIds) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isNull(root.get("deletedAt")));
@@ -92,13 +111,19 @@ public class PromotionOperationsSearchService {
                         like(cb, root, "customerPhone", pattern), like(cb, root, "sourceReference", pattern),
                         like(cb, root, "reasonDetail", pattern)));
             }
-            if (hasText(campaignId) || hasText(promotionId)) {
+            if (hasText(campaignId) || hasText(promotionId)
+                    || accessibleCampaignIds != null) {
                 Subquery<Long> subquery = query.subquery(Long.class);
                 Root<PromotionRedemption> redemption = subquery.from(PromotionRedemption.class);
                 List<Predicate> sub = new ArrayList<>();
                 sub.add(cb.equal(redemption.get("reservationPublicId"), root.get("publicId")));
                 if (hasText(campaignId)) sub.add(cb.equal(redemption.get("campaignPublicId"), campaignId));
                 if (hasText(promotionId)) sub.add(cb.equal(redemption.get("promotionPublicId"), promotionId));
+                if (accessibleCampaignIds != null) {
+                    sub.add(accessibleCampaignIds.isEmpty()
+                            ? cb.disjunction()
+                            : redemption.get("campaignPublicId").in(accessibleCampaignIds));
+                }
                 subquery.select(redemption.get("id")).where(sub.toArray(Predicate[]::new));
                 predicates.add(cb.exists(subquery));
             }
@@ -109,10 +134,16 @@ public class PromotionOperationsSearchService {
     private Specification<PromotionRedemption> redemptionSpec(
             String text, String campaignId, String promotionId, String reservationId,
             String bookingId, String paymentId, String customer, String status,
-            Instant from, Instant to) {
+            Instant from, Instant to,
+            Collection<String> accessibleCampaignIds) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isNull(root.get("deletedAt")));
+            if (accessibleCampaignIds != null) {
+                predicates.add(accessibleCampaignIds.isEmpty()
+                        ? cb.disjunction()
+                        : root.get("campaignPublicId").in(accessibleCampaignIds));
+            }
             addEqual(predicates, cb, root, "campaignPublicId", campaignId);
             addEqual(predicates, cb, root, "promotionPublicId", promotionId);
             addEqual(predicates, cb, root, "reservationPublicId", reservationId);
@@ -136,13 +167,24 @@ public class PromotionOperationsSearchService {
     }
 
     private Specification<PromotionRedemptionAdjustment> adjustmentSpec(
-            String text, String reservationId, String status, Instant from, Instant to) {
+            String text, String reservationId, String status, Instant from, Instant to,
+            Collection<String> accessibleCampaignIds) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isNull(root.get("deletedAt")));
             addEqual(predicates, cb, root, "reservationPublicId", reservationId);
             addEqual(predicates, cb, root, "adjustmentType", status);
             addRange(predicates, cb, root, "occurredAt", from, to);
+            if (accessibleCampaignIds != null) {
+                Subquery<Long> subquery = query.subquery(Long.class);
+                Root<PromotionRedemption> redemption = subquery.from(PromotionRedemption.class);
+                subquery.select(redemption.get("id")).where(
+                        cb.equal(redemption.get("publicId"), root.get("redemptionPublicId")),
+                        accessibleCampaignIds.isEmpty()
+                                ? cb.disjunction()
+                                : redemption.get("campaignPublicId").in(accessibleCampaignIds));
+                predicates.add(cb.exists(subquery));
+            }
             if (hasText(text)) {
                 String pattern = "%" + text.trim().toLowerCase() + "%";
                 predicates.add(cb.or(like(cb, root, "publicId", pattern),
@@ -155,7 +197,8 @@ public class PromotionOperationsSearchService {
     }
 
     private LedgerItem reservationItem(PromotionReservation item) {
-        return new LedgerItem("RESERVATION", item.getPublicId(), item.getStatus().name(),
+        return new LedgerItem("RESERVATION", item.getPublicId(), item.getReservationCode(),
+                item.getStatus().name(),
                 null, null, item.getPublicId(), item.getBookingPublicId(), item.getOrderPublicId(),
                 item.getPaymentPublicId(), item.getUserPublicId(),
                 item.getReleaseReasonType() == null ? null : item.getReleaseReasonType().name(),
@@ -164,7 +207,8 @@ public class PromotionOperationsSearchService {
     }
 
     private LedgerItem redemptionItem(PromotionRedemption item) {
-        return new LedgerItem("REDEMPTION", item.getPublicId(), item.getStatus().name(),
+        return new LedgerItem("REDEMPTION", item.getPublicId(),
+                reservationReference(item.getReservationPublicId()), item.getStatus().name(),
                 item.getCampaignPublicId(), item.getPromotionPublicId(), item.getReservationPublicId(),
                 item.getBookingPublicId(), item.getOrderPublicId(), item.getPaymentPublicId(),
                 item.getUserPublicId(), null, item.getRollbackReason(), null,
@@ -172,10 +216,18 @@ public class PromotionOperationsSearchService {
     }
 
     private LedgerItem adjustmentItem(PromotionRedemptionAdjustment item) {
-        return new LedgerItem("ADJUSTMENT", item.getPublicId(), item.getAdjustmentType(),
+        return new LedgerItem("ADJUSTMENT", item.getPublicId(),
+                reservationReference(item.getReservationPublicId()), item.getAdjustmentType(),
                 null, item.getRedemptionPublicId(), item.getReservationPublicId(),
                 null, null, null, null, item.getReasonCode(), item.getReason(), null,
                 item.getDiscountAmount(), item.getOccurredAt());
+    }
+
+    private String reservationReference(String reservationPublicId) {
+        if (!hasText(reservationPublicId)) return null;
+        return reservationRepository.findByPublicIdAndDeletedAtIsNull(reservationPublicId)
+                .map(PromotionReservation::getReservationCode)
+                .orElse(null);
     }
 
     private static boolean hasText(String value) { return value != null && !value.isBlank(); }

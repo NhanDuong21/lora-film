@@ -77,6 +77,11 @@ const labels = {
   EXHAUSTED: "Hết hạn mức đơn",
   BUDGET_EXHAUSTED: "Hết ngân sách",
   CAMPAIGN_BLOCKED: "Đã chặn áp dụng mới",
+  CONFIRMED: "Đã xác nhận",
+  RELEASED: "Đã giải phóng",
+  REVERSED: "Đã hoàn lại",
+  RESERVED: "Đang giữ",
+  ROLLBACKED: "Đã thu hồi",
   AUTO: "Ưu đãi tự động",
   VOUCHER: "Voucher sự kiện",
   COUPON: "Coupon theo khách",
@@ -104,8 +109,37 @@ const badge = (status) => {
 };
 
 const money = (value) => `${Number(value || 0).toLocaleString("vi-VN")}đ`;
-const dateTime = (value) =>
-  value ? new Date(value).toLocaleString("vi-VN") : "-";
+const dateTime = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  }).format(date);
+};
+
+const releaseReasonLabels = {
+  PAYMENT_FAILED: "Thanh toán thất bại",
+  PAYMENT_TIMEOUT: "Quá hạn thanh toán",
+  CUSTOMER_CANCELLED_BOOKING: "Khách hủy đơn",
+  STAFF_CANCELLED_BOOKING: "Nhân viên hủy đơn",
+  BOOKING_EXPIRED: "Đơn hết hạn",
+  CAMPAIGN_PAUSED: "Chiến dịch tạm dừng",
+  CAMPAIGN_KILL_SWITCH: "Chiến dịch dừng khẩn cấp",
+  SYSTEM_COMPENSATION: "Hệ thống bù trừ",
+};
+
+const compactReference = (value) => {
+  const text = String(value || "");
+  if (text.length <= 26) return text || "-";
+  return `${text.slice(0, 14)}…${text.slice(-6)}`;
+};
 const toLocalInput = (value) => {
   const date = value ? new Date(value) : new Date();
   const offset = date.getTimezoneOffset() * 60_000;
@@ -118,13 +152,26 @@ const nestedPageData = (payload) =>
   payload?.data?.data ?? payload?.data ?? payload ?? emptyPage;
 const errorText = (error) => friendlyPromotionError(error);
 
-function StatusBadge({ value }) {
+const legalStatusText = (campaign) => {
+  if (campaign?.legalStatus === "PASSED") return "Đạt pháp lý";
+  if (campaign?.legalStatus === "FAILED") return "Cần chỉnh sửa";
+  if (
+    campaign?.status === "DRAFT" &&
+    [undefined, null, "DRAFT"].includes(campaign?.approvalStatus)
+  )
+    return "Chưa yêu cầu";
+  if (campaign?.approvalStatus !== "APPROVED") return "Chưa bắt đầu";
+  if (campaign?.legalStatus === "PENDING") return "Chờ đánh giá";
+  return labels[campaign?.legalStatus] || "Chưa yêu cầu";
+};
+
+function StatusBadge({ value, text }) {
   if (!value) return null;
   return (
     <span
       className={`inline-flex rounded border px-2 py-1 text-[10px] font-bold ${badge(value)}`}
     >
-      {labels[value] || value}
+      {text || labels[value] || value}
     </span>
   );
 }
@@ -168,15 +215,15 @@ const campaignActionTitle = (action) =>
 const campaignActionDescription = (campaign, action) => {
   const name = `“${campaign.name}”`;
   if (action === "PUBLISH")
-    return `${name} sẽ tự chạy theo thời gian hiệu lực. Các promotion thuộc chiến dịch sẽ không được bật thủ công.`;
+    return `${name} sẽ tự chạy theo thời gian hiệu lực. Các ưu đãi thuộc chiến dịch sẽ không được bật thủ công.`;
   if (action === "ACTIVATE")
-    return `${name} cùng các promotion hợp lệ sẽ được mở để áp dụng tại checkout.`;
+    return `${name} cùng các ưu đãi hợp lệ sẽ được mở để áp dụng khi khách đặt vé.`;
   if (action === "PAUSE")
-    return `${name} sẽ chặn preview/reserve mới nhưng các lượt đang giữ vẫn được confirm, release hoặc hết hạn bình thường. Có thể tiếp tục lại sau.`;
+    return `${name} sẽ chặn các lượt kiểm tra và giữ ưu đãi mới. Các lượt đang giữ vẫn có thể được xác nhận sử dụng, giải phóng hoặc tự hết hạn. Có thể tiếp tục chiến dịch sau.`;
   if (action === "CANCEL")
     return `${name} sẽ bị chặn áp dụng mới vĩnh viễn và không thể tiếp tục lại.`;
   if (action === "KILL_SWITCH")
-    return `${name} sẽ bị chặn áp dụng mới ngay lập tức. Các lượt đang giữ không tự giải phóng; thao tác giải phóng hàng loạt được tách riêng để tránh làm hỏng booking đang thanh toán.`;
+    return `${name} sẽ bị chặn áp dụng mới ngay lập tức. Các lượt đang giữ không tự giải phóng; thao tác thu hồi khẩn cấp được tách riêng để bảo vệ các đơn đang thanh toán.`;
   return `Bạn đang cập nhật bước ${campaignActionTitle(action).replace("?", "").toLowerCase()} cho ${name}.`;
 };
 
@@ -185,6 +232,19 @@ export default function AdminPromotionCenterPage() {
   const permissions = user?.permissions || [];
   const canViewOperations = permissions.includes("PROMOTION_AUDIT_VIEW");
   const canAuthor = permissions.includes("PROMOTION_AUTHOR");
+  const normalizedRole = String(user?.role || "")
+    .replace(/^ROLE_/, "")
+    .toUpperCase();
+  const isManager = normalizedRole === "MANAGER";
+  const managerCinemaPublicIds = isManager
+    ? Array.from(
+        new Set(
+          (user?.cinemaPublicIds || user?.assignedCinemaPublicIds || [])
+            .filter(Boolean)
+            .map(String),
+        ),
+      )
+    : [];
   const [view, setView] = useState("campaigns");
   const [tab, setTab] = useState("system");
   const [campaigns, setCampaigns] = useState(emptyPage);
@@ -384,6 +444,7 @@ export default function AdminPromotionCenterPage() {
             campaign.publicId,
             action,
             action === "KILL_SWITCH" ? "Stopped by operator" : undefined,
+            campaign.version,
           );
 
   const issueToUsers = async (promotion, userPublicIds) => {
@@ -710,6 +771,8 @@ export default function AdminPromotionCenterPage() {
         <CampaignModal
           record={modal.record}
           template={modal.template}
+          isManager={isManager}
+          managerCinemaPublicIds={managerCinemaPublicIds}
           busy={busy}
           onClose={() => setModal(null)}
           onSave={(payload, editing) =>
@@ -739,10 +802,14 @@ export default function AdminPromotionCenterPage() {
           action={modal.action}
           busy={busy}
           onClose={() => setModal(null)}
-          onSubmit={(reason, campaignCode) => run(
+          onSubmit={(reason, campaignCode, impact, idempotencyKey) => run(
             () => modal.action === "KILL_SWITCH"
-              ? adminPromotionService.transitionCampaign(modal.record.publicId, "KILL_SWITCH", reason)
-              : adminPromotionService.forceReleaseCampaignHolds(modal.record.publicId, campaignCode, reason),
+              ? adminPromotionService.transitionCampaign(
+                modal.record.publicId, "KILL_SWITCH", reason, modal.record.version,
+              )
+              : adminPromotionService.forceReleaseCampaignHolds(
+                modal.record.publicId, campaignCode, reason, impact, idempotencyKey,
+              ),
             modal.action === "KILL_SWITCH"
               ? "Đã dừng khẩn cấp chiến dịch. Các lượt đang giữ chưa bị giải phóng."
               : "Đã giải phóng các lượt giữ ưu đãi đang hoạt động.",
@@ -756,13 +823,15 @@ export default function AdminPromotionCenterPage() {
           action={modal.action}
           busy={busy}
           onClose={() => setModal(null)}
-          onSubmit={({ comment, legalStatus, legalReference, campaignCode }) => run(
+          onSubmit={({ comment, legalStatus, legalReference, campaignCode, incidentReference }) => run(
             () => modal.action === "APPROVE"
               ? adminPromotionService.approveCampaign(modal.record.publicId, comment)
               : modal.action === "REJECT"
                 ? adminPromotionService.rejectCampaign(modal.record.publicId, comment)
                 : modal.action === "OVERRIDE_APPROVE"
-                  ? adminPromotionService.overrideCampaignApproval(modal.record.publicId, campaignCode, comment)
+                  ? adminPromotionService.overrideCampaignApproval(
+                    modal.record.publicId, campaignCode, incidentReference, comment,
+                  )
                   : adminPromotionService.reviewCampaignLegal(modal.record.publicId, legalStatus, comment, legalReference),
             "Đã ghi nhận quyết định và cập nhật luồng chiến dịch.",
             true,
@@ -859,10 +928,10 @@ function EmptyPromotions({ type }) {
 }
 
 const alertLabels = {
-  EXPIRATION_BACKLOG_HIGH: "Tồn đọng reservation quá hạn vượt ngưỡng",
-  EXPIRATION_OLDEST_AGE_HIGH: "Reservation quá hạn lâu nhất vượt SLA",
-  REVERSAL_RATE_HIGH: "Tần suất reversal trong một giờ tăng cao",
-  CAMPAIGN_BUDGET_EXPOSURE_HIGH: "Campaign chạm ngưỡng exposure ngân sách",
+  EXPIRATION_BACKLOG_HIGH: "Tồn đọng lượt giữ quá hạn vượt ngưỡng",
+  EXPIRATION_OLDEST_AGE_HIGH: "Lượt giữ quá hạn lâu nhất vượt thời gian xử lý",
+  REVERSAL_RATE_HIGH: "Tần suất hoàn lại trong một giờ tăng cao",
+  CAMPAIGN_BUDGET_EXPOSURE_HIGH: "Chiến dịch chạm ngưỡng ngân sách đã dùng và đang giữ",
 };
 
 const durationText = (seconds) => {
@@ -942,9 +1011,9 @@ function OperationsDashboard({ data, loading }) {
       tone: "text-emerald-300 border-emerald-500/30",
     },
     {
-      label: "Budget exposure",
+      label: "Ngân sách đã dùng và đang giữ",
       value: money(promotion.activeBudgetExposure),
-      detail: `${Number(promotion.campaignsAtExposureThreshold || 0)} campaign chạm ngưỡng`,
+      detail: `${Number(promotion.campaignsAtExposureThreshold || 0)} chiến dịch chạm ngưỡng`,
       icon: Activity,
       tone: "text-orange-300 border-orange-500/30",
     },
@@ -1002,8 +1071,8 @@ function OperationsDashboard({ data, loading }) {
       </div>
       <section className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950/30">
         <header className="border-b border-zinc-800 p-4">
-          <h2 className="text-sm font-black text-white">Reservation explorer & ledger điều chỉnh</h2>
-          <p className="mt-1 text-xs text-zinc-500">Tìm theo campaign, promotion, reservation, booking, payment, khách hàng, lý do release, trạng thái hoặc thời gian.</p>
+          <h2 className="text-sm font-black text-white">Tra cứu lượt giữ và điều chỉnh ưu đãi</h2>
+          <p className="mt-1 text-xs text-zinc-500">Tìm theo chiến dịch, ưu đãi, mã lượt giữ, đơn đặt vé, thanh toán, khách hàng, lý do giải phóng, trạng thái hoặc thời gian.</p>
           <div className="mt-4 grid gap-2 md:grid-cols-5">
             <input
               value={filters.query}
@@ -1013,11 +1082,11 @@ function OperationsDashboard({ data, loading }) {
             />
             <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} className={fieldClass}>
               <option value="">Mọi trạng thái</option>
-              {["ACTIVE", "CONFIRMED", "RELEASED", "EXPIRED", "REVERSED", "RESERVED", "ROLLBACKED"].map((value) => <option key={value}>{value}</option>)}
+              {["ACTIVE", "CONFIRMED", "RELEASED", "EXPIRED", "REVERSED", "RESERVED", "ROLLBACKED"].map((value) => <option key={value} value={value}>{labels[value] || value}</option>)}
             </select>
             <select value={filters.releaseReasonType} onChange={(event) => updateFilter("releaseReasonType", event.target.value)} className={fieldClass}>
-              <option value="">Mọi lý do release</option>
-              {["PAYMENT_FAILED", "PAYMENT_TIMEOUT", "CUSTOMER_CANCELLED_BOOKING", "STAFF_CANCELLED_BOOKING", "BOOKING_EXPIRED", "CAMPAIGN_PAUSED", "CAMPAIGN_KILL_SWITCH", "SYSTEM_COMPENSATION"].map((value) => <option key={value}>{value}</option>)}
+              <option value="">Mọi lý do giải phóng</option>
+              {["PAYMENT_FAILED", "PAYMENT_TIMEOUT", "CUSTOMER_CANCELLED_BOOKING", "STAFF_CANCELLED_BOOKING", "BOOKING_EXPIRED", "CAMPAIGN_PAUSED", "CAMPAIGN_KILL_SWITCH", "SYSTEM_COMPENSATION"].map((value) => <option key={value} value={value}>{releaseReasonLabels[value] || value}</option>)}
             </select>
             <button type="button" onClick={() => setFilters({ query: "", status: "", releaseReasonType: "", from: "", to: "" })} className="h-10 rounded-lg border border-zinc-700 text-xs font-bold text-zinc-300 hover:bg-zinc-800">Xóa lọc</button>
             <input type="datetime-local" value={filters.from} onChange={(event) => updateFilter("from", event.target.value)} className={fieldClass} />
@@ -1026,14 +1095,14 @@ function OperationsDashboard({ data, loading }) {
         </header>
         <div className="p-4">
           {ledgerState.loading ? (
-            <div className="flex min-h-24 items-center justify-center gap-2 text-xs text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Đang tra cứu ledger</div>
+            <div className="flex min-h-24 items-center justify-center gap-2 text-xs text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Đang tra cứu lịch sử</div>
           ) : ledgerState.error ? (
             <p className="text-xs text-red-300">{ledgerState.error}</p>
           ) : (
             <div className="space-y-5">
-              <LedgerTable title="Reservation" total={ledger?.reservationTotal} rows={ledger?.reservations || []} />
+              <LedgerTable title="Lượt giữ ưu đãi" total={ledger?.reservationTotal} rows={ledger?.reservations || []} />
               <LedgerTable title="Số lượt ưu đãi" total={ledger?.redemptionTotal} rows={ledger?.redemptions || []} />
-              <LedgerTable title="Adjustment / reversal" total={ledger?.adjustmentTotal} rows={ledger?.adjustments || []} />
+              <LedgerTable title="Điều chỉnh / hoàn lại" total={ledger?.adjustmentTotal} rows={ledger?.adjustments || []} />
             </div>
           )}
         </div>
@@ -1079,7 +1148,7 @@ const campaignActionLabel = {
   PAUSE: "Tạm dừng",
   CANCEL: "Hủy vĩnh viễn",
   KILL_SWITCH: "Dừng khẩn cấp",
-  FORCE_RELEASE_HOLDS: "Giải phóng toàn bộ lượt giữ",
+  FORCE_RELEASE_HOLDS: "Thu hồi khẩn cấp",
   DELETE: "Xóa bản nháp",
 };
 
@@ -1110,16 +1179,16 @@ function CampaignTable({ rows, busy, onDetail, onEdit, onClone, onDelete, onActi
               <p className="mt-1 font-mono text-xs text-zinc-500">{row.code}</p>
             </td>
             <td className="px-4 py-4">
-              <div className="flex flex-wrap gap-1">
-                <StatusBadge value={row.status} />
-                <StatusBadge value={row.approvalStatus} />
-                <StatusBadge value={row.legalStatus} />
+              <div className="space-y-1.5 text-[11px]">
+                <div><span className="mr-2 text-zinc-600">Vòng đời</span><StatusBadge value={row.status} /></div>
+                <div><span className="mr-2 text-zinc-600">Duyệt</span><span className="font-bold text-zinc-300">{labels[row.approvalStatus] || row.approvalStatus || "Chưa gửi"}</span></div>
+                <div><span className="mr-2 text-zinc-600">Pháp lý</span><span className="font-bold text-zinc-300">{legalStatusText(row)}</span></div>
               </div>
             </td>
-            <td className="px-4 py-4 text-xs text-zinc-400">
-              {dateTime(row.startAt)}
+            <td className="whitespace-nowrap px-4 py-4 text-xs leading-6 text-zinc-400">
+              <span className="text-zinc-600">Từ</span> {dateTime(row.startAt)}
               <br />
-              {dateTime(row.endAt)}
+              <span className="text-zinc-600">Đến</span> {dateTime(row.endAt)}
             </td>
             <td className="px-4 py-4 text-xs">
               <p className="font-bold text-white">
@@ -1813,8 +1882,9 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
   const [legalStatus, setLegalStatus] = useState("PASSED");
   const [legalReference, setLegalReference] = useState(campaign.legalNotificationRef || "");
   const [campaignCode, setCampaignCode] = useState("");
+  const [incidentReference, setIncidentReference] = useState("");
   const valid = comment.trim().length >= 3
-    && (!override || campaignCode === campaign.code)
+    && (!override || (campaignCode === campaign.code && incidentReference.trim().length >= 3))
     && (!legal || legalReference.trim().length > 0);
 
   return (
@@ -1831,6 +1901,7 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
             legalStatus,
             legalReference: legalReference.trim(),
             campaignCode,
+            incidentReference: incidentReference.trim(),
           });
         }}
         className="space-y-4 p-5"
@@ -1850,8 +1921,9 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
         )}
         {override && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/[0.06] p-4">
-            <p className="text-xs leading-5 text-red-100">Override là hành động riêng, không phải quyền mặc định của ADMIN. Nhập lại mã chiến dịch để tạo bằng chứng audit rõ ràng.</p>
+            <p className="text-xs leading-5 text-red-100">Duyệt ngoại lệ là hành động khẩn cấp, không phải quyền mặc định của quản trị viên. Nhập mã chiến dịch và mã sự cố để tạo bằng chứng kiểm tra rõ ràng.</p>
             <input value={campaignCode} onChange={(event) => setCampaignCode(event.target.value.toUpperCase())} placeholder={campaign.code} className={fieldClass + " mt-3"} />
+            <input value={incidentReference} onChange={(event) => setIncidentReference(event.target.value)} placeholder="Mã sự cố / ticket (ví dụ INC-2026-08-001)" className={fieldClass + " mt-3"} />
           </div>
         )}
         <Field label={legal ? "Nhận xét pháp lý" : action === "REJECT" ? "Lý do từ chối" : override ? "Lý do override" : "Nhận xét phê duyệt"} required>
@@ -1874,6 +1946,8 @@ function CampaignDangerModal({ campaign, action, busy, onClose, onSubmit }) {
   const [campaignCode, setCampaignCode] = useState("");
   const [impact, setImpact] = useState(null);
   const [impactError, setImpactError] = useState("");
+  const [idempotencyKey] = useState(() =>
+    globalThis.crypto?.randomUUID?.() || `force-release-${Date.now()}`);
 
   useEffect(() => {
     if (!forceRelease) return undefined;
@@ -1885,40 +1959,79 @@ function CampaignDangerModal({ campaign, action, busy, onClose, onSubmit }) {
   }, [campaign.publicId, forceRelease]);
 
   const valid = reason.trim().length >= 5
-    && (!forceRelease || campaignCode === campaign.code);
+    && (!forceRelease || (campaignCode === campaign.code && impact?.executable));
+  const impactItems = Array.isArray(impact?.bookings) ? impact.bookings : [];
+  const paymentInProgressCount = impactItems.filter(
+    (item) => item.disposition === "BLOCKED_PAYMENT_IN_PROGRESS",
+  ).length;
+  const unverifiableCount = impactItems.filter((item) =>
+    [
+      "BLOCKED_DEPENDENCY_UNAVAILABLE",
+      "BLOCKED_MISSING_BOOKING_REFERENCE",
+    ].includes(item.disposition),
+  ).length;
+  const alreadySettledCount = impactItems.filter((item) =>
+    ["BLOCKED_PAYMENT_SUCCESSFUL", "BLOCKED_BOOKING_TERMINAL"].includes(
+      item.disposition,
+    ),
+  ).length;
+  const impactBlockingMessage = Number(impact?.repriceRequiredCount) > 0
+    ? `Còn ${impact.repriceRequiredCount} đơn cần hủy hoặc tính lại giá ở hệ thống đặt vé. Hãy xử lý các đơn này, kết thúc phiên thanh toán liên quan rồi tải lại kết quả kiểm tra.`
+    : paymentInProgressCount > 0
+      ? `Còn ${paymentInProgressCount} đơn đang thanh toán. Hãy kết thúc các phiên thanh toán liên quan rồi tải lại kết quả kiểm tra.`
+      : unverifiableCount > 0
+        ? "Chưa thể xác minh đầy đủ trạng thái đặt vé hoặc thanh toán. Hãy kiểm tra kết nối hệ thống rồi tải lại kết quả."
+        : alreadySettledCount > 0
+          ? `Có ${alreadySettledCount} đơn đã thanh toán hoặc hoàn tất nên không thể thu hồi ưu đãi.`
+          : "Trạng thái đã thay đổi. Hãy tải lại kết quả kiểm tra trước khi thực hiện.";
 
   return (
     <ModalShell
-      title={forceRelease ? "Giải phóng toàn bộ lượt giữ" : "Dừng khẩn cấp chiến dịch"}
+      title={forceRelease ? "Thu hồi khẩn cấp các lượt đang giữ" : "Dừng khẩn cấp chiến dịch"}
       icon={AlertTriangle}
       onClose={busy ? () => {} : onClose}
     >
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (valid) onSubmit(reason.trim(), campaignCode);
+          if (valid) onSubmit(reason.trim(), campaignCode, impact, idempotencyKey);
         }}
         className="space-y-4 p-5"
       >
         <div className="rounded-lg border border-red-500/30 bg-red-500/[0.06] p-4 text-sm leading-6 text-red-100">
           {forceRelease
-            ? "Đây là thao tác độc lập sau kill switch. Booking đang thanh toán có thể phải tính lại giá hoặc hủy."
-            : "Preview và reserve mới sẽ bị chặn ngay. Reservation đang hoạt động không tự bị giải phóng."}
+            ? "Chỉ lượt giữ có đơn đặt vé đã hủy hoặc hết hạn và không có thanh toán thành công hay đang xử lý mới được thu hồi. Hệ thống sẽ chặn toàn bộ thao tác nếu còn đơn cần xử lý."
+            : "Các lượt kiểm tra và giữ ưu đãi mới sẽ bị chặn ngay. Những lượt đang giữ không tự bị giải phóng."}
         </div>
         {forceRelease && (
           impactError ? <p className="text-xs text-red-300">{impactError}</p>
             : !impact ? <p className="text-xs text-zinc-500">Đang tính phạm vi ảnh hưởng…</p>
               : (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <DetailCard label="Booking bị ảnh hưởng" value={impact.affectedBookingCount} />
-                  <DetailCard label="Reservation đang giữ" value={impact.affectedReservationCount} />
-                  <DetailCard label="Discount đang giữ" value={money(impact.reservedDiscount)} />
-                  <DetailCard label="Budget exposure" value={money(impact.budgetExposure)} />
-                  <DetailCard label="Cần tính lại giá / hủy" value={impact.bookingsRequiringRepriceOrCancel} />
+                  <DetailCard label="Đơn đặt vé bị ảnh hưởng" value={impact.affectedBookingCount} />
+                  <DetailCard label="Lượt ưu đãi đang giữ" value={impact.affectedReservationCount} />
+                  <DetailCard label="Ưu đãi đang giữ" value={money(impact.reservedDiscount)} />
+                  <DetailCard label="Ngân sách đã dùng và đang giữ" value={money(impact.budgetExposure)} />
+                  <DetailCard label="Có thể thu hồi ngay" value={impact.safeToReleaseCount} />
+                  <DetailCard label="Cần xử lý đặt vé trước" value={impact.repriceRequiredCount} />
+                  <DetailCard label="Đang thanh toán" value={paymentInProgressCount} />
+                  <DetailCard label="Không xác minh được" value={unverifiableCount} />
+                  {alreadySettledCount > 0 && (
+                    <DetailCard label="Đã thanh toán / hoàn tất" value={alreadySettledCount} />
+                  )}
+                  <DetailCard
+                    label="Trạng thái thao tác"
+                    value={impact.executable ? "Có thể thực hiện" : "Chưa thể thực hiện"}
+                  />
                 </div>
               )
         )}
-        <Field label="Lý do vận hành" required hint="Lý do được ghi vào audit và từng reservation bị release.">
+        {forceRelease && impact && !impact.executable && (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3 text-xs leading-5 text-amber-100">
+            {impactBlockingMessage}
+          </p>
+        )}
+        <Field label="Lý do vận hành" required hint="Lý do được ghi vào lịch sử kiểm tra và từng lượt ưu đãi được giải phóng.">
           <textarea required minLength="5" maxLength="1000" value={reason} onChange={(event) => setReason(event.target.value)} className="min-h-24 w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm text-white outline-none focus:border-red-500" />
         </Field>
         {forceRelease && (
@@ -1930,7 +2043,7 @@ function CampaignDangerModal({ campaign, action, busy, onClose, onSubmit }) {
           <button type="button" disabled={busy} onClick={onClose} className={buttonClass + " border border-zinc-700 text-zinc-300"}>Quay lại</button>
           <button disabled={busy || !valid || (forceRelease && !impact)} className={buttonClass + " bg-red-500 text-white hover:bg-red-600"}>
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            {forceRelease ? "Giải phóng lượt giữ" : "Dừng khẩn cấp"}
+            {forceRelease ? "Thu hồi các lượt an toàn" : "Dừng khẩn cấp"}
           </button>
         </div>
       </form>
@@ -1984,17 +2097,20 @@ function LedgerTable({ title, total, rows }) {
       <p className="mb-2 text-xs font-black uppercase tracking-wide text-zinc-500">{title} · {Number(total || 0).toLocaleString("vi-VN")}</p>
       <div className="overflow-x-auto rounded-lg border border-zinc-800">
         <table className="w-full min-w-[900px] text-left text-xs">
-          <thead className="bg-zinc-950 text-zinc-600"><tr><th className="px-3 py-2">Mã</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Booking / payment</th><th className="px-3 py-2">Khách hàng</th><th className="px-3 py-2">Lý do</th><th className="px-3 py-2">Giảm</th><th className="px-3 py-2">Thời gian</th></tr></thead>
+          <thead className="bg-zinc-950 text-zinc-600"><tr><th className="px-3 py-2">Mã nghiệp vụ</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Đơn / thanh toán</th><th className="px-3 py-2">Khách hàng</th><th className="px-3 py-2">Lý do</th><th className="px-3 py-2">Giảm</th><th className="px-3 py-2">Thời gian</th></tr></thead>
           <tbody className="divide-y divide-zinc-800">
             {rows.map((item) => (
               <tr key={item.entryType + item.publicId}>
-                <td className="px-3 py-2 font-mono text-zinc-300">{item.publicId}</td>
-                <td className="px-3 py-2"><StatusBadge value={item.status} /></td>
-                <td className="px-3 py-2 text-zinc-400">{item.bookingPublicId || item.reservationPublicId || "-"}<br />{item.paymentPublicId || "-"}</td>
-                <td className="px-3 py-2 text-zinc-400">{item.customerReference || "-"}</td>
-                <td className="max-w-xs px-3 py-2 text-zinc-400">{item.releaseReasonType || item.reasonDetail || "-"}</td>
+                <td className="px-3 py-2 text-zinc-300">
+                  <span className="font-mono font-bold" title={item.businessReference || undefined}>{compactReference(item.businessReference || "Chưa có mã")}</span>
+                  <details className="mt-1 text-[10px] text-zinc-600"><summary className="cursor-pointer">Thông tin kỹ thuật</summary><span className="break-all font-mono">{item.publicId}</span></details>
+                </td>
+                <td className="px-3 py-2"><StatusBadge value={item.status} text={item.entryType === "RESERVATION" && item.status === "ACTIVE" ? "Đang giữ" : undefined} /></td>
+                <td className="px-3 py-2 text-zinc-400" title={item.sourceReference || item.businessReference || undefined}>{compactReference(item.sourceReference || item.businessReference)}<br />{item.paymentPublicId ? "Có liên kết thanh toán" : "Chưa có thanh toán"}</td>
+                <td className="px-3 py-2 text-zinc-400">{item.customerReference ? `Khách •••${String(item.customerReference).slice(-4)}` : "-"}</td>
+                <td className="max-w-xs px-3 py-2 text-zinc-400">{releaseReasonLabels[item.releaseReasonType] || item.reasonDetail || "-"}</td>
                 <td className="px-3 py-2 font-bold text-white">{money(item.discountAmount)}</td>
-                <td className="px-3 py-2 text-zinc-500">{dateTime(item.occurredAt)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-zinc-500">{dateTime(item.occurredAt)}</td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan="7" className="px-3 py-6 text-center text-zinc-600">Không có dữ liệu phù hợp.</td></tr>}
@@ -2029,6 +2145,7 @@ const pendingTaskLabel = {
   APPROVAL_DECISION: "Người có quyền duyệt ngân sách",
   LEGAL_REVIEW: "Bộ phận pháp lý",
   PUBLISH_CAMPAIGN: "Người có quyền xuất bản",
+  MONITOR_ACTIVE_HOLDS: "Theo dõi các lượt đang giữ",
 };
 
 function CampaignDetailModal({ record, onClose }) {
@@ -2098,12 +2215,26 @@ function CampaignDetailModal({ record, onClose }) {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-sm text-emerald-300">Không còn blocker nghiệp vụ.</p>
+                <p className="mt-3 text-sm text-emerald-300">Không còn điều kiện nào đang ngăn chiến dịch hoạt động.</p>
               )}
             </div>
             <div className="rounded-lg border border-red-500/20 bg-red-500/[0.05] p-4 text-xs leading-5 text-zinc-300">
-              Nếu dừng: preview và giữ ưu đãi mới bị chặn ngay; các reservation đang hoạt động vẫn tiếp tục confirm, release hoặc hết hạn. Giải phóng hàng loạt là thao tác khẩn cấp riêng.
+              Ngừng chiến dịch sẽ chặn các đơn hàng mới nhận ưu đãi. Các đơn đang thanh toán vẫn giữ ưu đãi đến khi thanh toán thành công, thất bại hoặc hết thời gian giữ. Việc thu hồi các lượt đang giữ là một thao tác khẩn cấp riêng.
             </div>
+            {(detail.status === "KILLED" || detail.killSwitch) && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-amber-300">
+                  Việc cần làm sau khi dừng khẩn cấp
+                </p>
+                <p className="mt-2 text-sm leading-6 text-zinc-200">
+                  Theo dõi các lượt đang giữ đến khi kết thúc. Chỉ dùng “Thu hồi khẩn cấp”
+                  sau khi hệ thống đặt vé và hệ thống thanh toán xác nhận từng lượt an toàn.
+                </p>
+                <p className="mt-2 text-xs text-zinc-400">
+                  Ngân sách ưu đãi đang giữ: <b className="text-white">{money(detail.budgetReserved)}</b>
+                </p>
+              </div>
+            )}
           </div>
         ) : activeTab === "Ưu đãi" ? (
           <div className="space-y-3">
@@ -2148,7 +2279,7 @@ function CampaignDetailModal({ record, onClose }) {
           </div>
         ) : activeTab === "Duyệt & pháp lý" ? (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2"><StatusBadge value={detail.approvalStatus} /><StatusBadge value={detail.legalStatus} /></div>
+            <div className="flex flex-wrap gap-2"><StatusBadge value={detail.approvalStatus} /><StatusBadge value={detail.legalStatus} text={legalStatusText(detail)} /></div>
             <DetailCard label="Tham chiếu pháp lý" value={detail.legalNotificationRef || "Chưa có"} />
             <HistoryList history={history} />
           </div>
@@ -2227,7 +2358,15 @@ function Toggle({ checked, onChange, label, disabled = false }) {
   );
 }
 
-function CampaignModal({ record, template, busy, onClose, onSave }) {
+function CampaignModal({
+  record,
+  template,
+  isManager = false,
+  managerCinemaPublicIds = [],
+  busy,
+  onClose,
+  onSave,
+}) {
   const editing = Boolean(record);
   const source = record || template;
   const [form, setForm] = useState(() => ({
@@ -2248,11 +2387,48 @@ function CampaignModal({ record, template, busy, onClose, onSave }) {
     maxRedemptionsPerUser: source?.maxRedemptionsPerUser ?? 1,
     legalNotificationRef: source?.legalNotificationRef || "",
     remarks: source?.remarks || "",
+    cinemaPublicIds:
+      isManager && Array.isArray(source?.cinemaScope)
+        ? source.cinemaScope.filter((id) => managerCinemaPublicIds.includes(id))
+        : [],
+    cinemaScopeOptions: [],
   }));
+  const [formError, setFormError] = useState("");
   const update = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
+  const loadManagerCinemas = useCallback(
+    async (query) => {
+      const result = nestedPageData(
+        await adminCinemaService.getCinemas({
+          keyword: query || undefined,
+          page: 0,
+          size: 100,
+        }),
+      );
+      const rows = Array.isArray(result) ? result : result?.content || [];
+      const assigned = new Set(managerCinemaPublicIds.map(String));
+      return rows.filter((item) =>
+        assigned.has(String(item.publicId || item.id || "")),
+      );
+    },
+    [managerCinemaPublicIds],
+  );
+  const normaliseCinema = useCallback(
+    (item) => ({
+      value: String(item.publicId || item.id || ""),
+      label: item.name || item.cinemaName || item.publicId || item.id,
+    }),
+    [],
+  );
   const submit = (event) => {
     event.preventDefault();
+    setFormError("");
+    if (!editing && isManager && form.cinemaPublicIds.length === 0) {
+      setFormError(
+        "Hãy chọn ít nhất một rạp được phân công. Quản lý rạp không thể tạo chiến dịch toàn hệ thống.",
+      );
+      return;
+    }
     const payload = {
       ...form,
       priority: Number(form.priority),
@@ -2263,8 +2439,18 @@ function CampaignModal({ record, template, busy, onClose, onSave }) {
       endAt: fromLocalInput(form.endAt),
       legalNotificationRef: form.legalNotificationRef || null,
       remarks: form.remarks || null,
+      ...(!editing
+        ? {
+            scopeType: isManager ? "ASSIGNED_CINEMAS" : "GLOBAL",
+            cinemaPublicIds: isManager ? form.cinemaPublicIds : [],
+          }
+        : {}),
     };
-    if (editing) delete payload.code;
+    delete payload.cinemaScopeOptions;
+    if (editing) {
+      delete payload.code;
+      delete payload.cinemaPublicIds;
+    }
     onSave(payload, editing);
   };
   return (
@@ -2355,6 +2541,39 @@ function CampaignModal({ record, template, busy, onClose, onSave }) {
             className={fieldClass}
           />
         </Field>
+        {!editing && isManager && (
+          <div className="md:col-span-2">
+            <EntityScopePicker
+              icon={Building2}
+              title="Rạp áp dụng chiến dịch"
+              values={form.cinemaPublicIds}
+              selectedOptions={form.cinemaScopeOptions}
+              onChange={(cinemaPublicIds, cinemaScopeOptions) => {
+                setFormError("");
+                setForm((current) => ({
+                  ...current,
+                  cinemaPublicIds,
+                  cinemaScopeOptions,
+                }));
+              }}
+              loadOptions={loadManagerCinemas}
+              normalise={normaliseCinema}
+              emptyHint="Bắt buộc chọn ít nhất một rạp trong phạm vi được phân công."
+            />
+            <p className="mt-2 rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-xs leading-5 text-sky-100">
+              Chiến dịch áp dụng tại: {form.cinemaPublicIds.length
+                ? form.cinemaPublicIds
+                    .map(
+                      (id) =>
+                        form.cinemaScopeOptions.find(
+                          (option) => option.value === id,
+                        )?.label || id,
+                    )
+                    .join(", ")
+                : "Chưa chọn rạp"}
+            </p>
+          </div>
+        )}
         <div className="grid gap-3 md:col-span-2 sm:grid-cols-2">
           <Toggle
             checked={form.autoActivate}
@@ -2382,6 +2601,11 @@ function CampaignModal({ record, template, busy, onClose, onSave }) {
             label="Cho phép các ưu đãi trong chiến dịch được cộng dồn"
           />
         </div>
+        {formError && (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/[0.07] px-3 py-2 text-xs text-red-200 md:col-span-2">
+            {formError}
+          </p>
+        )}
         <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4 md:col-span-2">
           <button
             type="button"
@@ -2590,6 +2814,7 @@ function EntityScopePicker({
   onChange,
   loadOptions,
   normalise,
+  emptyHint = "Để trống nếu áp dụng cho tất cả.",
 }) {
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState([]);
@@ -2644,7 +2869,7 @@ function EntityScopePicker({
         <p className="text-xs font-black text-white">{title}</p>
       </div>
       <p className="mt-1 text-[10px] leading-4 text-zinc-500">
-        Để trống nếu áp dụng cho tất cả.
+        {emptyHint}
       </p>
       <label className="relative mt-3 block">
         <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-600" />

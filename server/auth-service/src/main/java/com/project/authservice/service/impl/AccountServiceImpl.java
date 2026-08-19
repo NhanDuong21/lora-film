@@ -200,13 +200,43 @@ public class AccountServiceImpl implements AccountService {
     public AccountDto updateAccountAccessProfile(Long id, Long accessProfileId) {
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
-        if (account.getRole() == null || !"EMPLOYEE".equals(account.getRole().getCode())) {
+        String roleCode = account.getRole() == null
+                ? null : account.getRole().getCode();
+        if (!java.util.Set.of("EMPLOYEE", "MANAGER").contains(roleCode)) {
             throw new com.project.authservice.exception.BusinessException(
-                    "Access profiles can only be assigned to EMPLOYEE accounts");
+                    "Access profiles can only be assigned to EMPLOYEE or MANAGER accounts");
+        }
+        if (accessProfileId == null) {
+            if ("EMPLOYEE".equals(roleCode)) {
+                throw new com.project.authservice.exception.BusinessException(
+                        "EMPLOYEE accounts require an access profile");
+            }
+            if (account.getAccessProfile() == null) {
+                return mapToDto(account);
+            }
+            String previousProfile = account.getAccessProfile().getName();
+            account.setAccessProfile(null);
+            account = accountRepository.save(account);
+            credentialRevocationService.revokeAll(account.getId());
+            authOutboxService.record("ACCOUNT_ACCESS_PROFILE_CHANGED", account.getId(),
+                    java.util.Map.of(
+                            "accountId", account.getId(),
+                            "role", roleCode,
+                            "accessProfile", "NONE"));
+            auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ACCESS_PROFILE",
+                    servletRequest, account.getId().toString(),
+                    "before=" + previousProfile + ",after=NONE");
+            return mapToDto(account);
         }
         com.project.authservice.entity.AccessProfile profile = accessProfileRepository.findById(accessProfileId)
                 .filter(item -> Boolean.TRUE.equals(item.getActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Access profile not found"));
+        if ("EMPLOYEE".equals(roleCode) && profile.getPermissions().stream()
+                .map(com.project.authservice.entity.Permission::getCode)
+                .anyMatch("PROMOTION_AUTHOR"::equals)) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "PROMOTION_AUTHOR access profiles can only be assigned to MANAGER accounts");
+        }
         if (account.getAccessProfile() != null && account.getAccessProfile().getId().equals(profile.getId())) {
             return mapToDto(account);
         }
@@ -218,7 +248,7 @@ public class AccountServiceImpl implements AccountService {
         authOutboxService.record("ACCOUNT_ACCESS_PROFILE_CHANGED", account.getId(),
                 java.util.Map.of(
                         "accountId", account.getId(),
-                        "role", "EMPLOYEE",
+                        "role", roleCode,
                         "accessProfile", profile.getCode()));
         auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ACCESS_PROFILE", servletRequest,
                 account.getId().toString(), "before=" + previousProfile + ",after=" + profile.getName());

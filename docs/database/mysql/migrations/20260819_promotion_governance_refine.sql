@@ -51,10 +51,10 @@ BEGIN
      WHERE status = 'CANCELLED';
 
     UPDATE promotion_reservations
-       SET release_reason_type = COALESCE(release_reason_type, 'SYSTEM_COMPENSATION'),
+       SET release_reason_type = COALESCE(release_reason_type, 'LEGACY_UNKNOWN'),
            released_at = COALESCE(released_at, rollback_at, updated_at),
-           released_by = COALESCE(NULLIF(released_by, ''), NULLIF(updated_by, ''), 'SYSTEM'),
-           source_service = COALESCE(NULLIF(source_service, ''), 'MIGRATION'),
+           released_by = COALESCE(NULLIF(released_by, ''), 'SYSTEM'),
+           source_service = COALESCE(NULLIF(source_service, ''), 'LEGACY_MIGRATION'),
            reason_detail = COALESCE(NULLIF(reason_detail, ''), rollback_reason, 'Legacy release')
      WHERE status = 'RELEASED';
 
@@ -67,7 +67,8 @@ BEGIN
                     'PAYMENT_FAILED', 'PAYMENT_TIMEOUT',
                     'CUSTOMER_CANCELLED_BOOKING', 'STAFF_CANCELLED_BOOKING',
                     'BOOKING_EXPIRED', 'CAMPAIGN_PAUSED',
-                    'CAMPAIGN_KILL_SWITCH', 'SYSTEM_COMPENSATION'));
+                    'CAMPAIGN_KILL_SWITCH', 'SYSTEM_COMPENSATION',
+                    'LEGACY_UNKNOWN'));
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
         WHERE constraint_schema = DATABASE() AND table_name = 'promotion_reservations'

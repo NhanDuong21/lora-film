@@ -12,5 +12,6 @@ public record WalletPromotionHistoryResponse(
         String promotionCode,
         BigDecimal discountAmount,
         String bookingPublicId,
+        String bookingReference,
         String detail) {
 }

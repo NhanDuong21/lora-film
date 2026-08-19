@@ -1,6 +1,8 @@
 package com.project.authservice.service;
 
 import com.project.authservice.entity.Account;
+import com.project.authservice.entity.AccessProfile;
+import com.project.authservice.entity.Permission;
 import com.project.authservice.entity.Role;
 import com.project.authservice.enums.AccountStatus;
 import com.project.authservice.exception.BusinessException;
@@ -141,6 +143,72 @@ class AccountServiceImplTest {
 
         assertThatThrownBy(() -> service.updateManagerCinemaAssignments(
                 10L, Set.of("b1575c2d-9081-11f1-bf65-0ebab02bf6f5")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("MANAGER");
+
+        verify(accountRepository, never()).save(any());
+        verify(credentialRevocationService, never()).revokeAll(any());
+    }
+
+    @Test
+    void managerCanReceiveSeparateAuthorAccessProfileAndSessionsAreRevoked() {
+        Role manager = role(2L, "MANAGER");
+        Account account = account(10L, manager, AccountStatus.ACTIVE);
+        AccessProfile profile = new AccessProfile();
+        profile.setId(20L);
+        profile.setCode("PROMOTION_LOCAL_AUTHOR");
+        profile.setName("Promotion local author");
+        profile.setActive(true);
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
+        when(accessProfileRepository.findById(20L)).thenReturn(Optional.of(profile));
+        when(accountRepository.save(account)).thenReturn(account);
+
+        var result = service.updateAccountAccessProfile(10L, 20L);
+
+        assertThat(result.getAccessProfile().getCode())
+                .isEqualTo("PROMOTION_LOCAL_AUTHOR");
+        assertThat(account.getAccessProfile()).isSameAs(profile);
+        verify(credentialRevocationService).revokeAll(10L);
+        verify(authOutboxService).record(
+                eq("ACCOUNT_ACCESS_PROFILE_CHANGED"), eq(10L), any());
+    }
+
+    @Test
+    void managerSupplementalAccessProfileCanBeRemoved() {
+        Role manager = role(2L, "MANAGER");
+        Account account = account(10L, manager, AccountStatus.ACTIVE);
+        AccessProfile profile = new AccessProfile();
+        profile.setId(20L);
+        profile.setCode("PROMOTION_LOCAL_AUTHOR");
+        profile.setName("Promotion local author");
+        profile.setActive(true);
+        account.setAccessProfile(profile);
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
+        when(accountRepository.save(account)).thenReturn(account);
+
+        service.updateAccountAccessProfile(10L, null);
+
+        assertThat(account.getAccessProfile()).isNull();
+        verify(credentialRevocationService).revokeAll(10L);
+        verify(authOutboxService).record(
+                eq("ACCOUNT_ACCESS_PROFILE_CHANGED"), eq(10L), any());
+    }
+
+    @Test
+    void employeeCannotReceiveManagerOnlyPromotionAuthorProfile() {
+        Account account = account(10L, role(3L, "EMPLOYEE"), AccountStatus.ACTIVE);
+        AccessProfile profile = new AccessProfile();
+        profile.setId(20L);
+        profile.setCode("PROMOTION_LOCAL_AUTHOR");
+        profile.setName("Promotion local author");
+        profile.setActive(true);
+        Permission author = new Permission();
+        author.setCode("PROMOTION_AUTHOR");
+        profile.setPermissions(Set.of(author));
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
+        when(accessProfileRepository.findById(20L)).thenReturn(Optional.of(profile));
+
+        assertThatThrownBy(() -> service.updateAccountAccessProfile(10L, 20L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("MANAGER");
 

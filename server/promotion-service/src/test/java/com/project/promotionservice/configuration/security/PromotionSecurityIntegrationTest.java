@@ -12,15 +12,26 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import com.project.promotionservice.promotion.entity.PromotionCampaign;
+import com.project.promotionservice.promotion.entity.PromotionRedemption;
+import com.project.promotionservice.promotion.enums.CampaignScopeType;
+import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
+import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.List;
+import java.time.Instant;
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -36,6 +47,8 @@ class PromotionSecurityIntegrationTest {
     @Autowired
     @Qualifier("requestMappingHandlerMapping")
     private RequestMappingHandlerMapping handlerMapping;
+    @Autowired private PromotionCampaignRepository campaignRepository;
+    @Autowired private PromotionRedemptionRepository redemptionRepository;
 
     @Test
     void operationsRoleCanReachItsAdminReservationApi() throws Exception {
@@ -85,6 +98,173 @@ class PromotionSecurityIntegrationTest {
                 .isEmpty();
     }
 
+    @Test
+    void adminRoleWithoutOverrideCapabilityCannotCallOverrideApi() throws Exception {
+        String campaignId = "01a92c81-342d-421c-9d8c-89de54746758";
+        mockMvc.perform(post("/api/admin/promotion-campaigns/{id}/override-approval", campaignId)
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "ADMIN", List.of("PROMOTION_VIEW"), List.of()))
+                        .contentType("application/json")
+                        .content("{\"campaignCode\":\"TEST\",\"incidentReference\":\"INC-1\",\"reason\":\"review\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void emergencyStopCapabilityDoesNotGrantForceRelease() throws Exception {
+        String campaignId = "01a92c81-342d-421c-9d8c-89de54746758";
+        mockMvc.perform(post("/api/admin/promotion-campaigns/{id}/force-release", campaignId)
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "ADMIN", List.of("PROMOTION_EMERGENCY_STOP"), List.of()))
+                        .header("Idempotency-Key", "security-test-command")
+                        .contentType("application/json")
+                        .content("{\"campaignCode\":\"TEST\",\"reason\":\"review\","
+                                + "\"impactToken\":\"" + "0".repeat(64)
+                                + "\",\"campaignVersion\":1}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotReadGlobalCampaignThroughDirectApi() throws Exception {
+        PromotionCampaign global = campaign("GLOBAL-SCOPE", CampaignScopeType.GLOBAL, null);
+        campaignRepository.saveAndFlush(global);
+
+        mockMvc.perform(get("/api/admin/promotion-campaigns/{id}", global.getPublicId())
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_VIEW"), List.of("cinema-a"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCanReadOnlyCampaignInsideAssignedCinemaScope() throws Exception {
+        PromotionCampaign own = campaign(
+                "OWN-SCOPE", CampaignScopeType.ASSIGNED_CINEMAS, "[\"cinema-a\"]");
+        PromotionCampaign other = campaign(
+                "OTHER-SCOPE", CampaignScopeType.ASSIGNED_CINEMAS, "[\"cinema-b\"]");
+        campaignRepository.saveAllAndFlush(List.of(own, other));
+        String token = tokenWithClaims(
+                "MANAGER", List.of("PROMOTION_VIEW"), List.of("cinema-a"));
+
+        mockMvc.perform(get("/api/admin/promotion-campaigns/{id}", own.getPublicId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scopeType").value("ASSIGNED_CINEMAS"));
+        mockMvc.perform(get("/api/admin/promotion-campaigns/{id}", other.getPublicId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCannotPauseGlobalCampaignThroughDirectApi() throws Exception {
+        PromotionCampaign global = campaign("GLOBAL-PAUSE", CampaignScopeType.GLOBAL, null);
+        campaignRepository.saveAndFlush(global);
+
+        mockMvc.perform(patch("/api/admin/promotion-campaigns/{id}/status", global.getPublicId())
+                        .param("action", "PAUSE")
+                        .param("expectedVersion", String.valueOf(global.getVersion()))
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_OPERATE"), List.of("cinema-a"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staleCampaignTransitionReturnsConflictInsteadOfApplyingOldAllowedAction() throws Exception {
+        PromotionCampaign campaign = campaign("STALE-ACTION", CampaignScopeType.GLOBAL, null);
+        campaignRepository.saveAndFlush(campaign);
+
+        mockMvc.perform(patch("/api/admin/promotion-campaigns/{id}/status", campaign.getPublicId())
+                        .param("action", "PAUSE")
+                        .param("expectedVersion", String.valueOf(campaign.getVersion() + 1))
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "ADMIN", List.of("PROMOTION_OPERATE"), List.of())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message")
+                        .value("Dữ liệu đã thay đổi, vui lòng tải lại"));
+    }
+
+    @Test
+    void managerCampaignCreationRejectsGlobalScopeInsteadOfExpandingSilently() throws Exception {
+        String code = "LOCAL-" + System.nanoTime();
+        String body = """
+                {
+                  "code":"%s","name":"Manager local campaign",
+                  "startAt":"%s","endAt":"%s","budgetAmount":100000,
+                  "scopeType":"GLOBAL","cinemaPublicIds":["cinema-a"]
+                }
+                """.formatted(code, Instant.now().plusSeconds(3600),
+                Instant.now().plusSeconds(7200));
+
+        mockMvc.perform(post("/api/admin/promotion-campaigns")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_AUTHOR"), List.of("cinema-a")))
+                        .contentType("application/json")
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void managerCampaignCreationUsesOnlyExplicitAssignedCinemaSubset() throws Exception {
+        String code = "LOCAL-SUBSET-" + System.nanoTime();
+        String body = """
+                {
+                  "code":"%s","name":"Manager Landmark campaign",
+                  "startAt":"%s","endAt":"%s","budgetAmount":100000,
+                  "scopeType":"ASSIGNED_CINEMAS","cinemaPublicIds":["cinema-a"]
+                }
+                """.formatted(code, Instant.now().plusSeconds(3600),
+                Instant.now().plusSeconds(7200));
+
+        mockMvc.perform(post("/api/admin/promotion-campaigns")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_AUTHOR"),
+                                List.of("cinema-a", "cinema-b")))
+                        .contentType("application/json")
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.scopeType").value("ASSIGNED_CINEMAS"))
+                .andExpect(jsonPath("$.data.cinemaScope[0]").value("cinema-a"));
+    }
+
+    @Test
+    void managerCampaignCreationRejectsCinemaOutsideAssignment() throws Exception {
+        String code = "LOCAL-OUTSIDE-" + System.nanoTime();
+        String body = """
+                {
+                  "code":"%s","name":"Manager outside campaign",
+                  "startAt":"%s","endAt":"%s","budgetAmount":100000,
+                  "scopeType":"ASSIGNED_CINEMAS","cinemaPublicIds":["cinema-b"]
+                }
+                """.formatted(code, Instant.now().plusSeconds(3600),
+                Instant.now().plusSeconds(7200));
+
+        mockMvc.perform(post("/api/admin/promotion-campaigns")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_AUTHOR"), List.of("cinema-a")))
+                        .contentType("application/json")
+                        .content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerOperationsSearchExcludesOtherCinemaCampaignData() throws Exception {
+        PromotionCampaign own = campaign(
+                "OPS-OWN", CampaignScopeType.ASSIGNED_CINEMAS, "[\"cinema-a\"]");
+        PromotionCampaign other = campaign(
+                "OPS-OTHER", CampaignScopeType.ASSIGNED_CINEMAS, "[\"cinema-b\"]");
+        campaignRepository.saveAllAndFlush(List.of(own, other));
+        PromotionRedemption ownEntry = redemption(own.getPublicId(), "Own benefit");
+        PromotionRedemption otherEntry = redemption(other.getPublicId(), "Other benefit");
+        redemptionRepository.saveAllAndFlush(List.of(ownEntry, otherEntry));
+
+        mockMvc.perform(get("/api/admin/promotion-operations/search")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_AUDIT_VIEW"),
+                                List.of("cinema-a"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.redemptionTotal").value(1))
+                .andExpect(jsonPath("$.data.redemptions[0].campaignPublicId")
+                        .value(own.getPublicId()));
+    }
+
     private boolean hasAuthorizationPolicy(HandlerMethod handler) {
         return AnnotatedElementUtils.findMergedAnnotation(
                 handler.getMethod(), PreAuthorize.class) != null
@@ -97,18 +277,64 @@ class PromotionSecurityIntegrationTest {
     }
 
     private String token(String role, String tokenType) {
+        return tokenWithClaims(role, "OPERATIONS_MANAGER".equals(role)
+                ? List.of("PROMOTION_AUDIT_VIEW") : List.of(), List.of(), tokenType);
+    }
+
+    private String tokenWithClaims(
+            String role, List<String> permissions, List<String> cinemaPublicIds) {
+        return tokenWithClaims(role, permissions, cinemaPublicIds, "access");
+    }
+
+    private String tokenWithClaims(
+            String role, List<String> permissions, List<String> cinemaPublicIds,
+            String tokenType) {
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET));
         Date now = new Date();
         return Jwts.builder()
                 .subject("security-test@lorafilm.vn")
                 .claim("userId", 123L)
                 .claim("role", role)
-                .claim("permissions", "OPERATIONS_MANAGER".equals(role)
-                        ? List.of("PROMOTION_AUDIT_VIEW") : List.of())
+                .claim("permissions", permissions)
+                .claim("cinemaPublicIds", cinemaPublicIds)
                 .claim("tokenType", tokenType)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + 60_000))
                 .signWith(key)
                 .compact();
+    }
+
+    private PromotionCampaign campaign(
+            String code, CampaignScopeType scopeType, String cinemaScopeJson) {
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setCode(code);
+        campaign.setName(code);
+        campaign.setSlug(code.toLowerCase());
+        campaign.setStartAt(Instant.now().plusSeconds(3600));
+        campaign.setEndAt(Instant.now().plusSeconds(7200));
+        campaign.setBudgetAmount(BigDecimal.ZERO);
+        campaign.setBudgetRemaining(BigDecimal.ZERO);
+        campaign.setScopeType(scopeType);
+        campaign.setCinemaScopeJson(cinemaScopeJson);
+        return campaign;
+    }
+
+    private PromotionRedemption redemption(String campaignPublicId, String name) {
+        PromotionRedemption redemption = new PromotionRedemption();
+        redemption.setUserPublicId("1001");
+        redemption.setPromotionPublicId(java.util.UUID.randomUUID().toString());
+        redemption.setCampaignPublicId(campaignPublicId);
+        redemption.setPromotionType(PromotionType.AUTO);
+        redemption.setPromotionName(name);
+        redemption.setPromotionPriority(1);
+        redemption.setPromotionStackable(false);
+        redemption.setConditionsSnapshotJson("{}");
+        redemption.setActionsSnapshotJson("{}");
+        redemption.setSequenceNo(1);
+        redemption.setStatus(PromotionRedemptionStatus.RESERVED);
+        redemption.setOriginalAmount(new BigDecimal("100000.00"));
+        redemption.setDiscountAmount(new BigDecimal("10000.00"));
+        redemption.setFinalAmount(new BigDecimal("90000.00"));
+        return redemption;
     }
 }

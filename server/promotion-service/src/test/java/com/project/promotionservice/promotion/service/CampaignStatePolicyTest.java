@@ -68,6 +68,19 @@ class CampaignStatePolicyTest {
         assertThat(campaign.getAllowedActions()).contains("LEGAL_REVIEW");
     }
 
+    @Test
+    void killedCampaignCreatesAnOperationalHoldMonitoringTask() {
+        CampaignResponse campaign = activeCampaign();
+        campaign.setStatus(CampaignStatus.KILLED);
+        campaign.setKillSwitch(true);
+
+        policy.decorate(campaign, principal("99", List.of("PROMOTION_VIEW")));
+
+        assertThat(campaign.getPendingTasks()).contains("MONITOR_ACTIVE_HOLDS");
+        assertThat(campaign.getAvailabilityStatus())
+                .isEqualTo(CampaignAvailabilityStatus.CAMPAIGN_BLOCKED);
+    }
+
     private CampaignResponse activeCampaign() {
         CampaignResponse campaign = new CampaignResponse();
         campaign.setStatus(CampaignStatus.ACTIVE);

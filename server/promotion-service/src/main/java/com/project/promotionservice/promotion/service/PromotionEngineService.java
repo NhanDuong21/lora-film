@@ -153,7 +153,11 @@ public class PromotionEngineService {
                 ? money(discount.subtract(manualCandidate.discount()).max(BigDecimal.ZERO))
                 : BigDecimal.ZERO.setScale(2);
         if (manualSelectionReplaced) {
-            warnings.add("Hệ thống đã giữ voucher trong ví và tự áp dụng ưu đãi tốt hơn, "
+            String retainedBenefit = manualCandidate.promotion().getPromotionType()
+                    == PromotionType.COUPON
+                    ? "Mã ưu đãi chưa được sử dụng."
+                    : "Voucher vẫn còn trong ví.";
+            warnings.add(retainedBenefit + " Hệ thống đã tự áp dụng ưu đãi tốt hơn, "
                     + "giúp bạn tiết kiệm thêm " + additionalSavings.toPlainString() + " "
                     + normalizeCurrency(request.currency()));
         }
@@ -440,8 +444,20 @@ public class PromotionEngineService {
         if (campaignPriorityComparison != 0) {
             return campaignPriorityComparison < 0 ? candidate : current;
         }
-        return candidate.promotionPriorityScore() < current.promotionPriorityScore()
+        int promotionPriorityComparison = Integer.compare(
+                candidate.promotionPriorityScore(), current.promotionPriorityScore());
+        if (promotionPriorityComparison != 0) {
+            return promotionPriorityComparison < 0 ? candidate : current;
+        }
+        return selectionKey(candidate).compareTo(selectionKey(current)) < 0
                 ? candidate : current;
+    }
+
+    private String selectionKey(Selection selection) {
+        return selection.candidates().stream()
+                .map(candidate -> candidate.promotion().getPublicId())
+                .sorted()
+                .collect(java.util.stream.Collectors.joining("|"));
     }
 
     private List<AppliedPromotionResponse> allocate(

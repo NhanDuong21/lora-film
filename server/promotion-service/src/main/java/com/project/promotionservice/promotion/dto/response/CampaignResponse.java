@@ -2,6 +2,7 @@ package com.project.promotionservice.promotion.dto.response;
 
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignScopeType;
 import com.project.promotionservice.promotion.enums.CampaignAvailabilityStatus;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 
@@ -12,6 +13,7 @@ import java.util.List;
 public class CampaignResponse {
 
     private String publicId;
+    private Integer version;
     private String code;
     private String name;
     private String slug;
@@ -19,6 +21,8 @@ public class CampaignResponse {
     private CampaignStatus status;
     private CampaignApprovalStatus approvalStatus;
     private LegalStatus legalStatus;
+    private CampaignScopeType scopeType;
+    private List<String> cinemaScope = List.of();
     private Integer priority;
     private Boolean stackable;
     private Boolean exclusiveCampaign;
@@ -32,6 +36,9 @@ public class CampaignResponse {
     private Instant publishedAt;
     private Instant approvedAt;
     private String approvedBy;
+    private BigDecimal approvalThresholdApplied;
+    private String approvalPolicyVersion;
+    private String requiredApprovalCapability;
     private BigDecimal budgetAmount;
     private BigDecimal budgetUsed;
     private BigDecimal budgetReserved;
@@ -61,6 +68,9 @@ public class CampaignResponse {
     public void setPublicId(String publicId) {
         this.publicId = publicId;
     }
+
+    public Integer getVersion() { return version; }
+    public void setVersion(Integer version) { this.version = version; }
 
     public String getCode() {
         return code;
@@ -116,6 +126,22 @@ public class CampaignResponse {
 
     public void setLegalStatus(LegalStatus legalStatus) {
         this.legalStatus = legalStatus;
+    }
+
+    public CampaignScopeType getScopeType() {
+        return scopeType;
+    }
+
+    public void setScopeType(CampaignScopeType scopeType) {
+        this.scopeType = scopeType;
+    }
+
+    public List<String> getCinemaScope() {
+        return cinemaScope;
+    }
+
+    public void setCinemaScope(List<String> cinemaScope) {
+        this.cinemaScope = cinemaScope == null ? List.of() : List.copyOf(cinemaScope);
     }
 
     public Integer getPriority() {
@@ -221,6 +247,13 @@ public class CampaignResponse {
     public void setApprovedBy(String approvedBy) {
         this.approvedBy = approvedBy;
     }
+
+    public BigDecimal getApprovalThresholdApplied() { return approvalThresholdApplied; }
+    public void setApprovalThresholdApplied(BigDecimal value) { this.approvalThresholdApplied = value; }
+    public String getApprovalPolicyVersion() { return approvalPolicyVersion; }
+    public void setApprovalPolicyVersion(String value) { this.approvalPolicyVersion = value; }
+    public String getRequiredApprovalCapability() { return requiredApprovalCapability; }
+    public void setRequiredApprovalCapability(String value) { this.requiredApprovalCapability = value; }
 
     public BigDecimal getBudgetAmount() {
         return budgetAmount;

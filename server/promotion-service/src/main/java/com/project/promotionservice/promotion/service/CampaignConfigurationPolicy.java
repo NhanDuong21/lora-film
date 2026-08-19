@@ -32,6 +32,9 @@ public class CampaignConfigurationPolicy {
         campaign.setLegalStatus(LegalStatus.PENDING);
         campaign.setApprovedAt(null);
         campaign.setApprovedBy(null);
+        campaign.setApprovalThresholdApplied(null);
+        campaign.setApprovalPolicyVersion(null);
+        campaign.setRequiredApprovalCapability(null);
         campaign.setLegalNotificationRef(null);
         campaign.setUpdatedBy(actor);
     }

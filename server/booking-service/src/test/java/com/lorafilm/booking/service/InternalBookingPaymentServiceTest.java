@@ -213,6 +213,21 @@ class InternalBookingPaymentServiceTest {
     }
 
     @Test
+    void lifecycleContextReturnsCancelledBookingWithoutPaymentValidation() {
+        booking.changeStatus(BookingStatus.CANCELLED, Instant.now());
+        when(bookingRepository.findByPublicId(BOOKING_PUBLIC_ID))
+                .thenReturn(Optional.of(booking));
+
+        var context = service.getLifecycleContext(BOOKING_PUBLIC_ID);
+
+        assertEquals(BOOKING_PUBLIC_ID, context.bookingPublicId());
+        assertEquals("LORAFILM-1", context.bookingCode());
+        assertEquals("CANCELLED", context.bookingStatus());
+        verify(reservationRepository, never()).findAllByBookingId(any());
+        verify(snapshotRepository, never()).findByBookingId(any());
+    }
+
+    @Test
     void reportsExpiredBookingContextWithoutExtendingDeadline() {
         Instant originalDeadline = Instant.now().minusSeconds(1);
         booking.setExpiresAt(originalDeadline);

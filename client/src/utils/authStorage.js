@@ -94,6 +94,11 @@ export const getUserPermissions = () => {
     }
 };
 
+export const getUserCinemaPublicIds = () => {
+    const ids = decodeToken(getAuthToken())?.cinemaPublicIds;
+    return Array.isArray(ids) ? ids.filter(Boolean).map(String) : [];
+};
+
 export const clearAuthData = () => {
     removeFromStorage(localStorage);
     removeFromStorage(sessionStorage);
@@ -114,6 +119,7 @@ export const getAuthSession = () => ({
     email: getUserEmail(),
     role: getUserRole(),
     permissions: getUserPermissions(),
+    cinemaPublicIds: getUserCinemaPublicIds(),
     expiresIn: readValue("expiresIn"),
     rememberMe: getRememberMe()
 });

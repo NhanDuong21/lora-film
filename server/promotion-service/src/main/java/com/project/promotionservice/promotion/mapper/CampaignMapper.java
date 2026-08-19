@@ -1,5 +1,7 @@
 package com.project.promotionservice.promotion.mapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.promotion.dto.request.CampaignCreateRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignDetailResponse;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
@@ -15,9 +17,11 @@ import java.util.stream.Collectors;
 public class CampaignMapper {
 
     private final PromotionMapper promotionMapper;
+    private final ObjectMapper objectMapper;
 
-    public CampaignMapper(PromotionMapper promotionMapper) {
+    public CampaignMapper(PromotionMapper promotionMapper, ObjectMapper objectMapper) {
         this.promotionMapper = promotionMapper;
+        this.objectMapper = objectMapper;
     }
 
     public PromotionCampaign toEntity(CampaignCreateRequest request) {
@@ -80,6 +84,7 @@ public class CampaignMapper {
 
     private void mapCommon(PromotionCampaign entity, CampaignResponse response) {
         response.setPublicId(entity.getPublicId());
+        response.setVersion(entity.getVersion());
         response.setCode(entity.getCode());
         response.setName(entity.getName());
         response.setSlug(entity.getSlug());
@@ -87,6 +92,8 @@ public class CampaignMapper {
         response.setStatus(entity.getStatus());
         response.setApprovalStatus(entity.getApprovalStatus());
         response.setLegalStatus(entity.getLegalStatus());
+        response.setScopeType(entity.getScopeType());
+        response.setCinemaScope(readCinemaScope(entity.getCinemaScopeJson()));
         response.setPriority(entity.getPriority());
         response.setStackable(entity.getStackable());
         response.setExclusiveCampaign(entity.getExclusiveCampaign());
@@ -100,6 +107,9 @@ public class CampaignMapper {
         response.setPublishedAt(entity.getPublishedAt());
         response.setApprovedAt(entity.getApprovedAt());
         response.setApprovedBy(entity.getApprovedBy());
+        response.setApprovalThresholdApplied(entity.getApprovalThresholdApplied());
+        response.setApprovalPolicyVersion(entity.getApprovalPolicyVersion());
+        response.setRequiredApprovalCapability(entity.getRequiredApprovalCapability());
         response.setBudgetAmount(entity.getBudgetAmount());
         response.setBudgetUsed(entity.getBudgetUsed());
         response.setBudgetReserved(entity.getBudgetReserved());
@@ -113,5 +123,25 @@ public class CampaignMapper {
         response.setCreatedBy(entity.getCreatedBy());
         response.setUpdatedAt(entity.getUpdatedAt());
         response.setUpdatedBy(entity.getUpdatedBy());
+    }
+
+    private List<String> readCinemaScope(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(json);
+            while (node != null && node.isTextual()) {
+                node = objectMapper.readTree(node.asText());
+            }
+            if (node == null || !node.isArray()) return List.of();
+            List<String> values = new ArrayList<>();
+            node.forEach(value -> {
+                if (value.isTextual() && !value.asText().isBlank()) {
+                    values.add(value.asText());
+                }
+            });
+            return List.copyOf(values);
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 }

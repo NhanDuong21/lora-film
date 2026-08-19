@@ -2,6 +2,8 @@ package com.project.promotionservice.reservation.controller;
 
 import com.project.promotionservice.common.response.ApiResponse;
 import com.project.promotionservice.common.response.PagedResponse;
+import com.project.promotionservice.configuration.security.principal.UserPrincipal;
+import com.project.promotionservice.promotion.service.PromotionResourceScopeService;
 import com.project.promotionservice.reservation.dto.response.ReservationResponse;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.reservation.service.PromotionReservationService;
@@ -14,6 +16,7 @@ import jakarta.validation.constraints.Pattern;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,9 +37,13 @@ import static com.project.promotionservice.common.constant.ValidationConstants.U
 public class AdminReservationController {
 
     private final PromotionReservationService reservationService;
+    private final PromotionResourceScopeService resourceScope;
 
-    public AdminReservationController(PromotionReservationService reservationService) {
+    public AdminReservationController(
+            PromotionReservationService reservationService,
+            PromotionResourceScopeService resourceScope) {
         this.reservationService = reservationService;
+        this.resourceScope = resourceScope;
     }
 
     @GetMapping
@@ -58,9 +65,12 @@ public class AdminReservationController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(reservationService.history(
                 status, userPublicId, bookingPublicId, orderPublicId,
-                from, to, page, size)));
+                from, to, page, size,
+                resourceScope.isManager(principal)
+                        ? resourceScope.accessibleCampaignIds(principal) : null)));
     }
 }

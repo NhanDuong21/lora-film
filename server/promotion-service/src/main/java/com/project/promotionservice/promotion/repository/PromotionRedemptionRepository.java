@@ -71,4 +71,22 @@ public interface PromotionRedemptionRepository
     BigDecimal sumActiveReservedDiscountByCampaign(
             @Param("campaignPublicId") String campaignPublicId);
 
+    @Query("""
+            select (count(redemption) > 0)
+            from PromotionRedemption redemption
+            where redemption.campaignPublicId = :campaignPublicId
+              and redemption.status = com.project.promotionservice.promotion.enums.PromotionRedemptionStatus.CONFIRMED
+              and redemption.reservationPublicId <> :reservationPublicId
+              and redemption.deletedAt is null
+              and ((:bookingPublicId is not null
+                    and redemption.bookingPublicId = :bookingPublicId)
+                or (:orderPublicId is not null
+                    and redemption.orderPublicId = :orderPublicId))
+            """)
+    boolean existsConfirmedCampaignConsumptionForBusinessKey(
+            @Param("campaignPublicId") String campaignPublicId,
+            @Param("reservationPublicId") String reservationPublicId,
+            @Param("bookingPublicId") String bookingPublicId,
+            @Param("orderPublicId") String orderPublicId);
+
 }

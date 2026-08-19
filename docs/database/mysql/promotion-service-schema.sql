@@ -135,6 +135,8 @@ CREATE TABLE `promotion_campaigns` (
   `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
   `approval_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
   `legal_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `scope_type` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'GLOBAL',
+  `cinema_scope_json` json DEFAULT NULL,
   `priority` int NOT NULL DEFAULT '100',
   `stackable` tinyint(1) NOT NULL DEFAULT '0',
   `exclusive_campaign` tinyint(1) NOT NULL DEFAULT '0',
@@ -148,6 +150,9 @@ CREATE TABLE `promotion_campaigns` (
   `published_at` datetime(6) DEFAULT NULL,
   `approved_at` datetime(6) DEFAULT NULL,
   `approved_by` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `approval_threshold_applied` decimal(18,2) DEFAULT NULL,
+  `approval_policy_version` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `required_approval_capability` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `budget_amount` decimal(18,2) NOT NULL DEFAULT '0.00',
   `budget_used` decimal(18,2) NOT NULL DEFAULT '0.00',
   `budget_reserved` decimal(18,2) NOT NULL DEFAULT '0.00',
@@ -406,7 +411,7 @@ CREATE TABLE `promotion_reservations` (
   CONSTRAINT `chk_reservation_lifecycle_v3` CHECK ((((`status` = _latin1'ACTIVE') and (`confirmed_at` is null) and (`rollback_at` is null)) or ((`status` = _latin1'CONFIRMED') and (`confirmed_at` is not null) and (`payment_public_id` is not null) and (`rollback_at` is null)) or ((`status` = _latin1'REVERSED') and (`confirmed_at` is not null) and (`payment_public_id` is not null) and (`rollback_at` is not null) and (`rollback_reason` is not null)) or ((`status` = _latin1'RELEASED') and (`confirmed_at` is null) and (`rollback_at` is not null) and (`rollback_reason` is not null)) or ((`status` = _latin1'EXPIRED') and (`confirmed_at` is null) and (`rollback_at` is null)))),
   CONSTRAINT `chk_reservation_period` CHECK ((`reservation_expired_at` > `reservation_started_at`)),
   CONSTRAINT `chk_reservation_release_metadata` CHECK ((`status` <> _latin1'RELEASED' OR (`release_reason_type` IS NOT NULL AND `released_at` IS NOT NULL AND `released_by` IS NOT NULL AND `source_service` IS NOT NULL))),
-  CONSTRAINT `chk_reservation_release_reason_type` CHECK ((`release_reason_type` IS NULL OR `release_reason_type` IN (_latin1'PAYMENT_FAILED',_latin1'PAYMENT_TIMEOUT',_latin1'CUSTOMER_CANCELLED_BOOKING',_latin1'STAFF_CANCELLED_BOOKING',_latin1'BOOKING_EXPIRED',_latin1'CAMPAIGN_PAUSED',_latin1'CAMPAIGN_KILL_SWITCH',_latin1'SYSTEM_COMPENSATION'))),
+  CONSTRAINT `chk_reservation_release_reason_type` CHECK ((`release_reason_type` IS NULL OR `release_reason_type` IN (_latin1'PAYMENT_FAILED',_latin1'PAYMENT_TIMEOUT',_latin1'CUSTOMER_CANCELLED_BOOKING',_latin1'STAFF_CANCELLED_BOOKING',_latin1'BOOKING_EXPIRED',_latin1'CAMPAIGN_PAUSED',_latin1'CAMPAIGN_KILL_SWITCH',_latin1'SYSTEM_COMPENSATION',_latin1'LEGACY_UNKNOWN'))),
   CONSTRAINT `chk_reservation_status_v3` CHECK ((`status` in (_latin1'ACTIVE',_latin1'CONFIRMED',_latin1'REVERSED',_latin1'RELEASED',_latin1'EXPIRED')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

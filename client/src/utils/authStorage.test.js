@@ -27,6 +27,7 @@ describe('authStorage', () => {
       userId: 12,
       role: 'EMPLOYEE',
       permissions: ['PAYROLL_VIEW'],
+      cinemaPublicIds: ['cinema-a'],
       exp: Math.floor(Date.now() / 1000) + 300
     });
 
@@ -39,6 +40,7 @@ describe('authStorage', () => {
       accountId: '12',
       email: 'staff@example.com',
       role: 'EMPLOYEE',
+      cinemaPublicIds: ['cinema-a'],
       rememberMe: false
     });
     expect(isAuthenticated()).toBe(true);

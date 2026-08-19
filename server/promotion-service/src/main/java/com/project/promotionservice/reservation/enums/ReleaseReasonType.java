@@ -9,5 +9,7 @@ public enum ReleaseReasonType {
     BOOKING_EXPIRED,
     CAMPAIGN_PAUSED,
     CAMPAIGN_KILL_SWITCH,
-    SYSTEM_COMPENSATION
+    SYSTEM_COMPENSATION,
+    /** Backfilled row whose historical business reason cannot be proven. */
+    LEGACY_UNKNOWN
 }

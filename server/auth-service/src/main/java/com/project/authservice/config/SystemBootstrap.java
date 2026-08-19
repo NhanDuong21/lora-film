@@ -85,6 +85,7 @@ public class SystemBootstrap {
             new PermissionData("PROMOTION_PUBLISH", "Publish approved promotion campaigns", "Promotion Governance"),
             new PermissionData("PROMOTION_OPERATE", "Pause, resume and cancel campaigns", "Promotion Governance"),
             new PermissionData("PROMOTION_EMERGENCY_STOP", "Trigger campaign emergency stop", "Promotion Governance"),
+            new PermissionData("PROMOTION_FORCE_RELEASE", "Release campaign holds after coordinated impact review", "Promotion Governance"),
             new PermissionData("PROMOTION_AUDIT_VIEW", "View promotion audit and ledgers", "Promotion Governance"),
             new PermissionData("PROMOTION_OVERRIDE", "Override campaign approval with evidence", "Promotion Governance"),
             
@@ -207,13 +208,20 @@ public class SystemBootstrap {
                 "MOVIE_VIEW", "CINEMA_MANAGE", "SHOWTIME_MANAGE", "PRICING_MANAGE",
                 "PAYMENT_VIEW", "PROMOTION_MANAGE", "ANALYTICS_MANAGE",
                 "SCORE_MANAGE", "MEMBERSHIP_TIER_MANAGE",
-                "PROMOTION_VIEW", "PROMOTION_AUTHOR", "PROMOTION_OPERATE",
+                "PROMOTION_VIEW", "PROMOTION_OPERATE",
                 "PROMOTION_AUDIT_VIEW"
             ).contains(p.getCode()))
             .collect(Collectors.toSet());
 
+        Set<Permission> adminPermissions = allPermissions.stream()
+            .filter(permission -> !Set.of(
+                    "PROMOTION_OVERRIDE", "PROMOTION_FORCE_RELEASE")
+                    .contains(permission.getCode()))
+            .collect(Collectors.toSet());
+
         createRoleIfNotExists("ADMIN", "System administrator",
-                "Full access to the LoraFilm back office", new HashSet<>(allPermissions));
+                "Full access except separately assigned break-glass capabilities",
+                adminPermissions);
         createRoleIfNotExists("MANAGER", "Cinema manager",
                 "Manages cinema operations and reports", managerPermissions);
         createRoleIfNotExists("EMPLOYEE", "Employee",
@@ -227,10 +235,11 @@ public class SystemBootstrap {
             role -> {
                 boolean metadataChanged = !name.equals(role.getRoleName())
                         || !description.equals(role.getDescription());
-                boolean permissionsChanged = role.getPermissions().addAll(permissions);
+                boolean permissionsChanged = !role.getPermissions().equals(permissions);
                 if (metadataChanged || permissionsChanged) {
                     role.setRoleName(name);
                     role.setDescription(description);
+                    role.setPermissions(new HashSet<>(permissions));
                     roleRepository.save(role);
                     log.info("Normalized built-in role metadata and capabilities: {}", code);
                 } else {

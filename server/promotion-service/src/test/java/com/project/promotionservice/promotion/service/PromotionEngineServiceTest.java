@@ -118,6 +118,48 @@ class PromotionEngineServiceTest {
     }
 
     @Test
+    void killedCampaignRejectsNewPromotionPreview() {
+        PromotionCampaign campaign = activeCampaign("campaign-killed");
+        campaign.setStatus(CampaignStatus.KILLED);
+        campaign.setKillSwitch(true);
+        Promotion promotion = activePromotion(
+                "promotion-killed", "campaign-killed", PromotionType.AUTO,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":20000}");
+        when(promotionRepository.findByPublicIdAndDeletedAtIsNull("promotion-killed"))
+                .thenReturn(Optional.of(promotion));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-killed"))
+                .thenReturn(Optional.of(campaign));
+
+        assertThatThrownBy(() -> service.preview(
+                request(new BigDecimal("100000"), List.of("promotion-killed"))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("campaign is not active");
+    }
+
+    @Test
+    void equalDiscountAndPriorityUsesStablePromotionPublicIdTieBreaker() {
+        PromotionCampaign campaign = activeCampaign("campaign-1");
+        Promotion laterId = activePromotion(
+                "promotion-z", "campaign-1", PromotionType.AUTO,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":20000}");
+        Promotion earlierId = activePromotion(
+                "promotion-a", "campaign-1", PromotionType.AUTO,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":20000}");
+        when(promotionRepository.findRuntimeCandidates(
+                eq(PromotionType.AUTO), eq(PromotionStatus.ACTIVE), any()))
+                .thenReturn(List.of(laterId, earlierId));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-1"))
+                .thenReturn(Optional.of(campaign));
+
+        PromotionCheckoutResponse result = service.preview(
+                request(new BigDecimal("100000")));
+
+        assertThat(result.appliedPromotions()).singleElement()
+                .extracting(applied -> applied.promotionPublicId())
+                .isEqualTo("promotion-a");
+    }
+
+    @Test
     void fixedDiscountLargerThanTheOrderMakesTheOrderFree() {
         PromotionCampaign campaign = activeCampaign("campaign-1");
         Promotion promotion = activePromotion(
@@ -237,7 +279,7 @@ class PromotionEngineServiceTest {
         assertThat(result.discountAmount()).isEqualByComparingTo("21000.00");
         assertThat(result.manualSelectionReplaced()).isTrue();
         assertThat(result.additionalSavings()).isEqualByComparingTo("11000.00");
-        assertThat(result.warnings()).anyMatch(message -> message.contains("giữ voucher trong ví"));
+        assertThat(result.warnings()).anyMatch(message -> message.contains("Voucher vẫn còn trong ví"));
     }
 
     @Test
@@ -590,6 +632,126 @@ class PromotionEngineServiceTest {
         assertThatThrownBy(() -> service.preview(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Coupon was not issued to this customer");
+    }
+
+    @Test
+    void issuedCouponCodeIsCaseInsensitiveAndConsumesItsWalletGrant() {
+        PromotionCampaign campaign = activeCampaign("campaign-1");
+        Promotion coupon = activePromotion(
+                "coupon-1", "campaign-1", PromotionType.COUPON,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":25000}");
+        coupon.setCode("CPN-PRIVATE");
+        UserPromotion grant = walletItem("coupon-grant-1", "1001", "coupon-1");
+        when(promotionRepository.findByPromotionTypeAndCodeIgnoreCaseAndDeletedAtIsNull(
+                PromotionType.COUPON, "cpn-private"))
+                .thenReturn(Optional.of(coupon));
+        when(walletRepository.findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
+                "1001", "coupon-1")).thenReturn(Optional.of(grant));
+        when(walletRepository.findByPublicIdAndDeletedAtIsNull("coupon-grant-1"))
+                .thenReturn(Optional.of(grant));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-1"))
+                .thenReturn(Optional.of(campaign));
+
+        PromotionCheckoutResponse result = service.preview(new PromotionCheckoutRequest(
+                "1001", new BigDecimal("100000"), List.of(), List.of(),
+                "cpn-private", null,
+                "11111111-1111-4111-8111-111111111111", null,
+                "VND", objectMapper.createObjectNode(), 300));
+
+        assertThat(result.appliedPromotions()).singleElement().satisfies(applied -> {
+            assertThat(applied.promotionType()).isEqualTo(PromotionType.COUPON);
+            assertThat(applied.userPromotionPublicId()).isEqualTo("coupon-grant-1");
+            assertThat(applied.discountAmount()).isEqualByComparingTo("25000.00");
+        });
+    }
+
+    @Test
+    void betterAutomaticReplacesIssuedCouponWithoutUsingItsGrant() {
+        PromotionCampaign couponCampaign = activeCampaign("campaign-coupon");
+        PromotionCampaign automaticCampaign = activeCampaign("campaign-auto");
+        Promotion coupon = activePromotion(
+                "coupon-1", "campaign-coupon", PromotionType.COUPON,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":10000}");
+        coupon.setCode("CPN-PRIVATE");
+        Promotion automatic = activePromotion(
+                "auto-1", "campaign-auto", PromotionType.AUTO,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":25000}");
+        UserPromotion grant = walletItem("coupon-grant-1", "1001", "coupon-1");
+        when(promotionRepository.findByPromotionTypeAndCodeIgnoreCaseAndDeletedAtIsNull(
+                PromotionType.COUPON, "CPN-PRIVATE"))
+                .thenReturn(Optional.of(coupon));
+        when(walletRepository.findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
+                "1001", "coupon-1")).thenReturn(Optional.of(grant));
+        when(walletRepository.findByPublicIdAndDeletedAtIsNull("coupon-grant-1"))
+                .thenReturn(Optional.of(grant));
+        when(promotionRepository.findRuntimeCandidates(
+                eq(PromotionType.AUTO), eq(PromotionStatus.ACTIVE), any()))
+                .thenReturn(List.of(automatic));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-coupon"))
+                .thenReturn(Optional.of(couponCampaign));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-auto"))
+                .thenReturn(Optional.of(automaticCampaign));
+
+        PromotionCheckoutResponse result = service.preview(new PromotionCheckoutRequest(
+                "1001", new BigDecimal("100000"), List.of(), List.of(),
+                "CPN-PRIVATE", null,
+                "11111111-1111-4111-8111-111111111111", null,
+                "VND", objectMapper.createObjectNode(), 300));
+
+        assertThat(result.appliedPromotions()).singleElement().satisfies(applied -> {
+            assertThat(applied.promotionPublicId()).isEqualTo("auto-1");
+            assertThat(applied.userPromotionPublicId()).isNull();
+        });
+        assertThat(result.manualSelectionReplaced()).isTrue();
+        assertThat(result.additionalSavings()).isEqualByComparingTo("15000.00");
+        assertThat(result.warnings()).anyMatch(message ->
+                message.contains("Mã ưu đãi chưa được sử dụng"));
+        assertThat(grant.getStatus()).isEqualTo(UserPromotionStatus.AVAILABLE);
+        assertThat(grant.getUsageCount()).isZero();
+    }
+
+    @Test
+    void equalAutomaticDiscountPreservesOneTimeCouponEntitlement() {
+        PromotionCampaign couponCampaign = activeCampaign("campaign-coupon");
+        PromotionCampaign automaticCampaign = activeCampaign("campaign-auto");
+        Promotion coupon = activePromotion(
+                "coupon-1", "campaign-coupon", PromotionType.COUPON,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":20000}");
+        coupon.setCode("CPN-PRIVATE");
+        Promotion automatic = activePromotion(
+                "auto-1", "campaign-auto", PromotionType.AUTO,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":20000}");
+        UserPromotion grant = walletItem("coupon-grant-1", "1001", "coupon-1");
+        when(promotionRepository.findByPromotionTypeAndCodeIgnoreCaseAndDeletedAtIsNull(
+                PromotionType.COUPON, "CPN-PRIVATE"))
+                .thenReturn(Optional.of(coupon));
+        when(walletRepository.findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
+                "1001", "coupon-1")).thenReturn(Optional.of(grant));
+        when(walletRepository.findByPublicIdAndDeletedAtIsNull("coupon-grant-1"))
+                .thenReturn(Optional.of(grant));
+        when(promotionRepository.findRuntimeCandidates(
+                eq(PromotionType.AUTO), eq(PromotionStatus.ACTIVE), any()))
+                .thenReturn(List.of(automatic));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-coupon"))
+                .thenReturn(Optional.of(couponCampaign));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-auto"))
+                .thenReturn(Optional.of(automaticCampaign));
+
+        PromotionCheckoutResponse result = service.preview(new PromotionCheckoutRequest(
+                "1001", new BigDecimal("100000"), List.of(), List.of(),
+                "CPN-PRIVATE", null,
+                "11111111-1111-4111-8111-111111111111", null,
+                "VND", objectMapper.createObjectNode(), 300));
+
+        assertThat(result.appliedPromotions()).singleElement().satisfies(applied -> {
+            assertThat(applied.promotionPublicId()).isEqualTo("auto-1");
+            assertThat(applied.userPromotionPublicId()).isNull();
+            assertThat(applied.discountAmount()).isEqualByComparingTo("20000.00");
+        });
+        assertThat(result.manualSelectionReplaced()).isTrue();
+        assertThat(result.additionalSavings()).isEqualByComparingTo("0.00");
+        assertThat(grant.getStatus()).isEqualTo(UserPromotionStatus.AVAILABLE);
+        assertThat(grant.getUsageCount()).isZero();
     }
 
     private PromotionCheckoutRequest request(BigDecimal amount) {

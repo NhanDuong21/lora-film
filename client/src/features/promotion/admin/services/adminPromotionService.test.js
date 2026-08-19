@@ -28,13 +28,13 @@ describe('adminPromotionService', () => {
   });
 
   it('uses campaign workflow, approval, and legal review contracts', async () => {
-    await adminPromotionService.transitionCampaign('campaign-1', 'ACTIVATE', 'Ready');
+    await adminPromotionService.transitionCampaign('campaign-1', 'ACTIVATE', 'Ready', 4);
     await adminPromotionService.approveCampaign('campaign-1', 'Approved');
     await adminPromotionService.reviewCampaignLegal('campaign-1', 'PASSED', 'Legal checked');
 
     expect(apiClient.patch).toHaveBeenCalledWith(
       '/api/admin/promotion-campaigns/campaign-1/status', null,
-      { params: { action: 'ACTIVATE', comment: 'Ready' } }
+      { params: { action: 'ACTIVATE', comment: 'Ready', expectedVersion: 4 } }
     );
     expect(apiClient.post).toHaveBeenCalledWith(
       '/api/admin/promotion-campaigns/campaign-1/approve', { comment: 'Approved' }

@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -48,6 +50,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 List<String> rolesList = extractListClaim(claims, "roles", "role");
                 List<String> permissionsList = extractListClaim(claims, "permissions", "permission");
+                Set<String> cinemaPublicIds = extractListClaim(claims, "cinemaPublicIds", null)
+                        .stream().filter(StringUtils::hasText).map(String::trim)
+                        .collect(Collectors.toUnmodifiableSet());
 
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
 
@@ -64,7 +69,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     }
                 }
 
-                UserPrincipal principal = new UserPrincipal(userId, username, email, rolesList, permissionsList, authorities);
+                UserPrincipal principal = new UserPrincipal(
+                        userId, username, email, rolesList, permissionsList,
+                        cinemaPublicIds, authorities);
 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         principal, null, authorities);

@@ -12,6 +12,7 @@ import com.project.promotionservice.reservation.dto.response.ReservationResponse
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 
 import java.time.Instant;
+import java.util.Set;
 
 public interface PromotionReservationService {
 
@@ -46,6 +47,17 @@ public interface PromotionReservationService {
             Instant to,
             int page,
             int size);
+
+    PagedResponse<ReservationResponse> history(
+            ReservationStatus status,
+            String userPublicId,
+            String bookingPublicId,
+            String orderPublicId,
+            Instant from,
+            Instant to,
+            int page,
+            int size,
+            Set<String> allowedCampaignPublicIds);
 
     int expireDueReservations(String actor);
 }

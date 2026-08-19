@@ -12,7 +12,7 @@ public interface ApprovalService {
     CampaignResponse rejectCampaign(String publicId, String comment, String approver, List<String> capabilities);
 
     CampaignResponse overrideApproval(
-            String publicId, String campaignCode, String reason,
+            String publicId, String campaignCode, String incidentReference, String reason,
             String approver, List<String> capabilities);
 
     List<ApprovalHistoryResponse> getApprovalHistory(String targetPublicId);

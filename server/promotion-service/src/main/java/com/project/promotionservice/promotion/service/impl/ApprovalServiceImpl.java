@@ -24,6 +24,7 @@ import com.project.promotionservice.common.audit.Auditable;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -34,7 +35,12 @@ import java.util.stream.Collectors;
 @Service
 public class ApprovalServiceImpl implements ApprovalService {
 
-    private static final BigDecimal BUDGET_LIMIT = new BigDecimal("50000000.00");
+    private BigDecimal budgetLimit = new BigDecimal("50000000.00");
+
+    @Value("${promotion.approval.high-budget-threshold:50000000.00}")
+    void setBudgetLimit(BigDecimal budgetLimit) {
+        this.budgetLimit = budgetLimit;
+    }
 
     private final PromotionCampaignRepository campaignRepository;
     private final ApprovalHistoryRepository approvalHistoryRepository;
@@ -90,9 +96,12 @@ public class ApprovalServiceImpl implements ApprovalService {
         }
 
         // Budget authority checks
-        String requiredCapability = campaign.getBudgetAmount().compareTo(BUDGET_LIMIT) > 0
-                ? "PROMOTION_APPROVE_HIGH_BUDGET"
-                : "PROMOTION_APPROVE_STANDARD";
+        String requiredCapability = campaign.getRequiredApprovalCapability();
+        if (requiredCapability == null || requiredCapability.isBlank()) {
+            requiredCapability = campaign.getBudgetAmount().compareTo(budgetLimit) > 0
+                    ? "PROMOTION_APPROVE_HIGH_BUDGET"
+                    : "PROMOTION_APPROVE_STANDARD";
+        }
         if (!capabilities.contains(requiredCapability)) {
             throw new BusinessException(ErrorCode.FORBIDDEN,
                     "Approver lacks capability " + requiredCapability,
@@ -191,7 +200,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Transactional
     @Auditable(action = "CAMPAIGN_OVERRIDE_APPROVE", entityType = "PROMOTION_CAMPAIGN")
     public CampaignResponse overrideApproval(
-            String publicId, String campaignCode, String reason,
+            String publicId, String campaignCode, String incidentReference, String reason,
             String approver, List<String> capabilities) {
         if (!capabilities.contains("PROMOTION_OVERRIDE")) {
             throw new BusinessException(ErrorCode.FORBIDDEN,
@@ -207,6 +216,11 @@ public class ApprovalServiceImpl implements ApprovalService {
         if (reason == null || reason.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
                     "Override reason is required", HttpStatus.BAD_REQUEST);
+        }
+        if (incidentReference == null || incidentReference.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "Incident reference is required for an approval override",
+                    HttpStatus.BAD_REQUEST);
         }
         if (campaign.getStatus() != CampaignStatus.DRAFT
                 || campaign.getApprovalStatus() != CampaignApprovalStatus.PENDING) {
@@ -228,7 +242,8 @@ public class ApprovalServiceImpl implements ApprovalService {
         history.setOldStatus(oldStatus);
         history.setNewStatus(CampaignApprovalStatus.APPROVED.name());
         history.setApproverPublicId(approver);
-        history.setComment("OVERRIDE: " + reason.trim());
+        history.setComment("EMERGENCY_OVERRIDE [" + incidentReference.trim()
+                + "]: " + reason.trim());
         history.setApprovedAt(Instant.now());
         history.setCreatedBy(approver);
         history.setUpdatedBy(approver);

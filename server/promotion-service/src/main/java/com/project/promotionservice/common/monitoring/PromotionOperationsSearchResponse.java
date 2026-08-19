@@ -15,6 +15,7 @@ public record PromotionOperationsSearchResponse(
     public record LedgerItem(
             String entryType,
             String publicId,
+            String businessReference,
             String status,
             String campaignPublicId,
             String promotionPublicId,

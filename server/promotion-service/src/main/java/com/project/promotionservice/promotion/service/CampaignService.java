@@ -7,13 +7,19 @@ import com.project.promotionservice.promotion.dto.request.LegalReviewRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignDetailResponse;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignScopeType;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
+import java.util.Collection;
 
 public interface CampaignService {
 
     CampaignResponse createCampaign(CampaignCreateRequest request, String creator);
+
+    CampaignResponse createCampaign(
+            CampaignCreateRequest request, String creator,
+            CampaignScopeType scopeType, Collection<String> cinemaScope);
 
     CampaignResponse updateCampaign(String publicId, CampaignUpdateRequest request, String updater);
 
@@ -23,6 +29,11 @@ public interface CampaignService {
 
     PagedResponse<CampaignResponse> searchCampaigns(String name, String code, CampaignStatus status,
                                                     Instant from, Instant to, Pageable pageable);
+
+    PagedResponse<CampaignResponse> searchCampaigns(
+            String name, String code, CampaignStatus status,
+            Instant from, Instant to, Pageable pageable,
+            Collection<String> accessibleCampaignIds);
 
     CampaignResponse submitCampaign(String publicId, String comment, String user);
 

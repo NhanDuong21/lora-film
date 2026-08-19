@@ -16,6 +16,7 @@ import com.project.promotionservice.promotion.enums.CampaignTransitionAction;
 import com.project.promotionservice.promotion.service.CampaignService;
 import com.project.promotionservice.promotion.service.ApprovalService;
 import com.project.promotionservice.promotion.service.CampaignStatePolicy;
+import com.project.promotionservice.promotion.service.PromotionResourceScopeService;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.exception.ErrorCode;
 
@@ -52,11 +53,18 @@ public class AdminCampaignController {
 
     private final CampaignService campaignService;
     private final ApprovalService approvalService;
-    private final CampaignStatePolicy statePolicy = new CampaignStatePolicy();
+    private final PromotionResourceScopeService resourceScope;
+    private final CampaignStatePolicy statePolicy;
 
-    public AdminCampaignController(CampaignService campaignService, ApprovalService approvalService) {
+    public AdminCampaignController(
+            CampaignService campaignService,
+            ApprovalService approvalService,
+            PromotionResourceScopeService resourceScope,
+            CampaignStatePolicy statePolicy) {
         this.campaignService = campaignService;
         this.approvalService = approvalService;
+        this.resourceScope = resourceScope;
+        this.statePolicy = statePolicy;
     }
 
     @PostMapping
@@ -66,7 +74,10 @@ public class AdminCampaignController {
             @Valid @RequestBody CampaignCreateRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         String actor = getActor(userPrincipal);
-        CampaignResponse data = decorate(campaignService.createCampaign(request, actor), userPrincipal);
+        PromotionResourceScopeService.CreationScope scope =
+                resourceScope.creationScope(request, userPrincipal);
+        CampaignResponse data = decorate(campaignService.createCampaign(
+                request, actor, scope.type(), scope.cinemaPublicIds()), userPrincipal);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(true, "Promotion campaign created successfully", data));
     }
@@ -80,6 +91,7 @@ public class AdminCampaignController {
             String publicId,
             @Valid @RequestBody CampaignUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         String actor = getActor(userPrincipal);
         CampaignResponse data = decorate(campaignService.updateCampaign(publicId, request, actor), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true, "Promotion campaign updated successfully", data));
@@ -93,6 +105,7 @@ public class AdminCampaignController {
             @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
             String publicId,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         String actor = getActor(userPrincipal);
         campaignService.deleteCampaign(publicId, actor);
         return ResponseEntity.ok(new ApiResponse<>(true, "Promotion campaign soft deleted successfully", null));
@@ -106,6 +119,7 @@ public class AdminCampaignController {
             @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
             String publicId,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         CampaignDetailResponse data = (CampaignDetailResponse) decorate(
                 campaignService.getCampaign(publicId), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true, "Campaign retrieved successfully", data));
@@ -126,8 +140,12 @@ public class AdminCampaignController {
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
         Pageable pageable = pageable(page, size, sort, SORT_FIELDS, "createdAt");
+        Set<String> accessibleCampaignIds = resourceScope.isManager(userPrincipal)
+                ? resourceScope.accessibleCampaignIds(userPrincipal)
+                : null;
         PagedResponse<CampaignResponse> data =
-                campaignService.searchCampaigns(name, code, status, from, to, pageable);
+                campaignService.searchCampaigns(
+                        name, code, status, from, to, pageable, accessibleCampaignIds);
         data.setContent(data.getContent().stream()
                 .map(campaign -> decorate(campaign, userPrincipal)).toList());
         return ResponseEntity.ok(new ApiResponse<>(true, "Campaign search results retrieved", data));
@@ -142,7 +160,10 @@ public class AdminCampaignController {
             String publicId,
             @RequestParam("action") CampaignTransitionAction action,
             @RequestParam(value = "comment", required = false) @Size(max = 500) String comment,
+            @RequestParam("expectedVersion") @Min(0) int expectedVersion,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
+        resourceScope.requireCampaignVersion(publicId, expectedVersion);
         String actor = getActor(userPrincipal);
         requireCapabilityForAction(action, userPrincipal);
         CampaignResponse data;
@@ -174,6 +195,7 @@ public class AdminCampaignController {
             @Valid @RequestBody(required = false) ApprovalRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         String actor = getActor(userPrincipal);
         List<String> capabilities = userPrincipal != null ? userPrincipal.getPermissions() : List.of();
         String comment = request != null ? request.getComment() : "Approved";
@@ -192,6 +214,7 @@ public class AdminCampaignController {
             String publicId,
             @Valid @RequestBody LegalReviewRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         CampaignResponse data = decorate(campaignService.reviewLegalStatus(
                 publicId, request, getActor(userPrincipal)), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(
@@ -208,6 +231,7 @@ public class AdminCampaignController {
             @Valid @RequestBody(required = false) ApprovalRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         String actor = getActor(userPrincipal);
         List<String> capabilities = userPrincipal != null ? userPrincipal.getPermissions() : List.of();
         String comment = request != null ? request.getComment() : "Rejected";
@@ -223,7 +247,9 @@ public class AdminCampaignController {
     public ResponseEntity<ApiResponse<List<ApprovalHistoryResponse>>> getApprovalHistory(
             @PathVariable("id")
             @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
-            String publicId) {
+            String publicId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         List<ApprovalHistoryResponse> data = approvalService.getApprovalHistory(publicId);
         return ResponseEntity.ok(new ApiResponse<>(true, "Approval histories retrieved successfully", data));
     }
@@ -237,8 +263,9 @@ public class AdminCampaignController {
             String publicId,
             @Valid @RequestBody ApprovalOverrideRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        resourceScope.requireCampaignAccess(publicId, userPrincipal);
         CampaignResponse data = decorate(approvalService.overrideApproval(
-                publicId, request.campaignCode(), request.reason(),
+                publicId, request.campaignCode(), request.incidentReference(), request.reason(),
                 getActor(userPrincipal), userPrincipal.getPermissions()), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true,
                 "Campaign approval override recorded", data));

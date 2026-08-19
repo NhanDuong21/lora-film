@@ -18,6 +18,7 @@ import com.project.promotionservice.promotion.repository.PromotionCampaignReposi
 import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.promotion.repository.UserPromotionRepository;
+import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +50,8 @@ class PromotionCatalogServiceTest {
     private PromotionCampaignRepository campaignRepository;
     @Mock
     private PromotionRedemptionRepository redemptionRepository;
+    @Mock
+    private PromotionReservationRepository reservationRepository;
     private PromotionMapper mapper;
     @Mock
     private PromotionPolicyValidator policyValidator;
@@ -71,6 +74,7 @@ class PromotionCatalogServiceTest {
                 walletRepository,
                 campaignRepository,
                 redemptionRepository,
+                reservationRepository,
                 mapper,
                 policyValidator,
                 campaignPolicy,

@@ -61,7 +61,7 @@ public class AccountController {
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
     public ResponseEntity<ApiResponse<AccountDto>> updateAccessProfile(
             @PathVariable Long id,
-            @RequestParam Long accessProfileId) {
+            @RequestParam(required = false) Long accessProfileId) {
         log.info("Update account access profile called: id={}, accessProfileId={}", id, accessProfileId);
         AccountDto account = accountService.updateAccountAccessProfile(id, accessProfileId);
         return ResponseEntity.ok(ApiResponse.success("Access profile updated successfully", account));

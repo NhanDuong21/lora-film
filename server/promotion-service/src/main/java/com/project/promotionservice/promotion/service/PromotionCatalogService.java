@@ -26,6 +26,7 @@ import com.project.promotionservice.promotion.repository.PromotionRedemptionRepo
 import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.promotion.repository.PromotionSpecifications;
 import com.project.promotionservice.promotion.repository.UserPromotionRepository;
+import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -46,6 +47,7 @@ import java.util.UUID;
 import java.util.Set;
 import java.math.BigDecimal;
 import java.util.Comparator;
+import java.util.Collection;
 
 @Service
 public class PromotionCatalogService {
@@ -58,6 +60,7 @@ public class PromotionCatalogService {
     private final UserPromotionRepository walletRepository;
     private final PromotionCampaignRepository campaignRepository;
     private final PromotionRedemptionRepository redemptionRepository;
+    private final PromotionReservationRepository reservationRepository;
     private final PromotionMapper mapper;
     private final PromotionPolicyValidator policyValidator;
     private final CampaignConfigurationPolicy campaignPolicy;
@@ -69,6 +72,7 @@ public class PromotionCatalogService {
             UserPromotionRepository walletRepository,
             PromotionCampaignRepository campaignRepository,
             PromotionRedemptionRepository redemptionRepository,
+            PromotionReservationRepository reservationRepository,
             PromotionMapper mapper,
             PromotionPolicyValidator policyValidator,
             CampaignConfigurationPolicy campaignPolicy,
@@ -78,6 +82,7 @@ public class PromotionCatalogService {
         this.walletRepository = walletRepository;
         this.campaignRepository = campaignRepository;
         this.redemptionRepository = redemptionRepository;
+        this.reservationRepository = reservationRepository;
         this.mapper = mapper;
         this.policyValidator = policyValidator;
         this.campaignPolicy = campaignPolicy;
@@ -144,9 +149,23 @@ public class PromotionCatalogService {
             Boolean publicVisible,
             String keyword,
             Pageable pageable) {
+        return search(campaignPublicId, type, status, publicVisible, keyword,
+                pageable, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<PromotionResponse> search(
+            String campaignPublicId,
+            PromotionType type,
+            PromotionStatus status,
+            Boolean publicVisible,
+            String keyword,
+            Pageable pageable,
+            Collection<String> accessibleCampaignIds) {
         Page<Promotion> result = promotionRepository.findAll(
                 PromotionSpecifications.filter(
-                        campaignPublicId, type, status, publicVisible, keyword),
+                        campaignPublicId, type, status, publicVisible, keyword,
+                        accessibleCampaignIds),
                 pageable);
         return promotionPage(result);
     }
@@ -393,6 +412,7 @@ public class PromotionCatalogService {
                             promotion.getCode(),
                             BigDecimal.ZERO,
                             null,
+                            null,
                             eventType.equals("EXPIRED")
                                     ? "Voucher đã hết thời hạn sử dụng."
                                     : "Voucher đã được thu hồi khỏi ví."));
@@ -403,10 +423,9 @@ public class PromotionCatalogService {
                         userPublicId,
                         EnumSet.of(PromotionRedemptionStatus.CONFIRMED,
                                 PromotionRedemptionStatus.REVERSED));
+        Map<String, String> bookingReferences = new HashMap<>();
         redemptions.forEach(redemption -> {
-            if (redemption.getUserPromotionPublicId() == null) {
-                return;
-            }
+            String bookingReference = bookingReference(redemption, bookingReferences);
             if (redemption.getConfirmedAt() != null) {
                 history.add(new WalletPromotionHistoryResponse(
                         "USED", redemption.getConfirmedAt(),
@@ -414,7 +433,8 @@ public class PromotionCatalogService {
                         redemption.getPromotionPublicId(), redemption.getPromotionName(),
                         redemption.getPromotionCode(), redemption.getDiscountAmount(),
                         redemption.getBookingPublicId(),
-                        "Voucher đã được dùng cho đơn hàng."));
+                        bookingReference,
+                        "Ưu đãi đã được áp dụng cho đơn hàng."));
             }
             if (redemption.getStatus() == PromotionRedemptionStatus.REVERSED
                     && redemption.getRollbackAt() != null) {
@@ -424,7 +444,10 @@ public class PromotionCatalogService {
                         redemption.getPromotionPublicId(), redemption.getPromotionName(),
                         redemption.getPromotionCode(), redemption.getDiscountAmount(),
                         redemption.getBookingPublicId(),
-                        "Lượt dùng đã được hoàn lại vào ví sau khi đơn được đảo ngược."));
+                        bookingReference,
+                        redemption.getUserPromotionPublicId() == null
+                                ? "Ưu đãi tự động đã được hoàn lại sau khi đơn bị hủy."
+                                : "Lượt dùng đã được hoàn lại vào ví sau khi đơn bị hủy."));
             }
         });
         return history.stream()
@@ -433,6 +456,16 @@ public class PromotionCatalogService {
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(100)
                 .toList();
+    }
+
+    private String bookingReference(
+            PromotionRedemption redemption, Map<String, String> cache) {
+        String reservationId = redemption.getReservationPublicId();
+        if (reservationId == null || reservationId.isBlank()) return null;
+        return cache.computeIfAbsent(reservationId, id -> reservationRepository
+                .findByPublicIdAndDeletedAtIsNull(id)
+                .map(reservation -> reservation.getReservationCode())
+                .orElse(""));
     }
 
     private void validate(

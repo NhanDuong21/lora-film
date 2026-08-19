@@ -34,6 +34,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
     Page<Payment> findByReconciliationStatus(ReconciliationStatus status, Pageable pageable);
     Page<Payment> findByStatusAndBookingExpiresAtBefore(PaymentStatus status, Instant deadline, Pageable pageable);
     Page<Payment> findByStatusAndSettlementHoldUntilBefore(PaymentStatus status, Instant now, Pageable pageable);
+    List<Payment> findByBookingPublicIdIn(List<String> bookingPublicIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.id = :id")

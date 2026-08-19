@@ -1,10 +1,12 @@
 package com.project.promotionservice.reservation.specification;
 
+import com.project.promotionservice.promotion.entity.PromotionRedemption;
 import com.project.promotionservice.reservation.entity.PromotionReservation;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
+import java.util.Set;
 
 public final class ReservationSpecifications {
 
@@ -25,6 +27,24 @@ public final class ReservationSpecifications {
                 .and(equal("orderPublicId", blankToNull(orderPublicId)))
                 .and(createdAtFrom(from))
                 .and(createdAtTo(to));
+    }
+
+    public static Specification<PromotionReservation> allowedCampaigns(
+            Set<String> campaignPublicIds) {
+        if (campaignPublicIds == null) return null;
+        if (campaignPublicIds.isEmpty()) {
+            return (root, query, builder) -> builder.disjunction();
+        }
+        return (root, query, builder) -> {
+            var subquery = query.subquery(Long.class);
+            var redemption = subquery.from(PromotionRedemption.class);
+            subquery.select(builder.literal(1L));
+            subquery.where(
+                    builder.equal(redemption.get("reservationPublicId"), root.get("publicId")),
+                    redemption.get("campaignPublicId").in(campaignPublicIds),
+                    builder.isNull(redemption.get("deletedAt")));
+            return builder.exists(subquery);
+        };
     }
 
     private static Specification<PromotionReservation> notDeleted() {

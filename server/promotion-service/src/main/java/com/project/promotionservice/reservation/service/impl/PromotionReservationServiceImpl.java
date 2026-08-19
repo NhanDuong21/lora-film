@@ -77,6 +77,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
     private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
     private static final int MAX_RESERVATION_LIFETIME_SECONDS = 1800;
     private static final int EXPIRATION_BATCH_SIZE = 100;
+    private static final EnumSet<ReservationStatus> FINALIZED_BUSINESS_KEY_STATUSES =
+            EnumSet.of(ReservationStatus.CONFIRMED, ReservationStatus.REVERSED);
 
     private final PromotionReservationRepository reservationRepository;
     private final PromotionRedemptionRepository redemptionRepository;
@@ -159,6 +161,10 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             } else {
                 throw conflict("Checkout already has an effective promotion reservation");
             }
+        }
+        if (hasFinalizedBusinessKey(request)) {
+            throw conflict(
+                    "Checkout business key already belongs to a confirmed or reversed promotion reservation");
         }
 
         PromotionCheckoutResponse advisory = engineService.preview(request.checkoutRequest());
@@ -267,6 +273,16 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         if (redemptions.isEmpty()) {
             throw conflict("Active reservation has no promotion redemptions");
         }
+        redemptions.stream().map(PromotionRedemption::getCampaignPublicId)
+                .distinct().forEach(campaignPublicId -> {
+                    if (redemptionRepository
+                            .existsConfirmedCampaignConsumptionForBusinessKey(
+                                    campaignPublicId, reservationPublicId,
+                                    reservation.getBookingPublicId(),
+                                    reservation.getOrderPublicId())) {
+                        throw conflict("Campaign was already consumed by this booking/order");
+                    }
+                });
         Map<String, CampaignConsumption> campaignConsumption = new LinkedHashMap<>();
         for (PromotionRedemption redemption : redemptions) {
             if (redemption.getStatus() != PromotionRedemptionStatus.RESERVED) {
@@ -409,7 +425,6 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         restoreCampaignBudgets(restoration, actor);
 
         reservation.setStatus(ReservationStatus.REVERSED);
-        reservation.setReservationScopeKey(null);
         reservation.setRollbackAt(now);
         reservation.setRollbackReason(request.reason());
         reservation.setUpdatedBy(actor);
@@ -484,9 +499,26 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             Instant to,
             int page,
             int size) {
+        return history(status, userPublicId, bookingPublicId, orderPublicId,
+                from, to, page, size, null);
+    }
+
+    @Override
+    public PagedResponse<ReservationResponse> history(
+            ReservationStatus status,
+            String userPublicId,
+            String bookingPublicId,
+            String orderPublicId,
+            Instant from,
+            Instant to,
+            int page,
+            int size,
+            java.util.Set<String> allowedCampaignPublicIds) {
         Page<PromotionReservation> result = reservationRepository.findAll(
                 ReservationSpecifications.filter(
-                        status, userPublicId, bookingPublicId, orderPublicId, from, to),
+                        status, userPublicId, bookingPublicId, orderPublicId, from, to)
+                        .and(ReservationSpecifications.allowedCampaigns(
+                                allowedCampaignPublicIds)),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
         List<ReservationResponse> content = result.getContent().stream()
                 .map(this::response)
@@ -883,6 +915,21 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         return request.orderPublicId() != null && !request.orderPublicId().isBlank()
                 ? "ORDER:" + request.orderPublicId().trim()
                 : "BOOKING:" + request.bookingPublicId().trim();
+    }
+
+    private boolean hasFinalizedBusinessKey(ReserveRequest request) {
+        if (request.orderPublicId() != null && !request.orderPublicId().isBlank()) {
+            return reservationRepository
+                    .existsByOrderPublicIdAndStatusInAndDeletedAtIsNull(
+                            request.orderPublicId().trim(),
+                            FINALIZED_BUSINESS_KEY_STATUSES);
+        }
+        return request.bookingPublicId() != null
+                && !request.bookingPublicId().isBlank()
+                && reservationRepository
+                .existsByBookingPublicIdAndStatusInAndDeletedAtIsNull(
+                        request.bookingPublicId().trim(),
+                        FINALIZED_BUSINESS_KEY_STATUSES);
     }
 
     private String reservationCode(String actor, String idempotencyKey) {

@@ -72,6 +72,11 @@ foreach ($module in $modules) {
 commit secret. Các giá trị trong file mẫu có thể được ghi đè bằng biến môi
 trường; hãy thay toàn bộ credential mặc định trước khi dùng ngoài máy local.
 
+Ba internal token phục vụ incident flow không có fallback trong cấu hình mẫu
+và bắt buộc phải được cấp qua môi trường: `PROMOTION_TO_BOOKING_INTERNAL_TOKEN`,
+`PROMOTION_TO_PAYMENT_ASSESSMENT_TOKEN` và `SHOWTIME_TO_PAYMENT_INTERNAL_TOKEN`.
+Service sẽ từ chối khởi động nếu một token bắt buộc bị bỏ trống.
+
 ### 2. Khởi động hạ tầng
 
 ```powershell

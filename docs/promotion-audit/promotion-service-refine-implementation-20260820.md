@@ -81,7 +81,7 @@ Customer:
 
 - `GET /api/admin/promotion-operations/search`
 - `GET /api/admin/promotion-campaigns/{id}/force-release-impact`
-- `POST /api/admin/promotion-campaigns/{id}/force-release-holds`
+- `POST /api/admin/promotion-campaigns/{id}/force-release`
 - `POST /api/admin/promotion-campaigns/{id}/approval/override`
 - `GET /api/customers/me/promotion-history`
 - Migration: `docs/database/mysql/migrations/20260819_promotion_governance_refine.sql`
@@ -94,8 +94,8 @@ Customer:
 | Campaign lifecycle | Đã cover core | Draft → submit → approve → legal → publish/active → pause/resume/cancel/kill; server trả trạng thái, blocker, task và action hợp lệ |
 | Maker-checker & quyền | Đã cover core | Creator không tự duyệt; không còn ADMIN bypass; high-budget, legal, emergency và override là capability riêng |
 | Phân phối | Đã cover 3 model | AUTO không cần chọn; VOUCHER public cần nhận vào ví; COUPON cấp riêng và dùng bằng mã |
-| Best price checkout | Đã cover core | So sánh manual/AUTO/stacking; manual có thể bị thay; tie không consume voucher; UI giải thích khoản tiết kiệm và voucher còn lại |
-| Reservation & quota | Đã cover core | Idempotent reserve/confirm/release; campaign đếm distinct order; promotion đếm benefit; release taxonomy có nguồn và actor |
+| Best price checkout | Đã cover core | So sánh manual/AUTO/stacking; manual có thể bị thay; tie không consume voucher hoặc coupon dùng một lần; UI giải thích khoản tiết kiệm và quyền lợi còn lại |
+| Reservation & quota | Đã cover core | Idempotent reserve/confirm/release; finalized business key không thể reserve lại; campaign đếm distinct order; promotion đếm benefit; release taxonomy có nguồn và actor |
 | Recovery & emergency | Đã cover core | Pause/kill chặn lượt giữ mới nhưng không âm thầm release; force release tách riêng và có impact preview + confirm code |
 | Monitoring & audit | Đã cover vận hành cấp 1 | Dashboard, cảnh báo exposure, explorer theo business reference, reservation/redemption/adjustment ledger |
 | Customer transparency | Đã cover core | Phân loại dùng được/có thể nhận/AUTO/lịch sử; AUTO copy đúng; history lấy từ wallet + immutable redemption ledger |
@@ -104,13 +104,14 @@ Kết luận: luồng promotion cốt lõi từ Admin/Manager đến checkout v�
 
 ## Verification
 
-- Promotion Service: **84/84** tests pass, gồm MySQL 8 canonical-schema validation bằng Testcontainers.
-- Auth Service: **57/57** tests pass.
-- Frontend promotion-focused: **44/44** tests pass, gồm checkout decision, chooser, customer service, presentation copy và Promotion Center page-level contract.
+- Promotion Service: **119/119** tests pass bằng `mvn clean test`, gồm security scope, force-release execute revalidation, finalized business-key guard, best-price entitlement, startup token guard và migration snapshot MySQL chạy hai lần.
+- Auth Service: **60/60** tests pass; generic manager không có AUTHOR, supplemental profile và session revocation có regression.
+- Booking Service: **177/177** tests pass; có regression cho lifecycle-context read-only, token scope và missing audit token fail startup.
+- Payment Service: **112/112** tests pass; có regression cho assessment token không gọi được emergency stop và missing token fail startup.
+- Toàn bộ client suite: **650/650** tests pass trên 164 test files; test ngày của catalog đã dùng ngày động.
 - Client ESLint và production build: pass.
-- Toàn bộ client suite: **646/647** tests pass. Một test ngoài phạm vi promotion (`MovieExhibitionPeriodPanel.test.jsx`) phụ thuộc ngày hiện tại, vẫn kỳ vọng `2026-08-20` trong khi component đúng luật đặt `min=2026-08-21`; không có source catalog nào bị sửa trong đợt này.
 - `git diff --check`: không có whitespace error; chỉ có cảnh báo line-ending LF/CRLF của Windows.
-- Migration và fixture đã được nạp vào MySQL local; chạy lại fixture thành công, không nhân bản dữ liệu.
+- Con số test Promotion 165 trong audit cũ có lẫn compiled test class đã bị xóa từ một commit cũ nhưng còn trong `target`; `mvn clean test` xác nhận source hiện tại có 25 report class và không có test bị xóa/disable trong working-tree diff.
 
 ## Walkthrough runtime ADMIN → MANAGER → CUSTOMER
 
@@ -135,7 +136,8 @@ Operations Explorer tải được reservation và redemption ledger, có filter
 ### MANAGER — capability-limited operations
 
 - Sidebar có `Trung tâm khuyến mãi`; route `/manager/promotions` truy cập được.
-- Có quyền author/operate/audit theo bootstrap hiện tại.
+- Generic manager chỉ có view/operate/audit; không có AUTHOR mặc định. AUTHOR chỉ được cấp bằng supplemental access profile và việc thay profile hoặc cinema assignment đều revoke session cũ.
+- Manager-author phải chọn rõ ít nhất một rạp được phân công khi tạo campaign; UI không mặc định toàn bộ và backend từ chối `GLOBAL`/rạp ngoài scope.
 - Không render `Phê duyệt`, legal review, `Dừng khẩn cấp`, override hay force release; vẫn có thao tác vận hành thông thường như pause/resume khi server cho phép.
 
 ![MANAGER chỉ thấy action theo capability](./screenshots/14-refine-manager-capabilities.png)
@@ -152,12 +154,32 @@ Tab lịch sử tải từ endpoint mới và hiển thị transaction đã dùn
 
 ## Điểm nên nhờ reviewer/ChatGPT phản biện tiếp
 
-1. Capability mặc định của MANAGER (`VIEW`, `AUTHOR`, `OPERATE`, `AUDIT_VIEW`) có đúng mô hình tổ chức thực tế, hay `AUTHOR`/`AUDIT_VIEW` cần tách theo access profile từng rạp?
-2. Ngưỡng high-budget và escalation SLA nên lấy từ configuration nào, ai sở hữu và thay đổi qua quy trình nào?
-3. Sau kill switch, giữ nguyên active reservation là policy đã chốt; có cần timer hoặc runbook bắt buộc để operator quyết định force release trong thời gian xác định không?
-4. Customer history nên giữ vô hạn hay áp dụng retention/pagination/export theo yêu cầu pháp lý và CSKH?
-5. Trước production cần bổ sung load test concurrent reserve/confirm, failure injection cho payment event và dashboard metric/alert ngoài ứng dụng.
+1. Ngưỡng high-budget và escalation SLA nên lấy từ configuration nào, ai sở hữu và thay đổi qua quy trình nào?
+2. Sau kill switch, giữ nguyên active reservation là policy đã chốt; có cần timer hoặc runbook bắt buộc để operator quyết định force release trong thời gian xác định không?
+3. Customer history nên giữ vô hạn hay áp dụng retention/pagination/export theo yêu cầu pháp lý và CSKH?
+4. Trước production cần bổ sung load test concurrent reserve/confirm, failure injection cho payment event và dashboard metric/alert ngoài ứng dụng.
 
 ## Giới hạn chủ động giữ ngoài scope
 
 Không triển khai CSV import, segment builder, bulk job UI, forecast, anomaly detection, analytics mới, engine rewrite hoặc theme rewrite.
+
+## Pre-commit hardening bổ sung sau walkthrough cuối
+
+Walkthrough force-release bằng dữ liệu thật đã phát hiện hai gap tích hợp mà unit test ban đầu chưa lộ ra:
+
+- Booking `payment-context` cố ý từ chối booking terminal bằng `409`, nên không phù hợp để Promotion đánh giá một lượt giữ trên booking đã `CANCELLED`/`EXPIRED`. Booking nay có `GET /internal/bookings/{publicId}/lifecycle-context`, chỉ trả trạng thái vòng đời cần thiết cho audit an toàn.
+- Promotion không còn dùng token có quyền emergency stop của Payment. Token `PROMOTION_TO_PAYMENT_ASSESSMENT_TOKEN` chỉ được gọi `/assess`; gọi `/stop` bằng token này trả `401`. Tương tự, token audit của Booking chỉ đọc được `lifecycle-context`, không đọc `payment-context` và không gọi route ghi. Cấu hình production/default không có secret fallback; Booking PostConstruct, Payment controller constructor và Promotion dependency-client constructor đều fail startup nếu token thiếu hoặc blank.
+
+Sau sign-off, execute force-release còn đánh giá lại Booking/Payment ngay trước mutation. Regression cover Payment chuyển PROCESSING, Booking đổi lifecycle và timeout của từng dependency sau khi impact từng SAFE; mọi trường hợp đều chặn toàn batch với zero release. `CONFIRMED`/`REVERSED` cũng giữ canonical business key và reserve mới cùng booking/order bị từ chối trước khi engine, reservation, redemption, budget, quota hoặc wallet bị chạm tới.
+
+Runtime fixture cuối có hai lượt giữ trên campaign KILLED: một lượt `SAFE_TO_RELEASE`, một lượt `REPRICE_REQUIRED`. Impact trả 1 an toàn, 1 cần tính lại, 0 đang thanh toán, 0 dependency lỗi và không cho execute. Đây là hành vi fail-closed mong muốn.
+
+UI cuối cũng được làm rõ thêm:
+
+- “Force release” được đổi thành “Thu hồi khẩn cấp”; modal nói rõ ngân sách đã dùng/đang giữ và chỉ thu hồi các lượt an toàn.
+- Operations Việt hóa trạng thái/lý do, rút gọn business reference nhưng giữ giá trị đầy đủ ở tooltip.
+- Customer history không gọi reservation UUID là booking code; dùng nhãn trung thực “Mã lượt ưu đãi” và tên ưu đãi thân thiện.
+
+Ảnh walkthrough cuối nằm tại `screenshots/17-hardening-admin-campaigns.png` đến `screenshots/23-hardening-customer-history.png`. Bộ ảnh và prompt review được đóng gói trong `promotion-service-precommit-review-pack-20260820.md`.
+
+Verification cuối: Promotion **119/119**, Booking **177/177**, Payment **112/112**, Auth **60/60**, client **650/650**; client lint và production build đều pass.

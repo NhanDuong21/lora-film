@@ -20,6 +20,7 @@ import com.project.promotionservice.promotion.enums.ApprovalAction;
 import com.project.promotionservice.promotion.enums.ApprovalTargetType;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignScopeType;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.mapper.CampaignMapper;
 import com.project.promotionservice.promotion.repository.ApprovalHistoryRepository;
@@ -41,17 +42,25 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.Collection;
 import java.text.Normalizer;
 import java.util.regex.Pattern;
 
 @Service
 public class CampaignServiceImpl implements CampaignService {
+
+    @Value("${promotion.approval.high-budget-threshold:50000000.00}")
+    private BigDecimal highBudgetThreshold = new BigDecimal("50000000.00");
+
+    @Value("${promotion.approval.policy-version:2026-08-v1}")
+    private String approvalPolicyVersion = "2026-08-v1";
 
     private final PromotionCampaignRepository campaignRepository;
     private final PromotionRepository promotionRepository;
@@ -92,6 +101,15 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional
     public CampaignResponse createCampaign(CampaignCreateRequest request, String creator) {
+        return createCampaign(request, creator, CampaignScopeType.GLOBAL, List.of());
+    }
+
+    @Override
+    @Transactional
+    @Auditable(action = "CAMPAIGN_CREATE", entityType = "PROMOTION_CAMPAIGN")
+    public CampaignResponse createCampaign(
+            CampaignCreateRequest request, String creator,
+            CampaignScopeType scopeType, Collection<String> cinemaScope) {
         if (request.getEndAt().isBefore(request.getStartAt())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_PARAMETER, "End date must be after start date", HttpStatus.BAD_REQUEST);
         }
@@ -106,6 +124,13 @@ public class CampaignServiceImpl implements CampaignService {
         }
 
         PromotionCampaign campaign = campaignMapper.toEntity(request);
+        campaign.setScopeType(scopeType == null ? CampaignScopeType.GLOBAL : scopeType);
+        try {
+            campaign.setCinemaScopeJson(campaign.getScopeType() == CampaignScopeType.GLOBAL
+                    ? null : objectMapper.writeValueAsString(cinemaScope == null ? List.of() : cinemaScope));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to persist campaign cinema scope", exception);
+        }
         campaign.setSlug(slug);
         campaign.setCreatedBy(creator);
         campaign.setUpdatedBy(creator);
@@ -220,12 +245,22 @@ public class CampaignServiceImpl implements CampaignService {
     @Transactional(readOnly = true)
     public PagedResponse<CampaignResponse> searchCampaigns(String name, String code, CampaignStatus status,
                                                            Instant from, Instant to, Pageable pageable) {
+        return searchCampaigns(name, code, status, from, to, pageable, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<CampaignResponse> searchCampaigns(
+            String name, String code, CampaignStatus status,
+            Instant from, Instant to, Pageable pageable,
+            Collection<String> accessibleCampaignIds) {
         Specification<PromotionCampaign> spec = Specification.where(CampaignSpecification.isNotDeleted())
                 .and(CampaignSpecification.hasNameLike(name))
                 .and(CampaignSpecification.hasCode(code))
                 .and(CampaignSpecification.hasStatus(status))
                 .and(CampaignSpecification.startsAfter(from))
-                .and(CampaignSpecification.endsBefore(to));
+                .and(CampaignSpecification.endsBefore(to))
+                .and(CampaignSpecification.publicIdIn(accessibleCampaignIds));
 
         Page<PromotionCampaign> page = campaignRepository.findAll(spec, pageable);
 
@@ -265,6 +300,12 @@ public class CampaignServiceImpl implements CampaignService {
 
         String oldStatus = campaign.getApprovalStatus().name();
         campaign.setApprovalStatus(CampaignApprovalStatus.PENDING);
+        campaign.setApprovalThresholdApplied(highBudgetThreshold);
+        campaign.setApprovalPolicyVersion(approvalPolicyVersion);
+        campaign.setRequiredApprovalCapability(
+                campaign.getBudgetAmount().compareTo(highBudgetThreshold) > 0
+                        ? "PROMOTION_APPROVE_HIGH_BUDGET"
+                        : "PROMOTION_APPROVE_STANDARD");
         campaign.setUpdatedBy(user);
         PromotionCampaign saved = campaignRepository.save(campaign);
 
@@ -355,10 +396,14 @@ public class CampaignServiceImpl implements CampaignService {
                     HttpStatus.BAD_REQUEST);
         }
         if (!now.isBefore(campaign.getEndAt())) {
-            throw new BusinessException(
-                    ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "An ended campaign cannot be activated",
-                    HttpStatus.BAD_REQUEST);
+            campaign.setStatus(CampaignStatus.COMPLETED);
+            campaign.setUpdatedBy(user);
+            PromotionCampaign completed = campaignRepository.saveAndFlush(campaign);
+            recordOutboxEvent("CAMPAIGN", completed.getPublicId(),
+                    "CAMPAIGN_COMPLETED_ON_RESUME",
+                    campaignMapper.toResponse(completed),
+                    "promotion.campaign.lifecycle", user);
+            return campaignMapper.toResponse(completed);
         }
         campaign.setKillSwitch(false);
         campaign.setStatus(CampaignStatus.ACTIVE);
@@ -515,10 +560,11 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaign.getStatus() == CampaignStatus.CANCELLED) {
             return campaignMapper.toResponse(campaign);
         }
-        if (campaign.getStatus() == CampaignStatus.COMPLETED) {
+        if (campaign.getStatus() == CampaignStatus.COMPLETED
+                || campaign.getStatus() == CampaignStatus.KILLED) {
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST_PARAMETER,
-                    "A completed campaign cannot be cancelled",
+                    "A completed or killed campaign cannot be cancelled",
                     HttpStatus.BAD_REQUEST);
         }
 

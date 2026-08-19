@@ -10,6 +10,7 @@ import com.project.promotionservice.promotion.entity.PromotionRedemption;
 import com.project.promotionservice.promotion.entity.PromotionRedemptionAdjustment;
 import com.project.promotionservice.promotion.entity.UserPromotion;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
+import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
@@ -21,6 +22,7 @@ import com.project.promotionservice.promotion.service.PromotionCatalogEventServi
 import com.project.promotionservice.promotion.service.PromotionEngineService;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.CompensateRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ConfirmRequest;
+import com.project.promotionservice.reservation.dto.request.ReservationRequests.ReserveRequest;
 import com.project.promotionservice.reservation.entity.PromotionReservation;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
@@ -39,6 +41,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
@@ -77,6 +82,8 @@ class PromotionReservationServiceImplTest {
         Instant now = Instant.parse("2026-08-01T10:00:00Z");
         PromotionReservation reservation = new PromotionReservation();
         reservation.setPublicId("11111111-1111-4111-8111-111111111111");
+        reservation.setReservationScopeKey(
+                "BOOKING:77777777-7777-4777-8777-777777777777");
         reservation.setStatus(ReservationStatus.CONFIRMED);
         reservation.setUserPublicId("1001");
         reservation.setOriginalAmount(new BigDecimal("100000.00"));
@@ -144,6 +151,8 @@ class PromotionReservationServiceImplTest {
                 "refund-idempotency", "BOOKING_SERVICE");
 
         assertThat(response.getStatus()).isEqualTo(ReservationStatus.REVERSED);
+        assertThat(reservation.getReservationScopeKey())
+                .isEqualTo("BOOKING:77777777-7777-4777-8777-777777777777");
         assertThat(redemption.getStatus()).isEqualTo(PromotionRedemptionStatus.REVERSED);
         assertThat(wallet.getStatus()).isEqualTo(UserPromotionStatus.AVAILABLE);
         assertThat(wallet.getUsageCount()).isZero();
@@ -164,7 +173,7 @@ class PromotionReservationServiceImplTest {
     }
 
     @Test
-    void confirmCountsOneCampaignOrderForTwoBenefitsAndRetryIsIdempotent() {
+    void activeHoldStillConfirmsAfterKillAndCountsOneCampaignOrderForTwoBenefits() {
         Instant now = Instant.parse("2026-08-01T10:00:00Z");
         PromotionReservation reservation = new PromotionReservation();
         reservation.setPublicId("11111111-1111-4111-8111-111111111111");
@@ -198,6 +207,8 @@ class PromotionReservationServiceImplTest {
         campaign.setBudgetUsed(BigDecimal.ZERO.setScale(2));
         campaign.setBudgetRemaining(new BigDecimal("1000000.00"));
         campaign.setRedemptionCount(0);
+        campaign.setStatus(CampaignStatus.KILLED);
+        campaign.setKillSwitch(true);
 
         when(databaseTimeProvider.now()).thenReturn(now);
         when(reservationRepository.findByPublicIdForUpdate(reservation.getPublicId()))
@@ -222,6 +233,84 @@ class PromotionReservationServiceImplTest {
         assertThat(campaign.getRedemptionCount()).isEqualTo(1);
         assertThat(campaign.getBudgetUsed()).isEqualByComparingTo("25000.00");
         verify(campaignRepository, times(1)).save(campaign);
+    }
+
+    @Test
+    void confirmRejectsSecondReservationForSameBookingCampaignBusinessKey() {
+        Instant now = Instant.parse("2026-08-01T10:00:00Z");
+        PromotionReservation reservation = new PromotionReservation();
+        reservation.setPublicId("11111111-1111-4111-8111-111111111119");
+        reservation.setBookingPublicId("22222222-2222-4222-8222-222222222229");
+        reservation.setStatus(ReservationStatus.ACTIVE);
+        reservation.setReservationExpiredAt(now.plusSeconds(300));
+        String campaignId = "55555555-5555-4555-8555-555555555559";
+        PromotionRedemption redemption = reservedRedemption(
+                "33333333-3333-4333-8333-333333333339",
+                "44444444-4444-4444-8444-444444444449",
+                campaignId, reservation.getPublicId(), 1, "10000.00");
+        Promotion promotion = new Promotion();
+        promotion.setPublicId(redemption.getPromotionPublicId());
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId(campaignId);
+
+        when(databaseTimeProvider.now()).thenReturn(now);
+        when(reservationRepository.findByPublicIdForUpdate(reservation.getPublicId()))
+                .thenReturn(Optional.of(reservation));
+        when(redemptionRepository.findByReservationPublicIdForUpdate(
+                reservation.getPublicId())).thenReturn(List.of(redemption));
+        when(promotionRepository.findByPublicIdForUpdate(promotion.getPublicId()))
+                .thenReturn(Optional.of(promotion));
+        when(campaignRepository.findByPublicIdForUpdate(campaignId))
+                .thenReturn(Optional.of(campaign));
+        when(redemptionRepository.existsConfirmedCampaignConsumptionForBusinessKey(
+                campaignId, reservation.getPublicId(),
+                reservation.getBookingPublicId(), null)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.confirm(
+                reservation.getPublicId(),
+                new ConfirmRequest("77777777-7777-4777-8777-777777777777"),
+                "confirm-duplicate", "PAYMENT_SERVICE"))
+                .hasMessageContaining("already consumed");
+        verify(promotionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void reserveRejectsNewIdempotencyKeyForAlreadyConfirmedBookingBusinessKey() {
+        Instant now = Instant.parse("2026-08-01T10:00:00Z");
+        String bookingId = "22222222-2222-4222-8222-222222222229";
+        String scopeKey = "BOOKING:" + bookingId;
+        PromotionReservation confirmed = new PromotionReservation();
+        confirmed.setPublicId("11111111-1111-4111-8111-111111111119");
+        confirmed.setReservationScopeKey(scopeKey);
+        confirmed.setBookingPublicId(bookingId);
+        confirmed.setStatus(ReservationStatus.CONFIRMED);
+        confirmed.setDiscountAmount(new BigDecimal("10000.00"));
+
+        ReserveRequest request = new ReserveRequest(
+                "1001", new BigDecimal("100000.00"), List.of(), List.of(),
+                null, null, bookingId, null, "VND", null, 300,
+                List.of(), List.of());
+        when(databaseTimeProvider.now()).thenReturn(now);
+        when(reservationRepository.findByReservationCodeAndDeletedAtIsNull(any()))
+                .thenReturn(Optional.empty());
+        when(reservationRepository.findByReservationScopeKeyAndDeletedAtIsNull(scopeKey))
+                .thenReturn(Optional.empty());
+        when(reservationRepository
+                .existsByBookingPublicIdAndStatusInAndDeletedAtIsNull(
+                        bookingId, java.util.Set.of(
+                                ReservationStatus.CONFIRMED,
+                                ReservationStatus.REVERSED)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.reserve(
+                request, "new-idempotency-key", "BOOKING_SERVICE"))
+                .hasMessageContaining("already belongs to a confirmed or reversed");
+
+        verify(engineService, never()).preview(any());
+        verify(reservationRepository, never()).save(any());
+        verify(redemptionRepository, never()).save(any());
+        verify(campaignRepository, never()).save(any());
+        verify(walletRepository, never()).save(any());
     }
 
     private PromotionRedemption reservedRedemption(

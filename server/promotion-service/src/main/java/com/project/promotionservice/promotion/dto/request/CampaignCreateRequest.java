@@ -1,6 +1,7 @@
 package com.project.promotionservice.promotion.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.project.promotionservice.promotion.enums.CampaignScopeType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -10,6 +11,8 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Schema(description = "Request body to create a new promotion campaign")
 public class CampaignCreateRequest {
@@ -69,6 +72,10 @@ public class CampaignCreateRequest {
     private String legalNotificationRef;
 
     private String remarks;
+
+    private CampaignScopeType scopeType = CampaignScopeType.GLOBAL;
+
+    private Set<@Size(max = 36) String> cinemaPublicIds = new LinkedHashSet<>();
 
     public CampaignCreateRequest() {
     }
@@ -207,5 +214,22 @@ public class CampaignCreateRequest {
 
     public void setRemarks(String remarks) {
         this.remarks = remarks;
+    }
+
+    public CampaignScopeType getScopeType() {
+        return scopeType;
+    }
+
+    public void setScopeType(CampaignScopeType scopeType) {
+        this.scopeType = scopeType;
+    }
+
+    public Set<String> getCinemaPublicIds() {
+        return cinemaPublicIds;
+    }
+
+    public void setCinemaPublicIds(Set<String> cinemaPublicIds) {
+        this.cinemaPublicIds = cinemaPublicIds == null
+                ? new LinkedHashSet<>() : new LinkedHashSet<>(cinemaPublicIds);
     }
 }

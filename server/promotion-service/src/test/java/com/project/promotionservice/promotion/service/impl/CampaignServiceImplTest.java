@@ -195,6 +195,11 @@ class CampaignServiceImplTest {
 
         assertEquals(CampaignApprovalStatus.PENDING, result.getApprovalStatus());
         assertEquals(CampaignApprovalStatus.PENDING, campaign.getApprovalStatus());
+        assertEquals(new BigDecimal("50000000.00"),
+                campaign.getApprovalThresholdApplied());
+        assertEquals("2026-08-v1", campaign.getApprovalPolicyVersion());
+        assertEquals("PROMOTION_APPROVE_STANDARD",
+                campaign.getRequiredApprovalCapability());
         verify(approvalHistoryRepository).save(any());
     }
 
@@ -232,6 +237,51 @@ class CampaignServiceImplTest {
         assertTrue(exception.getMessage().contains("SCHEDULED, ACTIVE or PAUSED"));
         assertEquals(CampaignStatus.DRAFT, campaign.getStatus());
         verify(campaignRepository, never()).save(campaign);
+    }
+
+    @Test
+    void killedCampaignIsTerminalAndCannotBeCancelled() {
+        PromotionCampaign campaign = draftCouponCampaign();
+        campaign.setStatus(CampaignStatus.KILLED);
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> campaignService.cancelCampaign(campaign.getPublicId(), "admin"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        assertEquals(CampaignStatus.KILLED, campaign.getStatus());
+        verify(campaignRepository, never()).save(campaign);
+    }
+
+    @Test
+    void resumeAfterEndMarksCampaignCompletedInsteadOfActive() {
+        PromotionCampaign campaign = draftCouponCampaign();
+        campaign.setStatus(CampaignStatus.PAUSED);
+        campaign.setApprovalStatus(CampaignApprovalStatus.APPROVED);
+        campaign.setLegalStatus(LegalStatus.PASSED);
+        campaign.setBudgetAmount(new BigDecimal("100000.00"));
+        campaign.setStartAt(Instant.now().minusSeconds(7200));
+        campaign.setEndAt(Instant.now().minusSeconds(60));
+        CampaignResponse response = new CampaignResponse();
+        response.setStatus(CampaignStatus.COMPLETED);
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+        when(promotionRepository.existsConfiguredForCampaign(
+                eq(campaign.getPublicId()), any(),
+                eq(campaign.getStartAt()), eq(campaign.getEndAt())))
+                .thenReturn(true);
+        when(campaignRepository.saveAndFlush(campaign)).thenReturn(campaign);
+        when(campaignMapper.toResponse(campaign)).thenReturn(response);
+
+        CampaignResponse result = campaignService.activateCampaign(
+                campaign.getPublicId(), "operator");
+
+        assertEquals(CampaignStatus.COMPLETED, campaign.getStatus());
+        assertEquals(CampaignStatus.COMPLETED, result.getStatus());
+        verify(promotionRepository, never()).activateDraftPromotions(
+                any(), any(), any(), any(), any());
     }
 
     @Test

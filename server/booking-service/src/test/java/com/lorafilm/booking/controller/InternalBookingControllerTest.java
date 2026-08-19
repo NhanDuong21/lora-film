@@ -8,6 +8,7 @@ import com.lorafilm.booking.booking.enums.BookingStatus;
 import com.lorafilm.booking.booking.service.InternalBookingService;
 import com.lorafilm.booking.booking.service.InternalBookingPaymentService;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
+import com.lorafilm.booking.booking.dto.response.InternalBookingLifecycleResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,6 +125,20 @@ public class InternalBookingControllerTest {
                 .andExpect(jsonPath("$.data.amount").value(240000.00))
                 .andExpect(jsonPath("$.data.currency").value("VND"))
                 .andExpect(jsonPath("$.data.analyticsSnapshot.ticketCount").value(2));
+    }
+
+    @Test
+    public void getLifecycleContext_ReturnsTerminalBookingStatus() throws Exception {
+        String publicId = "550e8400-e29b-41d4-a716-446655440000";
+        when(internalBookingPaymentService.getLifecycleContext(publicId)).thenReturn(
+                new InternalBookingLifecycleResponse(publicId, "LORAFILM-1001", "CANCELLED"));
+
+        mockMvc.perform(get("/internal/bookings/" + publicId + "/lifecycle-context")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.bookingPublicId").value(publicId))
+                .andExpect(jsonPath("$.data.bookingCode").value("LORAFILM-1001"))
+                .andExpect(jsonPath("$.data.bookingStatus").value("CANCELLED"));
     }
 
     @Test

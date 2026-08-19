@@ -3,6 +3,7 @@ package com.project.promotionservice.promotion.entity;
 import com.project.promotionservice.common.entity.BaseAuditableEntity;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignScopeType;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 
 import jakarta.persistence.Column;
@@ -42,6 +43,13 @@ public class PromotionCampaign extends BaseAuditableEntity {
     @Column(name = "legal_status", length = 30, nullable = false)
     private LegalStatus legalStatus = LegalStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scope_type", length = 30, nullable = false)
+    private CampaignScopeType scopeType = CampaignScopeType.GLOBAL;
+
+    @Column(name = "cinema_scope_json", columnDefinition = "json")
+    private String cinemaScopeJson;
+
     @Column(name = "priority", nullable = false)
     private Integer priority = 100;
 
@@ -80,6 +88,15 @@ public class PromotionCampaign extends BaseAuditableEntity {
 
     @Column(name = "approved_by", length = 36)
     private String approvedBy;
+
+    @Column(name = "approval_threshold_applied", precision = 18, scale = 2)
+    private BigDecimal approvalThresholdApplied;
+
+    @Column(name = "approval_policy_version", length = 50)
+    private String approvalPolicyVersion;
+
+    @Column(name = "required_approval_capability", length = 100)
+    private String requiredApprovalCapability;
 
     @Column(name = "budget_amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal budgetAmount = BigDecimal.ZERO;
@@ -208,6 +225,22 @@ public class PromotionCampaign extends BaseAuditableEntity {
         return legalStatus;
     }
 
+    public CampaignScopeType getScopeType() {
+        return scopeType;
+    }
+
+    public void setScopeType(CampaignScopeType scopeType) {
+        this.scopeType = scopeType;
+    }
+
+    public String getCinemaScopeJson() {
+        return cinemaScopeJson;
+    }
+
+    public void setCinemaScopeJson(String cinemaScopeJson) {
+        this.cinemaScopeJson = cinemaScopeJson;
+    }
+
     public void setLegalStatus(LegalStatus legalStatus) {
         this.legalStatus = legalStatus;
     }
@@ -315,6 +348,13 @@ public class PromotionCampaign extends BaseAuditableEntity {
     public void setApprovedBy(String approvedBy) {
         this.approvedBy = approvedBy;
     }
+
+    public BigDecimal getApprovalThresholdApplied() { return approvalThresholdApplied; }
+    public void setApprovalThresholdApplied(BigDecimal value) { this.approvalThresholdApplied = value; }
+    public String getApprovalPolicyVersion() { return approvalPolicyVersion; }
+    public void setApprovalPolicyVersion(String value) { this.approvalPolicyVersion = value; }
+    public String getRequiredApprovalCapability() { return requiredApprovalCapability; }
+    public void setRequiredApprovalCapability(String value) { this.requiredApprovalCapability = value; }
 
     public BigDecimal getBudgetAmount() {
         return budgetAmount;

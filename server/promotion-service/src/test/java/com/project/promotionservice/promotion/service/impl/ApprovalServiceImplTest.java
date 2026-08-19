@@ -14,6 +14,8 @@ import com.project.promotionservice.promotion.repository.PromotionCampaignReposi
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -112,5 +114,30 @@ class ApprovalServiceImplTest {
         assertEquals(CampaignApprovalStatus.APPROVED, result.getApprovalStatus());
         verify(campaignRepository, times(1)).save(any(PromotionCampaign.class));
         verify(approvalHistoryRepository, times(1)).save(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "49999999.00,PROMOTION_APPROVE_STANDARD,PROMOTION_APPROVE_HIGH_BUDGET",
+            "50000000.00,PROMOTION_APPROVE_STANDARD,PROMOTION_APPROVE_HIGH_BUDGET",
+            "50000001.00,PROMOTION_APPROVE_HIGH_BUDGET,PROMOTION_APPROVE_STANDARD"
+    })
+    void approvalThresholdBoundaryUsesExpectedCapability(
+            String budget, String requiredCapability, String providedCapability) {
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId("550e8400-e29b-41d4-a716-446655440009");
+        campaign.setCreatedBy("creator1");
+        campaign.setApprovalStatus(CampaignApprovalStatus.PENDING);
+        campaign.setBudgetAmount(new BigDecimal(budget));
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                approvalService.approveCampaign(campaign.getPublicId(),
+                        "Boundary check", "approver1", List.of(providedCapability)));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
+        assertEquals("Approver lacks capability " + requiredCapability,
+                exception.getMessage());
     }
 }

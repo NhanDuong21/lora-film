@@ -8,6 +8,7 @@ import com.lorafilm.booking.booking.dto.request.EmergencyShowtimeClosureRequest;
 import com.lorafilm.booking.booking.dto.response.EmergencyShowtimeClosureResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
+import com.lorafilm.booking.booking.dto.response.InternalBookingLifecycleResponse;
 import com.lorafilm.booking.common.constant.ValidationConstants;
 import com.lorafilm.booking.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -125,6 +126,14 @@ public class InternalBookingController {
             @PathVariable String publicId) {
         return ResponseEntity.ok(ApiResponse.success(
                 internalBookingPaymentService.getPaymentContext(publicId)));
+    }
+
+    @GetMapping("/{publicId:[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}}/lifecycle-context")
+    @Operation(summary = "Get read-only Booking lifecycle context for incident coordination")
+    public ResponseEntity<ApiResponse<InternalBookingLifecycleResponse>> getLifecycleContext(
+            @PathVariable String publicId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                internalBookingPaymentService.getLifecycleContext(publicId)));
     }
 
     @GetMapping("/{bookingId:\\d+}/score-redemption-context")

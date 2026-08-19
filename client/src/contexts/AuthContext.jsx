@@ -8,6 +8,7 @@ import {
   getAuthToken,
   getRefreshToken,
   getUserPermissions,
+  getUserCinemaPublicIds,
   hasRefreshToken,
   clearAuthData,
   setAuthData as saveAuthData
@@ -25,6 +26,7 @@ export function AuthProvider({ children }) {
   const [accessToken, setAccessToken] = useState(() => getAuthToken());
   const [refreshToken, setRefreshToken] = useState(() => getRefreshToken());
   const [permissions, setPermissions] = useState(() => getUserPermissions());
+  const [cinemaPublicIds, setCinemaPublicIds] = useState(() => getUserCinemaPublicIds());
   
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -85,6 +87,7 @@ export function AuthProvider({ children }) {
       setAccessToken(getAuthToken());
       setRefreshToken(getRefreshToken());
       setPermissions(getUserPermissions());
+      setCinemaPublicIds(getUserCinemaPublicIds());
       return storedAccountId;
     }
     setAccountId(null);
@@ -93,6 +96,7 @@ export function AuthProvider({ children }) {
     setAccessToken(null);
     setRefreshToken(null);
     setPermissions([]);
+    setCinemaPublicIds([]);
     setProfile(null);
     setProfilePending(false);
     setProfileError(null);
@@ -179,11 +183,12 @@ export function AuthProvider({ children }) {
       role: userRole,
       fullName: profile?.fullName || email?.split('@')[0] || 'User',
       permissions: effectivePermissions,
+      cinemaPublicIds,
       profilePending: profilePending,
       profileLoading: profileLoading,
       ...profile
     };
-  }, [isAuthenticated, accountId, email, userRole, permissions, profile, profilePending, profileLoading]);
+  }, [isAuthenticated, accountId, email, userRole, permissions, cinemaPublicIds, profile, profilePending, profileLoading]);
 
   return (
     <AuthContext.Provider value={{ 

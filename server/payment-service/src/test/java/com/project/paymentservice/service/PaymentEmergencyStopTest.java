@@ -80,6 +80,29 @@ class PaymentEmergencyStopTest {
         verify(outboxService).enqueueBookingResult(processing, "CANCELLED", processing.getCancelledAt());
     }
 
+    @Test
+    void assessesActiveAndSuccessfulPaymentsWithoutMutatingThem() {
+        Payment pending = payment(1L, "booking-pending", PaymentStatus.PENDING);
+        Payment processing = payment(2L, "booking-processing", PaymentStatus.PROCESSING);
+        Payment success = payment(3L, "booking-success", PaymentStatus.SUCCESS);
+        Payment failed = payment(4L, "booking-failed", PaymentStatus.FAILED);
+        List<String> bookingIds = List.of(
+                "booking-pending", "booking-processing", "booking-success", "booking-failed");
+        when(paymentRepository.findByBookingPublicIdIn(bookingIds))
+                .thenReturn(List.of(pending, processing, success, failed));
+
+        var result = service.assessPaymentsForEmergency(bookingIds);
+
+        assertThat(result.activePaymentBookingPublicIds())
+                .containsExactly("booking-pending", "booking-processing");
+        assertThat(result.successfulPaymentBookingPublicIds())
+                .containsExactly("booking-success");
+        assertThat(pending.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(processing.getStatus()).isEqualTo(PaymentStatus.PROCESSING);
+        assertThat(success.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    }
+
     private Payment payment(Long id, String bookingPublicId, PaymentStatus status) {
         Payment payment = new Payment();
         payment.setId(id);

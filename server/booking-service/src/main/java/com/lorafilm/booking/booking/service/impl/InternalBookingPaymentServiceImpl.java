@@ -7,6 +7,7 @@ import com.lorafilm.booking.booking.client.ScoreRedemptionClient;
 import com.lorafilm.booking.booking.client.PromotionReservationClient;
 import com.lorafilm.booking.booking.dto.request.InternalPaymentResultRequest;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentContextResponse;
+import com.lorafilm.booking.booking.dto.response.InternalBookingLifecycleResponse;
 import com.lorafilm.booking.booking.dto.response.InternalPaymentResultResponse;
 import com.lorafilm.booking.booking.entity.Booking;
 import com.lorafilm.booking.booking.entity.BookingPriceSnapshot;
@@ -172,6 +173,18 @@ public class InternalBookingPaymentServiceImpl implements InternalBookingPayment
                 .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
                 .orElseThrow(() -> new BookingNotFoundException(bookingCode));
         return buildPaymentContext(booking);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InternalBookingLifecycleResponse getLifecycleContext(String bookingPublicId) {
+        Booking booking = bookingRepository.findByPublicId(bookingPublicId)
+                .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()))
+                .orElseThrow(() -> new BookingNotFoundException(bookingPublicId));
+        return new InternalBookingLifecycleResponse(
+                booking.getPublicId(),
+                booking.getBookingCode(),
+                booking.getBookingStatus().name());
     }
 
     @Override
