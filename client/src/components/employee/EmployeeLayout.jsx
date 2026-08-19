@@ -113,8 +113,8 @@ export default function EmployeeLayout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-zinc-950">
-      <aside className="z-30 flex h-full w-20 shrink-0 flex-col justify-between border-r border-zinc-800 bg-zinc-900 md:w-72">
-        <div>
+      <aside className="z-30 flex h-full w-20 shrink-0 flex-col overflow-hidden border-r border-zinc-800 bg-zinc-900 md:w-72">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="border-b border-zinc-800 p-4 text-center md:p-6 md:text-left">
             <div className="flex items-center justify-center gap-3 md:justify-start">
               <img src="/images/main-logo.png" alt="LoraFilm" loading="eager" decoding="sync" className="h-10 w-10 shrink-0 rounded-xl object-contain" />
@@ -143,7 +143,7 @@ export default function EmployeeLayout() {
             )}
           </nav>
         </div>
-        <div className="mt-auto space-y-2 border-t border-zinc-800 p-4">
+        <div className="mt-auto shrink-0 space-y-2 border-t border-zinc-800 p-4">
           <div className="hidden items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 md:flex">
             <RoleAvatar
               user={user}
