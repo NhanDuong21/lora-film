@@ -188,6 +188,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
                 .outstandingPoints(0)
                 .tierSnapshot(userScore.getCurrentTier().getTierCode())
                 .reason(request.reason())
+                .caseId(request.caseId())
                 .description("Admin manual score adjustment (" + type + "): " + request.reason())
                 .operatorId(opId != 0L ? opId : null)
                 .reconciliationStatus(ReconciliationStatus.NONE)
@@ -299,6 +300,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
                 .outstandingPoints(0)
                 .tierSnapshot(userScore.getCurrentTier().getTierCode())
                 .reason(request.reason())
+                .caseId(request.caseId())
                 .description("Reversed transaction #" + original.getId() + ": " + request.reason())
                 .operatorId(opId != 0L ? opId : null)
                 .reconciliationStatus(ReconciliationStatus.NONE)
@@ -322,6 +324,49 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
         outboxService.saveEvent("USER_SCORE", String.valueOf(effectiveUserId), "POINT_ADJUSTED", response, org.slf4j.MDC.get("correlationId"));
 
         return response;
+    }
+
+    @Override
+    @Transactional
+    public AdminUserScoreResponse updateAccountStatus(Long userId, ScoreAccountStatusRequest request, String operatorId, String clientIp) {
+        if (request.status() != UserScoreStatus.ACTIVE && request.status() != UserScoreStatus.LOCKED) {
+            throw new BusinessException("Admin can only activate or freeze a score account", "SCORE_STATUS_INVALID", HttpStatus.BAD_REQUEST);
+        }
+        if (request.reason() == null || request.reason().trim().length() < 5) {
+            throw new BusinessException("A clear reason is required", "SCORE_REASON_REQUIRED", HttpStatus.BAD_REQUEST);
+        }
+
+        UserScore userScore = userScoreRepository.findWithLockByUserId(userId)
+                .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_USER_NOT_FOUND", HttpStatus.NOT_FOUND));
+        UserScoreStatus previousStatus = userScore.getStatus();
+        userScore.setStatus(request.status());
+        userScoreRepository.save(userScore);
+
+        long opId = parseOperatorId(operatorId);
+        java.util.Map<String, Object> responsePayload = new java.util.LinkedHashMap<>();
+        responsePayload.put("userId", userId);
+        responsePayload.put("previousStatus", previousStatus);
+        responsePayload.put("status", request.status());
+        responsePayload.put("reason", request.reason().trim());
+        if (request.caseId() != null && !request.caseId().isBlank()) responsePayload.put("caseId", request.caseId().trim());
+        saveAuditLog(opId, userId, null, "ACTION_SCORE_ACCOUNT_STATUS", "USER_SCORE_" + userId, 200, clientIp, request, responsePayload, 0L);
+        outboxService.saveEvent("USER_SCORE", String.valueOf(userId),
+                request.status() == UserScoreStatus.LOCKED ? "SCORE_ACCOUNT_FROZEN" : "SCORE_ACCOUNT_UNFROZEN",
+                responsePayload, org.slf4j.MDC.get("correlationId"));
+
+        MembershipTier current = userScore.getCurrentTier();
+        MembershipTierResponse currentTier = new MembershipTierResponse(
+                current.getId(), current.getTierCode(), current.getTierName(),
+                current.getMinAccumulatedPoints(), current.getEarningRate(), current.getPriority());
+        NextTierResponse nextTier = membershipTierRepository
+                .findFirstByIsActiveTrueAndMinAccumulatedPointsGreaterThanOrderByMinAccumulatedPointsAsc(userScore.getAccumulatedPoints())
+                .map(tier -> new NextTierResponse(tier.getId(), tier.getTierCode(), tier.getTierName(),
+                        tier.getMinAccumulatedPoints(), Math.max(0, tier.getMinAccumulatedPoints() - userScore.getAccumulatedPoints())))
+                .orElse(null);
+        return new AdminUserScoreResponse(userId, userScore.getCurrentPoints(), userScore.getHeldPoints(),
+                userScore.getAccumulatedPoints(), userScore.getOutstandingPoints(), userScore.getStatus(),
+                currentTier, nextTier, userScore.getLastEarnAt(), userScore.getLastRedeemAt(),
+                userScore.getLastExpireAt(), userScore.getUpdatedAt());
     }
 
     @Override
@@ -414,7 +459,7 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
             int calcHeld = ledgerHeld != null ? ledgerHeld : 0;
             int heldDiff = us.getHeldPoints() - calcHeld;
 
-            Integer ledgerAccum = scoreHistoryRepository.sumEarnedPointsByUserId(us.getUserId());
+            Integer ledgerAccum = scoreHistoryRepository.sumAccumulatedDeltaByUserId(us.getUserId());
             int calcAccum = ledgerAccum != null ? ledgerAccum : 0;
             int accumDiff = us.getAccumulatedPoints() - calcAccum;
 
@@ -433,11 +478,15 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
 
             if (balDiff == 0 && heldDiff == 0 && accumDiff == 0) {
                 detail.setStatus(ReconciliationDetailStatus.MATCHED);
-                detail.setRemark("Balance and ledger match");
+                detail.setRemark("BALANCE_OK | HOLD_OK | TIER_POINTS_OK");
                 matched++;
             } else {
                 detail.setStatus(ReconciliationDetailStatus.MISMATCH);
-                detail.setRemark("Discrepancy detected: BalDiff=" + balDiff + ", HeldDiff=" + heldDiff + ", AccumDiff=" + accumDiff);
+                List<String> causes = new java.util.ArrayList<>();
+                if (balDiff != 0) causes.add("BALANCE_MISMATCH=" + balDiff);
+                if (heldDiff != 0) causes.add("HOLD_MISMATCH=" + heldDiff);
+                if (accumDiff != 0) causes.add("TIER_POINTS_MISMATCH=" + accumDiff);
+                detail.setRemark(String.join(" | ", causes));
                 mismatched++;
             }
             reconciliationDetailRepository.save(detail);
@@ -567,27 +616,47 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
         long gold = membershipTierRepository.findByTierCode("GOLD").map(userScoreRepository::countByCurrentTier).orElse(0L);
         long diamond = membershipTierRepository.findByTierCode("DIAMOND").map(userScoreRepository::countByCurrentTier).orElse(0L);
 
-        long earned = 0;
-        long redeemed = 0;
-        long expired = 0;
+        long available = 0;
+        long accumulated = 0;
+        long outstanding = 0;
         long held = 0;
+        long active = 0;
+        long locked = 0;
 
         List<UserScore> allUsers = userScoreRepository.findAll();
         for (UserScore u : allUsers) {
-            held += u.getHeldPoints();
-            Integer userEarn = scoreHistoryRepository.sumEarnedPointsByUserId(u.getUserId());
-            if (userEarn != null) earned += userEarn;
+            int userHeld = u.getHeldPoints() != null ? u.getHeldPoints() : 0;
+            int userCurrent = u.getCurrentPoints() != null ? u.getCurrentPoints() : 0;
+            held += userHeld;
+            available += Math.max(0, userCurrent - userHeld);
+            accumulated += u.getAccumulatedPoints() != null ? u.getAccumulatedPoints() : 0;
+            outstanding += u.getOutstandingPoints() != null ? u.getOutstandingPoints() : 0;
+            if (u.getStatus() == UserScoreStatus.ACTIVE) active++;
+            if (u.getStatus() == UserScoreStatus.LOCKED) locked++;
         }
 
-        long pendingRecon = reconciliationDetailRepository.countByRunIdAndStatus(
-                reconciliationRunRepository.findAll(Sort.by("id").descending()).stream().findFirst().map(ReconciliationRun::getId).orElse(-1L),
-                ReconciliationDetailStatus.MISMATCH
-        );
+        long earned = Optional.ofNullable(scoreHistoryRepository.sumPositivePointChangeByTransactionTypes(
+                List.of(ScoreTransactionType.EARN, ScoreTransactionType.EARN_BY_BOOKING, ScoreTransactionType.MANUAL_ADD)))
+                .orElse(0L);
+        long redeemed = Optional.ofNullable(scoreHistoryRepository.sumAbsoluteNegativePointChangeByTransactionTypes(
+                List.of(ScoreTransactionType.COMMIT, ScoreTransactionType.REDEEM, ScoreTransactionType.REDEEM_FOR_BOOKING)))
+                .orElse(0L);
+        long expired = Optional.ofNullable(scoreHistoryRepository.sumAbsoluteNegativePointChangeByTransactionTypes(
+                List.of(ScoreTransactionType.EXPIRED)))
+                .orElse(0L);
 
-        Optional<ReconciliationRun> lastRun = reconciliationRunRepository.findAll(Sort.by("id").descending()).stream().findFirst();
+        Optional<ReconciliationRun> lastRun = reconciliationRunRepository.findTopByOrderByStartedAtDesc();
+        long pendingRecon = lastRun
+                .map(run -> reconciliationDetailRepository.countByRunIdAndStatus(run.getId(), ReconciliationDetailStatus.MISMATCH))
+                .orElse(0L);
 
         return new ScoreDashboardResponse(
                 totalMembers,
+                active,
+                locked,
+                available,
+                accumulated,
+                outstanding,
                 earned,
                 redeemed,
                 held,
@@ -597,7 +666,12 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
                 diamond,
                 pendingRecon,
                 lastRun.map(ReconciliationRun::getBatchCode).orElse("NONE"),
-                lastRun.map(ReconciliationRun::getStartedAt).orElse(null)
+                lastRun.map(ReconciliationRun::getStartedAt).orElse(null),
+                lastRun.map(ReconciliationRun::getFinishedAt).orElse(null),
+                lastRun.map(ReconciliationRun::getStatus).orElse(null),
+                lastRun.map(ReconciliationRun::getTotalUsers).orElse(0),
+                lastRun.map(ReconciliationRun::getMatchedUsers).orElse(0),
+                lastRun.map(ReconciliationRun::getMismatchedUsers).orElse(0)
         );
     }
 

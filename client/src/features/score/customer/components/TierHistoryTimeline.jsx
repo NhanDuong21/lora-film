@@ -49,7 +49,7 @@ export default function TierHistoryTimeline({ tierHistory = [], isLoading = fals
                 Lịch Sử Hạng Thành Viên
               </h3>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-white/5 text-indigo-300 border border-white/10 shadow-sm">
-                Append Only
+                Lịch sử bất biến
               </span>
             </div>
             <p className="text-[11px] text-zinc-400 font-medium tracking-wide">

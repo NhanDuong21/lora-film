@@ -75,9 +75,15 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
         return new AdminUserScoreResponse(
                 userScore.getUserId(),
                 userScore.getCurrentPoints(),
+                userScore.getHeldPoints(),
                 userScore.getAccumulatedPoints(),
+                userScore.getOutstandingPoints(),
+                userScore.getStatus(),
                 currentTier,
                 nextTier,
+                userScore.getLastEarnAt(),
+                userScore.getLastRedeemAt(),
+                userScore.getLastExpireAt(),
                 userScore.getUpdatedAt()
         );
     }
@@ -147,7 +153,7 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
         String recStatusStr = history.getReconciliationStatus() != null ? history.getReconciliationStatus().name() : "NONE";
         String typeStr = history.getTransactionType() != null ? history.getTransactionType().name() : null;
 
-        return new AdminScoreHistoryItemResponse(
+        AdminScoreHistoryItemResponse response = new AdminScoreHistoryItemResponse(
                 history.getId(),
                 history.getEventId(),
                 history.getBookingId(),
@@ -167,5 +173,17 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
                 history.getDescription(),
                 history.getOccurredAt()
         );
+        response.setHeldBefore(history.getHeldBefore());
+        response.setHeldAfter(history.getHeldAfter());
+        response.setOutstandingBefore(history.getOutstandingBefore());
+        response.setOutstandingAfter(history.getOutstandingAfter());
+        response.setTierSnapshot(history.getTierSnapshot());
+        response.setEarningRateSnapshot(history.getEarningRateSnapshot());
+        response.setRedeemRateSnapshot(history.getRedeemRateSnapshot());
+        response.setSourceService(history.getSourceService());
+        response.setCorrelationId(history.getCorrelationId());
+        response.setCaseId(history.getCaseId());
+        response.setApprovalId(history.getApprovalId());
+        return response;
     }
 }

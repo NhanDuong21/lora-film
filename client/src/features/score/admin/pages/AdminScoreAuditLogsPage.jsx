@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useAdminScore from '../hooks/useAdminScore';
 import { History, Download, RefreshCw, Filter, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AdminScoreAuditLogsPage() {
+  const [searchParams] = useSearchParams();
   const {
     auditLogs,
     fetchAuditLogs,
@@ -10,14 +12,14 @@ export default function AdminScoreAuditLogsPage() {
     isLoadingOperations
   } = useAdminScore();
 
-  const [filterUserId, setFilterUserId] = useState('');
+  const [filterUserId, setFilterUserId] = useState(searchParams.get('userId') || '');
   const [filterAction, setFilterAction] = useState('');
   const [notification, setNotification] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
-    fetchAuditLogs({ page: 0, size: 30 });
-  }, [fetchAuditLogs]);
+    fetchAuditLogs({ page: 0, size: 30, ...(searchParams.get('userId') ? { userId: Number(searchParams.get('userId')) } : {}) });
+  }, [fetchAuditLogs, searchParams]);
 
   const showNotify = (msg, type = 'success') => {
     setNotification({ msg, type });
@@ -74,10 +76,10 @@ export default function AdminScoreAuditLogsPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
             <History className="w-7 h-7 text-brand-orange shrink-0" />
-            <span>Nhật Ký Kiểm Toán (Audit Logs)</span>
+            <span>Nhật ký vận hành điểm thưởng</span>
           </h1>
           <p className="text-[11px] font-medium tracking-wide text-zinc-400 mt-1">
-            Ghi vết toàn bộ hành động của Admin liên quan đến điều chỉnh điểm, đảo giao dịch và đối soát.
+            Tra cứu ai đã làm gì, trên tài khoản nào, vào thời điểm nào; phục vụ bàn giao ca và điều tra khiếu nại.
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">

@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   applyCustomerAccessAction,
   getCustomer,
@@ -17,13 +17,14 @@ import {
   MetricStrip,
   OperationsHeader
 } from '../components/OperationsConsole';
-import { Download, Search, ShieldAlert, UserCheck, UserPlus, Users } from 'lucide-react';
+import { Download, Search, ShieldAlert, UserCheck, UserPlus, Users, WalletCards } from 'lucide-react';
 
 const EMPTY_RESULT = { content: [], totalPages: 0, totalElements: 0 };
 
 export default function AdminMembersPage() {
   const can = useAdminAccess();
   const canUpdate = can('CUSTOMER_UPDATE');
+  const navigate = useNavigate();
   const outlet = useOutletContext();
   const notify = outlet?.triggerToast || (() => undefined);
   const [filters, setFilters] = useState({ keyword: '', status: '', page: 0, size: 15 });
@@ -186,14 +187,27 @@ export default function AdminMembersPage() {
         onClose={() => setSelected(null)}
         title={selected?.fullName || 'Hồ sơ khách hàng'}
         subtitle={selected?.customerCode}
-        footer={canUpdate && selected ? (
-          <button
-            type="button"
-            onClick={() => { setReason(''); setAccessAction({ customer: selected, type: selected.status === 'BLOCKED' ? 'UNBLOCK' : 'BLOCK' }); }}
-            className={`w-full rounded-xl px-4 py-3 text-sm font-black ${selected.status === 'BLOCKED' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-red-500/10 text-red-400 ring-1 ring-inset ring-red-500/30 hover:bg-red-500/20'}`}
-          >
-            {selected.status === 'BLOCKED' ? 'Khôi phục quyền truy cập' : 'Khóa quyền truy cập'}
-          </button>
+        footer={selected ? (
+          <div className="grid gap-2">
+            {selected.accountId ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/admin/scores/viewer?accountId=${selected.accountId}&customerCode=${encodeURIComponent(selected.customerCode || '')}&name=${encodeURIComponent(selected.fullName || '')}`)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black hover:bg-orange-400"
+              >
+                <WalletCards size={17} /> Mở hồ sơ điểm thưởng
+              </button>
+            ) : null}
+            {canUpdate ? (
+              <button
+                type="button"
+                onClick={() => { setReason(''); setAccessAction({ customer: selected, type: selected.status === 'BLOCKED' ? 'UNBLOCK' : 'BLOCK' }); }}
+                className={`w-full rounded-xl px-4 py-3 text-sm font-black ${selected.status === 'BLOCKED' ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'bg-red-500/10 text-red-400 ring-1 ring-inset ring-red-500/30 hover:bg-red-500/20'}`}
+              >
+                {selected.status === 'BLOCKED' ? 'Khôi phục quyền đăng nhập' : 'Khóa quyền đăng nhập'}
+              </button>
+            ) : null}
+          </div>
         ) : null}
       >
         {selectedLoading ? <p className="text-sm text-zinc-500">Đang tải hồ sơ…</p> : selected ? (

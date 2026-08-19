@@ -2,8 +2,12 @@ package com.project.scoreservice.service;
 
 import com.project.scoreservice.dto.*;
 import com.project.scoreservice.entity.MembershipTier;
+import com.project.scoreservice.entity.ScoreHistory;
 import com.project.scoreservice.entity.UserScore;
+import com.project.scoreservice.enumtype.ReconciliationDetailStatus;
 import com.project.scoreservice.enumtype.ReconciliationRunStatus;
+import com.project.scoreservice.enumtype.ScoreTransactionType;
+import com.project.scoreservice.enumtype.UserScoreStatus;
 import com.project.scoreservice.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,6 +107,45 @@ public class AdminScoreOperationServiceTest {
 
         long detailCount = reconciliationDetailRepository.count();
         assertEquals(1, detailCount);
+    }
+
+    @Test
+    void reconciliationUsesAccumulatedSnapshotsInsteadOfEveryPositiveTransaction() {
+        UserScore account = userScoreRepository.findByUserId(99991L).orElseThrow();
+        account.setCurrentPoints(250);
+        account.setAccumulatedPoints(200);
+        userScoreRepository.save(account);
+
+        scoreHistoryRepository.save(ScoreHistory.builder()
+                .userScore(account).idempotencyKey("RECON-EARN-1")
+                .transactionType(ScoreTransactionType.EARN)
+                .actualPointChange(200).balanceBefore(0).balanceAfter(200)
+                .accumulatedBefore(0).accumulatedAfter(200).build());
+        scoreHistoryRepository.save(ScoreHistory.builder()
+                .userScore(account).idempotencyKey("RECON-REFUND-1")
+                .transactionType(ScoreTransactionType.REFUND_REDEEM)
+                .actualPointChange(50).balanceBefore(200).balanceAfter(250)
+                .accumulatedBefore(200).accumulatedAfter(200).build());
+
+        ReconciliationDTOs.ReconciliationRunResponse run = adminScoreOperationService.runReconciliation(
+                new ReconciliationDTOs.ReconciliationRunRequest("BATCH-SNAPSHOT-01", "Snapshot semantics"), "888");
+
+        assertEquals(1, run.matchedUsers());
+        assertEquals(0, run.mismatchedUsers());
+        assertEquals(1, reconciliationDetailRepository.countByRunIdAndStatus(run.id(), ReconciliationDetailStatus.MATCHED));
+    }
+
+    @Test
+    void freezesScoreAccountWithoutChangingLoginAccount() {
+        AdminUserScoreResponse response = adminScoreOperationService.updateAccountStatus(
+                99991L,
+                new ScoreAccountStatusRequest(UserScoreStatus.LOCKED, "Investigating refund complaint", "CASE-SCORE-001"),
+                "888",
+                "127.0.0.1");
+
+        assertEquals(UserScoreStatus.LOCKED, response.getStatus());
+        assertEquals(UserScoreStatus.LOCKED, userScoreRepository.findByUserId(99991L).orElseThrow().getStatus());
+        assertTrue(auditLogRepository.count() > 0);
     }
 
     @Test

@@ -258,7 +258,7 @@ function OverviewCard({ icon: Icon, eyebrow, title, description, to, action, ton
 
 function OverviewSection({ user, scoreData, spendingSummary, upcomingBooking }) {
   const firstName = user?.fullName?.trim().split(/\s+/).pop() || "bạn";
-  const availablePoints = Number(scoreData?.currentPoints ?? 0);
+  const availablePoints = Math.max(0, Number(scoreData?.currentPoints ?? 0) - Number(scoreData?.heldPoints ?? 0));
   const tier = friendlyTierName(scoreData?.currentTier?.tierName);
   const presentation = upcomingBooking?.presentation || upcomingBooking?.snapshot || {};
   const movieTitle = upcomingBooking?.movieTitle || presentation.movieTitle;
@@ -577,15 +577,28 @@ export default function AccountCenterPage() {
   useEffect(() => {
     if (section !== "overview" || !accountId) return;
     let active = true;
-    getBookingHistory({ page: 0, size: 1, status: "CONFIRMED", sort: "createdAt,desc" })
-      .then((page) => { if (active) setUpcomingBooking(page?.content?.[0] || null); })
+    getBookingHistory({ page: 0, size: 20, status: "CONFIRMED", sort: "createdAt,desc" })
+      .then((page) => {
+        if (!active) return;
+        const now = Date.now();
+        const upcoming = (page?.content || []).filter(item => {
+          const presentation = item?.presentation || item?.snapshot || {};
+          const value = item?.showtimeStart || presentation.showtimeStart;
+          return value && new Date(value).getTime() > now;
+        }).sort((left, right) => {
+          const leftTime = left?.showtimeStart || left?.presentation?.showtimeStart || left?.snapshot?.showtimeStart;
+          const rightTime = right?.showtimeStart || right?.presentation?.showtimeStart || right?.snapshot?.showtimeStart;
+          return new Date(leftTime).getTime() - new Date(rightTime).getTime();
+        })[0];
+        setUpcomingBooking(upcoming || null);
+      })
       .catch(() => { if (active) setUpcomingBooking(null); });
     return () => { active = false; };
   }, [accountId, section]);
 
   const tier = friendlyTierName(scoreData?.currentTier?.tierName);
   const points = scoreData
-    ? Number(scoreData.currentPoints ?? 0)
+    ? Math.max(0, Number(scoreData.currentPoints ?? 0) - Number(scoreData.heldPoints ?? 0))
     : user?.points !== undefined
       ? Number(user.points)
       : null;

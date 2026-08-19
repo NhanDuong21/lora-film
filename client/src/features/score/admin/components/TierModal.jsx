@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Award, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-export default function TierModal({ isOpen, onClose, onSave, initialData }) {
+export default function TierModal({ isOpen, onClose, onSave, initialData, existingTiers = [] }) {
   const isEditing = !!initialData?.tierCode;
 
   const [formData, setFormData] = useState({
@@ -9,6 +9,7 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
     tierName: '',
     minAccumulatedPoints: 0,
     earningRate: 0.05,
+    priority: 10,
     description: '',
     active: true
   });
@@ -25,6 +26,7 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
         tierName: initialData.tierName || '',
         minAccumulatedPoints: initialData.minAccumulatedPoints ?? 0,
         earningRate: initialData.earningRate ?? 0.05,
+        priority: initialData.priority ?? 10,
         description: initialData.description || '',
         active: initialData.active ?? true
       });
@@ -35,6 +37,7 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
         tierName: '',
         minAccumulatedPoints: 0,
         earningRate: 0.05,
+        priority: 10,
         description: '',
         active: true
       });
@@ -60,7 +63,15 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
       return;
     }
     if (formData.minAccumulatedPoints < 0 || formData.earningRate < 0) {
-      setError('Điểm tích lũy tối thiểu và tỷ lệ hoàn điểm phải lớn hơn hoặc bằng 0.');
+      setError('Điểm tích lũy tối thiểu và tỷ lệ tích phải lớn hơn hoặc bằng 0.');
+      return;
+    }
+    if (formData.earningRate <= 0 || formData.earningRate > 1) {
+      setError('Tỷ lệ tích phải lớn hơn 0% và không vượt quá 100%.');
+      return;
+    }
+    if (existingTiers.some(tier => tier.tierCode !== initialData?.tierCode && Number(tier.minAccumulatedPoints) === Number(formData.minAccumulatedPoints))) {
+      setError('Mốc điểm hạng này đang thuộc một hạng khác.');
       return;
     }
     try {
@@ -68,8 +79,7 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
       await onSave(formData);
       onClose();
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi lưu hạng thẻ';
-      setError(msg);
+      if (!err.cancelled) setError(err.response?.data?.message || err.message || 'Có lỗi xảy ra khi lưu hạng thẻ');
     } finally {
       setIsSubmitting(false);
     }
@@ -148,18 +158,21 @@ export default function TierModal({ isOpen, onClose, onSave, initialData }) {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400">Tỷ lệ hoàn điểm (0.05 = 5%)</label>
+              <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400">Tỷ lệ tích (%)</label>
               <input
                 type="number"
-                step="0.01"
-                min="0"
-                max="1"
-                name="earningRate"
-                value={formData.earningRate}
-                onChange={handleChange}
+                step="0.1"
+                min="0.1"
+                max="100"
+                value={Number((Number(formData.earningRate || 0) * 100).toFixed(2))}
+                onChange={event => setFormData(prev => ({ ...prev, earningRate: Number(event.target.value) / 100 }))}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-brand-orange"
               />
             </div>
+          </div>
+
+          <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.06] p-3 text-xs leading-5 text-zinc-400">
+            <b className="text-sky-300">Công thức:</b> giá trị thanh toán hợp lệ × {(Number(formData.earningRate || 0) * 100).toLocaleString('vi-VN')}% ÷ 1.000đ/điểm, làm tròn xuống. Ví dụ 225.000đ nhận {Math.floor(225000 * Number(formData.earningRate || 0) / 1000).toLocaleString('vi-VN')} điểm.
           </div>
 
           <div className="space-y-1.5">

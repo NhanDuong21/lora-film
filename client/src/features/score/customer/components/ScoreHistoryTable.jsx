@@ -12,6 +12,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
   const getTransactionBadge = (type) => {
     switch (type) {
       case 'EARN':
+      case 'EARN_BY_BOOKING':
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/20">
             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -19,6 +20,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
           </span>
         );
       case 'REDEEM':
+      case 'REDEEM_FOR_BOOKING':
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-400 border border-amber-500/20">
             <ArrowDownLeft className="h-3.5 w-3.5" />
@@ -53,7 +55,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
             Hoàn điểm tạm giữ
           </span>
         );
-      case 'EXPIRE':
+      case 'EXPIRED':
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2.5 py-1 text-xs font-bold text-zinc-400 border border-zinc-700">
             <RefreshCcw className="h-3.5 w-3.5" />
@@ -61,7 +63,10 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
           </span>
         );
       case 'REVOKE_EARN':
-      case 'MANUAL_ADJUSTMENT':
+      case 'REVOKE_EARN_BY_REFUND':
+      case 'MANUAL_ADD':
+      case 'MANUAL_DEDUCT':
+      case 'REVERSE_ADJUSTMENT':
       default:
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-bold text-blue-400 border border-blue-500/20">
@@ -73,17 +78,22 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
   };
 
   const customerDescription = item => {
-    const booking = item.bookingId ? ` cho đơn #BK${item.bookingId}` : '';
+    const booking = item.bookingId ? ` cho Booking ID ${item.bookingId}` : '';
     switch (item.transactionType) {
-      case 'EARN': return `Tích điểm từ đơn hàng${booking}`;
+      case 'EARN':
+      case 'EARN_BY_BOOKING': return `Tích điểm từ đơn hàng${booking}`;
       case 'REDEEM':
+      case 'REDEEM_FOR_BOOKING':
       case 'COMMIT': return `Dùng điểm thanh toán${booking}`;
       case 'HOLD': return `Tạm giữ điểm${booking}`;
       case 'RELEASE': return `Hoàn điểm tạm giữ${booking}`;
       case 'REFUND_REDEEM': return `Hoàn điểm từ giao dịch${booking}`;
       case 'REVOKE_EARN': return `Điều chỉnh điểm từ đơn hoàn hoặc hủy${booking}`;
-      case 'EXPIRE': return 'Điểm đã hết thời hạn sử dụng';
-      case 'MANUAL_ADJUSTMENT': return 'Điều chỉnh điểm bởi bộ phận hỗ trợ';
+      case 'EXPIRED': return 'Điểm đã hết thời hạn sử dụng';
+      case 'REVOKE_EARN_BY_REFUND': return `Thu hồi điểm do đơn hàng hoàn tiền${booking}`;
+      case 'MANUAL_ADD': return 'Bộ phận hỗ trợ cộng điểm theo yêu cầu đã xác minh';
+      case 'MANUAL_DEDUCT': return 'Bộ phận hỗ trợ trừ điểm theo yêu cầu đã xác minh';
+      case 'REVERSE_ADJUSTMENT': return 'Đảo một điều chỉnh điểm trước đó';
       default: return 'Cập nhật số dư điểm thành viên';
     }
   };
@@ -133,7 +143,8 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
             { id: 'ALL', label: 'Tất cả' },
             { id: 'EARN', label: 'Tích điểm' },
             { id: 'REDEEM', label: 'Dùng điểm' },
-            { id: 'REFUND_REDEEM', label: 'Hoàn/Thu hồi' }
+            { id: 'REFUND_REDEEM', label: 'Hoàn/Thu hồi' },
+            { id: 'HOLD', label: 'Tạm giữ' }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -161,7 +172,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-500 space-y-2">
           <AlertCircle className="h-10 w-10 text-zinc-700 mb-2" />
-          <p className="text-sm font-bold text-zinc-400">Chưa có giao dịch điểm thưởng nào</p>
+          <p className="text-sm font-bold text-zinc-400">{activeFilter === 'ALL' ? 'Chưa có giao dịch điểm thưởng nào' : 'Không có giao dịch thuộc bộ lọc này'}</p>
           <p className="text-xs text-zinc-600 max-w-sm leading-relaxed">
             Điểm tích lũy và điểm đã dùng từ các đơn đặt vé sẽ được cập nhật tại đây.
           </p>
@@ -193,7 +204,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
                       {getTransactionBadge(item.transactionType)}
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap font-mono text-zinc-500 font-bold tracking-wide">
-                      {item.bookingId ? `#BK${item.bookingId}` : (item.eventId || '—')}
+                      {item.bookingId ? `Booking ID ${item.bookingId}` : (item.eventId || '—')}
                     </td>
                     <td className={`py-4 px-4 whitespace-nowrap text-right font-black text-sm tracking-wide ${isPositive ? 'text-emerald-400' : 'text-amber-400'}`}>
                       {isPositive ? `+${changeVal.toLocaleString('vi-VN')}` : changeVal.toLocaleString('vi-VN')}

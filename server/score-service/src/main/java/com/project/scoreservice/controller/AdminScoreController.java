@@ -7,6 +7,7 @@ import com.project.scoreservice.enumtype.ScoreTransactionType;
 import com.project.scoreservice.service.AdminScoreQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -103,6 +104,17 @@ public class AdminScoreController {
             @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
         AdminAdjustmentResponse response = adminScoreOperationService.recalculateTier(userId, operatorId, clientIp);
         return ResponseEntity.ok(ApiResponse.success("Tier recalculated successfully", response));
+    }
+
+    @PostMapping("/{userId}/status")
+    @Operation(summary = "Freeze or unfreeze a score account", description = "Changes loyalty operations only; it does not block customer login.")
+    public ResponseEntity<ApiResponse<AdminUserScoreResponse>> updateScoreAccountStatus(
+            @PathVariable Long userId,
+            @Valid @RequestBody ScoreAccountStatusRequest request,
+            @RequestHeader(value = "X-Operator-Id", required = false) String operatorId,
+            @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
+        AdminUserScoreResponse response = adminScoreOperationService.updateAccountStatus(userId, request, operatorId, clientIp);
+        return ResponseEntity.ok(ApiResponse.success("Score account status updated successfully", response));
     }
 }
 

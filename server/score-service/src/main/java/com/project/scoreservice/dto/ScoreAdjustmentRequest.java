@@ -18,11 +18,18 @@ public record ScoreAdjustmentRequest(
     @JsonAlias({"affectAccumulatedPoints", "allowNegative"}) Boolean affectAccumulatedPoints,
     @NotBlank(message = "Reason is required")
     String reason,
-    String requestId
+    String requestId,
+    String caseId
 ) {
+    public ScoreAdjustmentRequest(Long userId, ScoreAdjustmentType type, Integer points,
+                                  Boolean allowNegative, Boolean affectAccumulatedPoints,
+                                  String reason, String requestId) {
+        this(userId, type, points, allowNegative, affectAccumulatedPoints, reason, requestId, null);
+    }
+
     // 5-arg constructor for backwards compatibility with existing integration tests
     public ScoreAdjustmentRequest(ScoreAdjustmentType type, Integer points, Boolean allowNegative, String reason, String requestId) {
-        this(null, type, points, allowNegative, allowNegative, reason, requestId);
+        this(null, type, points, allowNegative, allowNegative, reason, requestId, null);
     }
 
     public ScoreAdjustmentType getEffectiveType() {

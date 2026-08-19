@@ -42,7 +42,7 @@ export default function ExpiringPointsSection({ expiringPoints = [], isLoading =
                 Điểm Sắp Hết Hạn
               </h3>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-white/5 text-amber-300 border border-white/10 shadow-sm">
-                FIFO Policy
+                Trừ điểm cũ trước
               </span>
             </div>
             <p className="text-[11px] text-zinc-400 font-medium tracking-wide">
@@ -104,7 +104,7 @@ export default function ExpiringPointsSection({ expiringPoints = [], isLoading =
                       <div className="text-[10px] text-zinc-400 font-medium tracking-wide flex flex-col gap-0.5">
                         <span>Ban đầu: <strong className="text-zinc-300">{bucket.earnedPoints.toLocaleString('vi-VN')}</strong></span>
                         {bucket.bookingId && (
-                          <span>Mã đơn: <strong className="text-zinc-300">#{bucket.bookingId}</strong></span>
+                          <span>Booking ID: <strong className="text-zinc-300">{bucket.bookingId}</strong></span>
                         )}
                       </div>
                     </div>
@@ -144,7 +144,7 @@ export default function ExpiringPointsSection({ expiringPoints = [], isLoading =
       {/* Footer Info */}
       <div className="mt-6 pt-5 border-t border-zinc-800/50 flex items-start gap-2.5 text-[10px] text-zinc-400 font-medium tracking-wide leading-relaxed">
         <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-        <span>Khi bạn thực hiện đổi điểm (Redeem), hệ thống sẽ tự động khấu trừ từ những lô điểm có ngày hết hạn gần nhất.</span>
+        <span>Khi bạn dùng điểm, hệ thống sẽ tự động khấu trừ từ những lô điểm có ngày hết hạn gần nhất.</span>
       </div>
     </div>
   );

@@ -173,6 +173,20 @@ export default function useAdminScore() {
     }
   }, [fetchUserScore]);
 
+  const updateScoreAccountStatus = useCallback(async (accountId, statusData) => {
+    setIsLoadingOperations(true);
+    try {
+      const res = await scoreAdminService.updateScoreAccountStatus(accountId, statusData);
+      queryCache.invalidateQueries(`admin-user-${accountId}`);
+      queryCache.invalidateQueries('admin-dashboard');
+      queryCache.invalidateQueries('customer-');
+      await fetchUserScore(accountId, { forceRefresh: true });
+      return res;
+    } finally {
+      if (isMounted.current) setIsLoadingOperations(false);
+    }
+  }, [fetchUserScore]);
+
   const runReconciliation = useCallback(async (reconData = {}) => {
     setIsLoadingOperations(true);
     try {
@@ -267,6 +281,7 @@ export default function useAdminScore() {
     adjustScore,
     reverseAdjustment,
     recalculateTier,
+    updateScoreAccountStatus,
     runReconciliation,
     fetchReconciliationRuns,
     fetchReconciliationDetails,

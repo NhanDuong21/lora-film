@@ -14,6 +14,8 @@ import java.util.Optional;
 public interface ReconciliationRunRepository extends JpaRepository<ReconciliationRun, Long> {
     Optional<ReconciliationRun> findByBatchCode(String batchCode);
 
+    Optional<ReconciliationRun> findTopByOrderByStartedAtDesc();
+
     Page<ReconciliationRun> findByStatus(ReconciliationRunStatus status, Pageable pageable);
 
     Page<ReconciliationRun> findByStartedAtBetween(LocalDateTime from, LocalDateTime to, Pageable pageable);

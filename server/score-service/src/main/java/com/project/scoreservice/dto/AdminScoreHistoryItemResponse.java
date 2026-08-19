@@ -1,5 +1,6 @@
 package com.project.scoreservice.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class AdminScoreHistoryItemResponse {
@@ -13,8 +14,19 @@ public class AdminScoreHistoryItemResponse {
     private String transactionType;
     private Integer balanceBefore;
     private Integer balanceAfter;
+    private Integer heldBefore;
+    private Integer heldAfter;
     private Integer accumulatedBefore;
     private Integer accumulatedAfter;
+    private Integer outstandingBefore;
+    private Integer outstandingAfter;
+    private String tierSnapshot;
+    private BigDecimal earningRateSnapshot;
+    private BigDecimal redeemRateSnapshot;
+    private String sourceService;
+    private String correlationId;
+    private String caseId;
+    private Long approvalId;
     private Long referenceHistoryId;
     private Long createdBy;
     private String requestId;
@@ -126,6 +138,11 @@ public class AdminScoreHistoryItemResponse {
         this.balanceAfter = balanceAfter;
     }
 
+    public Integer getHeldBefore() { return heldBefore; }
+    public void setHeldBefore(Integer heldBefore) { this.heldBefore = heldBefore; }
+    public Integer getHeldAfter() { return heldAfter; }
+    public void setHeldAfter(Integer heldAfter) { this.heldAfter = heldAfter; }
+
     public Integer getAccumulatedBefore() {
         return accumulatedBefore;
     }
@@ -141,6 +158,25 @@ public class AdminScoreHistoryItemResponse {
     public void setAccumulatedAfter(Integer accumulatedAfter) {
         this.accumulatedAfter = accumulatedAfter;
     }
+
+    public Integer getOutstandingBefore() { return outstandingBefore; }
+    public void setOutstandingBefore(Integer outstandingBefore) { this.outstandingBefore = outstandingBefore; }
+    public Integer getOutstandingAfter() { return outstandingAfter; }
+    public void setOutstandingAfter(Integer outstandingAfter) { this.outstandingAfter = outstandingAfter; }
+    public String getTierSnapshot() { return tierSnapshot; }
+    public void setTierSnapshot(String tierSnapshot) { this.tierSnapshot = tierSnapshot; }
+    public BigDecimal getEarningRateSnapshot() { return earningRateSnapshot; }
+    public void setEarningRateSnapshot(BigDecimal earningRateSnapshot) { this.earningRateSnapshot = earningRateSnapshot; }
+    public BigDecimal getRedeemRateSnapshot() { return redeemRateSnapshot; }
+    public void setRedeemRateSnapshot(BigDecimal redeemRateSnapshot) { this.redeemRateSnapshot = redeemRateSnapshot; }
+    public String getSourceService() { return sourceService; }
+    public void setSourceService(String sourceService) { this.sourceService = sourceService; }
+    public String getCorrelationId() { return correlationId; }
+    public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
+    public String getCaseId() { return caseId; }
+    public void setCaseId(String caseId) { this.caseId = caseId; }
+    public Long getApprovalId() { return approvalId; }
+    public void setApprovalId(Long approvalId) { this.approvalId = approvalId; }
 
     public Long getReferenceHistoryId() {
         return referenceHistoryId;

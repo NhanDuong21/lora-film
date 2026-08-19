@@ -134,7 +134,9 @@ export default function CustomerProfileView({
     [spendingSummary],
   );
   const points = useMemo(
-    () => scoreData?.currentPoints ?? user?.points ?? 0,
+    () => scoreData
+      ? Math.max(0, Number(scoreData.currentPoints || 0) - Number(scoreData.heldPoints || 0))
+      : (user?.points ?? 0),
     [scoreData, user],
   );
 
@@ -912,34 +914,14 @@ export default function CustomerProfileView({
                           <h4 className="font-extrabold text-zinc-200 uppercase text-[11px] border-l-2 border-brand-orange pl-2">
                             Quy định tích điểm
                           </h4>
-                          <p>
-                            Với mỗi giao dịch đặt vé xem phim hoặc bắp nước tại
-                            hệ thống LoraFilm, thành viên sẽ nhận được điểm tích
-                            lũy tương đương 10% giá trị hóa đơn thực tế thanh
-                            toán (10.000đ = 1 điểm).
-                          </p>
+                          <p>Điểm nhận = giá trị thanh toán hợp lệ × tỷ lệ của hạng hiện tại ({(Number(scoreData?.currentTier?.earningRate || 0.05) * 100).toLocaleString('vi-VN')}%) ÷ 1.000đ/điểm, làm tròn xuống. Điểm được ghi sau khi đơn hoàn tất; 1 điểm dùng tương đương 1.000đ.</p>
                         </div>
 
                         <div className="bg-zinc-950/40 border border-zinc-850 rounded-2xl p-4 space-y-2.5">
                           <h4 className="font-extrabold text-zinc-200 uppercase text-[11px] border-l-2 border-brand-orange pl-2">
                             Cấp bậc thành viên Lora
                           </h4>
-                          <ul className="list-disc pl-4 space-y-1.5">
-                            <li>
-                              <strong>Standard Member</strong>: Doanh số chi
-                              tiêu lũy kế dưới 2.000.000đ trong năm.
-                            </li>
-                            <li>
-                              <strong>Silver VIP Member</strong>: Chi tiêu từ
-                              2.000.000đ đến dưới 4.000.000đ. Nhận ưu đãi giảm
-                              giá 5% tại quầy bắp nước.
-                            </li>
-                            <li>
-                              <strong>Gold VIP Member</strong>: Chi tiêu tích
-                              lũy từ 4.000.000đ trở lên. Giảm giá 10% tại quầy
-                              bắp nước và tặng vé sinh nhật miễn phí.
-                            </li>
-                          </ul>
+                          <ul className="list-disc pl-4 space-y-1.5"><li>Hạng được xác định bằng <strong>điểm xét hạng</strong>, không phải doanh số ước tính.</li><li>Dùng điểm thanh toán không làm giảm điểm xét hạng.</li><li>Hoàn/hủy giao dịch có thể thu hồi điểm đã tích và tính lại hạng. Mốc hạng hiện hành được hiển thị tại Trung tâm điểm thưởng.</li></ul>
                         </div>
                       </div>
                     </div>

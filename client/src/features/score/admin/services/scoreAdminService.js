@@ -10,6 +10,11 @@ const asNumber = value => {
 
 export const normalizeScoreDashboardStats = (raw = {}) => ({
   totalMembers: asNumber(raw.totalMembers),
+  activeMembers: asNumber(raw.activeMembers),
+  lockedMembers: asNumber(raw.lockedMembers),
+  totalAvailablePoints: asNumber(raw.totalAvailablePoints),
+  totalAccumulatedPoints: asNumber(raw.totalAccumulatedPoints),
+  totalOutstandingPoints: asNumber(raw.totalOutstandingPoints),
   totalPointsEarned: asNumber(raw.totalPointsEarned),
   totalPointsRedeemed: asNumber(raw.totalPointsRedeemed),
   totalPointsHeld: asNumber(raw.totalPointsHeld),
@@ -23,6 +28,11 @@ export const normalizeScoreDashboardStats = (raw = {}) => ({
   lastReconciliationBatch: raw.lastReconciliationBatch || 'N/A',
   lastReconciliationTime:
     raw.lastReconciliationTime ?? raw.lastReconciliationDate ?? null,
+  lastReconciliationFinishedAt: raw.lastReconciliationFinishedAt ?? null,
+  lastReconciliationStatus: raw.lastReconciliationStatus ?? null,
+  lastReconciliationTotalUsers: asNumber(raw.lastReconciliationTotalUsers),
+  lastReconciliationMatchedUsers: asNumber(raw.lastReconciliationMatchedUsers),
+  lastReconciliationMismatchedUsers: asNumber(raw.lastReconciliationMismatchedUsers),
 });
 
 const scoreAdminService = {
@@ -118,6 +128,11 @@ const scoreAdminService = {
    */
   recalculateTier: async (accountId) => {
     const response = await apiClient.post(`${ADMIN_SCORE_API_URL}/${accountId}/recalculate-tier`);
+    return response.data?.data || response.data;
+  },
+
+  updateScoreAccountStatus: async (accountId, statusData) => {
+    const response = await apiClient.post(`${ADMIN_SCORE_API_URL}/${accountId}/status`, statusData);
     return response.data?.data || response.data;
   },
 

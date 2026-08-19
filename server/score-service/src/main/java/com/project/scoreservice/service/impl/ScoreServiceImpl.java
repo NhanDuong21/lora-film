@@ -340,8 +340,15 @@ public class ScoreServiceImpl implements ScoreService {
                 .actualPointChange(earnedPoints)
                 .balanceBefore(oldBalance)
                 .balanceAfter(userScore.getCurrentPoints())
+                .heldBefore(userScore.getHeldPoints())
+                .heldAfter(userScore.getHeldPoints())
                 .accumulatedBefore(oldAccumulated)
                 .accumulatedAfter(userScore.getAccumulatedPoints())
+                .outstandingBefore(userScore.getOutstandingPoints())
+                .outstandingAfter(userScore.getOutstandingPoints())
+                .tierSnapshot(previousTierCode)
+                .earningRateSnapshot(earningRate)
+                .sourceService("BOOKING")
                 .description("Earned points for booking " + request.bookingId())
                 .build();
         scoreHistoryRepository.save(history);
@@ -564,7 +571,8 @@ public class ScoreServiceImpl implements ScoreService {
                 .build();
         scoreHoldRepository.save(hold);
 
-        userScore.setHeldPoints(userScore.getHeldPoints() + request.points());
+        int heldBefore = userScore.getHeldPoints();
+        userScore.setHeldPoints(heldBefore + request.points());
         userScoreRepository.save(userScore);
 
         ScoreHistory history = ScoreHistory.builder()
@@ -579,8 +587,15 @@ public class ScoreServiceImpl implements ScoreService {
                 .actualPointChange(0)
                 .balanceBefore(userScore.getCurrentPoints())
                 .balanceAfter(userScore.getCurrentPoints())
+                .heldBefore(heldBefore)
+                .heldAfter(userScore.getHeldPoints())
                 .accumulatedBefore(userScore.getAccumulatedPoints())
                 .accumulatedAfter(userScore.getAccumulatedPoints())
+                .outstandingBefore(userScore.getOutstandingPoints())
+                .outstandingAfter(userScore.getOutstandingPoints())
+                .tierSnapshot(userScore.getCurrentTier().getTierCode())
+                .earningRateSnapshot(userScore.getCurrentTier().getEarningRate())
+                .sourceService("BOOKING")
                 .description("Held " + request.points() + " points for booking " + request.bookingId())
                 .build();
         scoreHistoryRepository.save(history);
@@ -691,8 +706,16 @@ public class ScoreServiceImpl implements ScoreService {
                 .actualPointChange(-pointsToCommit)
                 .balanceBefore(balanceBefore)
                 .balanceAfter(userScore.getCurrentPoints())
+                .heldBefore(heldBefore)
+                .heldAfter(userScore.getHeldPoints())
                 .accumulatedBefore(userScore.getAccumulatedPoints())
                 .accumulatedAfter(userScore.getAccumulatedPoints())
+                .outstandingBefore(userScore.getOutstandingPoints())
+                .outstandingAfter(userScore.getOutstandingPoints())
+                .tierSnapshot(userScore.getCurrentTier().getTierCode())
+                .earningRateSnapshot(userScore.getCurrentTier().getEarningRate())
+                .redeemRateSnapshot(redemptionValuePerPoint)
+                .sourceService("BOOKING")
                 .description("Committed points for booking " + hold.getBookingId())
                 .build();
         scoreHistoryRepository.save(history);
@@ -775,8 +798,15 @@ public class ScoreServiceImpl implements ScoreService {
                 .actualPointChange(0)
                 .balanceBefore(userScore.getCurrentPoints())
                 .balanceAfter(userScore.getCurrentPoints())
+                .heldBefore(heldBefore)
+                .heldAfter(userScore.getHeldPoints())
                 .accumulatedBefore(userScore.getAccumulatedPoints())
                 .accumulatedAfter(userScore.getAccumulatedPoints())
+                .outstandingBefore(userScore.getOutstandingPoints())
+                .outstandingAfter(userScore.getOutstandingPoints())
+                .tierSnapshot(userScore.getCurrentTier().getTierCode())
+                .earningRateSnapshot(userScore.getCurrentTier().getEarningRate())
+                .sourceService("BOOKING")
                 .description("Released held points for booking " + hold.getBookingId() + (request.reason() != null ? ": " + request.reason() : ""))
                 .build();
         scoreHistoryRepository.save(history);
@@ -882,8 +912,16 @@ public class ScoreServiceImpl implements ScoreService {
                 .actualPointChange(-request.points())
                 .balanceBefore(oldBalance)
                 .balanceAfter(userScore.getCurrentPoints())
+                .heldBefore(userScore.getHeldPoints())
+                .heldAfter(userScore.getHeldPoints())
                 .accumulatedBefore(userScore.getAccumulatedPoints())
                 .accumulatedAfter(userScore.getAccumulatedPoints())
+                .outstandingBefore(userScore.getOutstandingPoints())
+                .outstandingAfter(userScore.getOutstandingPoints())
+                .tierSnapshot(userScore.getCurrentTier().getTierCode())
+                .earningRateSnapshot(userScore.getCurrentTier().getEarningRate())
+                .redeemRateSnapshot(redemptionValuePerPoint)
+                .sourceService("BOOKING")
                 .description("Redeemed points for booking " + request.bookingId())
                 .build();
         scoreHistoryRepository.save(history);
@@ -1001,8 +1039,16 @@ public class ScoreServiceImpl implements ScoreService {
                 .actualPointChange(request.pointsToRefund())
                 .balanceBefore(oldBalance)
                 .balanceAfter(userScore.getCurrentPoints())
+                .heldBefore(userScore.getHeldPoints())
+                .heldAfter(userScore.getHeldPoints())
                 .accumulatedBefore(oldAccumulated)
                 .accumulatedAfter(userScore.getAccumulatedPoints())
+                .outstandingBefore(userScore.getOutstandingPoints())
+                .outstandingAfter(userScore.getOutstandingPoints())
+                .tierSnapshot(userScore.getCurrentTier().getTierCode())
+                .earningRateSnapshot(userScore.getCurrentTier().getEarningRate())
+                .redeemRateSnapshot(redemptionValuePerPoint)
+                .sourceService("PAYMENT")
                 .referenceHistory(orig)
                 .reason(request.reason())
                 .description(request.reason() != null ? request.reason() : "Refunded redeemed points for booking " + request.bookingId())
@@ -1183,10 +1229,15 @@ public class ScoreServiceImpl implements ScoreService {
                 .requestedPointChange(-toRevoke)
                 .balanceBefore(oldBalance)
                 .balanceAfter(userScore.getCurrentPoints())
+                .heldBefore(userScore.getHeldPoints())
+                .heldAfter(userScore.getHeldPoints())
                 .accumulatedBefore(oldAccumulated)
                 .accumulatedAfter(userScore.getAccumulatedPoints())
                 .outstandingBefore(oldOutstanding)
                 .outstandingAfter(userScore.getOutstandingPoints())
+                .tierSnapshot(previousTierCode)
+                .earningRateSnapshot(orig.getEarningRateSnapshot())
+                .sourceService("PAYMENT")
                 .referenceHistory(orig)
                 .reconciliationStatus(reconStatus)
                 .reason(request.reason())
@@ -1300,8 +1351,15 @@ public class ScoreServiceImpl implements ScoreService {
                         .actualPointChange(-toExpire)
                         .balanceBefore(oldBal)
                         .balanceAfter(us.getCurrentPoints())
+                        .heldBefore(us.getHeldPoints())
+                        .heldAfter(us.getHeldPoints())
                         .accumulatedBefore(us.getAccumulatedPoints())
                         .accumulatedAfter(us.getAccumulatedPoints())
+                        .outstandingBefore(us.getOutstandingPoints())
+                        .outstandingAfter(us.getOutstandingPoints())
+                        .tierSnapshot(us.getCurrentTier().getTierCode())
+                        .earningRateSnapshot(us.getCurrentTier().getEarningRate())
+                        .sourceService("EXPIRATION_SCHEDULER")
                         .description("Expired points from bucket " + b.getId())
                         .build();
                 scoreHistoryRepository.save(history);

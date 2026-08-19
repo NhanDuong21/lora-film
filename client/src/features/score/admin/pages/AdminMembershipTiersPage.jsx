@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import useAdminScore from '../hooks/useAdminScore';
 import TierModal from '../components/TierModal';
 import { Award, Plus, Edit2, CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function AdminMembershipTiersPage() {
+  const outlet = useOutletContext();
+  const confirm = outlet?.triggerConfirm || (async () => false);
   const {
     tiers,
     isLoadingTiers,
@@ -37,6 +40,18 @@ export default function AdminMembershipTiersPage() {
   };
 
   const handleSaveTier = async (formData) => {
+    const thresholdConflict = tiers.some(tier => tier.tierCode !== selectedTier?.tierCode && Number(tier.minAccumulatedPoints) === Number(formData.minAccumulatedPoints));
+    if (thresholdConflict) throw new Error('Mốc điểm hạng này đã được sử dụng. Mỗi hạng phải có một mốc riêng.');
+    const changedThreshold = selectedTier && Number(selectedTier.minAccumulatedPoints) !== Number(formData.minAccumulatedPoints);
+    const changedRate = selectedTier && Number(selectedTier.earningRate) !== Number(formData.earningRate);
+    const accepted = await confirm({
+      title: selectedTier ? 'Xác nhận thay đổi chính sách hạng' : 'Xác nhận tạo chính sách hạng',
+      message: selectedTier
+        ? `${selectedTier.userCount || 0} tài khoản đang ở hạng ${selectedTier.tierName}. ${changedThreshold ? 'Thay đổi mốc có thể yêu cầu tính lại hạng. ' : ''}${changedRate ? 'Tỷ lệ mới chỉ áp dụng cho lần tích điểm phát sinh sau khi lưu. ' : ''}Giao dịch cũ giữ snapshot cũ.`
+        : `Tạo hạng ${formData.tierName} từ ${Number(formData.minAccumulatedPoints).toLocaleString('vi-VN')} điểm hạng với tỷ lệ ${Number(formData.earningRate * 100).toLocaleString('vi-VN')}%.`,
+      confirmLabel: selectedTier ? 'Lưu chính sách' : 'Tạo hạng',
+    });
+    if (!accepted) throw Object.assign(new Error('CANCELLED'), { cancelled: true });
     if (selectedTier) {
       await updateTier(selectedTier.tierCode, formData);
       showNotify(`Đã cập nhật hạng thẻ ${formData.tierCode} thành công!`);
@@ -65,8 +80,8 @@ export default function AdminMembershipTiersPage() {
             <Award className="h-5 w-5" />
             <span className="text-[10px] font-black uppercase tracking-widest">Hệ thống Loyalty</span>
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Quản lý Hạng thẻ Thành viên</h1>
-          <p className="text-[11px] text-zinc-400 mt-1 font-medium tracking-wide">Thiết lập các mốc thăng hạng và tỷ lệ tích điểm thưởng cho khách hàng</p>
+          <h1 className="text-2xl font-black text-white tracking-tight">Chính sách hạng thành viên</h1>
+          <p className="text-[11px] text-zinc-400 mt-1 font-medium tracking-wide">Mốc điểm hạng và tỷ lệ tích áp dụng cho giao dịch mới; lịch sử giữ snapshot tại thời điểm phát sinh.</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -120,7 +135,7 @@ export default function AdminMembershipTiersPage() {
                   <th className="py-4 px-4 font-black">Mã hạng (Code)</th>
                   <th className="py-4 px-4 font-black">Tên hạng hiển thị</th>
                   <th className="py-4 px-4 text-right font-black">Điểm tối thiểu</th>
-                  <th className="py-4 px-4 text-right font-black">Tỷ lệ hoàn</th>
+                  <th className="py-4 px-4 text-right font-black">Tỷ lệ tích</th>
                   <th className="py-4 px-4 font-black">Trạng thái</th>
                   <th className="py-4 px-4 font-black">Mô tả</th>
                   <th className="py-4 px-4 text-right font-black">Thao tác</th>
@@ -140,6 +155,7 @@ export default function AdminMembershipTiersPage() {
                     </td>
                     <td className="py-4 px-4 text-right font-black text-emerald-400 whitespace-nowrap tracking-wide">
                       {Math.round((tier.earningRate || 0.05) * 100)}%
+                      <span className="mt-1 block text-[9px] font-medium text-zinc-600">÷ 1.000đ/điểm</span>
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap">
                       {tier.active !== false ? (
@@ -180,6 +196,7 @@ export default function AdminMembershipTiersPage() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveTier}
         initialData={selectedTier}
+        existingTiers={tiers}
       />
     </div>
   );

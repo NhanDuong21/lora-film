@@ -49,7 +49,9 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/scores/dashboard')) return 'scores-dashboard';
     if (path.endsWith('/scores/tiers')) return 'scores-tiers';
     if (path.endsWith('/scores/viewer')) return 'scores-viewer';
+    if (path.endsWith('/scores/adjustments')) return 'scores-adjustments';
     if (path.endsWith('/scores/reconciliation')) return 'scores-reconciliation';
+    if (path.endsWith('/scores/audit-logs')) return 'scores-audit-logs';
     if (path.endsWith('/staff')) return 'staff';
     if (path.endsWith('/hr')) return 'hr';
     if (path.endsWith('/approvals')) return 'approvals';

@@ -13,6 +13,8 @@ public interface AdminScoreOperationService {
 
     AdminAdjustmentResponse recalculateTier(Long userId, String operatorId, String clientIp);
 
+    AdminUserScoreResponse updateAccountStatus(Long userId, ScoreAccountStatusRequest request, String operatorId, String clientIp);
+
     ReconciliationDTOs.ReconciliationRunResponse runReconciliation(ReconciliationDTOs.ReconciliationRunRequest request, String operatorId);
 
     PageResponse<ReconciliationDTOs.ReconciliationRunResponse> getReconciliationRuns(int page, int size, ReconciliationRunStatus status, LocalDateTime from, LocalDateTime to);

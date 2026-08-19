@@ -1,344 +1,130 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
+import {
+  AlertTriangle, Award, Clock3, FileClock,
+  LockKeyhole, RefreshCcw, Search, ShieldCheck, UnlockKeyhole, UserRound, WalletCards
+} from 'lucide-react';
 import useAdminScore from '../hooks/useAdminScore';
 import ExpiringPointsSection from '@/features/score/customer/components/ExpiringPointsSection';
 import TierHistoryTimeline from '@/features/score/customer/components/TierHistoryTimeline';
-import { Search, Award, User, TrendingUp, AlertCircle, FileText, Calendar, ArrowUpRight, ArrowDownLeft, RefreshCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+
+const n = value => Number(value ?? 0).toLocaleString('vi-VN');
+const when = value => value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
+const TYPE_LABEL = {
+  EARN: 'Tích điểm', EARN_BY_BOOKING: 'Tích điểm', HOLD: 'Tạm giữ', COMMIT: 'Đã sử dụng',
+  REDEEM: 'Đã sử dụng', REDEEM_FOR_BOOKING: 'Đã sử dụng', RELEASE: 'Hoàn tạm giữ',
+  REFUND_REDEEM: 'Hoàn điểm đã dùng', REVOKE_EARN: 'Thu hồi điểm tích',
+  REVOKE_EARN_BY_REFUND: 'Thu hồi do hoàn tiền', EXPIRED: 'Hết hạn', MANUAL_ADD: 'Cộng thủ công',
+  MANUAL_DEDUCT: 'Trừ thủ công', REVERSE_ADJUSTMENT: 'Đảo điều chỉnh',
+};
+
+function SummaryCard({ label, value, hint, icon: Icon, tone = 'text-white' }) {
+  return <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4"><div className="flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">{label}</p><Icon size={17} className="text-zinc-600" /></div><p className={`mt-3 text-2xl font-black ${tone}`}>{value}</p><p className="mt-1 text-xs leading-5 text-zinc-500">{hint}</p></div>;
+}
 
 export default function AdminScoreViewerPage() {
+  const [params, setParams] = useSearchParams();
+  const outlet = useOutletContext();
+  const notify = outlet?.triggerToast || (() => undefined);
+  const confirm = outlet?.triggerConfirm || (async () => false);
+  const prompt = outlet?.triggerPrompt || (async () => null);
   const {
-    userScore,
-    userHistory,
-    expiringPoints,
-    tierHistory,
-    isLoadingUserScore,
-    errorUserScore,
-    fetchUserScore,
-    fetchUserHistory,
-    fetchUserExpiringPoints,
-    fetchUserTierHistory
+    userScore, userHistory, expiringPoints, tierHistory, isLoadingUserScore, errorUserScore,
+    isLoadingOperations, fetchUserScore, fetchUserHistory, fetchUserExpiringPoints,
+    fetchUserTierHistory, recalculateTier, updateScoreAccountStatus,
   } = useAdminScore();
+  const [searchId, setSearchId] = useState(params.get('accountId') || '');
+  const [filter, setFilter] = useState('ALL');
+  const initialLoaded = useRef(false);
+  const customerName = params.get('name');
+  const customerCode = params.get('customerCode');
 
+  const loadAccount = useCallback(async (accountId, historyFilter = 'ALL', page = 0) => {
+    if (!/^\d+$/.test(String(accountId))) return;
+    const historyParams = { page, size: 10, ...(historyFilter === 'ALL' ? {} : { transactionType: historyFilter }) };
+    await Promise.allSettled([
+      fetchUserScore(accountId, { forceRefresh: true }), fetchUserHistory(accountId, historyParams, { forceRefresh: true }),
+      fetchUserExpiringPoints(accountId, { forceRefresh: true }), fetchUserTierHistory(accountId, { forceRefresh: true }),
+    ]);
+  }, [fetchUserExpiringPoints, fetchUserHistory, fetchUserScore, fetchUserTierHistory]);
 
-  const [searchId, setSearchId] = useState('');
-  const [activeTabFilter, setActiveTabFilter] = useState('ALL');
+  useEffect(() => {
+    const accountId = params.get('accountId');
+    if (accountId && !initialLoaded.current) { initialLoaded.current = true; loadAccount(accountId); }
+  }, [loadAccount, params]);
 
-  const handleSearch = async (e) => {
-    e?.preventDefault();
-    if (!searchId.trim()) return;
-    try {
-      await fetchUserScore(searchId.trim());
-      await fetchUserHistory(searchId.trim(), { page: 0, size: 10 });
-      await fetchUserExpiringPoints(searchId.trim());
-      await fetchUserTierHistory(searchId.trim());
-    } catch {
-      // error handled in hook
-    }
+  const submitSearch = event => {
+    event.preventDefault();
+    const value = searchId.trim();
+    if (!/^\d+$/.test(value)) return;
+    setFilter('ALL');
+    setParams({ accountId: value });
+    loadAccount(value);
   };
 
+  const changeFilter = type => { setFilter(type); loadAccount(searchId, type); };
+  const changePage = page => loadAccount(searchId, filter, page);
 
-  const handlePageChange = (newPage) => {
-    if (!searchId.trim()) return;
-    const filters = activeTabFilter === 'ALL' ? {} : { transactionType: activeTabFilter };
-    fetchUserHistory(searchId.trim(), { page: newPage, size: 10, ...filters });
+  const handleRecalculate = async () => {
+    const accepted = await confirm({ title: 'Tính lại hạng thành viên', message: `Tính lại hạng của Account ID ${searchId} theo tổng điểm hạng hiện tại? Thao tác được ghi audit.`, confirmLabel: 'Tính lại hạng' });
+    if (!accepted) return;
+    try { await recalculateTier(searchId); notify('Đã tính lại hạng thành viên.'); }
+    catch (error) { notify(error?.response?.data?.message || 'Không thể tính lại hạng.', 'error'); }
   };
 
-  const handleFilterClick = (type) => {
-    setActiveTabFilter(type);
-    if (!searchId.trim()) return;
-    const filters = type === 'ALL' ? {} : { transactionType: type };
-    fetchUserHistory(searchId.trim(), { page: 0, size: 10, ...filters });
+  const handleStatus = async () => {
+    const freezing = userScore?.status !== 'LOCKED';
+    const reason = await prompt({
+      title: freezing ? 'Đóng băng tài khoản điểm' : 'Mở lại tài khoản điểm',
+      message: freezing ? 'Chỉ chặn tích/dùng điểm; khách hàng vẫn đăng nhập và xem hồ sơ bình thường.' : 'Khôi phục quyền tích và dùng điểm. Quyền đăng nhập không thay đổi.',
+      label: 'Lý do xử lý', placeholder: 'Ví dụ: Đang xác minh khiếu nại hoàn tiền…', confirmLabel: freezing ? 'Đóng băng điểm' : 'Mở lại điểm',
+    });
+    if (!reason) return;
+    const caseId = `SCORE-${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}`;
+    try { await updateScoreAccountStatus(searchId, { status: freezing ? 'LOCKED' : 'ACTIVE', reason, caseId }); notify(`${freezing ? 'Đã đóng băng' : 'Đã mở lại'} tài khoản điểm · ${caseId}`); }
+    catch (error) { notify(error?.response?.data?.message || 'Không thể cập nhật trạng thái điểm.', 'error'); }
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
-    try {
-      return new Intl.DateTimeFormat('vi-VN', {
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-      }).format(new Date(dateStr));
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const getTransactionBadge = (type) => {
-    switch (type) {
-      case 'EARN':
-      case 'EARN_BY_BOOKING':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/20"><ArrowUpRight className="h-3.5 w-3.5" />Tích điểm</span>;
-      case 'REDEEM':
-      case 'REDEEM_FOR_BOOKING':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-400 border border-amber-500/20"><ArrowDownLeft className="h-3.5 w-3.5" />Dùng điểm</span>;
-      case 'REFUND_REDEEM':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs font-bold text-cyan-400 border border-cyan-500/20"><RefreshCcw className="h-3.5 w-3.5" />Hoàn điểm</span>;
-      case 'REVOKE_EARN':
-      case 'REVOKE_EARN_BY_REFUND':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-400 border border-red-500/20"><AlertCircle className="h-3.5 w-3.5" />Thu hồi</span>;
-      default:
-        return <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-bold text-blue-400 border border-blue-500/20"><RefreshCcw className="h-3.5 w-3.5" />{type}</span>;
-    }
-  };
-
-
-  const historyItems = userHistory?.content || [];
-  const currentPage = userHistory?.number || 0;
-  const totalPages = userHistory?.totalPages || 0;
+  const history = userHistory?.content || [];
+  const page = Number(userHistory?.page ?? userHistory?.number ?? 0);
+  const totalPages = Number(userHistory?.totalPages ?? 0);
+  const rate = Number(userScore?.currentTier?.earningRate ?? 0) * 100;
 
   return (
-    <div className="space-y-8 text-white">
-      {/* Header */}
-      <div className="bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 rounded-[2rem] shadow-2xl shadow-black/20 space-y-5">
-        <div>
-          <div className="flex items-center gap-2 text-brand-orange mb-1.5">
-            <User className="h-5 w-5" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Tra cứu điểm thành viên</span>
-          </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Tra cứu & Lịch sử Điểm thưởng Khách hàng</h1>
-          <p className="text-[11px] text-zinc-400 font-medium tracking-wide mt-1">
-            Tìm kiếm thông tin điểm khả dụng, hạng thành viên và kiểm tra chi tiết các giao dịch của khách hàng
-          </p>
+    <section className="mx-auto max-w-7xl space-y-6 text-white">
+      <header className="rounded-3xl border border-white/10 bg-zinc-900/50 p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Customer score workspace</p><h1 className="mt-2 text-2xl font-black">Hồ sơ điểm thưởng khách hàng</h1><p className="mt-2 text-sm text-zinc-400">Điều tra số dư, hold, điểm hạng, expiration và thao tác hỗ trợ từ một hồ sơ.</p></div>{userScore ? <div className="text-right"><p className="text-sm font-black">{customerName || `Account ID ${userScore.userId}`}</p><p className="mt-1 font-mono text-xs text-zinc-500">{customerCode || `ACCOUNT-${userScore.userId}`}</p></div> : null}</div>
+        <form onSubmit={submitSearch} className="mt-5 flex flex-col gap-2 sm:flex-row"><label className="relative flex-1"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" size={18} /><input value={searchId} onChange={event => setSearchId(event.target.value)} inputMode="numeric" aria-label="Account ID khách hàng" placeholder="Nhập Account ID từ hồ sơ khách hàng" className="h-11 w-full rounded-xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm outline-none focus:border-brand-orange" /></label><button className="h-11 rounded-xl bg-brand-orange px-6 text-xs font-black text-black hover:bg-orange-400">Mở hồ sơ</button></form>
+        <p className="mt-2 text-[11px] text-zinc-600">Tìm theo tên/email tại <Link to="/admin/members" className="font-bold text-zinc-400 hover:text-white">Trung tâm khách hàng</Link>, sau đó chọn “Mở hồ sơ điểm thưởng”.</p>
+      </header>
+
+      {isLoadingUserScore ? <div className="rounded-2xl border border-white/10 p-10 text-center text-sm text-zinc-500">Đang tổng hợp hồ sơ điểm…</div> : null}
+      {errorUserScore && !userScore ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{errorUserScore}</div> : null}
+
+      {userScore ? <>
+        {userScore.status === 'LOCKED' ? <div className="flex gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4"><AlertTriangle className="shrink-0 text-amber-400" size={20} /><div><p className="text-sm font-black text-amber-200">Tài khoản điểm đang đóng băng</p><p className="mt-1 text-xs text-zinc-400">Khách hàng không thể tích hoặc dùng điểm; trạng thái đăng nhập là một kiểm soát riêng tại Trung tâm khách hàng.</p></div></div> : null}
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard label="Khả dụng" value={n(userScore.availablePoints ?? Number(userScore.currentPoints) - Number(userScore.heldPoints))} hint="Có thể dùng ngay" icon={WalletCards} tone="text-emerald-400" />
+          <SummaryCard label="Tạm giữ" value={n(userScore.heldPoints)} hint="Đang reserve cho booking" icon={Clock3} tone="text-sky-400" />
+          <SummaryCard label="Điểm hạng" value={n(userScore.accumulatedPoints)} hint="Dùng xét hạng, không tiêu" icon={Award} tone="text-violet-300" />
+          <SummaryCard label="Dư nợ" value={n(userScore.outstandingPoints)} hint="Cần thu hồi sau refund" icon={AlertTriangle} tone={Number(userScore.outstandingPoints) ? 'text-red-400' : 'text-zinc-300'} />
+          <SummaryCard label="Hạng hiện tại" value={userScore.currentTier?.tierName || userScore.currentTier?.tierCode || '—'} hint={`${rate.toLocaleString('vi-VN')}% trên giá trị hợp lệ`} icon={ShieldCheck} tone="text-amber-300" />
         </div>
 
-        {/* Search form */}
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 pt-2">
-          <div className="relative flex-grow">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500" />
-            <input
-              type="text"
-              value={searchId}
-              onChange={(e) => setSearchId(e.target.value)}
-              placeholder="Nhập Account ID (hoặc UUID tài khoản khách hàng)..."
-              className="w-full bg-black/20 border border-zinc-800/80 focus:border-brand-orange/50 rounded-2xl py-3.5 pl-12 pr-4 text-xs font-bold text-white focus:outline-none transition-colors shadow-inner"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={isLoadingUserScore || !searchId.trim()}
-            className="px-8 py-3.5 rounded-2xl bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black text-[11px] uppercase tracking-widest transition-all shadow-xl shadow-brand-orange/20 disabled:opacity-50 shrink-0 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Search className="h-4 w-4" />
-            <span>Tra cứu ngay</span>
-          </button>
-        </form>
-      </div>
+        <article className="rounded-3xl border border-white/10 bg-zinc-900/40 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-black">Công thức đang áp dụng</p><p className="mt-1 text-xs leading-5 text-zinc-400">Điểm nhận = giá trị thanh toán hợp lệ × {rate.toLocaleString('vi-VN')}% ÷ 1.000đ/điểm, làm tròn xuống. 1 điểm dùng = 1.000đ.</p><p className="mt-1 text-[11px] text-zinc-600">Cập nhật hồ sơ: {when(userScore.updatedAt)} · Tích gần nhất: {when(userScore.lastEarnAt)} · Dùng gần nhất: {when(userScore.lastRedeemAt)}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={handleRecalculate} disabled={isLoadingOperations} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-black text-zinc-300 hover:bg-white/5"><RefreshCcw size={14} className="mr-1.5 inline" />Tính lại hạng</button><button type="button" onClick={handleStatus} disabled={isLoadingOperations} className={`rounded-xl px-3 py-2 text-xs font-black ${userScore.status === 'LOCKED' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>{userScore.status === 'LOCKED' ? <UnlockKeyhole size={14} className="mr-1.5 inline" /> : <LockKeyhole size={14} className="mr-1.5 inline" />}{userScore.status === 'LOCKED' ? 'Mở lại điểm' : 'Đóng băng điểm'}</button><Link to={`/admin/scores/adjustments?accountId=${searchId}`} className="rounded-xl bg-brand-orange px-3 py-2 text-xs font-black text-black">Tạo xử lý khiếu nại</Link></div></div>
+        </article>
 
-      {/* Error state */}
-      {errorUserScore && (
-        <div className="rounded-3xl bg-red-950/40 border border-red-500/30 p-6 flex items-center gap-4 text-red-400 backdrop-blur-md shadow-xl">
-          <AlertCircle className="h-6 w-6 shrink-0" />
-          <div>
-            <h4 className="text-sm font-black tracking-wide">Không tìm thấy thông tin</h4>
-            <p className="text-[11px] mt-1 text-red-400/80 font-medium">{errorUserScore}</p>
-          </div>
-        </div>
-      )}
+        <article className="overflow-hidden rounded-3xl border border-white/10 bg-zinc-900/40">
+          <div className="flex flex-col gap-3 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between"><div><h2 className="font-black">Ledger giao dịch</h2><p className="mt-1 text-xs text-zinc-500">Snapshot trước/sau giúp giải thích chính xác từng biến động.</p></div><div className="flex flex-wrap gap-1">{[['ALL','Tất cả'],['EARN','Tích'],['HOLD','Tạm giữ'],['COMMIT','Đã dùng'],['REFUND_REDEEM','Hoàn'],['MANUAL_ADD','Thủ công']].map(([id,label]) => <button key={id} type="button" onClick={() => changeFilter(id)} className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold ${filter === id ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>{label}</button>)}</div></div>
+          {history.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-xs"><thead className="bg-white/[0.025] text-[10px] uppercase tracking-wider text-zinc-600"><tr><th className="px-5 py-3">Thời gian / nguồn</th><th className="px-5 py-3">Nghiệp vụ</th><th className="px-5 py-3">Thay đổi</th><th className="px-5 py-3">Số dư</th><th className="px-5 py-3">Tham chiếu</th><th className="px-5 py-3">Lý do / case</th></tr></thead><tbody className="divide-y divide-white/5">{history.map(item => { const delta = Number(item.pointChange ?? 0); const operation = TYPE_LABEL[item.transactionType] || item.transactionType || 'Giao dịch tự động'; return <tr key={item.historyId} className="align-top hover:bg-white/[0.02]"><td className="px-5 py-4 text-zinc-400">{when(item.createdAt)}<p className="mt-1 text-[10px] text-zinc-600">{item.sourceService || 'SCORE_SERVICE'}</p></td><td className="px-5 py-4 font-bold text-zinc-200">{operation}</td><td className={`px-5 py-4 font-black ${delta >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>{delta > 0 ? '+' : ''}{n(delta)}<p className="mt-1 font-normal text-zinc-600">hold {n(item.heldBefore)} → {n(item.heldAfter)}</p></td><td className="px-5 py-4 text-zinc-300">{n(item.balanceBefore)} → <b>{n(item.balanceAfter)}</b><p className="mt-1 text-zinc-600">hạng {n(item.accumulatedBefore)} → {n(item.accumulatedAfter)}</p></td><td className="px-5 py-4 font-mono text-zinc-500">{item.bookingId ? `Booking ID ${item.bookingId}` : item.eventId || '—'}</td><td className="max-w-xs px-5 py-4 text-zinc-400">{item.reason || `${operation}${item.bookingId ? ` cho Booking ID ${item.bookingId}` : ''}`}{item.caseId ? <p className="mt-1 font-mono text-[10px] text-brand-orange">{item.caseId}</p> : null}</td></tr>; })}</tbody></table></div> : <div className="p-10 text-center text-sm text-zinc-500">{filter === 'ALL' ? 'Tài khoản chưa phát sinh giao dịch điểm.' : 'Không có giao dịch thuộc nhóm đang lọc.'}</div>}
+          {totalPages > 1 ? <div className="flex items-center justify-between border-t border-white/10 p-4 text-xs text-zinc-500"><span>Trang {page + 1}/{totalPages}</span><div className="flex gap-2"><button disabled={page <= 0} onClick={() => changePage(page - 1)} className="rounded-lg border border-white/10 px-3 py-1.5 disabled:opacity-30">Trước</button><button disabled={page >= totalPages - 1} onClick={() => changePage(page + 1)} className="rounded-lg border border-white/10 px-3 py-1.5 disabled:opacity-30">Sau</button></div></div> : null}
+        </article>
 
-      {/* Loading */}
-      {isLoadingUserScore && (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-4 bg-zinc-900/40 backdrop-blur-md rounded-[2rem] border border-zinc-800/50 shadow-inner">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-orange border-t-transparent" />
-          <span className="text-xs font-medium tracking-wide">Đang tra cứu hồ sơ điểm...</span>
-        </div>
-      )}
-
-      {/* Score Summary Display */}
-      {userScore && !isLoadingUserScore && (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-[2rem] bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 shadow-xl shadow-black/10 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Điểm khả dụng</span>
-                <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center shadow-inner border border-white/10">
-                  <Award className="h-5 w-5 text-brand-orange" />
-                </div>
-              </div>
-              <div className="mt-6 flex items-baseline gap-2">
-                <span className="text-4xl md:text-5xl font-black text-white tracking-tighter">
-                  {(userScore.currentPoints ?? 0).toLocaleString('vi-VN')}
-                </span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5">PTS</span>
-              </div>
-              <div className="mt-5 pt-5 border-t border-zinc-800/50 text-[11px] text-zinc-500 flex items-center justify-between font-medium tracking-wide">
-                <span>Account ID</span>
-                <span className="font-mono font-bold text-zinc-300">{userScore.accountId}</span>
-              </div>
-            </div>
-
-            <div className="rounded-[2rem] bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 shadow-xl shadow-black/10 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Tích lũy trọn đời</span>
-                <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center shadow-inner border border-white/10">
-                  <TrendingUp className="h-5 w-5 text-emerald-400" />
-                </div>
-              </div>
-              <div className="mt-6 flex items-baseline gap-2">
-                <span className="text-4xl md:text-5xl font-black text-white tracking-tighter">
-                  {(userScore.accumulatedPoints ?? 0).toLocaleString('vi-VN')}
-                </span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5">PTS</span>
-              </div>
-              <div className="mt-5 pt-5 border-t border-zinc-800/50 text-[11px] text-zinc-500 flex flex-wrap items-center justify-between gap-2 font-medium tracking-wide">
-                <div className="flex items-center gap-1.5">
-                  <span>Tạm giữ</span>
-                  <span className="font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">{(userScore.heldPoints ?? 0).toLocaleString('vi-VN')}</span>
-                </div>
-                {(userScore.outstandingPoints > 0) && (
-                  <div className="flex items-center gap-1.5">
-                    <span>Nợ</span>
-                    <span className="font-black text-red-400 bg-red-500/10 px-2 py-0.5 rounded-md">{(userScore.outstandingPoints ?? 0).toLocaleString('vi-VN')}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-[2rem] bg-gradient-to-br from-amber-500/10 via-zinc-900/40 to-zinc-950/40 backdrop-blur-md border border-amber-500/20 p-8 shadow-xl shadow-amber-900/10 flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute -top-10 -right-10 w-40 h-40 bg-amber-500/10 rounded-full filter blur-3xl pointer-events-none" />
-              <div className="flex items-center justify-between relative z-10">
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-500/80">Hạng thẻ</span>
-                <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[9px] font-black uppercase text-amber-400 shadow-inner">
-                  {userScore.currentTier?.tierCode || 'SILVER'}
-                </span>
-              </div>
-              <div className="mt-6 relative z-10">
-                <span className="text-3xl font-black text-amber-400 tracking-tighter block mb-1">
-                  {userScore.currentTier?.tierName || 'Silver Member'}
-                </span>
-                <span className="text-[11px] text-zinc-400 font-medium tracking-wide block">
-                  Hoàn điểm <strong className="text-amber-300">{Math.round((userScore.currentTier?.earningRate || 0.05) * 100)}%</strong> giá trị giao dịch
-                </span>
-              </div>
-              <div className="mt-5 pt-5 border-t border-zinc-800/50 text-[11px] text-zinc-500 flex items-center justify-between font-medium tracking-wide relative z-10">
-                <span>Quyền hạn</span>
-                <span className="font-black text-emerald-400">Thành viên chính thức</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Phase 3 Note & Sections */}
-          <div className="rounded-2xl bg-blue-500/10 border border-blue-500/20 p-4 flex items-start gap-3 text-blue-300 text-xs leading-relaxed">
-            <Info className="h-5 w-5 shrink-0 text-blue-400 mt-0.5" />
-            <div>
-              <span className="font-bold block mb-0.5">Quyền hạn quản lý điểm Phase 3 (Refund, Expiration & Tier)</span>
-              Ở Giai đoạn 3, hệ thống đã hoàn thiện toàn bộ vòng đời điểm thưởng: tích điểm, dùng điểm, hoàn điểm (Refund), thu hồi điểm (Revoke), theo dõi hạn sử dụng theo nguyên tắc FIFO (Expiration) và lịch sử thăng giáng hạng (Tier History - Append Only).
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-6 flex flex-col">
-              <ExpiringPointsSection expiringPoints={expiringPoints} isLoading={isLoadingUserScore} />
-            </div>
-            <div className="lg:col-span-6 flex flex-col">
-              <TierHistoryTimeline tierHistory={tierHistory} isLoading={isLoadingUserScore} />
-            </div>
-          </div>
-
-
-          {/* History Table */}
-          <div className="rounded-[2rem] bg-zinc-900/40 backdrop-blur-md border border-zinc-800/50 p-8 shadow-xl shadow-black/10 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/50 pb-5">
-              <div>
-                <h3 className="text-base font-black text-white flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-brand-orange" />
-                  Lịch sử giao dịch điểm của tài khoản
-                </h3>
-              </div>
-
-              <div className="flex flex-wrap gap-1 bg-zinc-950/50 p-1.5 rounded-2xl border border-zinc-800/50 shadow-inner">
-                {[
-                  { id: 'ALL', label: 'Tất cả' },
-                  { id: 'EARN', label: 'Tích điểm' },
-                  { id: 'REDEEM', label: 'Dùng điểm' },
-                  { id: 'REFUND_REDEEM', label: 'Hoàn điểm' },
-                  { id: 'REVOKE_EARN', label: 'Thu hồi' }
-                ].map((tab) => (
-
-                  <button
-                    key={tab.id}
-                    onClick={() => handleFilterClick(tab.id)}
-                    className={`px-4 py-1.5 text-[11px] font-bold rounded-xl transition-all ${activeTabFilter === tab.id ? 'bg-zinc-800 text-white shadow-md border border-zinc-700/50' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
-                      }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {historyItems.length === 0 ? (
-              <div className="text-center py-16 text-zinc-500">
-                <p className="text-sm font-black tracking-wide">Khách hàng chưa có giao dịch điểm nào</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-zinc-800/50 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                      <th className="py-4 px-4">Thời gian</th>
-                      <th className="py-4 px-4">Loại giao dịch</th>
-                      <th className="py-4 px-4">Mã đơn / Sự kiện</th>
-                      <th className="py-4 px-4 text-right">Thay đổi</th>
-                      <th className="py-4 px-4 text-right">Số dư sau</th>
-                      <th className="py-4 px-4">Mô tả</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/30 text-xs text-zinc-300">
-                    {historyItems.map((item) => {
-                      const changeVal = item.pointChange ?? item.actualPointChange ?? 0;
-                      const isPositive = changeVal >= 0;
-                      return (
-                        <tr key={item.historyId || item.id} className="hover:bg-white/5 transition-colors group">
-                          <td className="py-4 px-4 whitespace-nowrap text-zinc-400 font-medium flex items-center gap-2">
-                            <Calendar className="h-3.5 w-3.5 text-zinc-600 group-hover:text-brand-orange transition-colors" />
-                            {formatDate(item.occurredAt || item.createdAt)}
-                          </td>
-                          <td className="py-4 px-4 whitespace-nowrap">
-                            {getTransactionBadge(item.transactionType)}
-                          </td>
-                          <td className="py-4 px-4 whitespace-nowrap font-mono text-zinc-500 font-bold tracking-wide">
-                            {item.bookingId ? `#BK${item.bookingId}` : (item.eventId || '—')}
-                          </td>
-                          <td className={`py-4 px-4 whitespace-nowrap text-right font-black text-sm tracking-wide ${isPositive ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {isPositive ? `+${changeVal.toLocaleString('vi-VN')}` : changeVal.toLocaleString('vi-VN')}
-                          </td>
-                          <td className="py-4 px-4 whitespace-nowrap text-right font-bold text-white tracking-wide">
-                            {(item.balanceAfter ?? 0).toLocaleString('vi-VN')}
-                          </td>
-                          <td className="py-4 px-4 text-zinc-400 max-w-xs truncate" title={item.description}>
-                            {item.description || '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-zinc-800/50 pt-5 text-xs">
-                <span className="text-zinc-500 font-medium">
-                  Trang <span className="text-white font-bold">{currentPage + 1}</span> / <span className="text-white font-bold">{totalPages}</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 0}
-                    className="p-2 rounded-xl bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 disabled:opacity-40 hover:bg-zinc-700 transition-colors shadow-sm"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage >= totalPages - 1}
-                    className="p-2 rounded-xl bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 disabled:opacity-40 hover:bg-zinc-700 transition-colors shadow-sm"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+        <div className="grid gap-5 xl:grid-cols-2"><ExpiringPointsSection expiringPoints={expiringPoints} isLoading={isLoadingUserScore} /><TierHistoryTimeline tierHistory={tierHistory} isLoading={isLoadingUserScore} /></div>
+        <div className="flex flex-wrap gap-4 text-xs"><Link to={`/admin/scores/audit-logs?userId=${searchId}`} className="inline-flex items-center gap-2 font-bold text-zinc-400 hover:text-white"><FileClock size={15} /> Nhật ký thao tác admin</Link><Link to="/admin/members" className="inline-flex items-center gap-2 font-bold text-zinc-400 hover:text-white"><UserRound size={15} /> Hồ sơ và quyền đăng nhập</Link></div>
+      </> : null}
+    </section>
   );
 }

@@ -93,8 +93,9 @@ function TierProgress({ scoreData }) {
   );
 }
 
-function LoyaltyRules() {
+function LoyaltyRules({ earningRate = 0.05 }) {
   const [open, setOpen] = useState(false);
+  const ratePercent = Number(earningRate || 0) * 100;
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/45">
       <button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)} className="flex w-full items-center justify-between gap-4 px-5 py-5 text-left sm:px-6">
@@ -108,7 +109,7 @@ function LoyaltyRules() {
         <div className="grid gap-4 border-t border-zinc-800 px-5 py-5 sm:grid-cols-2 sm:px-6">
           <div className="flex gap-3">
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
-            <div><h3 className="text-xs font-black text-white">Tích điểm</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Mỗi 10.000đ thanh toán hợp lệ, bạn nhận 1 điểm sau khi đơn hàng hoàn tất.</p></div>
+            <div><h3 className="text-xs font-black text-white">Tích điểm</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Điểm nhận = giá trị thanh toán hợp lệ × {ratePercent.toLocaleString('vi-VN')}% ÷ 1.000đ/điểm, làm tròn xuống. Điểm được ghi sau khi đơn hoàn tất.</p></div>
           </div>
           <div className="flex gap-3">
             <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
@@ -116,7 +117,7 @@ function LoyaltyRules() {
           </div>
           <div className="flex gap-3">
             <WalletCards className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
-            <div><h3 className="text-xs font-black text-white">Sử dụng điểm</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Điểm khả dụng có thể được dùng khi thanh toán. Điểm gần hết hạn sẽ được ưu tiên sử dụng trước.</p></div>
+            <div><h3 className="text-xs font-black text-white">Sử dụng điểm</h3><p className="mt-1 text-xs leading-5 text-zinc-500">1 điểm = 1.000đ. Điểm khả dụng có thể dùng khi thanh toán; điểm gần hết hạn được ưu tiên trước.</p></div>
           </div>
           <div className="flex gap-3">
             <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
@@ -150,7 +151,7 @@ export default function LoyaltyCenterPage({ embedded = false }) {
     .map(item => item.expirationDate)
     .filter(Boolean)
     .sort()[0];
-  const currentPoints = Number(scoreData?.currentPoints || 0);
+  const currentPoints = Math.max(0, Number(scoreData?.currentPoints || 0) - Number(scoreData?.heldPoints || 0));
   const heldPoints = Number(scoreData?.heldPoints || 0);
   const accumulatedPoints = Number(scoreData?.accumulatedPoints || 0);
 
@@ -175,6 +176,10 @@ export default function LoyaltyCenterPage({ embedded = false }) {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
           <div><p className="text-sm font-black text-white">Điểm cần đối soát</p><p className="mt-1 text-xs leading-5 text-zinc-400">{Number(scoreData.outstandingPoints).toLocaleString('vi-VN')} điểm đang được điều chỉnh từ một giao dịch hoàn hoặc hủy. Điểm mới sẽ được bù tự động.</p></div>
         </div>
+      )}
+
+      {scoreData?.status === 'LOCKED' && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" /><div><p className="text-sm font-black text-white">Tài khoản điểm đang được xác minh</p><p className="mt-1 text-xs leading-5 text-zinc-400">Bạn vẫn có thể đăng nhập và xem lịch sử, nhưng tạm thời chưa thể tích hoặc sử dụng điểm. Vui lòng liên hệ hỗ trợ nếu cần thêm thông tin.</p></div></div>
       )}
 
       {isLoading && !scoreData ? (
@@ -219,7 +224,7 @@ export default function LoyaltyCenterPage({ embedded = false }) {
         </section>
       )}
 
-      <LoyaltyRules />
+      <LoyaltyRules earningRate={scoreData?.currentTier?.earningRate} />
       <ScoreHistoryTable history={history} isLoading={isHistoryLoading} onPageChange={handlePageChange} onFilterChange={handleFilterChange} />
     </div>
   );

@@ -35,6 +35,11 @@ describe('scoreAdminService dashboard adapter', () => {
   it('returns finite numeric defaults for absent or malformed values', () => {
     expect(normalizeScoreDashboardStats({ totalMembers: 'not-a-number' })).toEqual({
       totalMembers: 0,
+      activeMembers: 0,
+      lockedMembers: 0,
+      totalAvailablePoints: 0,
+      totalAccumulatedPoints: 0,
+      totalOutstandingPoints: 0,
       totalPointsEarned: 0,
       totalPointsRedeemed: 0,
       totalPointsHeld: 0,
@@ -45,6 +50,11 @@ describe('scoreAdminService dashboard adapter', () => {
       pendingReconciliationMismatches: 0,
       lastReconciliationBatch: 'N/A',
       lastReconciliationTime: null,
+      lastReconciliationFinishedAt: null,
+      lastReconciliationStatus: null,
+      lastReconciliationTotalUsers: 0,
+      lastReconciliationMatchedUsers: 0,
+      lastReconciliationMismatchedUsers: 0,
     });
   });
 });

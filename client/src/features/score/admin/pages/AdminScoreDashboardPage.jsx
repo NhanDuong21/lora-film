@@ -1,157 +1,104 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  AlertTriangle, ArrowRight, Award, CheckCircle2, Clock3, Database,
+  RefreshCw, ShieldAlert, Users, WalletCards
+} from 'lucide-react';
 import useAdminScore from '../hooks/useAdminScore';
-import { Award, Users, TrendingUp, RefreshCw, ShieldAlert, Coins, Gift, Clock } from 'lucide-react';
+import { getDashboard as getCustomerDashboard } from '@/features/internal-staff/admin/services/userAdminService';
 
-const formatCount = value => Number(value ?? 0).toLocaleString('vi-VN');
+const number = value => Number(value ?? 0).toLocaleString('vi-VN');
+const PAGE_LOADED_AT = Date.now();
+const dateTime = value => value
+  ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
+  : 'Chưa có lần chạy';
+
+function Metric({ label, value, unit = 'điểm', hint, icon: Icon, tone = 'text-white' }) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">{label}</p><p className={`mt-3 text-3xl font-black tracking-tight ${tone}`}>{value}</p><p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-600">{unit}</p></div>
+        <span className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-zinc-400"><Icon size={19} /></span>
+      </div>
+      <p className="mt-4 text-xs leading-5 text-zinc-500">{hint}</p>
+    </article>
+  );
+}
 
 export default function AdminScoreDashboardPage() {
-  const {
-    dashboardStats,
-    fetchDashboardStats,
-    isLoadingOperations
-  } = useAdminScore();
+  const { dashboardStats, fetchDashboardStats } = useAdminScore();
+  const [customerStats, setCustomerStats] = useState(null);
+  const [state, setState] = useState({ loading: true, error: '' });
 
-  useEffect(() => {
-    fetchDashboardStats();
+  const load = useCallback(async () => {
+    setState({ loading: true, error: '' });
+    const [scoreResult, customerResult] = await Promise.allSettled([
+      fetchDashboardStats({ forceRefresh: true }), getCustomerDashboard(),
+    ]);
+    if (customerResult.status === 'fulfilled') setCustomerStats(customerResult.value);
+    setState({ loading: false, error: scoreResult.status === 'rejected' ? 'Không thể tải dữ liệu vận hành điểm thưởng.' : '' });
   }, [fetchDashboardStats]);
 
-  const stats = dashboardStats || {
-    totalMembers: 0,
-    totalPointsEarned: 0,
-    totalPointsRedeemed: 0,
-    totalPointsHeld: 0,
-    totalPointsExpired: 0,
-    silverMembers: 0,
-    goldMembers: 0,
-    diamondMembers: 0,
-    pendingReconciliationMismatches: 0,
-    lastReconciliationBatch: 'N/A',
-    lastReconciliationTime: null
-  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  const stats = dashboardStats || {};
+  const totalCustomers = Number(customerStats?.totalCustomers ?? 0);
+  const populationGap = Number(stats.totalMembers ?? 0) - totalCustomers;
+  const reconTotal = Number(stats.lastReconciliationTotalUsers ?? 0);
+  const reconCoverage = Number(stats.totalMembers) > 0 ? Math.round((reconTotal / Number(stats.totalMembers)) * 100) : 0;
+  const reconAgeHours = stats.lastReconciliationFinishedAt ? (PAGE_LOADED_AT - new Date(stats.lastReconciliationFinishedAt).getTime()) / 3_600_000 : Infinity;
+  const isReconStale = reconAgeHours > 24;
+  const hasAttention = populationGap !== 0 || Number(stats.pendingReconciliationMismatches) > 0 || isReconStale;
+  const tierRows = [
+    ['Silver', stats.silverMembers, 'bg-zinc-300'], ['Gold', stats.goldMembers, 'bg-amber-400'], ['Diamond', stats.diamondMembers, 'bg-cyan-400'],
+  ];
 
   return (
-    <div className="space-y-8 p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/40 p-6 rounded-[2rem] border border-zinc-800/50 backdrop-blur-xl shadow-2xl shadow-black/20">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
-            <Award className="w-7 h-7 text-brand-orange shrink-0" />
-            <span>Tổng Quan Loyalty Program</span>
-          </h1>
-          <p className="text-xs text-zinc-400 mt-1 tracking-wide font-medium">
-            Bảng điều khiển quản trị viên: giám sát số dư điểm, hạng thành viên và trạng thái đối soát.
-          </p>
-        </div>
-        <button
-          onClick={() => fetchDashboardStats()}
-          disabled={isLoadingOperations}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-[11px] text-white transition-all border border-white/10 shadow-inner disabled:opacity-50 shrink-0 cursor-pointer uppercase tracking-widest"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingOperations ? 'animate-spin text-brand-orange' : ''}`} />
-          <span>Làm mới dữ liệu</span>
-        </button>
+    <section className="mx-auto max-w-7xl space-y-6 p-5 text-white md:p-8">
+      <header className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-zinc-900/50 p-6 lg:flex-row lg:items-center lg:justify-between">
+        <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Loyalty operations</p><h1 className="mt-2 text-2xl font-black">Bàn điều hành điểm thưởng</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Theo dõi population, nghĩa vụ điểm, ngoại lệ đối soát và tình trạng chính sách trên cùng một màn hình.</p></div>
+        <button type="button" onClick={load} disabled={state.loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-black hover:bg-white/10 disabled:opacity-50"><RefreshCw size={16} className={state.loading ? 'animate-spin' : ''} /> Làm mới</button>
+      </header>
+
+      {state.error ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{state.error}</div> : null}
+
+      <div className={`flex flex-col gap-4 rounded-2xl border p-5 md:flex-row md:items-center md:justify-between ${hasAttention ? 'border-amber-500/30 bg-amber-500/[0.07]' : 'border-emerald-500/25 bg-emerald-500/[0.06]'}`}>
+        <div className="flex gap-3">{hasAttention ? <AlertTriangle className="mt-0.5 shrink-0 text-amber-400" size={21} /> : <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-400" size={21} />}<div><p className="font-black">{hasAttention ? 'Có tín hiệu cần kiểm tra' : 'Hệ thống đang trong ngưỡng an toàn'}</p><p className="mt-1 text-xs leading-5 text-zinc-400">{populationGap !== 0 ? `Population đang lệch ${Math.abs(populationGap)} tài khoản giữa hồ sơ khách hàng và Score Service. ` : ''}{isReconStale ? 'Đối soát gần nhất đã quá 24 giờ. ' : ''}{Number(stats.pendingReconciliationMismatches) > 0 ? `Còn ${stats.pendingReconciliationMismatches} tài khoản lệch.` : ''}</p></div></div>
+        <Link to="/admin/scores/reconciliation" className="inline-flex shrink-0 items-center gap-2 text-xs font-black text-amber-300 hover:text-amber-200">Mở hàng đợi ngoại lệ <ArrowRight size={15} /></Link>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-[2rem] border border-zinc-800/50 relative overflow-hidden group hover:border-brand-orange/40 transition-all shadow-xl shadow-black/10">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Tổng Thành Viên</span>
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20 shadow-inner">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-5 flex items-baseline gap-1.5">
-            <span className="text-4xl font-black text-white tracking-tighter">
-              {formatCount(stats.totalMembers)}
-            </span>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">tài khoản</span>
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-[2rem] border border-zinc-800/50 relative overflow-hidden group hover:border-emerald-500/40 transition-all shadow-xl shadow-black/10">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Tổng Điểm Tích Lũy</span>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20 shadow-inner">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-5 flex items-baseline gap-1.5">
-            <span className="text-4xl font-black text-emerald-400 tracking-tighter">
-              {formatCount(stats.totalPointsEarned)}
-            </span>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">pts</span>
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-[2rem] border border-zinc-800/50 relative overflow-hidden group hover:border-blue-500/40 transition-all shadow-xl shadow-black/10">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Điểm Đang Giữ</span>
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 shadow-inner">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-5 flex items-baseline gap-1.5">
-            <span className="text-4xl font-black text-blue-400 tracking-tighter">
-              {formatCount(stats.totalPointsHeld)}
-            </span>
-            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">pts</span>
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-[2rem] border border-zinc-800/50 relative overflow-hidden group hover:border-red-500/40 transition-all shadow-xl shadow-black/10">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Lệch Đối Soát</span>
-            <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/20 shadow-inner">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-5 flex items-end justify-between">
-            <div className="flex items-baseline gap-1.5">
-              <span className={`text-4xl font-black tracking-tighter ${stats.pendingReconciliationMismatches > 0 ? 'text-red-500' : 'text-zinc-300'}`}>
-                {formatCount(stats.pendingReconciliationMismatches)}
-              </span>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest pb-1">tài khoản</span>
-            </div>
-            <span className="text-[9px] font-black tracking-widest text-zinc-500 bg-white/5 px-2 py-1 rounded-md border border-white/5 uppercase shadow-inner">
-              {stats.lastReconciliationBatch}
-            </span>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Điểm khả dụng" value={number(stats.totalAvailablePoints)} hint="Nghĩa vụ khách hàng có thể dùng ngay; đã loại phần tạm giữ." icon={WalletCards} tone="text-emerald-400" />
+        <Metric label="Đang tạm giữ" value={number(stats.totalPointsHeld)} hint="Điểm đã reserve cho booking chưa commit hoặc release." icon={Clock3} tone="text-sky-400" />
+        <Metric label="Điểm hạng" value={number(stats.totalAccumulatedPoints)} hint="Chỉ dùng xét hạng; không đồng nghĩa số dư có thể chi tiêu." icon={Award} tone="text-violet-300" />
+        <Metric label="Dư nợ điểm" value={number(stats.totalOutstandingPoints)} hint="Phần phải thu hồi sau hoàn/hủy khi số dư không đủ." icon={ShieldAlert} tone={Number(stats.totalOutstandingPoints) > 0 ? 'text-red-400' : 'text-zinc-300'} />
       </div>
 
-      {/* Tiers distribution */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-gradient-to-br from-zinc-800/30 via-zinc-900/40 to-zinc-950/40 backdrop-blur-md p-8 rounded-[2rem] border border-zinc-700/30 flex items-center gap-5 shadow-xl shadow-black/10 transition-all hover:-translate-y-1">
-          <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-zinc-300 border border-white/10 shadow-inner">
-            <Award className="w-7 h-7" />
+      <div className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
+        <article className="rounded-3xl border border-white/10 bg-zinc-900/40 p-6">
+          <div className="flex items-center justify-between"><div><h2 className="font-black">Độ phủ tài khoản</h2><p className="mt-1 text-xs text-zinc-500">Hai nguồn phải được mapping 1–1 trước khi coi hệ thống khỏe.</p></div><Database className="text-zinc-600" size={21} /></div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-black/30 p-4"><p className="text-xs text-zinc-500">Hồ sơ khách hàng</p><p className="mt-2 text-2xl font-black">{state.loading && !customerStats ? '—' : number(totalCustomers)}</p></div>
+            <div className="rounded-2xl bg-black/30 p-4"><p className="text-xs text-zinc-500">Tài khoản điểm</p><p className="mt-2 text-2xl font-black">{state.loading && !dashboardStats ? '—' : number(stats.totalMembers)}</p><p className="mt-1 text-[11px] text-zinc-600">{number(stats.activeMembers)} active · {number(stats.lockedMembers)} frozen</p></div>
+            <div className={`rounded-2xl p-4 ${populationGap === 0 ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}><p className="text-xs text-zinc-500">Chênh population</p><p className={`mt-2 text-2xl font-black ${populationGap === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>{populationGap > 0 ? '+' : ''}{number(populationGap)}</p><p className="mt-1 text-[11px] text-zinc-600">Cần xác minh orphan/missing</p></div>
           </div>
-          <div>
-            <div className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1">Hạng Silver</div>
-            <div className="text-3xl font-black text-white tracking-tighter">{formatCount(stats.silverMembers)}</div>
-          </div>
-        </div>
+          <div className="mt-4 flex flex-wrap gap-3 text-xs"><Link to="/admin/members" className="font-bold text-zinc-300 hover:text-white">Mở trung tâm khách hàng →</Link><Link to="/admin/scores/viewer" className="font-bold text-zinc-300 hover:text-white">Tra cứu tài khoản điểm →</Link></div>
+        </article>
 
-        <div className="bg-gradient-to-br from-amber-500/10 via-zinc-900/40 to-zinc-950/40 backdrop-blur-md p-8 rounded-[2rem] border border-amber-500/20 flex items-center gap-5 shadow-xl shadow-amber-900/10 transition-all hover:-translate-y-1">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20 shadow-inner">
-            <Gift className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="text-[10px] font-black uppercase text-amber-500/80 tracking-widest mb-1">Hạng Gold</div>
-            <div className="text-3xl font-black text-amber-400 tracking-tighter">{formatCount(stats.goldMembers)}</div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-cyan-500/10 via-zinc-900/40 to-zinc-950/40 backdrop-blur-md p-8 rounded-[2rem] border border-cyan-500/20 flex items-center gap-5 shadow-xl shadow-cyan-900/10 transition-all hover:-translate-y-1">
-          <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 border border-cyan-500/20 shadow-inner">
-            <Coins className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="text-[10px] font-black uppercase text-cyan-500/80 tracking-widest mb-1">Hạng Diamond</div>
-            <div className="text-3xl font-black text-cyan-400 tracking-tighter">{formatCount(stats.diamondMembers)}</div>
-          </div>
-        </div>
+        <article className="rounded-3xl border border-white/10 bg-zinc-900/40 p-6">
+          <div className="flex items-center justify-between"><div><h2 className="font-black">Đối soát gần nhất</h2><p className="mt-1 text-xs text-zinc-500">{stats.lastReconciliationBatch || 'Chưa có batch'}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${isReconStale ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'}`}>{isReconStale ? 'QUÁ HẠN' : 'MỚI'}</span></div>
+          <div className="mt-5 flex items-end justify-between"><div><p className="text-3xl font-black">{reconCoverage}%</p><p className="mt-1 text-xs text-zinc-500">{number(reconTotal)}/{number(stats.totalMembers)} tài khoản trong scope</p></div><p className="text-right text-xs leading-5 text-zinc-500">{dateTime(stats.lastReconciliationFinishedAt || stats.lastReconciliationTime)}<br />{number(stats.lastReconciliationMismatchedUsers)} lệch</p></div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/40"><div className={`h-full ${reconCoverage === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, reconCoverage)}%` }} /></div>
+        </article>
       </div>
-    </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <article className="rounded-3xl border border-white/10 bg-zinc-900/40 p-6"><h2 className="font-black">Luồng điểm lũy kế</h2><p className="mt-1 text-xs text-zinc-500">KPI ledger, không phải số dư hiện tại.</p><div className="mt-5 grid grid-cols-3 gap-3 text-center"><div><p className="text-xl font-black text-emerald-400">{number(stats.totalPointsEarned)}</p><p className="mt-1 text-[10px] uppercase text-zinc-600">Đã phát hành</p></div><div><p className="text-xl font-black text-amber-400">{number(stats.totalPointsRedeemed)}</p><p className="mt-1 text-[10px] uppercase text-zinc-600">Đã sử dụng</p></div><div><p className="text-xl font-black text-zinc-300">{number(stats.totalPointsExpired)}</p><p className="mt-1 text-[10px] uppercase text-zinc-600">Đã hết hạn</p></div></div></article>
+        <article className="rounded-3xl border border-white/10 bg-zinc-900/40 p-6"><div className="flex items-center justify-between"><div><h2 className="font-black">Phân bố hạng hiện tại</h2><p className="mt-1 text-xs text-zinc-500">Theo snapshot trên tài khoản điểm.</p></div><Users className="text-zinc-600" size={20} /></div><div className="mt-5 space-y-3">{tierRows.map(([label, value, color]) => { const percent = Number(stats.totalMembers) ? Math.round((Number(value || 0) / Number(stats.totalMembers)) * 100) : 0; return <div key={label} className="grid grid-cols-[72px_1fr_52px] items-center gap-3 text-xs"><span className="font-bold text-zinc-300">{label}</span><div className="h-1.5 overflow-hidden rounded-full bg-black/40"><div className={`h-full ${color}`} style={{ width: `${percent}%` }} /></div><span className="text-right text-zinc-500">{number(value)}</span></div>; })}</div><Link to="/admin/scores/tiers" className="mt-5 inline-flex items-center gap-2 text-xs font-black text-zinc-300 hover:text-white">Xem chính sách hạng <ArrowRight size={14} /></Link></article>
+      </div>
+    </section>
   );
 }
