@@ -2,6 +2,7 @@ package com.project.promotionservice.reservation.entity;
 
 import com.project.promotionservice.common.entity.BaseAuditableEntity;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
+import com.project.promotionservice.reservation.enums.ReleaseReasonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -66,6 +67,25 @@ public class PromotionReservation extends BaseAuditableEntity {
 
     @Column(name = "rollback_reason", length = 255)
     private String rollbackReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "release_reason_type", length = 50)
+    private ReleaseReasonType releaseReasonType;
+
+    @Column(name = "released_at")
+    private Instant releasedAt;
+
+    @Column(name = "released_by", length = 100)
+    private String releasedBy;
+
+    @Column(name = "source_service", length = 100)
+    private String sourceService;
+
+    @Column(name = "source_reference", length = 100)
+    private String sourceReference;
+
+    @Column(name = "reason_detail", length = 1000)
+    private String reasonDetail;
 
     @Column(name = "metadata_json", columnDefinition = "JSON")
     private String metadataJson;
@@ -217,6 +237,19 @@ public class PromotionReservation extends BaseAuditableEntity {
     public void setRollbackReason(String rollbackReason) {
         this.rollbackReason = rollbackReason;
     }
+
+    public ReleaseReasonType getReleaseReasonType() { return releaseReasonType; }
+    public void setReleaseReasonType(ReleaseReasonType value) { this.releaseReasonType = value; }
+    public Instant getReleasedAt() { return releasedAt; }
+    public void setReleasedAt(Instant value) { this.releasedAt = value; }
+    public String getReleasedBy() { return releasedBy; }
+    public void setReleasedBy(String value) { this.releasedBy = value; }
+    public String getSourceService() { return sourceService; }
+    public void setSourceService(String value) { this.sourceService = value; }
+    public String getSourceReference() { return sourceReference; }
+    public void setSourceReference(String value) { this.sourceReference = value; }
+    public String getReasonDetail() { return reasonDetail; }
+    public void setReasonDetail(String value) { this.reasonDetail = value; }
 
     public String getMetadataJson() {
         return metadataJson;

@@ -10,9 +10,9 @@
 | Contract Owner | Dương Thiện Nhân |
 | Backend Owner | Trần Lương Thiện Hoàng |
 | Reviewer | Trần Lương Thiện Hoàng |
-| Trạng thái | Promotion core implemented/verified; end-to-end Booking/Payment integration pending |
+| Trạng thái | Promotion core, Booking/Payment integration và governance control plane đã implement/verify |
 | Milestone | Sprint 2 - Core Service API Foundation & Consolidated Benefit Domain |
-| Ngày cập nhật | 31/07/2026 |
+| Ngày cập nhật | 20/08/2026 |
 
 ---
 
@@ -28,7 +28,7 @@ Tài liệu này **hợp nhất** nội dung từ đặc tả cũ của `promoti
 - **Quản lý Voucher**: Phát hành và theo dõi voucher nằm trong ví khách hàng (Customer Wallet).
 - **Promotion Rules**: Cấu hình tùy chọn để preview và chuẩn bị cho automatic rule discovery. Rule không còn là điều kiện submit vì Reservation Runtime hiện áp dụng `conditions_json` và `actions_json` của coupon/voucher.
 - **Promotion Reservation (Giữ chỗ khuyến mại)**: Lock atomically coupon/voucher, quota, và budget trong quá trình checkout.
-- **Redemption & Reservation lifecycle**: Confirm khi thanh toán thành công; release khi thanh toán thất bại; cancel khi booking bị hủy; job tự expire phiên quá hạn. Giao dịch đã confirm phải dùng refund/compensation, không rollback ledger.
+- **Redemption & Reservation lifecycle**: Confirm khi thanh toán thành công; mọi failure/cancel trước confirm dùng `RELEASED` kèm reason taxonomy; job tự expire phiên quá hạn. Giao dịch đã confirm dùng reverse/compensation ledger.
 - **Compensation (Bồi thường)**: Phát hành voucher đền bù chăm sóc khách hàng.
 
 ### Nằm Ngoài Phạm Vi (Out of Scope)
@@ -1092,3 +1092,14 @@ Lấy danh sách các voucher thuộc quyền sở hữu của khách hàng đan
 | 28/07/2026 | **Hợp nhất hoàn toàn đặc tả Benefit Domain (API + Business Rules + Thực tế MySQL DDL)**. Thay đổi các endpoint apply/confirm sang `/internal/promotions/...`. Xóa bỏ tệp `benefit-domain-api.md`. | Antigravity |
 | 28/07/2026 | Đồng bộ Reservation Runtime với implementation thực tế: 8 API canonical, state machine terminal, pricing snapshot, idempotency, lock, auto-expiration và lịch sử vận hành. | Codex |
 | 28/07/2026 | Production hardening: service-scoped auth/idempotency, one-benefit checkout scope, legal/budget gate, strict condition engine, E.164 phone, Kafka ACK + DB lease outbox, per-row scheduler retry và Flyway migration. | Codex |
+## Governance refine (2026-08-20)
+
+Các endpoint bổ sung cho control plane:
+
+- `POST /api/admin/promotion-campaigns/{id}/approval/override`: duyệt ngoại lệ; yêu cầu `PROMOTION_OVERRIDE`, reason và campaign code.
+- `GET /api/admin/promotion-campaigns/{id}/force-release-impact`: xem số active hold và budget exposure trước emergency action.
+- `POST /api/admin/promotion-campaigns/{id}/force-release-holds`: force release sau kill switch; yêu cầu `PROMOTION_EMERGENCY_STOP`.
+- `GET /api/admin/promotion-operations/search`: tra cứu reservation/redemption/adjustment ledger theo các business reference.
+- `GET /api/customers/me/promotion-history`: lịch sử voucher used/expired/revoked/restored của customer hiện tại.
+
+Campaign response trả thêm `businessStatus`, `availabilityStatus`, `allowedActions`, `blockedReasons` và `pendingTasks`; client phải coi `allowedActions` là nguồn quyết định duy nhất cho action UI.

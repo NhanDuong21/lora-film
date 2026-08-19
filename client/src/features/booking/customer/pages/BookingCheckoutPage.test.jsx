@@ -104,6 +104,30 @@ describe("promotionDecision", () => {
     expect(decision.notice).toBeNull();
   });
 
+  it("explains when the engine keeps a better AUTO offer without consuming the voucher", () => {
+    const decision = promotionDecision(
+      {
+        discountAmount: 21000,
+        manualSelectionReplaced: true,
+        additionalSavings: 11000,
+        appliedPromotions: [
+          {
+            promotionPublicId: "auto-1",
+            promotionType: "AUTO",
+            name: "Giảm tự động 21K",
+            discountAmount: 21000,
+          },
+        ],
+      },
+      { promotion: walletVoucher },
+    );
+
+    expect(decision.applied).toBe(false);
+    expect(decision.notice?.variant).toBe("replaced");
+    expect(decision.notice?.message).toMatch(/tiết kiệm thêm 11\.000đ/i);
+    expect(decision.notice?.message).toMatch(/vẫn còn trong ví/i);
+  });
+
   it("reports the combined total when voucher and AUTO are both applied", () => {
     const decision = promotionDecision(
       {

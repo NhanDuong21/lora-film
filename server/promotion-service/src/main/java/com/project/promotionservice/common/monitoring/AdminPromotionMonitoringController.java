@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/admin/promotion-monitoring")
-@PreAuthorize("hasAnyRole('ADMIN', 'OPERATIONS_MANAGER', 'FINANCE_DIRECTOR')")
+@PreAuthorize("hasAuthority('PROMOTION_AUDIT_VIEW')")
 @Tag(name = "Promotion Operations Monitoring")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminPromotionMonitoringController {

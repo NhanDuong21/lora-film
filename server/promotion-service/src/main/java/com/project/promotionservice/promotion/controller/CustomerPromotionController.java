@@ -7,6 +7,7 @@ import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.configuration.security.principal.UserPrincipal;
 import com.project.promotionservice.promotion.dto.response.PromotionResponse;
 import com.project.promotionservice.promotion.dto.response.WalletPromotionResponse;
+import com.project.promotionservice.promotion.dto.response.WalletPromotionHistoryResponse;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.service.PromotionCatalogService;
 import jakarta.validation.constraints.Max;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Set;
+import java.util.List;
 
 import static com.project.promotionservice.common.constant.ValidationConstants.UUID_PATTERN;
 import static com.project.promotionservice.common.web.ControllerPageSupport.pageable;
@@ -96,6 +98,13 @@ public class CustomerPromotionController {
         String user = currentUser(principal);
         return ResponseEntity.ok(ApiResponse.success(
                 service.walletDetail(user, publicId)));
+    }
+
+    @GetMapping("/customers/me/promotion-history")
+    public ResponseEntity<ApiResponse<List<WalletPromotionHistoryResponse>>> walletHistory(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.walletHistory(currentUser(principal))));
     }
 
     private String currentUser(UserPrincipal principal) {

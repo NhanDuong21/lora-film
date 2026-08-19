@@ -36,6 +36,17 @@ export const promotionDecision = (
   const manualApplied = promotion
     ? quoteAppliesPromotion(quote, promotion)
     : quoteAppliesCoupon(quote, couponCode);
+  if (!manualApplied && quote?.manualSelectionReplaced) {
+    const appliedNames = applied.map((item) => item.name).filter(Boolean).join(" + ");
+    const extra = Number(quote?.additionalSavings || 0);
+    return {
+      applied: false,
+      notice: {
+        variant: "replaced",
+        message: `Hệ thống đã giữ ưu đãi tốt hơn${appliedNames ? ` (${appliedNames})` : ""}. Bạn tiết kiệm thêm ${currency(extra)} và voucher đã chọn vẫn còn trong ví.`,
+      },
+    };
+  }
   if (!manualApplied) return { applied: false, notice: null };
   if (manualApplied && applied.length > 1) {
     return {

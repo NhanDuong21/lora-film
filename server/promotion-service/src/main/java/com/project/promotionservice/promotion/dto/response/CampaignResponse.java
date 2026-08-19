@@ -2,10 +2,12 @@ package com.project.promotionservice.promotion.dto.response;
 
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
+import com.project.promotionservice.promotion.enums.CampaignAvailabilityStatus;
 import com.project.promotionservice.promotion.enums.LegalStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public class CampaignResponse {
 
@@ -43,6 +45,11 @@ public class CampaignResponse {
     private String createdBy;
     private Instant updatedAt;
     private String updatedBy;
+    private CampaignStatus businessStatus;
+    private CampaignAvailabilityStatus availabilityStatus;
+    private List<String> allowedActions = List.of();
+    private List<String> blockedReasons = List.of();
+    private List<String> pendingTasks = List.of();
 
     public CampaignResponse() {
     }
@@ -318,4 +325,15 @@ public class CampaignResponse {
     public void setUpdatedBy(String updatedBy) {
         this.updatedBy = updatedBy;
     }
+
+    public CampaignStatus getBusinessStatus() { return businessStatus; }
+    public void setBusinessStatus(CampaignStatus value) { this.businessStatus = value; }
+    public CampaignAvailabilityStatus getAvailabilityStatus() { return availabilityStatus; }
+    public void setAvailabilityStatus(CampaignAvailabilityStatus value) { this.availabilityStatus = value; }
+    public List<String> getAllowedActions() { return allowedActions; }
+    public void setAllowedActions(List<String> value) { this.allowedActions = value == null ? List.of() : value; }
+    public List<String> getBlockedReasons() { return blockedReasons; }
+    public void setBlockedReasons(List<String> value) { this.blockedReasons = value == null ? List.of() : value; }
+    public List<String> getPendingTasks() { return pendingTasks; }
+    public void setPendingTasks(List<String> value) { this.pendingTasks = value == null ? List.of() : value; }
 }

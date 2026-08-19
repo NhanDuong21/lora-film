@@ -111,6 +111,7 @@ export default function AdminSidebar({
   const canManagePermissions = can('PERMISSION_VIEW');
   const canConfigureSystem = can('SYSTEM_CONFIGURATION');
   const canViewUserAudits = can('USER_AUDIT_VIEW', 'SYSTEM_CONFIGURATION');
+  const canViewPromotions = permissions.includes('PROMOTION_VIEW');
   const hasHumanResourcesAccess = canManageEmployees || canManageDepartments
     || canManagePositions || canManagePayroll;
   const hasSystemAccess = canManageRoles || canManagePermissions
@@ -161,7 +162,7 @@ export default function AdminSidebar({
     {
       key: 'marketing',
       label: 'Khuyến mãi',
-      visible: isFullAdmin,
+      visible: canViewPromotions,
       items: [
         { key: 'promotions', label: 'Trung tâm khuyến mãi', path: '/admin/promotions', icon: BadgePercent },
       ],

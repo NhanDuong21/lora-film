@@ -51,7 +51,7 @@ public class AdminPromotionController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     public ResponseEntity<ApiResponse<PromotionResponse>> create(
             @Valid @RequestBody PromotionUpsertRequest request) {
         PromotionResponse data = service.create(request, SecurityActor.current());
@@ -60,7 +60,7 @@ public class AdminPromotionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     public ResponseEntity<ApiResponse<PromotionResponse>> update(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId,
             @Valid @RequestBody PromotionUpsertRequest request) {
@@ -69,14 +69,14 @@ public class AdminPromotionController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR', 'OPERATIONS_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
     public ResponseEntity<ApiResponse<PromotionResponse>> detail(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         return ResponseEntity.ok(ApiResponse.success(service.detail(publicId)));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR', 'OPERATIONS_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
     public ResponseEntity<ApiResponse<PagedResponse<PromotionResponse>>> search(
             @RequestParam(required = false) @Size(max = 36) String campaignPublicId,
             @RequestParam(required = false) PromotionType type,
@@ -92,7 +92,7 @@ public class AdminPromotionController {
     }
 
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     public ResponseEntity<ApiResponse<PromotionResponse>> activate(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         return ResponseEntity.ok(ApiResponse.success("Promotion activated",
@@ -100,7 +100,7 @@ public class AdminPromotionController {
     }
 
     @PostMapping("/{id}/pause")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'OPERATIONS_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_OPERATE')")
     public ResponseEntity<ApiResponse<PromotionResponse>> pause(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         return ResponseEntity.ok(ApiResponse.success("Promotion paused",
@@ -108,7 +108,7 @@ public class AdminPromotionController {
     }
 
     @GetMapping("/{id}/clone-draft")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     public ResponseEntity<ApiResponse<PromotionCloneDraftResponse>> cloneDraft(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         return ResponseEntity.ok(ApiResponse.success(service.buildCloneDraft(publicId)));
@@ -116,7 +116,7 @@ public class AdminPromotionController {
 
     @Deprecated(forRemoval = true)
     @PostMapping("/{id}/clone")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     public ResponseEntity<ApiResponse<PromotionResponse>> clonePromotion(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -125,7 +125,7 @@ public class AdminPromotionController {
     }
 
     @PostMapping("/{id}/issue")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'CSKH')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     public ResponseEntity<ApiResponse<PromotionIssueResponse>> issue(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId,
             @Valid @RequestBody PromotionIssueRequest request) {
@@ -134,7 +134,7 @@ public class AdminPromotionController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable("id") @Pattern(regexp = UUID_PATTERN) String publicId) {
         service.delete(publicId, SecurityActor.current());

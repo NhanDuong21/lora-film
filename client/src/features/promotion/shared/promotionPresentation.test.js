@@ -4,6 +4,7 @@ import {
   conditionSummary,
   friendlyPromotionError,
   promotionModelFor,
+  promotionSourceLabel,
   PROMOTION_TYPES,
 } from "./promotionPresentation";
 
@@ -15,8 +16,18 @@ describe("promotionPresentation", () => {
 
   it("maps backend types to the three Promotion Center models", () => {
     expect(promotionModelFor("AUTO").key).toBe("system");
+    expect(promotionModelFor("AUTO").description).toContain(
+      "không cần chọn hay nhập mã",
+    );
     expect(promotionModelFor("VOUCHER").key).toBe("event");
     expect(promotionModelFor("COUPON").key).toBe("coupon");
+  });
+
+  it("does not describe AUTO promotions as customer-selected vouchers", () => {
+    const label = promotionSourceLabel({ promotionType: "AUTO" });
+
+    expect(label).toBe("Ưu đãi hệ thống - tự động tại checkout");
+    expect(label.toLowerCase()).not.toContain("chọn");
   });
 
   it("explains an unavailable coupon in business language", () => {

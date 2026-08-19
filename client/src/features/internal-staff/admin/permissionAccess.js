@@ -50,6 +50,7 @@ export const ADMIN_AREA_PERMISSIONS = [
   'PAYROLL_SUBMIT_PAYMENT',
   'PAYROLL_RECONCILE',
   'PAYROLL_CANCEL',
+  'PROMOTION_VIEW',
 ];
 
 export const hasPermissionAccess = (role, permissions = [], ...requiredPermissions) => {
@@ -104,6 +105,7 @@ export const getAccountingRoleLabel = permissions => (
 );
 
 const ADMIN_LANDING_ROUTES = [
+  ['PROMOTION_VIEW', '/admin/promotions'],
   ['DASHBOARD_VIEW', '/admin'],
   ['CUSTOMER_VIEW', '/admin/members'],
   ['EMPLOYEE_VIEW', '/admin/hr'],

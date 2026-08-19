@@ -201,7 +201,7 @@ class PromotionEngineServiceTest {
     }
 
     @Test
-    void selectedWalletVoucherIsKeptWhenBetterAutomaticCannotStack() {
+    void betterAutomaticReplacesWalletVoucherWithoutConsumingIt() {
         PromotionCampaign voucherCampaign = activeCampaign("campaign-voucher");
         PromotionCampaign automaticCampaign = activeCampaign("campaign-auto");
         Promotion voucher = activePromotion(
@@ -230,11 +230,57 @@ class PromotionEngineServiceTest {
                 "VND", objectMapper.createObjectNode(), 300));
 
         assertThat(result.appliedPromotions()).singleElement().satisfies(applied -> {
-            assertThat(applied.promotionPublicId()).isEqualTo("voucher-1");
-            assertThat(applied.userPromotionPublicId()).isEqualTo("wallet-1");
-            assertThat(applied.discountAmount()).isEqualByComparingTo("10000.00");
+            assertThat(applied.promotionPublicId()).isEqualTo("auto-1");
+            assertThat(applied.userPromotionPublicId()).isNull();
+            assertThat(applied.discountAmount()).isEqualByComparingTo("21000.00");
         });
-        assertThat(result.discountAmount()).isEqualByComparingTo("10000.00");
+        assertThat(result.discountAmount()).isEqualByComparingTo("21000.00");
+        assertThat(result.manualSelectionReplaced()).isTrue();
+        assertThat(result.additionalSavings()).isEqualByComparingTo("11000.00");
+        assertThat(result.warnings()).anyMatch(message -> message.contains("giữ voucher trong ví"));
+    }
+
+    @Test
+    void bestPriceCanChooseManualPlusWeakerStackableAutomatic() {
+        PromotionCampaign manualCampaign = activeCampaign("campaign-manual");
+        manualCampaign.setStackable(true);
+        PromotionCampaign autoCampaign = activeCampaign("campaign-auto");
+        autoCampaign.setStackable(true);
+        Promotion voucher = activePromotion(
+                "voucher-1", "campaign-manual", PromotionType.VOUCHER,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":10000}");
+        voucher.setStackable(true);
+        Promotion autoA = activePromotion(
+                "auto-a", "campaign-auto", PromotionType.AUTO,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":21000}");
+        Promotion autoB = activePromotion(
+                "auto-b", "campaign-auto", PromotionType.AUTO,
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":15000}");
+        autoB.setStackable(true);
+        UserPromotion wallet = walletItem("wallet-1", "1001", "voucher-1");
+        when(walletRepository.findByPublicIdAndDeletedAtIsNull("wallet-1"))
+                .thenReturn(Optional.of(wallet));
+        when(promotionRepository.findByPublicIdAndDeletedAtIsNull("voucher-1"))
+                .thenReturn(Optional.of(voucher));
+        when(promotionRepository.findRuntimeCandidates(
+                eq(PromotionType.AUTO), eq(PromotionStatus.ACTIVE), any()))
+                .thenReturn(List.of(autoA, autoB));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-manual"))
+                .thenReturn(Optional.of(manualCampaign));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-auto"))
+                .thenReturn(Optional.of(autoCampaign));
+
+        PromotionCheckoutResponse result = service.preview(new PromotionCheckoutRequest(
+                "1001", new BigDecimal("100000"), List.of("wallet-1"),
+                List.of(), null, null,
+                "11111111-1111-4111-8111-111111111111", null,
+                "VND", objectMapper.createObjectNode(), 300));
+
+        assertThat(result.appliedPromotions())
+                .extracting(applied -> applied.promotionPublicId())
+                .containsExactly("auto-b", "voucher-1");
+        assertThat(result.discountAmount()).isEqualByComparingTo("25000.00");
+        assertThat(result.manualSelectionReplaced()).isFalse();
     }
 
     @Test

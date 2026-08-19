@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense } from 'react';
 import { PageLoader } from '@/components/common/RouteGuards';
+import { PermissionRoute } from '@/components/common/RouteGuards';
 
 const ManagerDashboardPage = lazy(() => import('./pages/ManagerDashboardPage'));
 const ManagerShowtimesPage = lazy(() => import('./pages/ManagerShowtimesPage'));
@@ -13,6 +14,7 @@ const ManagerPaymentsPage = lazy(() => import('./pages/ManagerPaymentsPage'));
 const ManagerBookingDetailPage = lazy(() => import('./pages/ManagerBookingDetailPage'));
 const ManagerPaymentDetailPage = lazy(() => import('./pages/ManagerPaymentDetailPage'));
 const ManagerTicketControlPage = lazy(() => import('./pages/ManagerTicketControlPage'));
+const PromotionCenterPage = lazy(() => import('@/features/promotion/admin/pages/AdminPromotionCenterPage'));
 
 const lazyPage = element => <Suspense fallback={<PageLoader />}>{element}</Suspense>;
 
@@ -28,4 +30,12 @@ export const managerRoutes = [
   { path: 'ticket-control', element: lazyPage(<ManagerTicketControlPage />) },
   { path: 'reports', element: lazyPage(<ManagerReportsPage />) },
   { path: 'cinema', element: lazyPage(<ManagerCinemaPage />) },
+  {
+    path: 'promotions',
+    element: (
+      <PermissionRoute requiredPermissions={['PROMOTION_VIEW']} allowAdminBypass={false}>
+        {lazyPage(<PromotionCenterPage />)}
+      </PermissionRoute>
+    ),
+  },
 ];

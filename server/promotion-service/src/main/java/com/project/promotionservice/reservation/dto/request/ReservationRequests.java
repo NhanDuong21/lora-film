@@ -2,6 +2,7 @@ package com.project.promotionservice.reservation.dto.request;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.project.promotionservice.promotion.dto.request.PromotionCheckoutRequest;
+import com.project.promotionservice.reservation.enums.ReleaseReasonType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -73,7 +74,37 @@ public final class ReservationRequests {
     }
 
     public record TransitionRequest(
-            @NotBlank @Size(max = 255) String reason) {
+            ReleaseReasonType releaseReasonType,
+            @Size(max = 1000) String reasonDetail,
+            @Size(max = 100) String sourceService,
+            @Size(max = 100) String sourceReference,
+            @Size(max = 255) String reason) {
+
+        /** Backwards-compatible constructor for in-process legacy callers. */
+        public TransitionRequest(String reason) {
+            this(ReleaseReasonType.SYSTEM_COMPENSATION, reason,
+                    "LEGACY_CALLER", null, reason);
+        }
+
+        @AssertTrue(message = "releaseReasonType is required")
+        public boolean isReasonTypePresent() {
+            return releaseReasonType != null || (reason != null && !reason.isBlank());
+        }
+
+        public ReleaseReasonType resolvedReasonType() {
+            return releaseReasonType == null
+                    ? ReleaseReasonType.SYSTEM_COMPENSATION : releaseReasonType;
+        }
+
+        public String resolvedReasonDetail() {
+            if (reasonDetail != null && !reasonDetail.isBlank()) return reasonDetail.trim();
+            return reason == null ? null : reason.trim();
+        }
+
+        public String resolvedSourceService(String actor) {
+            return sourceService == null || sourceService.isBlank()
+                    ? actor : sourceService.trim();
+        }
     }
 
     public record CompensateRequest(

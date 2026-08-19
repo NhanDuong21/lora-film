@@ -118,7 +118,8 @@ public class PromotionLifecycleService {
             PromotionCampaign campaign = campaigns.findByPublicIdForUpdate(id).orElse(null);
             if (campaign == null || campaign.getEndAt().isAfter(now)
                     || campaign.getStatus() == CampaignStatus.COMPLETED
-                    || campaign.getStatus() == CampaignStatus.CANCELLED) {
+                    || campaign.getStatus() == CampaignStatus.CANCELLED
+                    || campaign.getStatus() == CampaignStatus.KILLED) {
                 continue;
             }
             campaign.setStatus(CampaignStatus.COMPLETED);

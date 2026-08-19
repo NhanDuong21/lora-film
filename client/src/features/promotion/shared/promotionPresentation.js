@@ -41,10 +41,10 @@ export const ACTION_TYPES = ["PERCENTAGE", "FIXED_AMOUNT", "FULL_DISCOUNT"];
 export const PROMOTION_MODELS = {
   AUTO: {
     key: "system",
-    label: "Voucher hệ thống",
-    shortLabel: "Hệ thống",
+    label: "Ưu đãi tự động",
+    shortLabel: "Tự động",
     description:
-      "Hiển thị trong bước checkout để khách hàng chọn, không cần nhận trước vào ví.",
+      "Hệ thống tự đánh giá tại checkout và áp dụng phương án giảm tốt nhất; khách hàng không cần chọn hay nhập mã.",
   },
   VOUCHER: {
     key: "event",
@@ -65,7 +65,7 @@ export const PROMOTION_MODELS = {
 export const promotionLabels = {
   COUPON: "Coupon theo khách hàng",
   VOUCHER: "Voucher sự kiện",
-  AUTO: "Voucher hệ thống",
+  AUTO: "Ưu đãi tự động",
   DRAFT: "Đang soạn",
   SCHEDULED: "Đã lên lịch",
   ACTIVE: "Đang áp dụng",
@@ -112,7 +112,7 @@ export const promotionModelFor = (type) =>
 
 export const promotionSourceLabel = (promotion) => {
   if (promotion?.promotionType === "AUTO")
-    return "Voucher hệ thống - chọn tại checkout";
+    return "Ưu đãi hệ thống - tự động tại checkout";
   if (
     promotion?.source === "PUBLIC_EVENT" ||
     promotion?.ownershipType === "CLAIMABLE"

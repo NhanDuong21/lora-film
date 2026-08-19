@@ -444,6 +444,7 @@ public class CampaignServiceImpl implements CampaignService {
 
     @Override
     @Transactional
+    @Auditable(action = "CAMPAIGN_PAUSE", entityType = "PROMOTION_CAMPAIGN")
     public CampaignResponse pauseCampaign(String publicId, String user) {
         PromotionCampaign campaign = campaignRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));
@@ -488,7 +489,7 @@ public class CampaignServiceImpl implements CampaignService {
                     HttpStatus.BAD_REQUEST);
         }
         campaign.setKillSwitch(true);
-        campaign.setStatus(CampaignStatus.PAUSED);
+        campaign.setStatus(CampaignStatus.KILLED);
         String auditNote = "Kill switch: " + reason.trim();
         campaign.setRemarks(campaign.getRemarks() == null || campaign.getRemarks().isBlank()
                 ? auditNote
@@ -503,6 +504,7 @@ public class CampaignServiceImpl implements CampaignService {
 
     @Override
     @Transactional
+    @Auditable(action = "CAMPAIGN_CANCEL", entityType = "PROMOTION_CAMPAIGN")
     public CampaignResponse cancelCampaign(String publicId, String user) {
         PromotionCampaign campaign = campaignRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));

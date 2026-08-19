@@ -5,6 +5,7 @@ public enum CampaignTransitionAction {
     PUBLISH,
     ACTIVATE,
     PAUSE,
+    RESUME,
     KILL_SWITCH,
     CANCEL
 }

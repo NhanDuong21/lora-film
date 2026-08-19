@@ -20,6 +20,7 @@ import com.project.promotionservice.promotion.repository.UserPromotionRepository
 import com.project.promotionservice.promotion.service.PromotionCatalogEventService;
 import com.project.promotionservice.promotion.service.PromotionEngineService;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.CompensateRequest;
+import com.project.promotionservice.reservation.dto.request.ReservationRequests.ConfirmRequest;
 import com.project.promotionservice.reservation.entity.PromotionReservation;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
@@ -40,6 +41,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class PromotionReservationServiceImplTest {
@@ -159,5 +161,87 @@ class PromotionReservationServiceImplTest {
         assertThat(adjustment.getDiscountAmount()).isEqualByComparingTo("20000.00");
         assertThat(adjustment.getReasonCode()).isEqualTo("PAYMENT_REVERSED");
         assertThat(adjustment.getReason()).isEqualTo("Full refund");
+    }
+
+    @Test
+    void confirmCountsOneCampaignOrderForTwoBenefitsAndRetryIsIdempotent() {
+        Instant now = Instant.parse("2026-08-01T10:00:00Z");
+        PromotionReservation reservation = new PromotionReservation();
+        reservation.setPublicId("11111111-1111-4111-8111-111111111111");
+        reservation.setStatus(ReservationStatus.ACTIVE);
+        reservation.setUserPublicId("1001");
+        reservation.setOriginalAmount(new BigDecimal("100000.00"));
+        reservation.setDiscountAmount(new BigDecimal("25000.00"));
+        reservation.setFinalAmount(new BigDecimal("75000.00"));
+        reservation.setCurrency("VND");
+        reservation.setReservationExpiredAt(now.plusSeconds(300));
+
+        String campaignId = "55555555-5555-4555-8555-555555555555";
+        PromotionRedemption first = reservedRedemption(
+                "33333333-3333-4333-8333-333333333331",
+                "44444444-4444-4444-8444-444444444441",
+                campaignId, reservation.getPublicId(), 1, "10000.00");
+        PromotionRedemption second = reservedRedemption(
+                "33333333-3333-4333-8333-333333333332",
+                "44444444-4444-4444-8444-444444444442",
+                campaignId, reservation.getPublicId(), 2, "15000.00");
+        Promotion firstPromotion = new Promotion();
+        firstPromotion.setPublicId(first.getPromotionPublicId());
+        firstPromotion.setRedemptionCount(0);
+        Promotion secondPromotion = new Promotion();
+        secondPromotion.setPublicId(second.getPromotionPublicId());
+        secondPromotion.setRedemptionCount(0);
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId(campaignId);
+        campaign.setBudgetAmount(new BigDecimal("1000000.00"));
+        campaign.setBudgetReserved(new BigDecimal("25000.00"));
+        campaign.setBudgetUsed(BigDecimal.ZERO.setScale(2));
+        campaign.setBudgetRemaining(new BigDecimal("1000000.00"));
+        campaign.setRedemptionCount(0);
+
+        when(databaseTimeProvider.now()).thenReturn(now);
+        when(reservationRepository.findByPublicIdForUpdate(reservation.getPublicId()))
+                .thenReturn(Optional.of(reservation));
+        when(redemptionRepository.findByReservationPublicIdForUpdate(reservation.getPublicId()))
+                .thenReturn(List.of(first, second));
+        when(redemptionRepository.findByReservationPublicIdAndDeletedAtIsNull(reservation.getPublicId()))
+                .thenReturn(List.of(first, second));
+        when(promotionRepository.findByPublicIdForUpdate(firstPromotion.getPublicId()))
+                .thenReturn(Optional.of(firstPromotion));
+        when(promotionRepository.findByPublicIdForUpdate(secondPromotion.getPublicId()))
+                .thenReturn(Optional.of(secondPromotion));
+        when(campaignRepository.findByPublicIdForUpdate(campaignId))
+                .thenReturn(Optional.of(campaign));
+
+        ConfirmRequest request = new ConfirmRequest("22222222-2222-4222-8222-222222222222");
+        service.confirm(reservation.getPublicId(), request, "confirm-1", "PAYMENT_SERVICE");
+        service.confirm(reservation.getPublicId(), request, "confirm-1", "PAYMENT_SERVICE");
+
+        assertThat(firstPromotion.getRedemptionCount()).isEqualTo(1);
+        assertThat(secondPromotion.getRedemptionCount()).isEqualTo(1);
+        assertThat(campaign.getRedemptionCount()).isEqualTo(1);
+        assertThat(campaign.getBudgetUsed()).isEqualByComparingTo("25000.00");
+        verify(campaignRepository, times(1)).save(campaign);
+    }
+
+    private PromotionRedemption reservedRedemption(
+            String id, String promotionId, String campaignId,
+            String reservationId, int sequence, String discount) {
+        PromotionRedemption redemption = new PromotionRedemption();
+        redemption.setPublicId(id);
+        redemption.setReservationPublicId(reservationId);
+        redemption.setUserPublicId("1001");
+        redemption.setPromotionPublicId(promotionId);
+        redemption.setCampaignPublicId(campaignId);
+        redemption.setPromotionType(PromotionType.AUTO);
+        redemption.setPromotionName("Benefit " + sequence);
+        redemption.setPromotionPriority(sequence);
+        redemption.setPromotionStackable(true);
+        redemption.setSequenceNo(sequence);
+        redemption.setStatus(PromotionRedemptionStatus.RESERVED);
+        redemption.setOriginalAmount(new BigDecimal("100000.00"));
+        redemption.setDiscountAmount(new BigDecimal(discount));
+        redemption.setFinalAmount(new BigDecimal("100000.00").subtract(new BigDecimal(discount)));
+        return redemption;
     }
 }

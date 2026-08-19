@@ -87,6 +87,9 @@ const customerPromotionService = {
       ),
     ),
 
+  getMyPromotionHistory: async () =>
+    unwrap(await apiClient.get("/api/customers/me/promotion-history")) || [],
+
   getPublicPromotions: async (params = {}) =>
     normalizePublicPage(
       await apiClient.get("/api/promotions/public", { params }),

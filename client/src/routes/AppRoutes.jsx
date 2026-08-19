@@ -54,6 +54,12 @@ const revenueAccess = element => (
     </PermissionRoute>
 );
 
+const promotionAccess = element => (
+    <PermissionRoute requiredPermissions={["PROMOTION_VIEW"]} allowAdminBypass={false}>
+        {element}
+    </PermissionRoute>
+);
+
 function AppRoutes() {
     return (
         <BrowserRouter>
@@ -155,7 +161,7 @@ function AppRoutes() {
                         <Route key={`book-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
                     ))}
                     {adminPromotionRoutes.map((route, index) => (
-                        <Route key={`promo-adm-${index}`} path={route.path} element={adminOnly(route.element)} />
+                        <Route key={`promo-adm-${index}`} path={route.path} element={promotionAccess(route.element)} />
                     ))}
                     {adminScoreRoutes.map((route, index) => (
                         <Route key={`score-adm-${index}`} path={route.path} element={adminOnly(route.element)} />

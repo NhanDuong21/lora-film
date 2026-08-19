@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Gift,
   Globe2,
+  History,
   Loader2,
   RefreshCw,
   ReceiptText,
@@ -39,6 +40,7 @@ const tabItems = [
   { key: "wallet", label: "Có thể sử dụng", icon: WalletCards },
   { key: "event", label: "Có thể nhận", icon: Gift },
   { key: "system", label: "Tự động áp dụng", icon: Globe2 },
+  { key: "history", label: "Lịch sử", icon: History },
 ];
 
 const walletIdOf = (promotion) =>
@@ -305,7 +307,11 @@ function PromotionCard({
           <span
             className={`rounded border px-2 py-0.5 text-[10px] font-bold ${badgeClass(promotion.status)}`}
           >
-            {labelFor(promotion.status)}
+            {claimable
+              ? "Có thể nhận"
+              : system
+                ? "Tự động"
+                : labelFor(promotion.status)}
           </span>
         </div>
         <p className="mt-2 text-[10px] font-black uppercase text-sky-300">
@@ -354,13 +360,51 @@ function PromotionCard({
         </button>
       ) : system ? (
         <span className="inline-flex h-9 items-center gap-2 self-center rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-bold text-sky-200">
-          <Globe2 className="h-4 w-4" /> Chọn khi thanh toán
+          <Globe2 className="h-4 w-4" /> Tự động khi đủ điều kiện
         </span>
       ) : (
         <span className="inline-flex h-9 items-center gap-2 self-center rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-300">
           <BadgeCheck className="h-4 w-4" /> Đã thuộc ví
         </span>
       )}
+    </article>
+  );
+}
+
+function PromotionHistoryRow({ item }) {
+  const labels = {
+    USED: "Đã dùng",
+    EXPIRED: "Hết hạn",
+    REVOKED: "Đã thu hồi",
+    RESTORED: "Đã hoàn lại",
+  };
+  return (
+    <article className="grid gap-3 border-b border-zinc-800 px-3 py-5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <History className="h-4 w-4 text-zinc-500" />
+          <h3 className="break-words text-sm font-black text-white">
+            {item.promotionName || "Ưu đãi LoraFilm"}
+          </h3>
+          <span className={`rounded border px-2 py-0.5 text-[10px] font-black ${badgeClass(item.eventType)}`}>
+            {labels[item.eventType] || labelFor(item.eventType)}
+          </span>
+        </div>
+        {item.promotionCode && (
+          <p className="mt-2 font-mono text-xs font-bold text-amber-300">
+            {item.promotionCode}
+          </p>
+        )}
+        <p className="mt-2 text-xs leading-5 text-zinc-400">{item.detail}</p>
+        {item.bookingPublicId && (
+          <p className="mt-1 break-all text-[10px] text-zinc-600">
+            Đơn hàng: {item.bookingPublicId}
+          </p>
+        )}
+      </div>
+      <time className="text-xs font-bold text-zinc-500">
+        {formatDateTime(item.eventAt)}
+      </time>
     </article>
   );
 }
@@ -582,6 +626,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
   const [publicPromotions, setPublicPromotions] = useState([]);
   const [systemPromotions, setSystemPromotions] = useState([]);
   const [wallet, setWallet] = useState([]);
+  const [history, setHistory] = useState([]);
   const [walletOwnershipIds, setWalletOwnershipIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
@@ -594,7 +639,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [publicPage, walletPage, systemPage] = await Promise.all([
+      const [publicPage, walletPage, systemPage, historyItems] = await Promise.all([
         customerPromotionService.getPublicPromotions({
           page: 0,
           size: 100,
@@ -611,6 +656,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
           size: 100,
           sort: "priority,asc",
         }),
+        customerPromotionService.getMyPromotionHistory(),
       ]);
       const walletItems = contentOf(walletPage);
       setPublicPromotions(contentOf(publicPage));
@@ -623,6 +669,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
         ),
       );
       setSystemPromotions(contentOf(systemPage));
+      setHistory(Array.isArray(historyItems) ? historyItems : []);
       setMessage(null);
     } catch (error) {
       setMessage({ kind: "error", text: friendlyPromotionError(error) });
@@ -672,9 +719,12 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
     system: activeSystemPromotions.length,
     event: eventPromotions.length,
     wallet: personalVouchers.length,
+    history: history.length,
   };
   const rows =
-    tab === "system"
+    tab === "history"
+      ? history
+      : tab === "system"
       ? activeSystemPromotions
       : tab === "event"
         ? eventPromotions
@@ -774,7 +824,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
       )}
 
       <div
-        className={`${embedded ? "" : "mt-6"} grid grid-cols-2 border-b border-zinc-800 sm:grid-cols-3`}
+        className={`${embedded ? "" : "mt-6"} grid grid-cols-2 border-b border-zinc-800 sm:grid-cols-4`}
       >
         {tabItems.map(({ key, label, icon: Icon }) => (
           <button
@@ -816,8 +866,8 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-sky-500/20 bg-sky-500/[0.05] px-3 py-2 text-xs leading-5 text-sky-100">
           <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
           <span>
-            Những ưu đãi này được tự động kiểm tra và áp dụng khi đơn hàng của
-            bạn đáp ứng đủ điều kiện.
+            Hệ thống tự áp dụng ưu đãi tốt nhất khi đơn hàng đủ điều kiện. Bạn
+            không cần chọn hoặc nhập mã.
           </span>
         </div>
       )}
@@ -835,27 +885,36 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
                 ? "Chưa có ưu đãi mới để nhận"
                 : tab === "system"
                   ? "Chưa có ưu đãi tự động đang áp dụng"
-                  : "Bạn chưa có voucher có thể sử dụng"}
+                  : tab === "history"
+                    ? "Chưa có lịch sử sử dụng voucher"
+                    : "Bạn chưa có voucher có thể sử dụng"}
             </p>
             <p className="mt-1 text-xs text-zinc-600">
               Các ưu đãi hợp lệ sẽ xuất hiện tại đây.
             </p>
           </div>
         ) : (
-          rows.map((item, index) => (
-            <PromotionCard
-              key={item.publicId}
-              promotion={item}
-              claimable={tab === "event"}
-              system={tab === "system"}
-              recommended={tab === "wallet" && index === 0}
-              busy={busyId === (item.promotionPublicId || item.publicId)}
-              onClaim={claim}
-              onOpenDetail={
-                tab === "wallet" ? () => openVoucherDetail(item) : undefined
-              }
-            />
-          ))
+          rows.map((item, index) =>
+            tab === "history" ? (
+              <PromotionHistoryRow
+                key={`${item.eventType}-${item.eventAt}-${item.promotionPublicId}-${index}`}
+                item={item}
+              />
+            ) : (
+              <PromotionCard
+                key={item.publicId}
+                promotion={item}
+                claimable={tab === "event"}
+                system={tab === "system"}
+                recommended={tab === "wallet" && index === 0}
+                busy={busyId === (item.promotionPublicId || item.publicId)}
+                onClaim={claim}
+                onOpenDetail={
+                  tab === "wallet" ? () => openVoucherDetail(item) : undefined
+                }
+              />
+            ),
+          )
         )}
       </section>
       <VoucherDetailModal

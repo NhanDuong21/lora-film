@@ -3,6 +3,7 @@ package com.project.promotionservice.reservation.dto.response;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.project.promotionservice.promotion.dto.response.AppliedPromotionResponse;
 import com.project.promotionservice.reservation.enums.ReservationStatus;
+import com.project.promotionservice.reservation.enums.ReleaseReasonType;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,6 +27,12 @@ public class ReservationResponse {
     private Instant confirmedAt;
     private Instant rollbackAt;
     private String rollbackReason;
+    private ReleaseReasonType releaseReasonType;
+    private Instant releasedAt;
+    private String releasedBy;
+    private String sourceService;
+    private String sourceReference;
+    private String reasonDetail;
     private JsonNode contextJson;
     private List<AppliedPromotionResponse> appliedPromotions = List.of();
 
@@ -156,6 +163,19 @@ public class ReservationResponse {
     public void setRollbackReason(String rollbackReason) {
         this.rollbackReason = rollbackReason;
     }
+
+    public ReleaseReasonType getReleaseReasonType() { return releaseReasonType; }
+    public void setReleaseReasonType(ReleaseReasonType value) { this.releaseReasonType = value; }
+    public Instant getReleasedAt() { return releasedAt; }
+    public void setReleasedAt(Instant value) { this.releasedAt = value; }
+    public String getReleasedBy() { return releasedBy; }
+    public void setReleasedBy(String value) { this.releasedBy = value; }
+    public String getSourceService() { return sourceService; }
+    public void setSourceService(String value) { this.sourceService = value; }
+    public String getSourceReference() { return sourceReference; }
+    public void setSourceReference(String value) { this.sourceReference = value; }
+    public String getReasonDetail() { return reasonDetail; }
+    public void setReasonDetail(String value) { this.reasonDetail = value; }
 
     public JsonNode getContextJson() {
         return contextJson;

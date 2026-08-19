@@ -4,18 +4,24 @@ import com.project.promotionservice.promotion.entity.PromotionRedemption;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.math.BigDecimal;
 
 public interface PromotionRedemptionRepository
-        extends JpaRepository<PromotionRedemption, Long> {
+        extends JpaRepository<PromotionRedemption, Long>,
+        JpaSpecificationExecutor<PromotionRedemption> {
 
     List<PromotionRedemption> findByReservationPublicIdAndDeletedAtIsNull(
             String reservationPublicId);
+
+    List<PromotionRedemption> findTop100ByUserPublicIdAndStatusInAndDeletedAtIsNullOrderByUpdatedAtDesc(
+            String userPublicId, Collection<PromotionRedemptionStatus> statuses);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -51,5 +57,18 @@ public interface PromotionRedemptionRepository
     long countCampaignRedemptions(
             @Param("campaignPublicId") String campaignPublicId,
             @Param("statuses") Collection<PromotionRedemptionStatus> statuses);
+
+    @Query("""
+            select coalesce(sum(redemption.discountAmount), 0)
+            from PromotionRedemption redemption, PromotionReservation reservation
+            where redemption.reservationPublicId = reservation.publicId
+              and redemption.campaignPublicId = :campaignPublicId
+              and redemption.status = com.project.promotionservice.promotion.enums.PromotionRedemptionStatus.RESERVED
+              and reservation.status = com.project.promotionservice.reservation.enums.ReservationStatus.ACTIVE
+              and redemption.deletedAt is null
+              and reservation.deletedAt is null
+            """)
+    BigDecimal sumActiveReservedDiscountByCampaign(
+            @Param("campaignPublicId") String campaignPublicId);
 
 }

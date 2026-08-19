@@ -9,8 +9,10 @@ import com.project.promotionservice.promotion.dto.response.PromotionCloneDraftRe
 import com.project.promotionservice.promotion.dto.response.PromotionIssueResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionResponse;
 import com.project.promotionservice.promotion.dto.response.WalletPromotionResponse;
+import com.project.promotionservice.promotion.dto.response.WalletPromotionHistoryResponse;
 import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
+import com.project.promotionservice.promotion.entity.PromotionRedemption;
 import com.project.promotionservice.promotion.entity.UserPromotion;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.LegalStatus;
@@ -42,6 +44,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.Set;
+import java.math.BigDecimal;
+import java.util.Comparator;
 
 @Service
 public class PromotionCatalogService {
@@ -363,6 +367,74 @@ public class PromotionCatalogService {
         return walletResponse(wallet, promotion, now);
     }
 
+    @Transactional(readOnly = true)
+    public List<WalletPromotionHistoryResponse> walletHistory(String userPublicId) {
+        List<UserPromotion> walletItems = walletRepository
+                .findTop100ByUserPublicIdAndDeletedAtIsNullOrderByUpdatedAtDesc(
+                        userPublicId);
+        Map<String, Promotion> promotions = promotionMap(walletItems);
+        List<WalletPromotionHistoryResponse> history = new ArrayList<>();
+
+        walletItems.stream()
+                .filter(item -> item.getStatus() == UserPromotionStatus.EXPIRED
+                        || item.getStatus() == UserPromotionStatus.REVOKED)
+                .forEach(item -> {
+                    Promotion promotion = promotions.get(item.getPromotionPublicId());
+                    if (promotion == null || promotion.getPromotionType() == PromotionType.COUPON) {
+                        return;
+                    }
+                    String eventType = item.getStatus().name();
+                    history.add(new WalletPromotionHistoryResponse(
+                            eventType,
+                            item.getUpdatedAt() == null ? item.getValidTo() : item.getUpdatedAt(),
+                            item.getPublicId(),
+                            item.getPromotionPublicId(),
+                            promotion.getName(),
+                            promotion.getCode(),
+                            BigDecimal.ZERO,
+                            null,
+                            eventType.equals("EXPIRED")
+                                    ? "Voucher đã hết thời hạn sử dụng."
+                                    : "Voucher đã được thu hồi khỏi ví."));
+                });
+
+        List<PromotionRedemption> redemptions = redemptionRepository
+                .findTop100ByUserPublicIdAndStatusInAndDeletedAtIsNullOrderByUpdatedAtDesc(
+                        userPublicId,
+                        EnumSet.of(PromotionRedemptionStatus.CONFIRMED,
+                                PromotionRedemptionStatus.REVERSED));
+        redemptions.forEach(redemption -> {
+            if (redemption.getUserPromotionPublicId() == null) {
+                return;
+            }
+            if (redemption.getConfirmedAt() != null) {
+                history.add(new WalletPromotionHistoryResponse(
+                        "USED", redemption.getConfirmedAt(),
+                        redemption.getUserPromotionPublicId(),
+                        redemption.getPromotionPublicId(), redemption.getPromotionName(),
+                        redemption.getPromotionCode(), redemption.getDiscountAmount(),
+                        redemption.getBookingPublicId(),
+                        "Voucher đã được dùng cho đơn hàng."));
+            }
+            if (redemption.getStatus() == PromotionRedemptionStatus.REVERSED
+                    && redemption.getRollbackAt() != null) {
+                history.add(new WalletPromotionHistoryResponse(
+                        "RESTORED", redemption.getRollbackAt(),
+                        redemption.getUserPromotionPublicId(),
+                        redemption.getPromotionPublicId(), redemption.getPromotionName(),
+                        redemption.getPromotionCode(), redemption.getDiscountAmount(),
+                        redemption.getBookingPublicId(),
+                        "Lượt dùng đã được hoàn lại vào ví sau khi đơn được đảo ngược."));
+            }
+        });
+        return history.stream()
+                .sorted(Comparator.comparing(
+                        WalletPromotionHistoryResponse::eventAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(100)
+                .toList();
+    }
+
     private void validate(
             PromotionUpsertRequest request,
             PromotionCampaign campaign,
@@ -520,6 +592,7 @@ public class PromotionCatalogService {
 
     private void requireCampaignCanServePromotion(PromotionCampaign campaign) {
         if (campaign.getStatus() == CampaignStatus.CANCELLED
+                || campaign.getStatus() == CampaignStatus.KILLED
                 || campaign.getStatus() == CampaignStatus.COMPLETED
                 || Boolean.TRUE.equals(campaign.getKillSwitch())) {
             throw conflict("Campaign cannot serve an active promotion");

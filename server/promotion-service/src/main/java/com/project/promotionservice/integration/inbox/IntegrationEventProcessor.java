@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.ConfirmRequest;
 import com.project.promotionservice.reservation.dto.request.ReservationRequests.TransitionRequest;
+import com.project.promotionservice.reservation.enums.ReleaseReasonType;
 import com.project.promotionservice.reservation.service.PromotionReservationService;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
@@ -62,7 +63,9 @@ public class IntegrationEventProcessor {
         String reservationId = text(data, "reservationPublicId", "reservationId");
         require(reservationId, "reservationPublicId");
         TransitionRequest request = new TransitionRequest(
-                "Payment failed event " + event.getEventId());
+                ReleaseReasonType.PAYMENT_FAILED,
+                "Payment failed event " + event.getEventId(),
+                "PAYMENT_SERVICE", event.getEventId(), null);
         reservationService.release(reservationId, request, event.getEventId(), "PAYMENT_SERVICE");
     }
 
@@ -70,7 +73,9 @@ public class IntegrationEventProcessor {
         String reservationId = text(data, "reservationPublicId", "reservationId");
         require(reservationId, "reservationPublicId");
         TransitionRequest request = new TransitionRequest(
-                "Booking cancelled event " + event.getEventId());
+                ReleaseReasonType.CUSTOMER_CANCELLED_BOOKING,
+                "Booking cancelled event " + event.getEventId(),
+                "BOOKING_SERVICE", event.getEventId(), null);
         reservationService.release(reservationId, request, event.getEventId(), "BOOKING_SERVICE");
     }
 

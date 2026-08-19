@@ -6,6 +6,7 @@ import com.project.promotionservice.configuration.security.principal.UserPrincip
 import com.project.promotionservice.promotion.dto.request.CampaignCreateRequest;
 import com.project.promotionservice.promotion.dto.request.CampaignUpdateRequest;
 import com.project.promotionservice.promotion.dto.request.ApprovalRequest;
+import com.project.promotionservice.promotion.dto.request.ApprovalOverrideRequest;
 import com.project.promotionservice.promotion.dto.request.LegalReviewRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignDetailResponse;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
@@ -14,6 +15,9 @@ import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignTransitionAction;
 import com.project.promotionservice.promotion.service.CampaignService;
 import com.project.promotionservice.promotion.service.ApprovalService;
+import com.project.promotionservice.promotion.service.CampaignStatePolicy;
+import com.project.promotionservice.common.exception.BusinessException;
+import com.project.promotionservice.common.exception.ErrorCode;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,6 +52,7 @@ public class AdminCampaignController {
 
     private final CampaignService campaignService;
     private final ApprovalService approvalService;
+    private final CampaignStatePolicy statePolicy = new CampaignStatePolicy();
 
     public AdminCampaignController(CampaignService campaignService, ApprovalService approvalService) {
         this.campaignService = campaignService;
@@ -55,19 +60,19 @@ public class AdminCampaignController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     @Operation(summary = "Create a new campaign")
     public ResponseEntity<ApiResponse<CampaignResponse>> createCampaign(
             @Valid @RequestBody CampaignCreateRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         String actor = getActor(userPrincipal);
-        CampaignResponse data = campaignService.createCampaign(request, actor);
+        CampaignResponse data = decorate(campaignService.createCampaign(request, actor), userPrincipal);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(true, "Promotion campaign created successfully", data));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     @Operation(summary = "Update an existing campaign")
     public ResponseEntity<ApiResponse<CampaignResponse>> updateCampaign(
             @PathVariable("id")
@@ -76,12 +81,12 @@ public class AdminCampaignController {
             @Valid @RequestBody CampaignUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         String actor = getActor(userPrincipal);
-        CampaignResponse data = campaignService.updateCampaign(publicId, request, actor);
+        CampaignResponse data = decorate(campaignService.updateCampaign(publicId, request, actor), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true, "Promotion campaign updated successfully", data));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUTHOR')")
     @Operation(summary = "Soft delete a campaign")
     public ResponseEntity<ApiResponse<Void>> deleteCampaign(
             @PathVariable("id")
@@ -94,18 +99,20 @@ public class AdminCampaignController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF', 'FINANCE', 'FINANCE_DIRECTOR', 'LEGAL_COMPLIANCE', 'OPERATIONS_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
     @Operation(summary = "Get campaign details (including rules)")
     public ResponseEntity<ApiResponse<CampaignDetailResponse>> getCampaign(
             @PathVariable("id")
             @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
-            String publicId) {
-        CampaignDetailResponse data = campaignService.getCampaign(publicId);
+            String publicId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        CampaignDetailResponse data = (CampaignDetailResponse) decorate(
+                campaignService.getCampaign(publicId), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true, "Campaign retrieved successfully", data));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF', 'FINANCE', 'FINANCE_DIRECTOR', 'LEGAL_COMPLIANCE', 'OPERATIONS_MANAGER')")
+    @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
     @Operation(summary = "Search campaigns dynamically with pagination")
     public ResponseEntity<ApiResponse<PagedResponse<CampaignResponse>>> searchCampaigns(
             @RequestParam(value = "name", required = false) @Size(max = 120) String name,
@@ -115,16 +122,19 @@ public class AdminCampaignController {
             @RequestParam(value = "to", required = false) Instant to,
             @RequestParam(value = "page", defaultValue = "0") @Min(0) int page,
             @RequestParam(value = "size", defaultValue = "10") @Min(1) @Max(100) int size,
-            @RequestParam(value = "sort", defaultValue = "createdAt,desc") @Size(max = 60) String sort) {
+            @RequestParam(value = "sort", defaultValue = "createdAt,desc") @Size(max = 60) String sort,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
         Pageable pageable = pageable(page, size, sort, SORT_FIELDS, "createdAt");
         PagedResponse<CampaignResponse> data =
                 campaignService.searchCampaigns(name, code, status, from, to, pageable);
+        data.setContent(data.getContent().stream()
+                .map(campaign -> decorate(campaign, userPrincipal)).toList());
         return ResponseEntity.ok(new ApiResponse<>(true, "Campaign search results retrieved", data));
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('PROMOTION_AUTHOR','PROMOTION_PUBLISH','PROMOTION_OPERATE','PROMOTION_EMERGENCY_STOP')")
     @Operation(summary = "Transition campaign status (SUBMIT, PUBLISH, ACTIVATE, PAUSE, KILL_SWITCH, CANCEL)")
     public ResponseEntity<ApiResponse<CampaignResponse>> transitionCampaignStatus(
             @PathVariable("id")
@@ -134,6 +144,7 @@ public class AdminCampaignController {
             @RequestParam(value = "comment", required = false) @Size(max = 500) String comment,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         String actor = getActor(userPrincipal);
+        requireCapabilityForAction(action, userPrincipal);
         CampaignResponse data;
         switch (action) {
             case SUBMIT -> {
@@ -143,16 +154,18 @@ public class AdminCampaignController {
             case PUBLISH -> data = campaignService.publishCampaign(publicId, actor);
             case ACTIVATE -> data = campaignService.activateCampaign(publicId, actor);
             case PAUSE -> data = campaignService.pauseCampaign(publicId, actor);
+            case RESUME -> data = campaignService.activateCampaign(publicId, actor);
             case KILL_SWITCH -> data = campaignService.killSwitchCampaign(
                     publicId, comment, actor);
             case CANCEL -> data = campaignService.cancelCampaign(publicId, actor);
             default -> throw new IllegalArgumentException("Invalid status transition action: " + action);
         }
+        data = decorate(data, userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true, "Campaign status transitioned to " + action + " successfully", data));
     }
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR')")
+    @PreAuthorize("hasAnyAuthority('PROMOTION_APPROVE_STANDARD','PROMOTION_APPROVE_HIGH_BUDGET')")
     @Operation(summary = "Approve a pending campaign")
     public ResponseEntity<ApiResponse<CampaignResponse>> approveCampaign(
             @PathVariable("id")
@@ -162,15 +175,16 @@ public class AdminCampaignController {
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
         String actor = getActor(userPrincipal);
-        List<String> roles = userPrincipal != null ? userPrincipal.getRoles() : List.of();
+        List<String> capabilities = userPrincipal != null ? userPrincipal.getPermissions() : List.of();
         String comment = request != null ? request.getComment() : "Approved";
 
-        CampaignResponse data = approvalService.approveCampaign(publicId, comment, actor, roles);
+        CampaignResponse data = decorate(approvalService.approveCampaign(
+                publicId, comment, actor, capabilities), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true, "Campaign approved successfully", data));
     }
 
     @PostMapping("/{id}/legal-review")
-    @PreAuthorize("hasAnyRole('ADMIN', 'LEGAL_COMPLIANCE')")
+    @PreAuthorize("hasAuthority('PROMOTION_LEGAL_REVIEW')")
     @Operation(summary = "Record the legal compliance decision for a campaign")
     public ResponseEntity<ApiResponse<CampaignResponse>> reviewLegalStatus(
             @PathVariable("id")
@@ -178,14 +192,14 @@ public class AdminCampaignController {
             String publicId,
             @Valid @RequestBody LegalReviewRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        CampaignResponse data = campaignService.reviewLegalStatus(
-                publicId, request, getActor(userPrincipal));
+        CampaignResponse data = decorate(campaignService.reviewLegalStatus(
+                publicId, request, getActor(userPrincipal)), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(
                 true, "Campaign legal review recorded successfully", data));
     }
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'FINANCE_DIRECTOR')")
+    @PreAuthorize("hasAnyAuthority('PROMOTION_APPROVE_STANDARD','PROMOTION_APPROVE_HIGH_BUDGET')")
     @Operation(summary = "Reject a pending campaign")
     public ResponseEntity<ApiResponse<CampaignResponse>> rejectCampaign(
             @PathVariable("id")
@@ -195,15 +209,16 @@ public class AdminCampaignController {
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
         String actor = getActor(userPrincipal);
-        List<String> roles = userPrincipal != null ? userPrincipal.getRoles() : List.of();
+        List<String> capabilities = userPrincipal != null ? userPrincipal.getPermissions() : List.of();
         String comment = request != null ? request.getComment() : "Rejected";
 
-        CampaignResponse data = approvalService.rejectCampaign(publicId, comment, actor, roles);
+        CampaignResponse data = decorate(approvalService.rejectCampaign(
+                publicId, comment, actor, capabilities), userPrincipal);
         return ResponseEntity.ok(new ApiResponse<>(true, "Campaign rejected successfully", data));
     }
 
     @GetMapping("/{id}/approval-history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MARKETING_MANAGER', 'MARKETING_STAFF', 'FINANCE', 'FINANCE_DIRECTOR', 'LEGAL_COMPLIANCE')")
+    @PreAuthorize("hasAuthority('PROMOTION_AUDIT_VIEW')")
     @Operation(summary = "Get approval history for campaign")
     public ResponseEntity<ApiResponse<List<ApprovalHistoryResponse>>> getApprovalHistory(
             @PathVariable("id")
@@ -211,6 +226,41 @@ public class AdminCampaignController {
             String publicId) {
         List<ApprovalHistoryResponse> data = approvalService.getApprovalHistory(publicId);
         return ResponseEntity.ok(new ApiResponse<>(true, "Approval histories retrieved successfully", data));
+    }
+
+    @PostMapping("/{id}/override-approval")
+    @PreAuthorize("hasAuthority('PROMOTION_OVERRIDE')")
+    @Operation(summary = "Override approval with explicit campaign-code confirmation and reason")
+    public ResponseEntity<ApiResponse<CampaignResponse>> overrideApproval(
+            @PathVariable("id")
+            @Pattern(regexp = UUID_PATTERN, message = "id must be a valid UUID")
+            String publicId,
+            @Valid @RequestBody ApprovalOverrideRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        CampaignResponse data = decorate(approvalService.overrideApproval(
+                publicId, request.campaignCode(), request.reason(),
+                getActor(userPrincipal), userPrincipal.getPermissions()), userPrincipal);
+        return ResponseEntity.ok(new ApiResponse<>(true,
+                "Campaign approval override recorded", data));
+    }
+
+    private CampaignResponse decorate(CampaignResponse response, UserPrincipal principal) {
+        return statePolicy.decorate(response, principal);
+    }
+
+    private void requireCapabilityForAction(
+            CampaignTransitionAction action, UserPrincipal principal) {
+        List<String> permissions = principal == null ? List.of() : principal.getPermissions();
+        String required = switch (action) {
+            case SUBMIT -> "PROMOTION_AUTHOR";
+            case PUBLISH -> "PROMOTION_PUBLISH";
+            case ACTIVATE, PAUSE, RESUME, CANCEL -> "PROMOTION_OPERATE";
+            case KILL_SWITCH -> "PROMOTION_EMERGENCY_STOP";
+        };
+        if (!permissions.contains(required)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN,
+                    "Action requires capability " + required, HttpStatus.FORBIDDEN);
+        }
     }
 
     private String getActor(UserPrincipal userPrincipal) {

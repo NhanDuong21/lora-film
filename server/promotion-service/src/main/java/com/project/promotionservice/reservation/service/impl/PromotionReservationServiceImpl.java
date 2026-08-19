@@ -311,7 +311,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         lockManager.lockReservation(reservationPublicId);
         PromotionReservation reservation = requireForUpdate(reservationPublicId);
         if (reservation.getStatus() == ReservationStatus.RELEASED) {
-            if (!Objects.equals(reservation.getRollbackReason(), request.reason())) {
+            if (reservation.getReleaseReasonType() != request.resolvedReasonType()
+                    || !Objects.equals(reservation.getReasonDetail(), request.resolvedReasonDetail())) {
                 throw conflict("Reservation was released with another reason");
             }
             return response(reservation);
@@ -323,11 +324,18 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             throw conflict("Confirmed reservation cannot be released");
         }
         Instant now = databaseTimeProvider.now();
-        rollbackRedemptions(reservation, now, request.reason(), actor);
+        String reasonDetail = request.resolvedReasonDetail();
+        rollbackRedemptions(reservation, now, reasonDetail, actor);
         reservation.setStatus(ReservationStatus.RELEASED);
         reservation.setReservationScopeKey(null);
         reservation.setRollbackAt(now);
-        reservation.setRollbackReason(request.reason());
+        reservation.setRollbackReason(reasonDetail);
+        reservation.setReleaseReasonType(request.resolvedReasonType());
+        reservation.setReleasedAt(now);
+        reservation.setReleasedBy(actor);
+        reservation.setSourceService(request.resolvedSourceService(actor));
+        reservation.setSourceReference(request.sourceReference());
+        reservation.setReasonDetail(reasonDetail);
         reservation.setUpdatedBy(actor);
         reservationRepository.save(reservation);
         ReservationResponse response = response(reservation);
@@ -785,6 +793,12 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         response.setConfirmedAt(reservation.getConfirmedAt());
         response.setRollbackAt(reservation.getRollbackAt());
         response.setRollbackReason(reservation.getRollbackReason());
+        response.setReleaseReasonType(reservation.getReleaseReasonType());
+        response.setReleasedAt(reservation.getReleasedAt());
+        response.setReleasedBy(reservation.getReleasedBy());
+        response.setSourceService(reservation.getSourceService());
+        response.setSourceReference(reservation.getSourceReference());
+        response.setReasonDetail(reservation.getReasonDetail());
         response.setContextJson(readNullable(reservation.getMetadataJson()));
         response.setAppliedPromotions(applied);
         return response;

@@ -5,6 +5,7 @@ public enum CampaignStatus {
     SCHEDULED,
     ACTIVE,
     PAUSED,
+    KILLED,
     COMPLETED,
     CANCELLED
 }

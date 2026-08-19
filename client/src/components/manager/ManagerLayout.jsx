@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronDown,
   CircleGauge,
+  BadgePercent,
   CreditCard,
   ScanLine,
   LogOut,
@@ -34,6 +35,9 @@ const MANAGER_MENUS = [
 export default function ManagerLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const managerMenus = user?.permissions?.includes('PROMOTION_VIEW')
+    ? [...MANAGER_MENUS, { path: '/manager/promotions', label: 'Trung tâm khuyến mãi', icon: BadgePercent }]
+    : MANAGER_MENUS;
   const [cinemas, setCinemas] = useState([]);
   const [selectedCinemaId, setSelectedCinemaId] = useState(
     () => window.localStorage.getItem('managerSelectedCinemaId') || '',
@@ -98,7 +102,7 @@ export default function ManagerLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Chức năng quản lý rạp">
-          {MANAGER_MENUS.map(menu => {
+          {managerMenus.map(menu => {
             const Icon = menu.icon;
             return (
               <NavLink key={menu.path} to={menu.path} end={menu.end} className={({ isActive }) => `flex min-h-12 items-center justify-center rounded-xl transition-colors lg:justify-start lg:px-4 ${isActive ? 'bg-brand-orange/10 font-bold text-brand-orange' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}>

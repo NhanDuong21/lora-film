@@ -28,7 +28,7 @@ import static com.project.promotionservice.common.constant.ValidationConstants.U
 @RestController
 @Validated
 @RequestMapping("/api/admin/reservations")
-@PreAuthorize("hasAnyRole('ADMIN', 'OPERATIONS_MANAGER')")
+@PreAuthorize("hasAuthority('PROMOTION_AUDIT_VIEW')")
 @Tag(name = "Admin Reservation APIs", description = "Reservation history and operational lookup")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminReservationController {

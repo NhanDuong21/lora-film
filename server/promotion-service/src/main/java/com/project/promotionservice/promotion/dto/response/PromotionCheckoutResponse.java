@@ -11,7 +11,9 @@ public record PromotionCheckoutResponse(
         String currency,
         List<AppliedPromotionResponse> appliedPromotions,
         List<PromotionEligibilityResponse> promotionEvaluations,
-        List<String> warnings) {
+        List<String> warnings,
+        boolean manualSelectionReplaced,
+        BigDecimal additionalSavings) {
 
     public PromotionCheckoutResponse(
             boolean eligible,
@@ -22,6 +24,6 @@ public record PromotionCheckoutResponse(
             List<AppliedPromotionResponse> appliedPromotions,
             List<String> warnings) {
         this(eligible, originalAmount, discountAmount, finalAmount, currency,
-                appliedPromotions, List.of(), warnings);
+                appliedPromotions, List.of(), warnings, false, BigDecimal.ZERO);
     }
 }

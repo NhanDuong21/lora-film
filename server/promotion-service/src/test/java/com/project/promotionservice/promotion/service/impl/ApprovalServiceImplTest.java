@@ -64,7 +64,7 @@ class ApprovalServiceImplTest {
 
         // Approver is also creator ("user123")
         BusinessException exception = assertThrows(BusinessException.class, () ->
-                approvalService.approveCampaign("550e8400-e29b-41d4-a716-446655440000", "Approved", "user123", List.of("ROLE_MARKETING_MANAGER"))
+                approvalService.approveCampaign("550e8400-e29b-41d4-a716-446655440000", "Approved", "user123", List.of("PROMOTION_APPROVE_STANDARD"))
         );
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
@@ -82,13 +82,13 @@ class ApprovalServiceImplTest {
 
         when(campaignRepository.findByPublicId("550e8400-e29b-41d4-a716-446655440000")).thenReturn(Optional.of(campaign));
 
-        // Approver is a marketing manager, not finance director
+        // Standard approval does not grant high-budget authority.
         BusinessException exception = assertThrows(BusinessException.class, () ->
-                approvalService.approveCampaign("550e8400-e29b-41d4-a716-446655440000", "Approved", "approver1", List.of("ROLE_MARKETING_MANAGER"))
+                approvalService.approveCampaign("550e8400-e29b-41d4-a716-446655440000", "Approved", "approver1", List.of("PROMOTION_APPROVE_STANDARD"))
         );
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
-        assertEquals("Campaign budget exceeds 50,000,000 VNĐ and requires Finance Director approval", exception.getMessage());
+        assertEquals("Approver lacks capability PROMOTION_APPROVE_HIGH_BUDGET", exception.getMessage());
     }
 
     @Test
@@ -106,8 +106,7 @@ class ApprovalServiceImplTest {
         when(campaignRepository.save(any(PromotionCampaign.class))).thenReturn(campaign);
         when(campaignMapper.toResponse(any(PromotionCampaign.class))).thenReturn(response);
 
-        // Approver is a Finance Director
-        CampaignResponse result = approvalService.approveCampaign("550e8400-e29b-41d4-a716-446655440000", "Approved", "approver1", List.of("ROLE_FINANCE_DIRECTOR"));
+        CampaignResponse result = approvalService.approveCampaign("550e8400-e29b-41d4-a716-446655440000", "Approved", "approver1", List.of("PROMOTION_APPROVE_HIGH_BUDGET"));
 
         assertNotNull(result);
         assertEquals(CampaignApprovalStatus.APPROVED, result.getApprovalStatus());

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
-  ArrowLeft,
   BadgePercent,
   Banknote,
   CalendarClock,
@@ -68,11 +67,17 @@ const labels = {
   PAUSED: "Tạm dừng",
   COMPLETED: "Hoàn tất",
   CANCELLED: "Đã hủy",
+  KILLED: "Đã dừng khẩn cấp",
   DISABLED: "Đã tắt",
   EXPIRED: "Hết hạn",
   PASSED: "Đạt pháp lý",
   FAILED: "Không đạt",
-  AUTO: "Voucher hệ thống",
+  AVAILABLE: "Có thể áp dụng",
+  NOT_STARTED: "Chưa bắt đầu",
+  EXHAUSTED: "Hết hạn mức đơn",
+  BUDGET_EXHAUSTED: "Hết ngân sách",
+  CAMPAIGN_BLOCKED: "Đã chặn áp dụng mới",
+  AUTO: "Ưu đãi tự động",
   VOUCHER: "Voucher sự kiện",
   COUPON: "Coupon theo khách",
   PERCENTAGE: "Giảm phần trăm",
@@ -81,7 +86,7 @@ const labels = {
 };
 
 const promotionTabs = [
-  { key: "system", type: "AUTO", label: "Voucher hệ thống", icon: Globe2 },
+  { key: "system", type: "AUTO", label: "Ưu đãi tự động", icon: Globe2 },
   { key: "event", type: "VOUCHER", label: "Voucher sự kiện", icon: Gift },
   { key: "coupon", type: "COUPON", label: "Coupon theo khách", icon: Tag },
 ];
@@ -153,6 +158,10 @@ const campaignActionTitle = (action) =>
     PUBLISH: "Xuất bản chiến dịch?",
     ACTIVATE: "Kích hoạt chiến dịch?",
     PAUSE: "Tạm dừng chiến dịch?",
+    RESUME: "Tiếp tục chiến dịch?",
+    REJECT: "Từ chối chiến dịch?",
+    LEGAL_REVIEW: "Ghi nhận kết quả pháp lý?",
+    CANCEL: "Hủy vĩnh viễn chiến dịch?",
     KILL_SWITCH: "Dừng khẩn cấp chiến dịch?",
   })[action] || "Cập nhật chiến dịch?";
 
@@ -162,20 +171,21 @@ const campaignActionDescription = (campaign, action) => {
     return `${name} sẽ tự chạy theo thời gian hiệu lực. Các promotion thuộc chiến dịch sẽ không được bật thủ công.`;
   if (action === "ACTIVATE")
     return `${name} cùng các promotion hợp lệ sẽ được mở để áp dụng tại checkout.`;
-  if (action === "PAUSE" || action === "KILL_SWITCH")
-    return `${name} sẽ ngừng áp dụng ngay cả khi promotion vẫn còn hiệu lực.`;
+  if (action === "PAUSE")
+    return `${name} sẽ chặn preview/reserve mới nhưng các lượt đang giữ vẫn được confirm, release hoặc hết hạn bình thường. Có thể tiếp tục lại sau.`;
+  if (action === "CANCEL")
+    return `${name} sẽ bị chặn áp dụng mới vĩnh viễn và không thể tiếp tục lại.`;
+  if (action === "KILL_SWITCH")
+    return `${name} sẽ bị chặn áp dụng mới ngay lập tức. Các lượt đang giữ không tự giải phóng; thao tác giải phóng hàng loạt được tách riêng để tránh làm hỏng booking đang thanh toán.`;
   return `Bạn đang cập nhật bước ${campaignActionTitle(action).replace("?", "").toLowerCase()} cho ${name}.`;
 };
 
 export default function AdminPromotionCenterPage() {
-  const { userRole } = useAuth();
-  const normalizedRole = String(userRole || "").replace(/^ROLE_/, "");
-  const canViewOperations = [
-    "ADMIN",
-    "OPERATIONS_MANAGER",
-    "FINANCE_DIRECTOR",
-  ].includes(normalizedRole);
-  const [view, setView] = useState("promotions");
+  const { user } = useAuth();
+  const permissions = user?.permissions || [];
+  const canViewOperations = permissions.includes("PROMOTION_AUDIT_VIEW");
+  const canAuthor = permissions.includes("PROMOTION_AUTHOR");
+  const [view, setView] = useState("campaigns");
   const [tab, setTab] = useState("system");
   const [campaigns, setCampaigns] = useState(emptyPage);
   const [campaignOptions, setCampaignOptions] = useState([]);
@@ -218,7 +228,7 @@ export default function AdminPromotionCenterPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (view === "operations") {
+      if (view === "operations" || view === "overview") {
         const [promotion, booking] = await Promise.all([
           adminPromotionService.getPromotionMonitoring(),
           adminPromotionService.getBookingMonitoring(),
@@ -359,7 +369,12 @@ export default function AdminPromotionCenterPage() {
           campaign.publicId,
           "Approved from Promotion Center",
         )
-      : action === "LEGAL"
+      : action === "REJECT"
+        ? adminPromotionService.rejectCampaign(
+            campaign.publicId,
+            "Rejected from Promotion Center",
+          )
+      : action === "LEGAL_REVIEW"
         ? adminPromotionService.reviewCampaignLegal(
             campaign.publicId,
             "PASSED",
@@ -404,50 +419,12 @@ export default function AdminPromotionCenterPage() {
                 ? "Giám sát sức khỏe ưu đãi và đối soát phân tán"
                 : view === "campaigns"
                 ? "Quản trị vòng đời chiến dịch"
+                : view === "overview"
+                ? "Tổng quan sức khỏe và các việc cần xử lý"
                 : promotionModelFor(selectedTab.type).description}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {view !== "operations" && (
-              <button
-                type="button"
-                onClick={() => {
-                  setView((value) =>
-                    value === "promotions" ? "campaigns" : "promotions",
-                  );
-                  setQuery("");
-                  setStatus("");
-                  setPage(0);
-                }}
-                className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:bg-zinc-800`}
-              >
-                {view !== "promotions" ? (
-                  <ArrowLeft className="h-4 w-4" />
-                ) : (
-                  <CalendarClock className="h-4 w-4" />
-                )}
-                {view !== "promotions" ? "Promotion Center" : "Chiến dịch"}
-              </button>
-            )}
-            {canViewOperations && (
-              <button
-                type="button"
-                onClick={() => {
-                  setView((value) =>
-                    value === "operations" ? "promotions" : "operations",
-                  );
-                  setPage(0);
-                }}
-                className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:bg-zinc-800`}
-              >
-                {view === "operations" ? (
-                  <ArrowLeft className="h-4 w-4" />
-                ) : (
-                  <Activity className="h-4 w-4" />
-                )}
-                {view === "operations" ? "Promotion Center" : "Vận hành"}
-              </button>
-            )}
             <button
               type="button"
               onClick={() => void load()}
@@ -458,7 +435,7 @@ export default function AdminPromotionCenterPage() {
               />{" "}
               Làm mới
             </button>
-            {view !== "operations" && (
+            {canAuthor && ["campaigns", "promotions"].includes(view) && (
               <button
                 type="button"
                 onClick={() =>
@@ -478,6 +455,23 @@ export default function AdminPromotionCenterPage() {
             )}
           </div>
         </div>
+        <nav aria-label="Khu vực Promotion Center" className="mt-5 flex gap-1 overflow-x-auto border-b border-zinc-800">
+          {[
+            ["overview", "Tổng quan"],
+            ["campaigns", "Chiến dịch"],
+            ["promotions", "Cấp phát"],
+            ...(canViewOperations ? [["operations", "Vận hành"]] : []),
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => { setView(key); setPage(0); setQuery(""); setStatus(""); }}
+              className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-black ${view === key ? "border-orange-500 text-orange-300" : "border-transparent text-zinc-500 hover:text-white"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </header>
 
       <main className="px-5 py-5 lg:px-8">
@@ -517,7 +511,7 @@ export default function AdminPromotionCenterPage() {
           </div>
         )}
 
-        {view !== "operations" && (
+        {["campaigns", "promotions"].includes(view) && (
           <div
             className={`mb-4 grid gap-3 ${view === "campaigns" ? "md:grid-cols-[minmax(240px,1fr)_180px_180px]" : "md:grid-cols-[minmax(220px,1fr)_200px_180px_180px]"}`}
           >
@@ -548,6 +542,7 @@ export default function AdminPromotionCenterPage() {
                   "SCHEDULED",
                   "ACTIVE",
                   "PAUSED",
+                  "KILLED",
                   "COMPLETED",
                   "CANCELLED",
                 ]
@@ -602,7 +597,7 @@ export default function AdminPromotionCenterPage() {
           </div>
         )}
 
-        {view === "operations" ? (
+        {view === "operations" || view === "overview" ? (
           <OperationsDashboard data={operations} loading={loading} />
         ) : (
           <>
@@ -615,7 +610,9 @@ export default function AdminPromotionCenterPage() {
             <CampaignTable
               rows={campaigns.content}
               busy={busy}
+              onDetail={(item) => setModal({ type: "campaign-detail", record: item })}
               onEdit={(item) => setModal({ type: "campaign", record: item })}
+              onClone={(item) => setModal({ type: "campaign", template: item })}
               onDelete={(item) =>
                 runConfirmed({
                   title: "Xóa chiến dịch?",
@@ -627,15 +624,23 @@ export default function AdminPromotionCenterPage() {
                   refreshCampaigns: true,
                 })
               }
-              onAction={(item, action) =>
+              onAction={(item, action) => {
+                if (action === "KILL_SWITCH" || action === "FORCE_RELEASE_HOLDS") {
+                  setModal({ type: "campaign-danger", record: item, action });
+                  return;
+                }
+                if (["APPROVE", "REJECT", "LEGAL_REVIEW", "OVERRIDE_APPROVE"].includes(action)) {
+                  setModal({ type: "campaign-review", record: item, action });
+                  return;
+                }
                 runConfirmed({
                   title: campaignActionTitle(action),
                   description: campaignActionDescription(item, action),
                   action: () => campaignAction(item, action),
                   success: "Đã cập nhật vòng đời chiến dịch.",
                   refreshCampaigns: true,
-                })
-              }
+                });
+              }}
             />
           ) : promotions.content.length === 0 ? (
             <EmptyPromotions type={selectedTab.type} />
@@ -704,6 +709,7 @@ export default function AdminPromotionCenterPage() {
       {modal?.type === "campaign" && (
         <CampaignModal
           record={modal.record}
+          template={modal.template}
           busy={busy}
           onClose={() => setModal(null)}
           onSave={(payload, editing) =>
@@ -719,6 +725,48 @@ export default function AdminPromotionCenterPage() {
               true,
             )
           }
+        />
+      )}
+      {modal?.type === "campaign-detail" && (
+        <CampaignDetailModal
+          record={modal.record}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === "campaign-danger" && (
+        <CampaignDangerModal
+          campaign={modal.record}
+          action={modal.action}
+          busy={busy}
+          onClose={() => setModal(null)}
+          onSubmit={(reason, campaignCode) => run(
+            () => modal.action === "KILL_SWITCH"
+              ? adminPromotionService.transitionCampaign(modal.record.publicId, "KILL_SWITCH", reason)
+              : adminPromotionService.forceReleaseCampaignHolds(modal.record.publicId, campaignCode, reason),
+            modal.action === "KILL_SWITCH"
+              ? "Đã dừng khẩn cấp chiến dịch. Các lượt đang giữ chưa bị giải phóng."
+              : "Đã giải phóng các lượt giữ ưu đãi đang hoạt động.",
+            true,
+          )}
+        />
+      )}
+      {modal?.type === "campaign-review" && (
+        <CampaignReviewModal
+          campaign={modal.record}
+          action={modal.action}
+          busy={busy}
+          onClose={() => setModal(null)}
+          onSubmit={({ comment, legalStatus, legalReference, campaignCode }) => run(
+            () => modal.action === "APPROVE"
+              ? adminPromotionService.approveCampaign(modal.record.publicId, comment)
+              : modal.action === "REJECT"
+                ? adminPromotionService.rejectCampaign(modal.record.publicId, comment)
+                : modal.action === "OVERRIDE_APPROVE"
+                  ? adminPromotionService.overrideCampaignApproval(modal.record.publicId, campaignCode, comment)
+                  : adminPromotionService.reviewCampaignLegal(modal.record.publicId, legalStatus, comment, legalReference),
+            "Đã ghi nhận quyết định và cập nhật luồng chiến dịch.",
+            true,
+          )}
         />
       )}
       {modal?.type === "promotion" && (
@@ -825,6 +873,41 @@ const durationText = (seconds) => {
 };
 
 function OperationsDashboard({ data, loading }) {
+  const [filters, setFilters] = useState({
+    query: "",
+    status: "",
+    releaseReasonType: "",
+    from: "",
+    to: "",
+  });
+  const [ledger, setLedger] = useState(null);
+  const [ledgerState, setLedgerState] = useState({ loading: false, error: "" });
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLedgerState({ loading: true, error: "" });
+      adminPromotionService.searchPromotionOperations({
+        ...filters,
+        from: filters.from ? new Date(filters.from).toISOString() : undefined,
+        to: filters.to ? new Date(filters.to).toISOString() : undefined,
+      }).then((result) => {
+        if (active) {
+          setLedger(result);
+          setLedgerState({ loading: false, error: "" });
+        }
+      }).catch((error) => {
+        if (active) setLedgerState({ loading: false, error: errorText(error) });
+      });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [filters]);
+
+  const updateFilter = (key, value) => setFilters((current) => ({
+    ...current,
+    [key]: value,
+  }));
+
   if (loading || !data.promotion || !data.booking) {
     return (
       <div className="flex h-48 items-center justify-center gap-2 text-sm text-zinc-500">
@@ -886,11 +969,21 @@ function OperationsDashboard({ data, loading }) {
           </div>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-red-300">
             {alerts.map((item) => (
-              <span key={item}>
+              <button
+                key={item}
+                type="button"
+                onClick={() => {
+                  if (item === "EXPIRATION_BACKLOG_HIGH" || item === "EXPIRATION_OLDEST_AGE_HIGH") updateFilter("status", "ACTIVE");
+                  else if (item === "REVERSAL_RATE_HIGH") updateFilter("status", "REVERSE");
+                  else if (item === "CAMPAIGN_BUDGET_EXPOSURE_HIGH") updateFilter("query", "CAMPAIGN");
+                  else updateFilter("query", "");
+                }}
+                className="text-left underline decoration-red-500/40 underline-offset-4 hover:text-white"
+              >
                 {item === "RECONCILIATION_MISMATCH"
                   ? `${mismatch} booking lệch promotion`
                   : alertLabels[item] || item}
-              </span>
+              </button>
             ))}
           </div>
         </div>
@@ -907,6 +1000,44 @@ function OperationsDashboard({ data, loading }) {
           </article>
         ))}
       </div>
+      <section className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950/30">
+        <header className="border-b border-zinc-800 p-4">
+          <h2 className="text-sm font-black text-white">Reservation explorer & ledger điều chỉnh</h2>
+          <p className="mt-1 text-xs text-zinc-500">Tìm theo campaign, promotion, reservation, booking, payment, khách hàng, lý do release, trạng thái hoặc thời gian.</p>
+          <div className="mt-4 grid gap-2 md:grid-cols-5">
+            <input
+              value={filters.query}
+              onChange={(event) => updateFilter("query", event.target.value)}
+              placeholder="Mã hoặc tham chiếu bất kỳ"
+              className="h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white outline-none focus:border-orange-500 md:col-span-2"
+            />
+            <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} className={fieldClass}>
+              <option value="">Mọi trạng thái</option>
+              {["ACTIVE", "CONFIRMED", "RELEASED", "EXPIRED", "REVERSED", "RESERVED", "ROLLBACKED"].map((value) => <option key={value}>{value}</option>)}
+            </select>
+            <select value={filters.releaseReasonType} onChange={(event) => updateFilter("releaseReasonType", event.target.value)} className={fieldClass}>
+              <option value="">Mọi lý do release</option>
+              {["PAYMENT_FAILED", "PAYMENT_TIMEOUT", "CUSTOMER_CANCELLED_BOOKING", "STAFF_CANCELLED_BOOKING", "BOOKING_EXPIRED", "CAMPAIGN_PAUSED", "CAMPAIGN_KILL_SWITCH", "SYSTEM_COMPENSATION"].map((value) => <option key={value}>{value}</option>)}
+            </select>
+            <button type="button" onClick={() => setFilters({ query: "", status: "", releaseReasonType: "", from: "", to: "" })} className="h-10 rounded-lg border border-zinc-700 text-xs font-bold text-zinc-300 hover:bg-zinc-800">Xóa lọc</button>
+            <input type="datetime-local" value={filters.from} onChange={(event) => updateFilter("from", event.target.value)} className={fieldClass} />
+            <input type="datetime-local" value={filters.to} onChange={(event) => updateFilter("to", event.target.value)} className={fieldClass} />
+          </div>
+        </header>
+        <div className="p-4">
+          {ledgerState.loading ? (
+            <div className="flex min-h-24 items-center justify-center gap-2 text-xs text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Đang tra cứu ledger</div>
+          ) : ledgerState.error ? (
+            <p className="text-xs text-red-300">{ledgerState.error}</p>
+          ) : (
+            <div className="space-y-5">
+              <LedgerTable title="Reservation" total={ledger?.reservationTotal} rows={ledger?.reservations || []} />
+              <LedgerTable title="Số lượt ưu đãi" total={ledger?.redemptionTotal} rows={ledger?.redemptions || []} />
+              <LedgerTable title="Adjustment / reversal" total={ledger?.adjustmentTotal} rows={ledger?.adjustments || []} />
+            </div>
+          )}
+        </div>
+      </section>
       <div className="mt-4 text-right text-[11px] text-zinc-600">
         Cập nhật {dateTime(promotion.observedAt)}
       </div>
@@ -914,7 +1045,45 @@ function OperationsDashboard({ data, loading }) {
   );
 }
 
-function CampaignTable({ rows, busy, onEdit, onDelete, onAction }) {
+const campaignActionIcon = {
+  VIEW: Eye,
+  EDIT: Edit3,
+  CLONE: Copy,
+  SUBMIT: Send,
+  APPROVE: Check,
+  REJECT: X,
+  OVERRIDE_APPROVE: AlertTriangle,
+  LEGAL_REVIEW: CheckCircle2,
+  PUBLISH: CalendarClock,
+  ACTIVATE: Play,
+  RESUME: Play,
+  PAUSE: CirclePause,
+  CANCEL: Trash2,
+  KILL_SWITCH: AlertTriangle,
+  FORCE_RELEASE_HOLDS: RotateCw,
+  DELETE: Trash2,
+};
+
+const campaignActionLabel = {
+  VIEW: "Xem chi tiết",
+  EDIT: "Sửa",
+  CLONE: "Nhân bản",
+  SUBMIT: "Gửi duyệt",
+  APPROVE: "Phê duyệt",
+  REJECT: "Từ chối",
+  OVERRIDE_APPROVE: "Duyệt ngoại lệ",
+  LEGAL_REVIEW: "Duyệt pháp lý",
+  PUBLISH: "Xuất bản",
+  ACTIVATE: "Kích hoạt",
+  RESUME: "Tiếp tục",
+  PAUSE: "Tạm dừng",
+  CANCEL: "Hủy vĩnh viễn",
+  KILL_SWITCH: "Dừng khẩn cấp",
+  FORCE_RELEASE_HOLDS: "Giải phóng toàn bộ lượt giữ",
+  DELETE: "Xóa bản nháp",
+};
+
+function CampaignTable({ rows, busy, onDetail, onEdit, onClone, onDelete, onAction }) {
   return (
     <table className="w-full min-w-[980px] text-left text-sm">
       <thead className="bg-zinc-950 text-[10px] font-bold uppercase text-zinc-500">
@@ -924,7 +1093,7 @@ function CampaignTable({ rows, busy, onEdit, onDelete, onAction }) {
             "Trạng thái",
             "Hiệu lực",
             "Ngân sách",
-            "Lượt dùng",
+            "Số đơn đã áp dụng",
             "Thao tác",
           ].map((value) => (
             <th key={value} className="px-4 py-3">
@@ -966,77 +1135,27 @@ function CampaignTable({ rows, busy, onEdit, onDelete, onAction }) {
             </td>
             <td className="px-4 py-4">
               <div className="flex flex-wrap gap-1">
-                <IconButton
-                  title="Sửa"
-                  onClick={() => onEdit(row)}
-                  disabled={busy || row.status !== "DRAFT"}
-                >
-                  <Edit3 className="h-4 w-4" />
-                </IconButton>
-                {row.approvalStatus === "DRAFT" && (
-                  <IconButton
-                    title="Gửi duyệt"
-                    onClick={() => onAction(row, "SUBMIT")}
-                    disabled={busy}
-                  >
-                    <Send className="h-4 w-4" />
-                  </IconButton>
-                )}
-                {row.approvalStatus === "PENDING" && (
-                  <IconButton
-                    title="Phê duyệt"
-                    onClick={() => onAction(row, "APPROVE")}
-                    disabled={busy}
-                  >
-                    <Check className="h-4 w-4" />
-                  </IconButton>
-                )}
-                {row.legalStatus !== "PASSED" && (
-                  <IconButton
-                    title="Duyệt pháp lý"
-                    onClick={() => onAction(row, "LEGAL")}
-                    disabled={busy}
-                  >
-                    <Check className="h-4 w-4" />
-                  </IconButton>
-                )}
-                {row.status === "DRAFT" &&
-                  row.approvalStatus === "APPROVED" &&
-                  row.legalStatus === "PASSED" && (
+                {(row.allowedActions || []).map((action) => {
+                  const Icon = campaignActionIcon[action];
+                  if (!Icon) return null;
+                  const dangerous = ["DELETE", "CANCEL", "KILL_SWITCH", "REJECT"].includes(action);
+                  const handler = action === "VIEW" ? onDetail
+                    : action === "EDIT" ? onEdit
+                    : action === "CLONE" ? onClone
+                    : action === "DELETE" ? onDelete
+                    : (item) => onAction(item, action);
+                  return (
                     <IconButton
-                      title="Xuất bản"
-                      onClick={() => onAction(row, "PUBLISH")}
+                      key={action}
+                      title={campaignActionLabel[action] || action}
+                      danger={dangerous}
+                      onClick={() => handler(row)}
                       disabled={busy}
                     >
-                      <CalendarClock className="h-4 w-4" />
+                      <Icon className="h-4 w-4" />
                     </IconButton>
-                  )}
-                {["SCHEDULED", "PAUSED"].includes(row.status) && (
-                  <IconButton
-                    title="Kích hoạt"
-                    onClick={() => onAction(row, "ACTIVATE")}
-                    disabled={busy}
-                  >
-                    <Play className="h-4 w-4" />
-                  </IconButton>
-                )}
-                {row.status === "ACTIVE" && (
-                  <IconButton
-                    title="Tạm dừng"
-                    onClick={() => onAction(row, "PAUSE")}
-                    disabled={busy}
-                  >
-                    <CirclePause className="h-4 w-4" />
-                  </IconButton>
-                )}
-                <IconButton
-                  title="Xóa"
-                  danger
-                  onClick={() => onDelete(row)}
-                  disabled={busy || row.status !== "DRAFT"}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </IconButton>
+                  );
+                })}
               </div>
             </td>
           </tr>
@@ -1560,7 +1679,7 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
           <DetailItem label="Cơ chế">
             <span>
               {promotion.promotionType === "AUTO"
-                ? "Khách chọn tại checkout"
+                ? "Hệ thống tự áp dụng tại checkout"
                 : promotion.promotionType === "COUPON"
                   ? "Cấp mã qua thông báo"
                   : "Khách nhận vào ví"}
@@ -1687,6 +1806,138 @@ function ModalShell({ title, icon: Icon, onClose, children }) {
   );
 }
 
+function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
+  const legal = action === "LEGAL_REVIEW";
+  const override = action === "OVERRIDE_APPROVE";
+  const [comment, setComment] = useState("");
+  const [legalStatus, setLegalStatus] = useState("PASSED");
+  const [legalReference, setLegalReference] = useState(campaign.legalNotificationRef || "");
+  const [campaignCode, setCampaignCode] = useState("");
+  const valid = comment.trim().length >= 3
+    && (!override || campaignCode === campaign.code)
+    && (!legal || legalReference.trim().length > 0);
+
+  return (
+    <ModalShell
+      title={campaignActionLabel[action] || "Ghi nhận quyết định"}
+      icon={legal ? CheckCircle2 : override ? AlertTriangle : Check}
+      onClose={busy ? () => {} : onClose}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid) onSubmit({
+            comment: comment.trim(),
+            legalStatus,
+            legalReference: legalReference.trim(),
+            campaignCode,
+          });
+        }}
+        className="space-y-4 p-5"
+      >
+        {legal && (
+          <>
+            <Field label="Kết quả pháp lý" required>
+              <select value={legalStatus} onChange={(event) => setLegalStatus(event.target.value)} className={fieldClass}>
+                <option value="PASSED">Đạt pháp lý</option>
+                <option value="FAILED">Không đạt</option>
+              </select>
+            </Field>
+            <Field label="Mã văn bản / ticket pháp lý" required>
+              <input value={legalReference} onChange={(event) => setLegalReference(event.target.value)} className={fieldClass} />
+            </Field>
+          </>
+        )}
+        {override && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/[0.06] p-4">
+            <p className="text-xs leading-5 text-red-100">Override là hành động riêng, không phải quyền mặc định của ADMIN. Nhập lại mã chiến dịch để tạo bằng chứng audit rõ ràng.</p>
+            <input value={campaignCode} onChange={(event) => setCampaignCode(event.target.value.toUpperCase())} placeholder={campaign.code} className={fieldClass + " mt-3"} />
+          </div>
+        )}
+        <Field label={legal ? "Nhận xét pháp lý" : action === "REJECT" ? "Lý do từ chối" : override ? "Lý do override" : "Nhận xét phê duyệt"} required>
+          <textarea required minLength="3" maxLength="1000" value={comment} onChange={(event) => setComment(event.target.value)} className="min-h-28 w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm text-white outline-none focus:border-orange-500" />
+        </Field>
+        <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4">
+          <button type="button" disabled={busy} onClick={onClose} className={buttonClass + " border border-zinc-700 text-zinc-300"}>Quay lại</button>
+          <button disabled={busy || !valid} className={buttonClass + (action === "REJECT" || override ? " bg-red-500" : " bg-orange-500") + " text-white"}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Ghi nhận
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function CampaignDangerModal({ campaign, action, busy, onClose, onSubmit }) {
+  const forceRelease = action === "FORCE_RELEASE_HOLDS";
+  const [reason, setReason] = useState("");
+  const [campaignCode, setCampaignCode] = useState("");
+  const [impact, setImpact] = useState(null);
+  const [impactError, setImpactError] = useState("");
+
+  useEffect(() => {
+    if (!forceRelease) return undefined;
+    let active = true;
+    adminPromotionService.getForceReleaseImpact(campaign.publicId)
+      .then((result) => { if (active) setImpact(result); })
+      .catch((error) => { if (active) setImpactError(errorText(error)); });
+    return () => { active = false; };
+  }, [campaign.publicId, forceRelease]);
+
+  const valid = reason.trim().length >= 5
+    && (!forceRelease || campaignCode === campaign.code);
+
+  return (
+    <ModalShell
+      title={forceRelease ? "Giải phóng toàn bộ lượt giữ" : "Dừng khẩn cấp chiến dịch"}
+      icon={AlertTriangle}
+      onClose={busy ? () => {} : onClose}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid) onSubmit(reason.trim(), campaignCode);
+        }}
+        className="space-y-4 p-5"
+      >
+        <div className="rounded-lg border border-red-500/30 bg-red-500/[0.06] p-4 text-sm leading-6 text-red-100">
+          {forceRelease
+            ? "Đây là thao tác độc lập sau kill switch. Booking đang thanh toán có thể phải tính lại giá hoặc hủy."
+            : "Preview và reserve mới sẽ bị chặn ngay. Reservation đang hoạt động không tự bị giải phóng."}
+        </div>
+        {forceRelease && (
+          impactError ? <p className="text-xs text-red-300">{impactError}</p>
+            : !impact ? <p className="text-xs text-zinc-500">Đang tính phạm vi ảnh hưởng…</p>
+              : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DetailCard label="Booking bị ảnh hưởng" value={impact.affectedBookingCount} />
+                  <DetailCard label="Reservation đang giữ" value={impact.affectedReservationCount} />
+                  <DetailCard label="Discount đang giữ" value={money(impact.reservedDiscount)} />
+                  <DetailCard label="Budget exposure" value={money(impact.budgetExposure)} />
+                  <DetailCard label="Cần tính lại giá / hủy" value={impact.bookingsRequiringRepriceOrCancel} />
+                </div>
+              )
+        )}
+        <Field label="Lý do vận hành" required hint="Lý do được ghi vào audit và từng reservation bị release.">
+          <textarea required minLength="5" maxLength="1000" value={reason} onChange={(event) => setReason(event.target.value)} className="min-h-24 w-full rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm text-white outline-none focus:border-red-500" />
+        </Field>
+        {forceRelease && (
+          <Field label={"Nhập lại mã " + campaign.code} required>
+            <input value={campaignCode} onChange={(event) => setCampaignCode(event.target.value.toUpperCase())} className={fieldClass} />
+          </Field>
+        )}
+        <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4">
+          <button type="button" disabled={busy} onClick={onClose} className={buttonClass + " border border-zinc-700 text-zinc-300"}>Quay lại</button>
+          <button disabled={busy || !valid || (forceRelease && !impact)} className={buttonClass + " bg-red-500 text-white hover:bg-red-600"}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            {forceRelease ? "Giải phóng lượt giữ" : "Dừng khẩn cấp"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
 function ConfirmModal({
   title,
   description,
@@ -1724,6 +1975,217 @@ function ConfirmModal({
         </div>
       </div>
     </ModalShell>
+  );
+}
+
+function LedgerTable({ title, total, rows }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-black uppercase tracking-wide text-zinc-500">{title} · {Number(total || 0).toLocaleString("vi-VN")}</p>
+      <div className="overflow-x-auto rounded-lg border border-zinc-800">
+        <table className="w-full min-w-[900px] text-left text-xs">
+          <thead className="bg-zinc-950 text-zinc-600"><tr><th className="px-3 py-2">Mã</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Booking / payment</th><th className="px-3 py-2">Khách hàng</th><th className="px-3 py-2">Lý do</th><th className="px-3 py-2">Giảm</th><th className="px-3 py-2">Thời gian</th></tr></thead>
+          <tbody className="divide-y divide-zinc-800">
+            {rows.map((item) => (
+              <tr key={item.entryType + item.publicId}>
+                <td className="px-3 py-2 font-mono text-zinc-300">{item.publicId}</td>
+                <td className="px-3 py-2"><StatusBadge value={item.status} /></td>
+                <td className="px-3 py-2 text-zinc-400">{item.bookingPublicId || item.reservationPublicId || "-"}<br />{item.paymentPublicId || "-"}</td>
+                <td className="px-3 py-2 text-zinc-400">{item.customerReference || "-"}</td>
+                <td className="max-w-xs px-3 py-2 text-zinc-400">{item.releaseReasonType || item.reasonDetail || "-"}</td>
+                <td className="px-3 py-2 font-bold text-white">{money(item.discountAmount)}</td>
+                <td className="px-3 py-2 text-zinc-500">{dateTime(item.occurredAt)}</td>
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan="7" className="px-3 py-6 text-center text-zinc-600">Không có dữ liệu phù hợp.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const campaignDetailTabs = [
+  "Tổng quan",
+  "Ưu đãi",
+  "Đối tượng nhận",
+  "Ngân sách & hạn mức",
+  "Duyệt & pháp lý",
+  "Lịch sử",
+];
+
+const blockedReasonLabel = {
+  CAMPAIGN_APPROVAL_REQUIRED: "Chưa được phê duyệt",
+  CAMPAIGN_LEGAL_REVIEW_REQUIRED: "Chưa đạt kiểm tra pháp lý",
+  PROMOTION_QUOTA_EXHAUSTED: "Đã hết số đơn tối đa",
+  CAMPAIGN_BUDGET_EXHAUSTED: "Đã hết ngân sách",
+  CAMPAIGN_PAUSED: "Chiến dịch đang tạm dừng",
+  CAMPAIGN_KILL_SWITCHED: "Đã dừng khẩn cấp",
+  CAMPAIGN_CANCELLED: "Chiến dịch đã bị hủy",
+  CAMPAIGN_EXPIRED: "Chiến dịch đã hết hạn",
+};
+
+const pendingTaskLabel = {
+  APPROVAL_DECISION: "Người có quyền duyệt ngân sách",
+  LEGAL_REVIEW: "Bộ phận pháp lý",
+  PUBLISH_CAMPAIGN: "Người có quyền xuất bản",
+};
+
+function CampaignDetailModal({ record, onClose }) {
+  const [activeTab, setActiveTab] = useState("Tổng quan");
+  const [detail, setDetail] = useState(record);
+  const [history, setHistory] = useState([]);
+  const [state, setState] = useState({ loading: true, error: "" });
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      adminPromotionService.getCampaign(record.publicId),
+      adminPromotionService.getApprovalHistory(record.publicId).catch(() => []),
+    ]).then(([campaign, approvalHistory]) => {
+      if (!active) return;
+      setDetail(campaign);
+      setHistory(Array.isArray(approvalHistory) ? approvalHistory : []);
+      setState({ loading: false, error: "" });
+    }).catch((error) => {
+      if (active) setState({ loading: false, error: errorText(error) });
+    });
+    return () => { active = false; };
+  }, [record.publicId]);
+
+  const nextActor = detail.pendingTasks?.length
+    ? pendingTaskLabel[detail.pendingTasks[0]] || detail.pendingTasks[0]
+    : "Không còn bước bắt buộc";
+
+  return (
+    <ModalShell title={"Chiến dịch · " + detail.name} icon={CalendarClock} onClose={onClose}>
+      <div className="border-b border-zinc-800 px-5">
+        <div className="flex gap-1 overflow-x-auto">
+          {campaignDetailTabs.map((tabName) => (
+            <button
+              key={tabName}
+              type="button"
+              onClick={() => setActiveTab(tabName)}
+              className={activeTab === tabName
+                ? "whitespace-nowrap border-b-2 border-orange-500 px-3 py-3 text-xs font-black text-orange-300"
+                : "whitespace-nowrap border-b-2 border-transparent px-3 py-3 text-xs font-bold text-zinc-500 hover:text-white"}
+            >
+              {tabName}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="p-5">
+        {state.loading ? (
+          <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-zinc-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Đang tải chi tiết chiến dịch
+          </div>
+        ) : state.error ? (
+          <p className="text-sm text-red-300">{state.error}</p>
+        ) : activeTab === "Tổng quan" ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <DetailCard label="Bước hiện tại" value={labels[detail.businessStatus] || detail.businessStatus} />
+              <DetailCard label="Khả dụng" value={labels[detail.availabilityStatus] || detail.availabilityStatus} />
+              <DetailCard label="Người xử lý tiếp theo" value={nextActor} />
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-zinc-500">Điều kiện còn chặn xuất bản / áp dụng</p>
+              {detail.blockedReasons?.length ? (
+                <ul className="mt-3 space-y-2 text-sm text-amber-200">
+                  {detail.blockedReasons.map((reason) => (
+                    <li key={reason}>• {blockedReasonLabel[reason] || reason}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-sm text-emerald-300">Không còn blocker nghiệp vụ.</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-red-500/20 bg-red-500/[0.05] p-4 text-xs leading-5 text-zinc-300">
+              Nếu dừng: preview và giữ ưu đãi mới bị chặn ngay; các reservation đang hoạt động vẫn tiếp tục confirm, release hoặc hết hạn. Giải phóng hàng loạt là thao tác khẩn cấp riêng.
+            </div>
+          </div>
+        ) : activeTab === "Ưu đãi" ? (
+          <div className="space-y-3">
+            {(detail.promotions || []).map((promotion) => (
+              <article key={promotion.publicId} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div><p className="font-bold text-white">{promotion.name}</p><p className="mt-1 text-xs text-zinc-500">{labels[promotion.promotionType] || promotion.promotionType}</p></div>
+                  <StatusBadge value={promotion.status} />
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
+                  <span>Số lượt ưu đãi: <b className="text-white">{promotion.redemptionCount || 0}</b></span>
+                  <span>Tối đa mỗi khách: <b className="text-white">{promotion.maxRedemptionsPerUser || 1}</b></span>
+                </div>
+              </article>
+            ))}
+            {!detail.promotions?.length && <p className="text-sm text-zinc-500">Chưa cấu hình ưu đãi cho chiến dịch.</p>}
+          </div>
+        ) : activeTab === "Đối tượng nhận" ? (
+          <div className="space-y-3 text-sm leading-6 text-zinc-300">
+            {(detail.promotions || []).map((promotion) => (
+              <article key={promotion.publicId} className="rounded-lg border border-zinc-800 p-4">
+                <p className="font-bold text-white">{promotion.name}</p>
+                <p className="mt-2">
+                  {promotion.promotionType === "AUTO"
+                    ? "Hệ thống tự xét cho mọi khách đủ điều kiện; khách không cần nhận hoặc nhập mã."
+                    : promotion.promotionType === "COUPON"
+                      ? "Chỉ khách đã được cấp coupon mới có thể sử dụng mã."
+                      : "Chỉ xuất hiện trong ví của khách đã nhận voucher."}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">{conditionSummary(promotion)}</p>
+              </article>
+            ))}
+          </div>
+        ) : activeTab === "Ngân sách & hạn mức" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailCard label="Ngân sách đã dùng" value={money(detail.budgetUsed)} />
+            <DetailCard label="Ngân sách đang giữ" value={money(detail.budgetReserved)} />
+            <DetailCard label="Ngân sách còn lại" value={money(detail.budgetRemaining)} />
+            <DetailCard label="Tổng ngân sách" value={money(detail.budgetAmount)} />
+            <DetailCard label="Số đơn đã áp dụng" value={(detail.redemptionCount || 0) + (detail.maxRedemptions ? " / " + detail.maxRedemptions : "")} />
+            <DetailCard label="Tối đa mỗi khách" value={detail.maxRedemptionsPerUser || 1} />
+          </div>
+        ) : activeTab === "Duyệt & pháp lý" ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2"><StatusBadge value={detail.approvalStatus} /><StatusBadge value={detail.legalStatus} /></div>
+            <DetailCard label="Tham chiếu pháp lý" value={detail.legalNotificationRef || "Chưa có"} />
+            <HistoryList history={history} />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailCard label="Tạo lúc" value={dateTime(detail.createdAt)} />
+              <DetailCard label="Cập nhật lúc" value={dateTime(detail.updatedAt)} />
+            </div>
+            <HistoryList history={history} />
+          </div>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function DetailCard({ label, value }) {
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+      <p className="text-[10px] font-black uppercase tracking-wide text-zinc-600">{label}</p>
+      <p className="mt-2 text-sm font-bold text-white">{value ?? "-"}</p>
+    </div>
+  );
+}
+
+function HistoryList({ history }) {
+  if (!history.length) return <p className="text-sm text-zinc-500">Chưa có lịch sử duyệt.</p>;
+  return (
+    <div className="divide-y divide-zinc-800 rounded-lg border border-zinc-800">
+      {history.map((item) => (
+        <div key={item.publicId || item.approvedAt} className="p-3 text-xs">
+          <div className="flex justify-between gap-3"><b className="text-white">{labels[item.action] || item.action}</b><span className="text-zinc-600">{dateTime(item.approvedAt)}</span></div>
+          <p className="mt-1 text-zinc-400">{item.comment || "Không có ghi chú"}</p>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1765,26 +2227,27 @@ function Toggle({ checked, onChange, label, disabled = false }) {
   );
 }
 
-function CampaignModal({ record, busy, onClose, onSave }) {
+function CampaignModal({ record, template, busy, onClose, onSave }) {
   const editing = Boolean(record);
+  const source = record || template;
   const [form, setForm] = useState(() => ({
-    code: record?.code || "",
-    name: record?.name || "",
-    description: record?.description || "",
-    priority: record?.priority ?? 100,
-    stackable: record?.stackable ?? false,
-    exclusiveCampaign: record?.exclusiveCampaign ?? false,
-    autoActivate: record?.autoActivate ?? true,
-    autoComplete: record?.autoComplete ?? true,
-    autoPauseWhenBudgetExceeded: record?.autoPauseWhenBudgetExceeded ?? true,
-    timezone: record?.timezone || "Asia/Ho_Chi_Minh",
-    startAt: toLocalInput(record?.startAt),
-    endAt: toLocalInput(record?.endAt || Date.now() + 30 * 86400_000),
-    budgetAmount: record?.budgetAmount ?? 100000000,
-    maxRedemptions: record?.maxRedemptions ?? "",
-    maxRedemptionsPerUser: record?.maxRedemptionsPerUser ?? 1,
-    legalNotificationRef: record?.legalNotificationRef || "",
-    remarks: record?.remarks || "",
+    code: template ? (source?.code || "CAMPAIGN") + "-COPY" : source?.code || "",
+    name: template ? "Bản sao " + (source?.name || "") : source?.name || "",
+    description: source?.description || "",
+    priority: source?.priority ?? 100,
+    stackable: source?.stackable ?? false,
+    exclusiveCampaign: source?.exclusiveCampaign ?? false,
+    autoActivate: source?.autoActivate ?? true,
+    autoComplete: source?.autoComplete ?? true,
+    autoPauseWhenBudgetExceeded: source?.autoPauseWhenBudgetExceeded ?? true,
+    timezone: source?.timezone || "Asia/Ho_Chi_Minh",
+    startAt: toLocalInput(template ? null : source?.startAt),
+    endAt: toLocalInput(template ? Date.now() + 30 * 86400_000 : source?.endAt || Date.now() + 30 * 86400_000),
+    budgetAmount: source?.budgetAmount ?? 100000000,
+    maxRedemptions: source?.maxRedemptions ?? "",
+    maxRedemptionsPerUser: source?.maxRedemptionsPerUser ?? 1,
+    legalNotificationRef: source?.legalNotificationRef || "",
+    remarks: source?.remarks || "",
   }));
   const update = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -1806,7 +2269,7 @@ function CampaignModal({ record, busy, onClose, onSave }) {
   };
   return (
     <ModalShell
-      title={editing ? "Sửa chiến dịch" : "Tạo chiến dịch"}
+      title={editing ? "Sửa chiến dịch" : template ? "Nhân bản chiến dịch" : "Tạo chiến dịch"}
       icon={CalendarClock}
       onClose={onClose}
     >
@@ -1873,7 +2336,7 @@ function CampaignModal({ record, busy, onClose, onSave }) {
             className={fieldClass}
           />
         </Field>
-        <Field label="Tổng lượt tối đa">
+        <Field label="Số đơn tối đa">
           <input
             min="1"
             type="number"
@@ -1882,7 +2345,7 @@ function CampaignModal({ record, busy, onClose, onSave }) {
             className={fieldClass}
           />
         </Field>
-        <Field label="Trần lượt mỗi khách trên từng ưu đãi" required>
+        <Field label="Tối đa mỗi khách" required>
           <input
             required
             min="1"
@@ -2762,7 +3225,7 @@ function PromotionModal({
               <Field label="Mã phân phối" required={type === "VOUCHER"}>
                 {type === "AUTO" ? (
                   <div className="flex h-10 items-center text-xs font-bold text-zinc-500">
-                    Không cần mã, khách chọn tại checkout
+                    Không cần mã; hệ thống tự áp dụng phương án tốt nhất
                   </div>
                 ) : type === "COUPON" ? (
                   <div className="flex h-10 items-center rounded-lg border border-zinc-800 bg-zinc-950 px-3 font-mono text-xs font-bold text-amber-200">

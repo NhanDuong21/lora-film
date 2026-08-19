@@ -74,6 +74,19 @@ public class SystemBootstrap {
             new PermissionData("AUTH_RESET_PASSWORD", "Reset password", "Authentication"),
             new PermissionData("AUTH_VIEW_PROFILE", "View own profile", "Authentication"),
             new PermissionData("AUTH_UPDATE_PROFILE", "Update own profile", "Authentication"),
+
+            // Promotion governance capabilities. These are deliberately separate
+            // from roles so a MANAGER can receive only the authority they need.
+            new PermissionData("PROMOTION_VIEW", "View promotion workspace", "Promotion Governance"),
+            new PermissionData("PROMOTION_AUTHOR", "Author promotion campaigns", "Promotion Governance"),
+            new PermissionData("PROMOTION_APPROVE_STANDARD", "Approve standard promotion budgets", "Promotion Governance"),
+            new PermissionData("PROMOTION_APPROVE_HIGH_BUDGET", "Approve high promotion budgets", "Promotion Governance"),
+            new PermissionData("PROMOTION_LEGAL_REVIEW", "Review promotion legal compliance", "Promotion Governance"),
+            new PermissionData("PROMOTION_PUBLISH", "Publish approved promotion campaigns", "Promotion Governance"),
+            new PermissionData("PROMOTION_OPERATE", "Pause, resume and cancel campaigns", "Promotion Governance"),
+            new PermissionData("PROMOTION_EMERGENCY_STOP", "Trigger campaign emergency stop", "Promotion Governance"),
+            new PermissionData("PROMOTION_AUDIT_VIEW", "View promotion audit and ledgers", "Promotion Governance"),
+            new PermissionData("PROMOTION_OVERRIDE", "Override campaign approval with evidence", "Promotion Governance"),
             
             // Customer Management
             new PermissionData("CUSTOMER_VIEW", "View customers", "Customer Management"),
@@ -193,7 +206,9 @@ public class SystemBootstrap {
                 "DEPARTMENT_VIEW", "POSITION_VIEW", "BOOKING_VIEW", "BOOKING_MANAGE",
                 "MOVIE_VIEW", "CINEMA_MANAGE", "SHOWTIME_MANAGE", "PRICING_MANAGE",
                 "PAYMENT_VIEW", "PROMOTION_MANAGE", "ANALYTICS_MANAGE",
-                "SCORE_MANAGE", "MEMBERSHIP_TIER_MANAGE"
+                "SCORE_MANAGE", "MEMBERSHIP_TIER_MANAGE",
+                "PROMOTION_VIEW", "PROMOTION_AUTHOR", "PROMOTION_OPERATE",
+                "PROMOTION_AUDIT_VIEW"
             ).contains(p.getCode()))
             .collect(Collectors.toSet());
 
@@ -212,11 +227,12 @@ public class SystemBootstrap {
             role -> {
                 boolean metadataChanged = !name.equals(role.getRoleName())
                         || !description.equals(role.getDescription());
-                if (metadataChanged) {
+                boolean permissionsChanged = role.getPermissions().addAll(permissions);
+                if (metadataChanged || permissionsChanged) {
                     role.setRoleName(name);
                     role.setDescription(description);
                     roleRepository.save(role);
-                    log.info("Normalized built-in role metadata: {}", code);
+                    log.info("Normalized built-in role metadata and capabilities: {}", code);
                 } else {
                     log.debug("Role {} already exists.", code);
                 }

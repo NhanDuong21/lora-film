@@ -96,9 +96,8 @@ public class PromotionEngineService {
             addCandidate(candidates, warnings, addedPromotions,
                     promotion, null, request, original, now, true);
         }
-        // AUTO promotions are system-controlled candidates. When a customer selects
-        // a voucher/coupon, that manual choice is authoritative and AUTO can only be
-        // added when the stacking policies of both benefits allow it.
+        // AUTO promotions always compete with a customer's manual choice. The
+        // selection policy evaluates every valid option and keeps the best price.
         for (Promotion promotion : promotionRepository.findRuntimeCandidates(
                 PromotionType.AUTO, PromotionStatus.ACTIVE, now)) {
             addCandidate(candidates, warnings, addedPromotions,
@@ -143,6 +142,21 @@ public class PromotionEngineService {
         BigDecimal discount = applied.stream()
                 .map(AppliedPromotionResponse::discountAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Candidate manualCandidate = candidates.stream()
+                .filter(candidate -> candidate.promotion().getPromotionType()
+                        != PromotionType.AUTO)
+                .findFirst()
+                .orElse(null);
+        boolean manualSelectionReplaced = manualCandidate != null
+                && selected.stream().noneMatch(candidate -> candidate == manualCandidate);
+        BigDecimal additionalSavings = manualSelectionReplaced
+                ? money(discount.subtract(manualCandidate.discount()).max(BigDecimal.ZERO))
+                : BigDecimal.ZERO.setScale(2);
+        if (manualSelectionReplaced) {
+            warnings.add("Hệ thống đã giữ voucher trong ví và tự áp dụng ưu đãi tốt hơn, "
+                    + "giúp bạn tiết kiệm thêm " + additionalSavings.toPlainString() + " "
+                    + normalizeCurrency(request.currency()));
+        }
         return new PromotionCheckoutResponse(
                 discount.signum() > 0,
                 original,
@@ -151,7 +165,9 @@ public class PromotionEngineService {
                 normalizeCurrency(request.currency()),
                 applied,
                 evaluations,
-                List.copyOf(warnings));
+                List.copyOf(warnings),
+                manualSelectionReplaced,
+                additionalSavings);
     }
 
     private List<PromotionEligibilityResponse> evaluateRequestedPromotions(
@@ -368,29 +384,24 @@ public class PromotionEngineService {
                 .findFirst()
                 .orElse(null);
 
-        if (manualCandidate == null) {
-            Selection bestAutomatic = Selection.empty();
-            for (Candidate automaticCandidate : automaticCandidates) {
-                bestAutomatic = better(bestAutomatic, selectionOf(
-                        List.of(automaticCandidate), originalAmount));
-            }
-            return bestAutomatic.candidates();
-        }
-
-        Selection bestWithManual = selectionOf(
-                List.of(manualCandidate), originalAmount);
+        Selection best = manualCandidate == null
+                ? Selection.empty()
+                : selectionOf(List.of(manualCandidate), originalAmount);
         for (Candidate automaticCandidate : automaticCandidates) {
+            best = better(best, selectionOf(
+                    List.of(automaticCandidate), originalAmount));
             if (canStack(manualCandidate, automaticCandidate)) {
-                bestWithManual = better(bestWithManual, selectionOf(
+                best = better(best, selectionOf(
                         List.of(automaticCandidate, manualCandidate),
                         originalAmount));
             }
         }
-        return bestWithManual.candidates();
+        return best.candidates();
     }
 
     private boolean canStack(Candidate manual, Candidate automatic) {
-        if (manual.promotion().getPromotionType() == PromotionType.AUTO
+        if (manual == null
+                || manual.promotion().getPromotionType() == PromotionType.AUTO
                 || automatic.promotion().getPromotionType() != PromotionType.AUTO) {
             return false;
         }

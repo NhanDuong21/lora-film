@@ -28,6 +28,9 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Lo
 
     long countByPromotionPublicIdAndDeletedAtIsNull(String promotionPublicId);
 
+    List<UserPromotion> findTop100ByUserPublicIdAndDeletedAtIsNullOrderByUpdatedAtDesc(
+            String userPublicId);
+
     @Query("""
             select (count(up) > 0) from UserPromotion up, Promotion p
             where up.promotionPublicId = p.publicId

@@ -41,6 +41,20 @@ public interface PromotionReservationRepository extends
             @Param("campaignPublicId") String campaignPublicId,
             @Param("status") ReservationStatus status);
 
+    @Query("""
+            select distinct reservation.publicId
+            from PromotionReservation reservation, PromotionRedemption redemption
+            where redemption.reservationPublicId = reservation.publicId
+              and redemption.campaignPublicId = :campaignPublicId
+              and reservation.status = :status
+              and reservation.deletedAt is null
+              and redemption.deletedAt is null
+            order by reservation.publicId
+            """)
+    List<String> findIdsByCampaignAndStatus(
+            @Param("campaignPublicId") String campaignPublicId,
+            @Param("status") ReservationStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select reservation from PromotionReservation reservation

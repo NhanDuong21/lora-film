@@ -28,9 +28,9 @@ Hibernate dùng `ddl-auto=validate` và không tự cập nhật schema.
 
 | Nhóm | Prefix tiêu biểu |
 |---|---|
-| Customer promotion và wallet | `/api/promotions/**`, `/api/customers/me/promotions/**` |
+| Customer promotion và wallet | `/api/promotions/**`, `/api/customers/me/promotions/**`, `/api/customers/me/promotion-history` |
 | Admin campaign/promotion | `/api/admin/promotion-campaigns/**`, `/api/admin/promotions/**` |
-| Admin reservation/config/event/monitoring | `/api/admin/reservations/**`, `/api/admin/configurations/**`, `/api/admin/events/**`, `/api/admin/promotion-monitoring/**` |
+| Admin reservation/config/event/monitoring | `/api/admin/reservations/**`, `/api/admin/configurations/**`, `/api/admin/events/**`, `/api/admin/promotion-monitoring/**`, `/api/admin/promotion-operations/**` |
 | Booking/Payment integration | `/internal/runtime/**`, `/internal/reservations/**` |
 | Internal operations | `/internal/events/**`, `/internal/schedulers/**`, `/internal/configurations/**` |
 

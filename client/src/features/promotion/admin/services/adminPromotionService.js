@@ -18,6 +18,21 @@ const adminPromotionService = {
   approveCampaign: async (id, comment) => unwrap(await apiClient.post(
     `/api/admin/promotion-campaigns/${id}/approve`, { comment }
   )),
+  rejectCampaign: async (id, comment) => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/reject`, { comment }
+  )),
+  getApprovalHistory: async id => unwrap(await apiClient.get(
+    `/api/admin/promotion-campaigns/${id}/approval-history`
+  )),
+  overrideCampaignApproval: async (id, campaignCode, reason) => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/override-approval`, { campaignCode, reason }
+  )),
+  getForceReleaseImpact: async id => unwrap(await apiClient.get(
+    `/api/admin/promotion-campaigns/${id}/force-release-impact`
+  )),
+  forceReleaseCampaignHolds: async (id, campaignCode, reason) => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/force-release`, { campaignCode, reason }
+  )),
   reviewCampaignLegal: async (id, status, comment, legalNotificationRef = null) => unwrap(await apiClient.post(
     `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment, legalNotificationRef }
   )),
@@ -40,6 +55,8 @@ const adminPromotionService = {
     unwrap(await apiClient.get('/api/admin/reservations', { params: cleanParams(params) })),
   getPromotionMonitoring: async () =>
     unwrap(await apiClient.get('/api/admin/promotion-monitoring/summary')),
+  searchPromotionOperations: async (params = {}) =>
+    unwrap(await apiClient.get('/api/admin/promotion-operations/search', { params: cleanParams(params) })),
   getBookingMonitoring: async () =>
     unwrap(await apiClient.get('/api/admin/monitoring/summary')),
 };

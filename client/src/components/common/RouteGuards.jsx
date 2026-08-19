@@ -49,7 +49,12 @@ export function RoleRoute({ children, allowedRoles }) {
     return children;
 }
 
-export function PermissionRoute({ children, requiredPermissions = [], requireAll = false }) {
+export function PermissionRoute({
+    children,
+    requiredPermissions = [],
+    requireAll = false,
+    allowAdminBypass = true,
+}) {
     const { isAuthenticated, user, isInitializing } = useAuth();
     const location = useLocation();
 
@@ -60,8 +65,9 @@ export function PermissionRoute({ children, requiredPermissions = [], requireAll
 
     const permissions = user?.permissions || [];
     const normalizedRole = String(user?.role || "").replace(/^ROLE_/, "");
-    const hasSuperAdminAccess = normalizedRole === "ADMIN"
-        || permissions.includes("PERM_ROOT_ACCESS");
+    const hasSuperAdminAccess = allowAdminBypass && (
+        normalizedRole === "ADMIN" || permissions.includes("PERM_ROOT_ACCESS")
+    );
     const allowed = hasSuperAdminAccess || requiredPermissions.length === 0 || (
         requireAll
             ? requiredPermissions.every((permission) => permissions.includes(permission))
