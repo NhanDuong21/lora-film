@@ -301,6 +301,8 @@ export const summarizeAuditDetails = details => {
     employeeId: 'Nhân viên', batchSize: 'Số ca', sourceChecksum: 'Mã đối soát',
     departmentId: 'Phòng ban', positionId: 'Chức vụ', status: 'Trạng thái',
     cinema: 'Rạp làm việc', reason: 'Lý do', before: 'Trước thay đổi', after: 'Sau thay đổi',
+    failureCount: 'Số lần thất bại', elapsedMinutes: 'Khoảng thời gian',
+    affectedAccounts: 'Số tài khoản liên quan',
   };
   return String(details)
     .split(',')
@@ -309,6 +311,7 @@ export const summarizeAuditDetails = details => {
       if (!rest.length) return part.trim();
       const normalizedKey = key.trim();
       const value = rest.join('=').trim();
+      if (normalizedKey === 'incident' || normalizedKey === 'windowMinutes') return '';
       if (normalizedKey === 'sourceChecksum' || normalizedKey.endsWith('Id')) return '';
       if (normalizedKey === 'cinema' && /^[0-9a-f-]{20,}$/i.test(value)) {
         return 'Rạp làm việc: Đã cập nhật theo phân công';
@@ -319,7 +322,9 @@ export const summarizeAuditDetails = details => {
         DELETED: 'Đã thu hồi', ADMIN: 'Quản trị hệ thống', MANAGER: 'Quản lý rạp',
         EMPLOYEE: 'Nhân viên', CUSTOMER: 'Khách hàng', NONE: 'Chưa có',
       };
-      const displayValue = cinemaIds?.length ? `${cinemaIds.length} rạp` : translatedValues[value] || value;
+      const displayValue = normalizedKey === 'elapsedMinutes'
+        ? `${value} phút`
+        : cinemaIds?.length ? `${cinemaIds.length} rạp` : translatedValues[value] || value;
       return `${keyLabels[normalizedKey] || normalizedKey}: ${displayValue}`;
     })
     .filter(Boolean)

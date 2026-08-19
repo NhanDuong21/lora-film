@@ -11,7 +11,7 @@ public interface AccountService {
     AccountDto getAccountById(Long id);
     AccountDto getAccountByEmail(String email);
     AccountDto updateAccountStatus(Long id, AccountStatus status);
-    AccountDto updateAccountRole(Long id, Long roleId);
+    AccountDto updateAccountRole(Long id, Long roleId, String reason);
     AccountDto updateAccountAccessProfile(Long id, Long accessProfileId);
     AccountDto updateManagerCinemaAssignments(Long id, java.util.Set<String> cinemaPublicIds);
     AccountDto createEmployeeAccount(com.project.authservice.dto.request.EmployeeAccountRequest request);

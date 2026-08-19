@@ -95,7 +95,7 @@ describe('ShowtimeSeatControlDrawer', () => {
     expect(screen.getByText('Ghế đôi')).toBeInTheDocument();
 
     const vipSeat = screen.getByRole('button', { name: /Ghế A2 · Ghế VIP/ });
-    expect(vipSeat).toHaveClass('bg-amber-950');
+    expect(vipSeat).toHaveClass('bg-[#2a1906]');
 
     const coupleSeat = screen.getByRole('button', { name: /Ghế đôi B1–B2 · Ghế đôi/ });
     expect(coupleSeat).toHaveClass('bg-purple-950');

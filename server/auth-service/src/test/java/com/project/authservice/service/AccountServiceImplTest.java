@@ -10,6 +10,7 @@ import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.service.impl.AccountServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -62,6 +63,11 @@ class AccountServiceImplTest {
                 accessProfileRepository, passwordResetTokenRepository, notificationClient);
     }
 
+    @AfterEach
+    void clearSecurityContext() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     @Test
     void activatingBlockedAccountPublishesUnlockedLifecycleEvent() {
         Account account = account(10L, role(1L, "CUSTOMER"), AccountStatus.LOCKED);
@@ -76,14 +82,14 @@ class AccountServiceImplTest {
 
     @Test
     void roleChangePublishesRemovalAndAssignmentAndRevokesCredentials() {
-        Role customer = role(1L, "CUSTOMER");
+        Role customer = role(1L, "EMPLOYEE");
         Role manager = role(2L, "MANAGER");
         Account account = account(10L, customer, AccountStatus.ACTIVE);
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
         when(roleRepository.findById(2L)).thenReturn(Optional.of(manager));
         when(accountRepository.save(account)).thenReturn(account);
 
-        service.updateAccountRole(10L, 2L);
+        service.updateAccountRole(10L, 2L, null);
 
         verify(credentialRevocationService).revokeAll(10L);
         verify(authOutboxService).record(eq("ACCOUNT_ROLE_CHANGED"), eq(10L), any());
@@ -98,9 +104,9 @@ class AccountServiceImplTest {
         when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
         when(roleRepository.findById(1L)).thenReturn(Optional.of(customer));
 
-        assertThatThrownBy(() -> service.updateAccountRole(10L, 1L))
+        assertThatThrownBy(() -> service.updateAccountRole(10L, 1L, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("already assigned");
+                .hasMessageContaining("đã thuộc vai trò");
 
         verify(accountRepository, never()).save(any());
         verify(credentialRevocationService, never()).revokeAll(any());
@@ -140,6 +146,56 @@ class AccountServiceImplTest {
 
         verify(accountRepository, never()).save(any());
         verify(credentialRevocationService, never()).revokeAll(any());
+    }
+
+    @Test
+    void currentAdministratorCannotLockOwnAccount() {
+        Account administrator = account(10L, role(1L, "ADMIN"), AccountStatus.ACTIVE);
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(administrator));
+        authenticateAs(10L);
+
+        assertThatThrownBy(() -> service.updateAccountStatus(10L, AccountStatus.LOCKED))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("không thể tự khóa");
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void lastActiveAdministratorCannotBeLocked() {
+        Account administrator = account(10L, role(1L, "ADMIN"), AccountStatus.ACTIVE);
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(administrator));
+        when(accountRepository.countActiveAdministrators()).thenReturn(1L);
+        authenticateAs(22L);
+
+        assertThatThrownBy(() -> service.updateAccountStatus(10L, AccountStatus.LOCKED))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("quản trị viên hoạt động cuối cùng");
+    }
+
+    @Test
+    void currentAdministratorCannotDemoteOwnAccount() {
+        Account administrator = account(10L, role(1L, "ADMIN"), AccountStatus.ACTIVE);
+        Role employee = role(3L, "EMPLOYEE");
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(administrator));
+        when(roleRepository.findById(3L)).thenReturn(Optional.of(employee));
+        authenticateAs(10L);
+
+        assertThatThrownBy(() -> service.updateAccountRole(10L, 3L, "Điều chuyển công việc"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("không thể tự thu hồi quyền quản trị");
+    }
+
+    @Test
+    void elevatingToAdministratorRequiresReason() {
+        Account employee = account(10L, role(3L, "EMPLOYEE"), AccountStatus.ACTIVE);
+        Role administrator = role(1L, "ADMIN");
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(employee));
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(administrator));
+
+        assertThatThrownBy(() -> service.updateAccountRole(10L, 1L, ""))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("nhập lý do");
     }
 
     @Test
@@ -193,10 +249,19 @@ class AccountServiceImplTest {
                 .passwordHash("hash")
                 .roles(new java.util.HashSet<>(java.util.List.of(role)))
                 .status(status)
+                .isEnabled(true)
+                .isDeleted(false)
                 .build();
     }
 
-    private Role role(Long id, String name) {
-        return Role.builder().id(id).roleName(name).build();
+    private Role role(Long id, String code) {
+        return Role.builder().id(id).code(code).roleName(code).build();
+    }
+
+    private void authenticateAs(Long accountId) {
+        var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "admin@lorafilm.local", accountId, java.util.List.of());
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .setAuthentication(authentication);
     }
 }

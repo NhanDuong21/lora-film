@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Activity, CheckCircle2, Eye, Info, LockKeyhole, Search, ShieldAlert } from 'lucide-react';
-import { getAuthAudits, reviewAuthAudit } from '../services/authAdminService';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { Activity, CheckCircle2, Eye, Info, LockKeyhole, LogOut, Mail, Search, ShieldAlert } from 'lucide-react';
+import {
+  getAuthAudits,
+  reviewAuthAudit,
+  revokeAccountSessions,
+  sendAccountPasswordReset,
+  updateAccountStatus,
+} from '../services/authAdminService';
 import { getUserAudits, getUserProfiles, reviewUserAudit } from '../services/userAdminService';
 import { AsyncState, Input, Select } from '@/components/common/ui/uiKit';
 import {
@@ -29,12 +35,27 @@ const ADMINISTRATIVE_ACTIONS = new Set([
 ]);
 const PAGE_SIZE = 20;
 
-const formatDate = value => value ? new Date(value).toLocaleString('vi-VN') : '—';
+const formatDate = value => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${time} · ${day}/${month}/${date.getFullYear()}`;
+};
 const isNumeric = value => value !== null && value !== undefined && /^\d+$/.test(String(value));
+const auditDetailFields = value => Object.fromEntries(String(value || '').split(',').map(part => {
+  const [key, ...rest] = part.split('=');
+  return [key?.trim(), rest.join('=').trim()];
+}).filter(([key, item]) => key && item));
 
 const resultLabel = result => ({ SUCCESS: 'Thành công', FAILED: 'Thất bại', BLOCKED: 'Bị chặn' }[result] || 'Đã hoàn tất');
 const severityLabel = severity => ({ NORMAL: 'Bình thường', REVIEW: 'Cần kiểm tra', CRITICAL: 'Nghiêm trọng' }[severity] || 'Bình thường');
-const reviewLabel = status => ({ UNREVIEWED: 'Chưa kiểm tra', REVIEWED: 'Đã kiểm tra', RESOLVED: 'Đã giải quyết', NOT_REQUIRED: 'Không cần xử lý' }[status] || 'Không cần xử lý');
+const reviewLabel = status => ({
+  UNREVIEWED: 'Chưa kiểm tra', IN_PROGRESS: 'Đang xử lý', REVIEWED: 'Đã kiểm tra',
+  DISMISSED: 'Không có rủi ro', RESOLVED: 'Đã giải quyết', NOT_REQUIRED: 'Không cần xử lý',
+}[status] || 'Không cần xử lý');
 
 function EventBadge({ entry }) {
   const severity = entry.severity || 'NORMAL';
@@ -59,6 +80,10 @@ export default function AdminAuthAuditPage() {
   const [profiles, setProfiles] = useState(new Map());
   const [reviewNote, setReviewNote] = useState('');
   const [reviewing, setReviewing] = useState(false);
+  const [actioning, setActioning] = useState('');
+  const outlet = useOutletContext();
+  const notify = outlet?.triggerToast || (() => undefined);
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
@@ -116,15 +141,27 @@ export default function AdminAuthAuditPage() {
   const sentence = useCallback(entry => {
     const targetId = entry.accountId || (isNumeric(entry.targetId) ? Number(entry.targetId) : null);
     const target = personName(targetId, 'hệ thống');
+    const anonymousLoginAttempt = String(entry.action || '').startsWith('LOGIN_FAILED');
     const actor = personName(entry.actorAccountId,
       entry.domain === 'operations' ? 'Hệ thống'
-        : ADMINISTRATIVE_ACTIONS.has(entry.action) ? 'Quản trị viên' : target);
+        : ADMINISTRATIVE_ACTIONS.has(entry.action) ? 'Quản trị viên'
+          : anonymousLoginAttempt ? 'Chưa xác định' : target);
+    const details = auditDetailFields(entry.description || entry.details);
+    if (entry.action === 'LOGIN_FAILED_INVALID_PASSWORD' && details.incident === 'LOGIN_FAILURE_BURST') {
+      return `${details.failureCount || 5} lần đăng nhập thất bại vào tài khoản ${target} trong ${details.elapsedMinutes || details.windowMinutes || 10} phút`;
+    }
+    if (entry.action === 'LOGIN_FAILED_INVALID_PASSWORD' && details.incident === 'MULTI_ACCOUNT_LOGIN_ATTACK') {
+      return `${details.affectedAccounts || 'Nhiều'} tài khoản bị thử đăng nhập từ cùng một nguồn trong ${details.windowMinutes || 10} phút`;
+    }
+    if (entry.action === 'LOGIN_SUCCESS' && details.incident === 'SUCCESS_AFTER_FAILURES') {
+      return `${target} đã đăng nhập thành công sau ${details.failureCount || 'nhiều'} lần thất bại`;
+    }
     const authSentences = {
       LOGIN_SUCCESS: `${target} đã đăng nhập vào hệ thống`,
       OAUTH2_LOGIN_SUCCESS: `${target} đã đăng nhập bằng tài khoản liên kết`,
       LOGIN_FAILED_INVALID_PASSWORD: `Có lần đăng nhập sai mật khẩu vào tài khoản của ${target}`,
-      LOGIN_FAILED_INACTIVE_ACCOUNT: `${target} đã thử đăng nhập khi tài khoản chưa được kích hoạt`,
-      LOGIN_FAILED_NOT_VERIFIED: `${target} đã thử đăng nhập khi email chưa được xác minh`,
+      LOGIN_FAILED_INACTIVE_ACCOUNT: `Có yêu cầu đăng nhập vào tài khoản chưa hoạt động của ${target}`,
+      LOGIN_FAILED_NOT_VERIFIED: `Có yêu cầu đăng nhập vào tài khoản chưa xác minh của ${target}`,
       REFRESH_TOKEN_FAILED: `Phiên đăng nhập của ${target} đã hết hiệu lực và cần đăng nhập lại`,
       LOGOUT_SUCCESS: `${target} đã đăng xuất khỏi hệ thống`,
       LOGOUT_ALL_SUCCESS: `${target} đã đăng xuất khỏi tất cả thiết bị`,
@@ -142,12 +179,14 @@ export default function AdminAuthAuditPage() {
     };
     if (entry.domain === 'security' && authSentences[entry.action]) return authSentences[entry.action];
 
+    const ownership = entry.actorAccountId && targetId && Number(entry.actorAccountId) === Number(targetId)
+      ? 'của mình' : `của ${target}`;
     const operationSentences = {
       CUSTOMER_PROFILE_CREATED: `Hệ thống đã tạo hồ sơ khách hàng cho ${target} sau khi email được xác minh`,
       USER_PROFILE_CREATED: `Hệ thống đã tạo hồ sơ người dùng cho ${target}`,
-      USER_PROFILE_UPDATED: `${actor} đã cập nhật thông tin hồ sơ của ${target}`,
-      AVATAR_UPDATED: `${actor} đã cập nhật ảnh đại diện của ${target}`,
-      AVATAR_DELETED: `${actor} đã xóa ảnh đại diện của ${target}`,
+      USER_PROFILE_UPDATED: `${actor} đã cập nhật thông tin hồ sơ ${ownership}`,
+      AVATAR_UPDATED: `${actor} đã cập nhật ảnh đại diện ${ownership}`,
+      AVATAR_DELETED: `${actor} đã xóa ảnh đại diện ${ownership}`,
       EMPLOYEE_CREATED: `${actor} đã tạo hồ sơ nhân sự cho ${target}`,
       EMPLOYEE_UPDATED: `${actor} đã cập nhật hồ sơ nhân sự của ${target}`,
       EMPLOYEE_CINEMA_ASSIGNED: `${actor} đã thay đổi rạp làm việc của ${target}`,
@@ -177,6 +216,10 @@ export default function AdminAuthAuditPage() {
 
   const markReviewed = async status => {
     if (!selectedEntry) return;
+    if (['DISMISSED', 'RESOLVED'].includes(status) && reviewNote.trim().length < 5) {
+      notify('Vui lòng ghi rõ kết quả xác minh trước khi hoàn tất.', 'error');
+      return;
+    }
     setReviewing(true);
     try {
       const payload = { status, note: reviewNote.trim() || null };
@@ -185,8 +228,55 @@ export default function AdminAuthAuditPage() {
         : await reviewUserAudit(selectedEntry.id, payload);
       setSelectedEntry({ ...selectedEntry, ...updated });
       await load();
+      notify(status === 'IN_PROGRESS' ? 'Đã chuyển cảnh báo sang trạng thái đang xử lý.' : 'Đã lưu kết quả xử lý cảnh báo.');
+    } catch (error) {
+      notify(error?.message || 'Không thể cập nhật trạng thái cảnh báo.', 'error');
     } finally {
       setReviewing(false);
+    }
+  };
+
+  const runRecommendedAction = async action => {
+    const accountId = selectedEntry?.accountId;
+    if (!accountId) return;
+    if (action === 'related') {
+      setSelectedEntry(null);
+      setQuery({ keyword: String(accountId), targetType: '', page: 0, size: PAGE_SIZE });
+      setSearchParams({ tab: 'security' });
+      return;
+    }
+    const configurations = {
+      reset: {
+        title: 'Gửi email đặt lại mật khẩu?',
+        message: 'Chủ tài khoản sẽ nhận mã đặt lại mật khẩu. Admin không thể xem mật khẩu mới.',
+        call: () => sendAccountPasswordReset(accountId),
+        success: 'Đã gửi email đặt lại mật khẩu.',
+      },
+      sessions: {
+        title: 'Đăng xuất tài khoản khỏi tất cả thiết bị?',
+        message: 'Mọi phiên đăng nhập hiện tại sẽ bị thu hồi và chủ tài khoản phải đăng nhập lại.',
+        call: () => revokeAccountSessions(accountId),
+        success: 'Đã đăng xuất tài khoản khỏi tất cả thiết bị.',
+      },
+      lock: {
+        title: 'Tạm khóa tài khoản?',
+        message: 'Tài khoản sẽ không thể đăng nhập cho đến khi được quản trị viên mở khóa.',
+        call: () => updateAccountStatus(accountId, 'LOCKED'),
+        success: 'Đã tạm khóa tài khoản.',
+      },
+    };
+    const configuration = configurations[action];
+    if (!configuration) return;
+    if (!await confirmAction({ ...configuration, confirmLabel: 'Xác nhận', tone: action === 'lock' ? 'danger' : 'warning' })) return;
+    setActioning(action);
+    try {
+      await configuration.call();
+      notify(configuration.success);
+      await load();
+    } catch (error) {
+      notify(error?.message || 'Không thể thực hiện hành động đề xuất.', 'error');
+    } finally {
+      setActioning('');
     }
   };
 
@@ -195,8 +285,8 @@ export default function AdminAuthAuditPage() {
     return [
       { label: 'Nghiêm trọng', value: content.filter(entry => entry.severity === 'CRITICAL').length, hint: 'Cần xử lý ngay', icon: ShieldAlert, tone: 'red' },
       { label: 'Cần kiểm tra', value: activeTab === 'attention' ? result.totalElements : content.filter(entry => entry.severity === 'REVIEW').length, hint: 'Chưa được rà soát', icon: Eye, tone: 'amber' },
-      { label: 'Đã kiểm tra', value: content.filter(entry => ['REVIEWED', 'RESOLVED'].includes(entry.reviewStatus)).length, hint: 'Có ghi nhận xử lý', icon: CheckCircle2, tone: 'green' },
-      { label: 'Hoạt động đang xem', value: result.totalElements || 0, hint: activeTab === 'security' ? 'Đăng nhập & bảo mật' : 'Trong bộ lọc hiện tại', icon: Activity, tone: 'blue' },
+      { label: 'Đã hoàn tất', value: content.filter(entry => ['REVIEWED', 'DISMISSED', 'RESOLVED'].includes(entry.reviewStatus)).length, hint: 'Có ghi nhận kết quả', icon: CheckCircle2, tone: 'green' },
+      { label: 'Tài khoản liên quan', value: new Set(content.map(entry => entry.accountId).filter(Boolean)).size, hint: 'Trong danh sách đang xem', icon: Activity, tone: 'blue' },
     ];
   }, [activeTab, result]);
 
@@ -245,14 +335,21 @@ export default function AdminAuthAuditPage() {
       <DetailDrawer open={Boolean(selectedEntry)} onClose={() => setSelectedEntry(null)} title="Chi tiết hoạt động" subtitle={selectedEntry ? formatDate(selectedEntry.createdAt) : ''}>
         {selectedEntry ? <div className="space-y-6">
           <div className="rounded-xl border border-brand-orange/20 bg-brand-orange/[0.07] p-4"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-brand-orange">Điều gì đã xảy ra?</p><p className="mt-2 font-bold leading-6 text-white">{sentence(selectedEntry)}</p></div>
-          <DetailGrid items={[
+          <DetailGrid items={String(selectedEntry.action).startsWith('LOGIN_FAILED') ? [
+            { label: 'Kết quả', value: resultLabel(selectedEntry.result) },
+            { label: 'Mức độ', value: severityLabel(selectedEntry.severity) },
+            { label: 'Tài khoản bị nhắm tới', value: personName(selectedEntry.accountId, 'Chưa xác định tài khoản') },
+            { label: 'Danh tính người thực hiện', value: 'Chưa xác định' },
+            { label: 'Nguồn yêu cầu', value: `${getDeviceLabel(selectedEntry.userAgent)} · Thiết bị chưa nhận diện` },
+          ] : [
             { label: 'Kết quả', value: resultLabel(selectedEntry.result) },
             { label: 'Mức độ', value: severityLabel(selectedEntry.severity) },
             { label: 'Người thực hiện', value: personName(selectedEntry.actorAccountId, selectedEntry.domain === 'operations' ? 'Hệ thống tự động' : ADMINISTRATIVE_ACTIONS.has(selectedEntry.action) ? 'Quản trị viên' : personName(selectedEntry.accountId)) },
             { label: 'Đối tượng bị tác động', value: personName(selectedEntry.accountId || (isNumeric(selectedEntry.targetId) ? Number(selectedEntry.targetId) : null), getTargetTypeLabel(selectedEntry.targetType || selectedEntry.resource)) },
           ]} />
           {summarizeAuditDetails(selectedEntry.description || selectedEntry.details) ? <div><p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600">Lý do hoặc ảnh hưởng</p><div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm leading-6 text-zinc-300">{summarizeAuditDetails(selectedEntry.description || selectedEntry.details)}</div></div> : null}
-          {selectedEntry.reviewStatus === 'UNREVIEWED' ? <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4"><p className="font-bold text-amber-200">Trạng thái kiểm tra</p><p className="mt-1 text-xs leading-5 text-zinc-500">Ghi lại kết quả xác minh để admin khác biết sự kiện đã được xử lý.</p><label className="mt-3 block text-xs font-bold text-zinc-400">Ghi chú kiểm tra<Input className="mt-2" value={reviewNote} onChange={event => setReviewNote(event.target.value)} maxLength={500} placeholder="Ví dụ: Đã xác nhận với nhân viên, do nhập nhầm mật khẩu." /></label><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={reviewing} onClick={() => markReviewed('REVIEWED')} className="rounded-lg bg-brand-orange px-3 py-2 text-xs font-black text-black disabled:opacity-40">Đánh dấu đã kiểm tra</button><button type="button" disabled={reviewing} onClick={() => markReviewed('RESOLVED')} className="rounded-lg border border-emerald-500/30 px-3 py-2 text-xs font-bold text-emerald-300 disabled:opacity-40">Đã giải quyết</button></div></div> : selectedEntry.reviewStatus !== 'NOT_REQUIRED' ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4"><p className="font-bold text-emerald-300">{reviewLabel(selectedEntry.reviewStatus)}</p>{selectedEntry.reviewNote ? <p className="mt-2 text-sm leading-6 text-zinc-300">{selectedEntry.reviewNote}</p> : null}<p className="mt-2 text-xs text-zinc-600">{formatDate(selectedEntry.reviewedAt)}</p></div> : null}
+          {selectedEntry.domain === 'security' && String(selectedEntry.action).startsWith('LOGIN_FAILED') && ['REVIEW', 'CRITICAL'].includes(selectedEntry.severity) && selectedEntry.accountId ? <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.05] p-4"><p className="font-bold text-sky-200">Hành động đề xuất</p><p className="mt-1 text-xs leading-5 text-zinc-500">Chọn hành động phù hợp sau khi đối chiếu với chủ tài khoản.</p><div className="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" onClick={() => runRecommendedAction('related')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-200"><Eye size={14} /> Xem các lần thử liên quan</button><button type="button" disabled={Boolean(actioning)} onClick={() => runRecommendedAction('reset')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-200 disabled:opacity-40"><Mail size={14} /> Gửi email đặt lại mật khẩu</button><button type="button" disabled={Boolean(actioning)} onClick={() => runRecommendedAction('sessions')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-200 disabled:opacity-40"><LogOut size={14} /> Đăng xuất tất cả thiết bị</button><button type="button" disabled={Boolean(actioning)} onClick={() => runRecommendedAction('lock')} className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-xs font-bold text-red-300 disabled:opacity-40"><LockKeyhole size={14} /> Tạm khóa tài khoản</button></div></div> : null}
+          {['UNREVIEWED', 'IN_PROGRESS'].includes(selectedEntry.reviewStatus) ? <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4"><p className="font-bold text-amber-200">{selectedEntry.reviewStatus === 'IN_PROGRESS' ? 'Đang xử lý' : 'Chưa kiểm tra'}</p><p className="mt-1 text-xs leading-5 text-zinc-500">Ghi lại kết quả xác minh để admin khác biết tình trạng xử lý.</p><label className="mt-3 block text-xs font-bold text-zinc-400">Ghi chú xử lý<Input className="mt-2" value={reviewNote} onChange={event => setReviewNote(event.target.value)} maxLength={500} placeholder="Ví dụ: Đã xác nhận với nhân viên, đây là lần nhập nhầm mật khẩu." /></label><div className="mt-3 flex flex-wrap gap-2">{selectedEntry.reviewStatus === 'UNREVIEWED' ? <button type="button" disabled={reviewing} onClick={() => markReviewed('IN_PROGRESS')} className="rounded-lg bg-brand-orange px-3 py-2 text-xs font-black text-black disabled:opacity-40">Bắt đầu xử lý</button> : null}<button type="button" disabled={reviewing || reviewNote.trim().length < 5} onClick={() => markReviewed('DISMISSED')} className="rounded-lg border border-white/15 px-3 py-2 text-xs font-bold text-zinc-200 disabled:opacity-40">Không có rủi ro</button><button type="button" disabled={reviewing || reviewNote.trim().length < 5} onClick={() => markReviewed('RESOLVED')} className="rounded-lg border border-emerald-500/30 px-3 py-2 text-xs font-bold text-emerald-300 disabled:opacity-40">Đánh dấu đã giải quyết</button></div></div> : selectedEntry.reviewStatus !== 'NOT_REQUIRED' ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4"><p className="font-bold text-emerald-300">{reviewLabel(selectedEntry.reviewStatus)}</p>{selectedEntry.reviewNote ? <p className="mt-2 text-sm leading-6 text-zinc-300">{selectedEntry.reviewNote}</p> : null}<p className="mt-2 text-xs text-zinc-600">{formatDate(selectedEntry.reviewedAt)}</p></div> : null}
           <details className="rounded-xl border border-white/10 p-4"><summary className="cursor-pointer text-xs font-bold text-zinc-500">Xem dữ liệu kỹ thuật</summary><DetailGrid items={[{ label: 'Mã sự kiện', value: selectedEntry.id }, { label: 'Mã hành động', value: selectedEntry.action }, { label: 'Địa chỉ mạng', value: ['0:0:0:0:0:0:0:1', '127.0.0.1', '::1'].includes(selectedEntry.ipAddress) ? 'Máy chủ nội bộ' : selectedEntry.ipAddress || 'Không ghi nhận' }, { label: 'Thiết bị', value: getDeviceLabel(selectedEntry.userAgent) }]} /><pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-zinc-600">{JSON.stringify(selectedEntry, null, 2)}</pre></details>
         </div> : null}
       </DetailDrawer>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   Menu,
   CheckCircle,
@@ -12,6 +12,7 @@ import { X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import AdminSidebar from './AdminSidebar';
 import Breadcrumbs from '@/components/common/Breadcrumbs';
+import apiClient from '@/services/apiClient';
 
 export default function AdminLayout({ onBackHome }) {
   const { user, logout } = useAuth();
@@ -71,6 +72,22 @@ export default function AdminLayout({ onBackHome }) {
   })();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [attentionCount, setAttentionCount] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([
+      apiClient.get('/api/audits', { params: { attentionOnly: true, page: 0, size: 1 } }),
+      apiClient.get('/api/user-audits', { params: { attentionOnly: true, page: 0, size: 1 } }),
+    ]).then(responses => {
+      if (!active) return;
+      const total = responses.reduce((sum, response) => response.status === 'fulfilled'
+        ? sum + Number(response.value?.data?.data?.totalElements || 0)
+        : sum, 0);
+      setAttentionCount(total);
+    });
+    return () => { active = false; };
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -329,7 +346,7 @@ export default function AdminLayout({ onBackHome }) {
           </div>
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => navigate('/admin/audits?tab=attention')} className="hidden rounded-full border border-brand-orange/20 bg-brand-orange/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-brand-orange hover:bg-brand-orange/15 md:block">
-              Xem cảnh báo cần kiểm tra
+              {attentionCount === 0 ? 'Không có cảnh báo' : attentionCount === null ? 'Xem cảnh báo cần kiểm tra' : `${attentionCount} cảnh báo cần kiểm tra`}
             </button>
             <div className="h-6 w-px bg-zinc-800 hidden md:block"></div>
             <button className="text-zinc-400 hover:text-white transition-colors p-2" title="Thông báo" aria-label="Thông báo">

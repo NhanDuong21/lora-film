@@ -45,4 +45,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 	java.util.List<Account> findAllByRolesId(Long roleId);
 	java.util.List<Account> findAllByAccessProfileId(Long accessProfileId);
 	long countByAccessProfileId(Long accessProfileId);
+
+	@Query("""
+			SELECT COUNT(DISTINCT a.id) FROM Account a
+			JOIN a.roles r
+			WHERE r.code IN ('ADMIN', 'ROLE_ADMIN')
+			  AND a.status = com.project.authservice.enums.AccountStatus.ACTIVE
+			  AND a.isEnabled = TRUE
+			  AND a.isDeleted = FALSE
+			""")
+	long countActiveAdministrators();
 }

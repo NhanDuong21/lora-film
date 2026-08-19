@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -72,9 +72,29 @@ const STATUS_LABELS = {
   DELETED: 'Đã thu hồi',
 };
 
-const formatDateTime = value => value
-  ? new Date(value).toLocaleString('vi-VN')
-  : 'Chưa ghi nhận';
+const ACCOUNT_CHANGE_ACTIONS = new Set([
+  'CREATE_EMPLOYEE_INVITATION',
+  'RESEND_EMPLOYEE_INVITATION',
+  'ADMIN_SENT_PASSWORD_RESET',
+  'ADMIN_REVOKED_ALL_SESSIONS',
+  'UPDATE_ACCOUNT_STATUS',
+  'UPDATE_ACCOUNT_ROLE',
+  'UPDATE_ACCOUNT_ACCESS_PROFILE',
+  'UPDATE_MANAGER_CINEMA_ASSIGNMENTS',
+  'EMPLOYEE_INVITATION_ACCEPTED',
+  'PASSWORD_CHANGED',
+  'PASSWORD_RESET_SUCCESS',
+]);
+
+const formatDateTime = value => {
+  if (!value) return 'Chưa ghi nhận';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Chưa ghi nhận';
+  const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${time} · ${day}/${month}/${date.getFullYear()}`;
+};
 
 const operationalStatus = account => {
   if (account.status === 'INACTIVE' && account.invitationExpiresAt
@@ -84,9 +104,24 @@ const operationalStatus = account => {
   return {
     label: STATUS_LABELS[account.status] || 'Cần kiểm tra',
     status: account.status,
-    needsAttention: ['LOCKED', 'DELETED'].includes(account.status),
+    needsAttention: false,
   };
 };
+
+const needsAccountAttention = account => {
+  if (operationalStatus(account).needsAttention) return true;
+  const roleCode = normalizeRoleCode(account.role);
+  if (roleCode === 'EMPLOYEE') {
+    return !account.accessProfile || !account.person?.cinemaPublicId;
+  }
+  if (roleCode === 'MANAGER') return !(account.assignedCinemaPublicIds || []).length;
+  return false;
+};
+
+const detailValues = value => Object.fromEntries(String(value || '')
+  .split(',')
+  .map(part => part.split('=').map(item => item.trim()))
+  .filter(([key, item]) => key && item));
 
 const personCode = account => {
   const roleCode = normalizeRoleCode(account.role);
@@ -102,6 +137,13 @@ const personCode = account => {
 const orderedRoles = roles => SYSTEM_ROLE_ORDER
   .map(code => roles.find(role => normalizeRoleCode(role) === code))
   .filter(Boolean);
+
+const accessPermissionCount = (role, profile) => {
+  if (normalizeRoleCode(role) === 'EMPLOYEE') {
+    return profile?.permissions?.length || profile?.permissionIds?.length || 0;
+  }
+  return role?.permissions?.length || role?.permissionIds?.length || 0;
+};
 
 const sameIds = (left, right) => {
   const a = [...left].map(Number).sort((x, y) => x - y);
@@ -123,7 +165,10 @@ export default function AdminAccountPage() {
   const { user } = useAuth();
   const can = useAdminAccess();
   const canUpdateEmployeeAccess = can('ROLE_UPDATE');
-  const [query, setQuery] = useState({ keyword: '', roleId: '', status: '', page: 0, size: 10 });
+  const [query, setQuery] = useState({
+    keyword: '', roleId: '', status: '', cinemaPublicId: '', accessProfileId: '',
+    attentionOnly: false, page: 0, size: 10,
+  });
   const [accounts, setAccounts] = useState({ content: [], totalPages: 0, totalElements: 0 });
   const [roles, setRoles] = useState([]);
   const [accessProfiles, setAccessProfiles] = useState([]);
@@ -143,6 +188,10 @@ export default function AdminAccountPage() {
   const [draftRoleId, setDraftRoleId] = useState('');
   const [draftAccessProfileId, setDraftAccessProfileId] = useState('');
   const [draftCinemaPublicIds, setDraftCinemaPublicIds] = useState([]);
+  const [accessReason, setAccessReason] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [knownActiveAdministratorCount, setKnownActiveAdministratorCount] = useState(0);
+  const accountLoadSequence = useRef(0);
   const [selectedAccessProfileId, setSelectedAccessProfileId] = useState('');
   const [selectedPermissionIds, setSelectedPermissionIds] = useState([]);
   const [permissionSearch, setPermissionSearch] = useState('');
@@ -153,6 +202,7 @@ export default function AdminAccountPage() {
   const notify = outlet?.triggerToast || (() => undefined);
 
   const loadAccounts = useCallback(async () => {
+    const loadSequence = ++accountLoadSequence.current;
     setAccountState({ loading: true, error: '' });
     try {
       if (accountScope === 'CUSTOMER' && !query.keyword.trim()) {
@@ -178,6 +228,11 @@ export default function AdminAccountPage() {
           size: 100,
         });
         accountRows = data?.content || [];
+        setKnownActiveAdministratorCount(current => Math.max(current, accountRows.filter(account => (
+          normalizeRoleCode(account.role) === 'ADMIN'
+          && account.status === 'ACTIVE'
+          && account.enabled !== false
+        )).length));
       }
 
       const accountIds = accountRows.map(account => account.id);
@@ -202,8 +257,19 @@ export default function AdminAccountPage() {
           account.email,
         ].filter(Boolean).join(' ').toLocaleLowerCase('vi').includes(keyword));
       }
+      if (accountScope === 'INTERNAL' && query.cinemaPublicId) {
+        enriched = enriched.filter(account => String(account.person?.cinemaPublicId) === query.cinemaPublicId
+          || (account.assignedCinemaPublicIds || []).map(String).includes(query.cinemaPublicId));
+      }
+      if (accountScope === 'INTERNAL' && query.accessProfileId) {
+        enriched = enriched.filter(account => String(account.accessProfile?.id || '') === query.accessProfileId);
+      }
+      if (accountScope === 'INTERNAL' && query.attentionOnly) {
+        enriched = enriched.filter(needsAccountAttention);
+      }
       const start = query.page * query.size;
       const totalElements = enriched.length;
+      if (loadSequence !== accountLoadSequence.current) return;
       setAccounts({
         content: enriched.slice(start, start + query.size),
         allContent: enriched,
@@ -212,6 +278,7 @@ export default function AdminAccountPage() {
       });
       setAccountState({ loading: false, error: '' });
     } catch (error) {
+      if (loadSequence !== accountLoadSequence.current) return;
       setAccountState({ loading: false, error: error?.message || 'Không thể tải danh sách tài khoản.' });
     }
   }, [accountScope, query]);
@@ -349,8 +416,13 @@ export default function AdminAccountPage() {
     setDraftRoleId(String(account.role?.id || ''));
     setDraftAccessProfileId(String(account.accessProfile?.id || ''));
     setDraftCinemaPublicIds(account.assignedCinemaPublicIds || []);
+    setAccessReason('');
     getAuthAudits({ keyword: String(account.id), page: 0, size: 20 })
-      .then(data => setAccountHistory(data?.content || []))
+      .then(data => setAccountHistory((data?.content || []).filter(entry => (
+        accountScope === 'INTERNAL'
+          ? ACCOUNT_CHANGE_ACTIONS.has(entry.action)
+          : entry.action.includes('LOGIN') || entry.action.includes('LOGOUT') || entry.action.includes('PASSWORD')
+      ))))
       .catch(() => setAccountHistory([]));
   };
 
@@ -400,6 +472,11 @@ export default function AdminAccountPage() {
     }
     const nextRole = roles.find(role => String(role.id) === draftRoleId);
     const nextRoleCode = normalizeRoleCode(nextRole);
+    const currentRole = roles.find(role => String(role.id) === String(selectedAccount.role?.id)) || selectedAccount.role;
+    const currentRoleCode = normalizeRoleCode(currentRole);
+    const nextProfile = accessProfiles.find(profile => String(profile.id) === draftAccessProfileId);
+    const currentPermissionCount = accessPermissionCount(currentRole, selectedAccount.accessProfile);
+    const nextPermissionCount = accessPermissionCount(nextRole, nextProfile);
     const roleChanged = String(selectedAccount.role?.id || '') !== draftRoleId;
     const profileChanged = String(selectedAccount.accessProfile?.id || '') !== draftAccessProfileId;
     const cinemaAssignmentsChanged = !sameStrings(
@@ -424,13 +501,23 @@ export default function AdminAccountPage() {
       notify('Bạn không thể tự thu hồi quyền quản trị của tài khoản đang sử dụng.', 'error');
       return;
     }
+    if (currentRoleCode !== 'ADMIN' && nextRoleCode === 'ADMIN' && accessReason.trim().length < 5) {
+      notify('Vui lòng nhập lý do khi cấp quyền Quản trị hệ thống.', 'error');
+      return;
+    }
+    const scopeAfter = nextRoleCode === 'MANAGER'
+      ? selectedCinemaNames.join(' · ') || 'Chưa chọn rạp'
+      : getRolePresentation(nextRole).scope;
+    const impactSummary = `Vai trò: ${getRolePresentation(currentRole).label} → ${getRolePresentation(nextRole).label}. `
+      + `Phạm vi sau khi lưu: ${scopeAfter}. `
+      + `Quyền bị gỡ: ${Math.max(0, currentPermissionCount - nextPermissionCount)}. `
+      + `Quyền được thêm: ${Math.max(0, nextPermissionCount - currentPermissionCount)}. `
+      + 'Sau khi lưu, tài khoản sẽ bị đăng xuất khỏi tất cả thiết bị để quyền mới có hiệu lực.';
     const approved = await confirmAction({
-      title: 'Xác nhận phân quyền tài khoản',
-      message: nextRoleCode === 'EMPLOYEE'
-        ? `${selectedAccount.email} sẽ là Nhân viên thuộc nhóm “${accessProfiles.find(profile => String(profile.id) === draftAccessProfileId)?.name}”. Phiên đăng nhập hiện tại sẽ được làm mới.`
-        : nextRoleCode === 'MANAGER'
-          ? `${selectedAccount.email} sẽ quản lý ${draftCinemaPublicIds.length} rạp đã chọn và không thể truy cập rạp khác. Phiên đăng nhập hiện tại sẽ được làm mới.`
-          : `${selectedAccount.email} sẽ chuyển sang “${getRolePresentation(nextRole).label}”. Phiên đăng nhập hiện tại sẽ được làm mới.`,
+      title: nextRoleCode === 'ADMIN' && currentRoleCode !== 'ADMIN'
+        ? 'Xác nhận cấp quyền Quản trị hệ thống'
+        : 'Xác nhận phân quyền tài khoản',
+      message: impactSummary,
       confirmLabel: 'Lưu phân quyền',
       tone: 'warning',
     });
@@ -438,7 +525,7 @@ export default function AdminAccountPage() {
     setUpdatingId(selectedAccount.id);
     try {
       if (roleChanged) {
-        await updateAccountRole(selectedAccount.id, Number(draftRoleId));
+        await updateAccountRole(selectedAccount.id, Number(draftRoleId), accessReason.trim() || undefined);
       }
       if (nextRoleCode === 'EMPLOYEE' && (roleChanged || profileChanged)) {
         await updateAccountAccessProfile(selectedAccount.id, Number(draftAccessProfileId));
@@ -528,6 +615,15 @@ export default function AdminAccountPage() {
 
   const selectedRole = roles.find(role => String(role.id) === draftRoleId);
   const selectedRoleInfo = getRolePresentation(selectedRole);
+  const selectedCurrentRole = roles.find(role => String(role.id) === String(selectedAccount?.role?.id))
+    || selectedAccount?.role;
+  const selectedNextProfile = accessProfiles.find(profile => String(profile.id) === draftAccessProfileId);
+  const selectedCurrentPermissionCount = accessPermissionCount(selectedCurrentRole, selectedAccount?.accessProfile);
+  const selectedNextPermissionCount = accessPermissionCount(selectedRole, selectedNextProfile);
+  const selectedPermissionImpact = {
+    removed: Math.max(0, selectedCurrentPermissionCount - selectedNextPermissionCount),
+    added: Math.max(0, selectedNextPermissionCount - selectedCurrentPermissionCount),
+  };
   const selectedCinemaNames = draftCinemaPublicIds
     .map(publicId => cinemaByPublicId.get(String(publicId))?.name)
     .filter(Boolean);
@@ -544,10 +640,73 @@ export default function AdminAccountPage() {
     return {
       active: rows.filter(account => account.status === 'ACTIVE').length,
       pending: rows.filter(account => account.status === 'INACTIVE').length,
-      attention: rows.filter(account => operationalStatus(account).needsAttention).length,
+      attention: rows.filter(needsAccountAttention).length,
       locked: rows.filter(account => account.status === 'LOCKED').length,
     };
   }, [accounts]);
+  const allInternalAccounts = accounts.allContent || accounts.content || [];
+  const activeAdministratorCount = Math.max(knownActiveAdministratorCount, allInternalAccounts.filter(account => (
+    normalizeRoleCode(account.role) === 'ADMIN'
+    && account.status === 'ACTIVE'
+    && account.enabled !== false
+  )).length);
+  const selectedIsLastActiveAdministrator = Boolean(selectedAccount)
+    && normalizeRoleCode(selectedAccount.role) === 'ADMIN'
+    && selectedAccount.status === 'ACTIVE'
+    && activeAdministratorCount <= 1;
+  const selectedRoleProtectionReason = isCurrentAccount(selectedAccount)
+    ? 'Bạn không thể thay đổi vai trò của tài khoản đang sử dụng.'
+    : selectedIsLastActiveAdministrator
+      ? 'Không thể thay đổi vai trò vì đây là quản trị viên hoạt động cuối cùng.'
+      : '';
+  const selectedSecurityProtectionReason = isCurrentAccount(selectedAccount)
+    ? 'Bạn không thể tạm khóa hoặc đăng xuất tài khoản đang sử dụng khỏi tất cả thiết bị.'
+    : selectedIsLastActiveAdministrator
+      ? 'Không thể khóa vì đây là quản trị viên hoạt động cuối cùng.'
+      : '';
+
+  const applyMetricFilter = (status, attentionOnly = false) => {
+    setQuery(value => ({ ...value, status, attentionOnly, page: 0 }));
+  };
+
+  const changeAccountScope = scope => {
+    accountLoadSequence.current += 1;
+    setSelectedAccount(null);
+    setAccounts({ content: [], totalPages: 0, totalElements: 0 });
+    setQuery(value => ({
+      ...value,
+      keyword: '', roleId: '', status: '', cinemaPublicId: '', accessProfileId: '',
+      attentionOnly: false, page: 0,
+    }));
+    setSearchParams({ tab: scope === 'CUSTOMER' ? 'customers' : 'accounts' });
+  };
+
+  const presentAccountHistory = entry => {
+    const values = detailValues(entry.description);
+    const actorAccount = allInternalAccounts.find(account => Number(account.id) === Number(entry.actorAccountId));
+    const actor = actorAccount?.person?.fullName || actorAccount?.email || 'Quản trị viên';
+    const beforeRole = values.before ? getRolePresentation({ code: values.before }).label : null;
+    const afterRole = values.after ? getRolePresentation({ code: values.after }).label : null;
+    const titles = {
+      UPDATE_ACCOUNT_ROLE: `${actor} đã thay đổi vai trò tài khoản`,
+      UPDATE_ACCOUNT_ACCESS_PROFILE: `${actor} đã thay đổi nhóm nghiệp vụ`,
+      UPDATE_MANAGER_CINEMA_ASSIGNMENTS: `${actor} đã thay đổi phạm vi rạp`,
+      UPDATE_ACCOUNT_STATUS: `${actor} đã thay đổi trạng thái truy cập`,
+      CREATE_EMPLOYEE_INVITATION: `${actor} đã tạo hồ sơ và gửi lời mời`,
+      RESEND_EMPLOYEE_INVITATION: `${actor} đã gửi lại lời mời kích hoạt`,
+      ADMIN_SENT_PASSWORD_RESET: `${actor} đã gửi email đặt lại mật khẩu`,
+      ADMIN_REVOKED_ALL_SESSIONS: `${actor} đã đăng xuất tài khoản khỏi tất cả thiết bị`,
+      EMPLOYEE_INVITATION_ACCEPTED: 'Nhân viên đã chấp nhận lời mời và kích hoạt tài khoản',
+      PASSWORD_CHANGED: 'Chủ tài khoản đã đổi mật khẩu',
+      PASSWORD_RESET_SUCCESS: 'Chủ tài khoản đã đặt lại mật khẩu',
+    };
+    let change = '';
+    if (entry.action === 'UPDATE_ACCOUNT_ROLE' && beforeRole && afterRole) change = `Trước: ${beforeRole} · Sau: ${afterRole}`;
+    else if (entry.action === 'UPDATE_ACCOUNT_STATUS' && values.before && values.after) change = `Trước: ${STATUS_LABELS[values.before] || values.before} · Sau: ${STATUS_LABELS[values.after] || values.after}`;
+    else if (values.before || values.after) change = `Trước: ${values.before || 'Chưa thiết lập'} · Sau: ${values.after || 'Chưa thiết lập'}`;
+    if (values.reason) change = `${change}${change ? ' · ' : ''}Lý do: ${values.reason}`;
+    return { title: titles[entry.action] || getAuditActionLabel(entry.action), change };
+  };
 
   return (
     <section className="flex-1 space-y-6 overflow-auto bg-zinc-950 p-6 text-white md:p-8">
@@ -557,17 +716,17 @@ export default function AdminAccountPage() {
         description="Theo dõi trạng thái truy cập của từng người, xử lý lời mời và kiểm soát đúng phạm vi công việc."
         actions={activeTab === 'accounts' && accountScope === 'INTERNAL' ? (
           <button type="button" onClick={() => { setCreateOpen(true); setCreateStep(1); setCreateResult(null); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500">
-            <UserPlus size={17} /> Mời nhân viên sử dụng hệ thống
+            <UserPlus size={17} /> Tạo hồ sơ & mời nhân viên
           </button>
         ) : null}
       />
 
       <div className="flex w-fit gap-1 rounded-xl border border-white/10 bg-white/[0.025] p-1">
-        <button type="button" onClick={() => { setQuery(value => ({ ...value, page: 0, keyword: '', roleId: '' })); setSearchParams({ tab: 'accounts' }); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'accounts' && accountScope === 'INTERNAL' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
+        <button type="button" onClick={() => changeAccountScope('INTERNAL')} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'accounts' && accountScope === 'INTERNAL' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
           Tài khoản nội bộ
         </button>
-        <button type="button" onClick={() => { setQuery(value => ({ ...value, page: 0, keyword: '', roleId: '' })); setSearchParams({ tab: 'customers' }); }} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'accounts' && accountScope === 'CUSTOMER' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
-          Khách hàng
+        <button type="button" onClick={() => changeAccountScope('CUSTOMER')} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'accounts' && accountScope === 'CUSTOMER' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
+          Tra cứu khách hàng
         </button>
         <button type="button" onClick={() => setSearchParams({ tab: 'access' })} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${activeTab === 'access' ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>
           Nhóm nghiệp vụ & quyền
@@ -578,10 +737,10 @@ export default function AdminAccountPage() {
         <>
           {accountScope === 'INTERNAL' ? (
             <MetricStrip items={[
-              { label: 'Đang hoạt động', value: accountSummary.active, hint: 'Có thể đăng nhập', icon: Users, tone: 'green' },
-              { label: 'Chờ kích hoạt', value: accountSummary.pending, hint: 'Đã gửi lời mời', icon: Mail, tone: 'orange' },
-              { label: 'Cần kiểm tra', value: accountSummary.attention, hint: 'Hết hạn hoặc bị khóa', icon: ShieldAlert, tone: 'amber' },
-              { label: 'Bị khóa bảo mật', value: accountSummary.locked, hint: 'Không thể đăng nhập', icon: LockKeyhole, tone: 'red' },
+              { label: 'Đang hoạt động', value: accountSummary.active, hint: 'Có thể đăng nhập', icon: Users, tone: 'green', onClick: () => applyMetricFilter('ACTIVE') },
+              { label: 'Chờ kích hoạt', value: accountSummary.pending, hint: 'Đã gửi lời mời', icon: Mail, tone: 'orange', onClick: () => applyMetricFilter('INACTIVE') },
+              { label: 'Cần kiểm tra', value: accountSummary.attention, hint: 'Lời mời hết hạn, thiếu phạm vi hoặc quyền bất thường', icon: ShieldAlert, tone: 'amber', onClick: () => applyMetricFilter('', true) },
+              { label: 'Bị khóa bảo mật', value: accountSummary.locked, hint: 'Không thể đăng nhập', icon: LockKeyhole, tone: 'red', onClick: () => applyMetricFilter('LOCKED') },
             ]} />
           ) : (
             <ConsolePanel className="flex items-start gap-3 p-5 text-sm leading-6 text-zinc-400">
@@ -590,7 +749,7 @@ export default function AdminAccountPage() {
             </ConsolePanel>
           )}
 
-          <div className={`grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 ${accountScope === 'INTERNAL' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+          <div className={`grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 ${accountScope === 'INTERNAL' ? 'md:grid-cols-4' : 'md:grid-cols-2'}`}>
             <Input aria-label="Tìm tài khoản" placeholder={accountScope === 'INTERNAL' ? 'Tìm theo tên, email, mã nhân viên hoặc số điện thoại…' : 'Tìm khách hàng theo tên, email hoặc số điện thoại…'} value={query.keyword} onChange={event => setQuery(value => ({ ...value, keyword: event.target.value, page: 0 }))} />
             {accountScope === 'INTERNAL' ? <Select aria-label="Lọc vai trò" value={query.roleId} onChange={event => setQuery(value => ({ ...value, roleId: event.target.value, page: 0 }))}>
               <option value="">Tất cả vai trò</option>
@@ -603,55 +762,54 @@ export default function AdminAccountPage() {
               <option value="LOCKED">Bị khóa bảo mật</option>
               <option value="DELETED">Đã thu hồi</option>
             </Select>
+            {accountScope === 'INTERNAL' ? <button type="button" onClick={() => setShowAdvancedFilters(value => !value)} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold ${showAdvancedFilters || query.cinemaPublicId || query.accessProfileId || query.attentionOnly ? 'border-brand-orange/50 bg-brand-orange/10 text-brand-orange' : 'border-white/10 text-zinc-300'}`}><Settings2 size={16} /> Bộ lọc</button> : null}
           </div>
+
+          {accountScope === 'INTERNAL' && (showAdvancedFilters || query.cinemaPublicId || query.accessProfileId || query.attentionOnly) ? <ConsolePanel className="grid gap-3 p-4 md:grid-cols-3">
+            <Select aria-label="Lọc rạp làm việc" value={query.cinemaPublicId} onChange={event => setQuery(value => ({ ...value, cinemaPublicId: event.target.value, page: 0 }))}><option value="">Tất cả rạp làm việc</option>{cinemas.map(cinema => <option key={cinema.publicId} value={cinema.publicId}>{cinema.name}</option>)}</Select>
+            <Select aria-label="Lọc nhóm nghiệp vụ" value={query.accessProfileId} onChange={event => setQuery(value => ({ ...value, accessProfileId: event.target.value, page: 0 }))}><option value="">Tất cả nhóm nghiệp vụ</option>{accessProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</Select>
+            <button type="button" onClick={() => setQuery(value => ({ ...value, roleId: '', status: '', cinemaPublicId: '', accessProfileId: '', attentionOnly: false, page: 0 }))} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-zinc-400 hover:text-white">Xóa bộ lọc</button>
+          </ConsolePanel> : null}
 
           <AsyncState loading={accountState.loading} error={accountState.error} onRetry={loadAccounts} empty={!accounts.content?.length} emptyMessage={accountScope === 'CUSTOMER' && !query.keyword ? 'Tìm khách hàng khi cần hỗ trợ' : 'Không tìm thấy tài khoản'} emptyDescription={accountScope === 'CUSTOMER' && !query.keyword ? 'Nhập tên, email hoặc số điện thoại ở ô tìm kiếm phía trên.' : 'Hãy thay đổi từ khóa hoặc bộ lọc và thử lại.'}>
             <ConsolePanel className="overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-white/[0.035] text-[10px] uppercase tracking-wider text-zinc-500">
-                    <tr><th className="p-4">{accountScope === 'INTERNAL' ? 'Nhân sự' : 'Khách hàng'}</th><th className="p-4">Công việc</th><th className="p-4">Phạm vi làm việc</th><th className="p-4">Trạng thái truy cập</th><th className="p-4">Hoạt động gần nhất</th><th className="p-4 text-right">Thao tác</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {accounts.content?.map(account => {
+                {accountScope === 'CUSTOMER' ? (
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-white/[0.035] text-[10px] uppercase tracking-wider text-zinc-500"><tr><th className="p-4">Khách hàng</th><th className="p-4">Liên hệ</th><th className="p-4">Xác minh</th><th className="p-4">Trạng thái tài khoản</th><th className="p-4">Hoạt động gần nhất</th><th className="p-4 text-right">Hỗ trợ</th></tr></thead>
+                    <tbody className="divide-y divide-white/10">{accounts.content?.map(account => {
+                      const displayName = account.person?.fullName || account.email?.split('@')[0] || 'Chưa cập nhật họ tên';
+                      const accessStatus = operationalStatus(account);
+                      return <tr key={account.id} className="hover:bg-white/[0.025]">
+                        <td className="p-4"><p className="font-bold text-white">{displayName}</p><p className="mt-1 text-[10px] text-zinc-600">{personCode(account)}</p></td>
+                        <td className="p-4"><p className="font-semibold text-zinc-300">{account.email}</p><p className="mt-1 text-xs text-zinc-600">{account.person?.phoneNumber || 'Chưa cập nhật số điện thoại'}</p></td>
+                        <td className="p-4"><p className={account.status === 'INACTIVE' ? 'font-semibold text-amber-300' : 'font-semibold text-emerald-300'}>{account.status === 'INACTIVE' ? 'Chưa hoàn tất xác minh' : 'Email đã xác minh'}</p></td>
+                        <td className="p-4"><StatusBadge status={accessStatus.status} label={accessStatus.label} /></td>
+                        <td className="p-4 text-zinc-400">{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : 'Chưa đăng nhập'}</td>
+                        <td className="p-4 text-right"><button type="button" onClick={() => openAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-brand-orange/40 hover:text-brand-orange"><Settings2 size={14} /> Mở hồ sơ khách hàng</button></td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                ) : (
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-white/[0.035] text-[10px] uppercase tracking-wider text-zinc-500"><tr><th className="p-4">Nhân sự</th><th className="p-4">Công việc</th><th className="p-4">Phạm vi làm việc</th><th className="p-4">Trạng thái truy cập</th><th className="p-4">Hoạt động gần nhất</th><th className="p-4 text-right">Thao tác</th></tr></thead>
+                    <tbody className="divide-y divide-white/10">{accounts.content?.map(account => {
                       const role = roles.find(item => item.id === account.role?.id) || account.role;
                       const roleInfo = getRolePresentation(role);
                       const accessStatus = operationalStatus(account);
                       const displayName = account.person?.fullName || account.email?.split('@')[0] || 'Chưa cập nhật họ tên';
                       const cinemaName = cinemaByPublicId.get(String(account.person?.cinemaPublicId))?.name;
-                      return (
-                        <tr key={account.id} className="hover:bg-white/[0.025]">
-                          <td className="p-4"><p className="font-bold text-white">{displayName}</p><p className="mt-1 text-[10px] text-zinc-600">{personCode(account)} · {account.email}</p></td>
-                          <td className="p-4"><p className="font-semibold text-zinc-200">{normalizeRoleCode(role) === 'EMPLOYEE' ? account.accessProfile?.name || account.person?.positionName || 'Chưa phân nhóm nghiệp vụ' : roleInfo.label}</p><p className="mt-1 text-xs text-zinc-600">{account.person?.positionName && normalizeRoleCode(role) === 'EMPLOYEE' ? account.person.positionName : roleInfo.description}</p></td>
-                          <td className="p-4">
-                            {normalizeRoleCode(role) === 'EMPLOYEE' ? (
-                              <><p className={`font-bold ${cinemaName ? 'text-zinc-200' : 'text-amber-300'}`}>{cinemaName || 'Chưa phân công rạp'}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{account.person?.departmentName || 'Phạm vi theo hồ sơ nhân sự'}</p></>
-                            ) : normalizeRoleCode(role) === 'MANAGER' ? (
-                              <>
-                                <p className={`font-bold ${(account.assignedCinemaPublicIds || []).length ? 'text-zinc-200' : 'text-amber-300'}`}>
-                                  {(account.assignedCinemaPublicIds || []).length
-                                    ? `${account.assignedCinemaPublicIds.length} rạp được phân công`
-                                    : 'Chưa phân công rạp'}
-                                </p>
-                                <p className="mt-1 max-w-xs text-xs text-zinc-600">
-                                  {(account.assignedCinemaPublicIds || [])
-                                    .map(publicId => cinemaByPublicId.get(String(publicId))?.name)
-                                    .filter(Boolean)
-                                    .join(' · ') || 'Cần chọn rạp trước khi bàn giao tài khoản.'}
-                                </p>
-                              </>
-                            ) : (
-                              <><p className="text-zinc-300">{roleInfo.scope}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{roleInfo.description}</p></>
-                            )}
-                          </td>
-                          <td className="p-4"><StatusBadge status={accessStatus.status} label={accessStatus.label} />{account.status === 'INACTIVE' ? <p className="mt-1.5 text-[10px] text-zinc-600">Hết hạn {formatDateTime(account.invitationExpiresAt)}</p> : null}</td>
-                          <td className="p-4"><p className="font-semibold text-zinc-300">{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : 'Chưa đăng nhập'}</p><p className="mt-1 text-xs text-zinc-600">{account.lastLoginAt ? 'Lần đăng nhập gần nhất' : 'Chưa có hoạt động'}</p></td>
-                          <td className="p-4 text-right"><button type="button" onClick={() => openAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-brand-orange/40 hover:text-brand-orange"><Settings2 size={14} /> Chi tiết</button></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      return <tr key={account.id} className="hover:bg-white/[0.025]">
+                        <td className="p-4"><p className="font-bold text-white">{displayName}</p><p className="mt-1 text-[10px] text-zinc-600">{personCode(account)} · {account.email}</p></td>
+                        <td className="p-4"><p className="font-semibold text-zinc-200">{normalizeRoleCode(role) === 'EMPLOYEE' ? account.accessProfile?.name || account.person?.positionName || 'Chưa phân nhóm nghiệp vụ' : roleInfo.label}</p><p className="mt-1 text-xs text-zinc-600">{account.person?.positionName && normalizeRoleCode(role) === 'EMPLOYEE' ? account.person.positionName : roleInfo.description}</p></td>
+                        <td className="p-4">{normalizeRoleCode(role) === 'EMPLOYEE' ? <><p className={`font-bold ${cinemaName ? 'text-zinc-200' : 'text-amber-300'}`}>{cinemaName || 'Chưa phân công rạp'}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{account.person?.departmentName || 'Phạm vi theo hồ sơ nhân sự'}</p></> : normalizeRoleCode(role) === 'MANAGER' ? <><p className={`font-bold ${(account.assignedCinemaPublicIds || []).length ? 'text-zinc-200' : 'text-amber-300'}`}>{(account.assignedCinemaPublicIds || []).length ? `${account.assignedCinemaPublicIds.length} rạp được phân công` : 'Chưa phân công rạp'}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{(account.assignedCinemaPublicIds || []).map(publicId => cinemaByPublicId.get(String(publicId))?.name).filter(Boolean).join(' · ') || 'Cần chọn rạp trước khi bàn giao tài khoản.'}</p></> : <><p className="text-zinc-300">{roleInfo.scope}</p><p className="mt-1 max-w-xs text-xs text-zinc-600">{roleInfo.description}</p></>}</td>
+                        <td className="p-4"><StatusBadge status={accessStatus.status} label={accessStatus.label} />{account.status === 'INACTIVE' ? <p className="mt-1.5 text-[10px] text-zinc-600">Hết hạn {formatDateTime(account.invitationExpiresAt)}</p> : null}</td>
+                        <td className="p-4"><p className="font-semibold text-zinc-300">{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : 'Chưa đăng nhập'}</p><p className="mt-1 text-xs text-zinc-600">{account.lastLoginAt ? 'Lần đăng nhập gần nhất' : 'Chưa có hoạt động'}</p></td>
+                        <td className="p-4 text-right"><button type="button" onClick={() => openAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-brand-orange/40 hover:text-brand-orange"><Settings2 size={14} /> Chi tiết</button></td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                )}
               </div>
               <ConsolePagination page={query.page} totalPages={accounts.totalPages} totalElements={accounts.totalElements} onPage={page => setQuery(value => ({ ...value, page }))} />
             </ConsolePanel>
@@ -776,20 +934,20 @@ export default function AdminAccountPage() {
         onClose={() => setSelectedAccount(null)}
         title={selectedAccount?.person?.fullName || selectedAccount?.email?.split('@')[0] || 'Chi tiết tài khoản'}
         subtitle={selectedAccount ? `${personCode(selectedAccount)} · ${selectedAccount.email}` : ''}
-        footer={selectedAccount && drawerTab === 'access' ? (
+        footer={selectedAccount && drawerTab === 'access' && accountScope === 'INTERNAL' ? (
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-zinc-500">Thay đổi quyền sẽ làm mới phiên đăng nhập.</span>
-            <button type="button" disabled={updatingId === selectedAccount.id || selectedAccount.status === 'DELETED' || !accountAccessChanged} onClick={handleAccountAccessSave} className="rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500 disabled:opacity-40">Lưu quyền truy cập</button>
+            <span className="text-xs text-zinc-500">Sau khi lưu, tài khoản sẽ bị đăng xuất khỏi tất cả thiết bị để quyền mới có hiệu lực.</span>
+            <button type="button" disabled={updatingId === selectedAccount.id || selectedAccount.status === 'DELETED' || !accountAccessChanged || Boolean(selectedRoleProtectionReason)} onClick={handleAccountAccessSave} className="rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500 disabled:opacity-40">Lưu quyền truy cập</button>
           </div>
         ) : null}
       >
         {selectedAccount ? (
           <div className="space-y-6">
             <div className="flex gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.025] p-1">
-              {[
-                ['overview', 'Tổng quan'], ['access', 'Quyền truy cập'],
-                ['security', 'Bảo mật'], ['history', 'Lịch sử thay đổi'],
-              ].map(([key, label]) => <button key={key} type="button" onClick={() => setDrawerTab(key)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold ${drawerTab === key ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>{label}</button>)}
+              {(accountScope === 'CUSTOMER'
+                ? [['overview', 'Tổng quan'], ['security', 'Bảo mật'], ['history', 'Lịch sử đăng nhập']]
+                : [['overview', 'Tổng quan'], ['access', 'Quyền truy cập'], ['security', 'Bảo mật'], ['history', 'Thay đổi tài khoản']]
+              ).map(([key, label]) => <button key={key} type="button" onClick={() => setDrawerTab(key)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold ${drawerTab === key ? 'bg-brand-orange text-black' : 'text-zinc-400 hover:text-white'}`}>{label}</button>)}
             </div>
 
             {drawerTab === 'overview' ? (
@@ -798,49 +956,65 @@ export default function AdminAccountPage() {
                   <div><p className="font-black text-white">{selectedAccount.person?.fullName || 'Chưa cập nhật họ tên'}</p><p className="mt-1 text-xs text-zinc-500">{selectedAccount.email}</p></div>
                   <StatusBadge status={operationalStatus(selectedAccount).status} label={operationalStatus(selectedAccount).label} />
                 </div>
-                <DetailGrid items={[
+                <DetailGrid items={accountScope === 'CUSTOMER' ? [
+                  { label: 'Mã khách hàng', value: personCode(selectedAccount) },
+                  { label: 'Số điện thoại', value: selectedAccount.person?.phoneNumber || 'Chưa cập nhật' },
+                  { label: 'Xác minh email', value: selectedAccount.status === 'INACTIVE' ? 'Chưa hoàn tất xác minh' : 'Đã xác minh' },
+                  { label: 'Trạng thái tài khoản', value: operationalStatus(selectedAccount).label },
+                  { label: 'Lần đăng nhập gần nhất', value: selectedAccount.lastLoginAt ? formatDateTime(selectedAccount.lastLoginAt) : 'Chưa đăng nhập' },
+                ] : [
                   { label: 'Mã nhân sự', value: personCode(selectedAccount) },
                   { label: 'Số điện thoại', value: selectedAccount.person?.phoneNumber || 'Chưa cập nhật' },
                   { label: 'Công việc', value: selectedAccount.accessProfile?.name || getRolePresentation(selectedAccount.role).label },
-                  { label: 'Rạp làm việc', value: cinemaByPublicId.get(String(selectedAccount.person?.cinemaPublicId))?.name || selectedCinemaNames.join(' · ') || 'Toàn hệ thống' },
+                  { label: normalizeRoleCode(selectedAccount.role) === 'ADMIN' ? 'Phạm vi truy cập' : 'Rạp làm việc', value: cinemaByPublicId.get(String(selectedAccount.person?.cinemaPublicId))?.name || selectedCinemaNames.join(' · ') || 'Toàn hệ thống' },
                   { label: 'Lần đăng nhập gần nhất', value: selectedAccount.lastLoginAt ? formatDateTime(selectedAccount.lastLoginAt) : 'Chưa đăng nhập' },
-                  { label: 'Trạng thái lời mời', value: selectedAccount.status === 'INACTIVE' ? `Hết hạn ${formatDateTime(selectedAccount.invitationExpiresAt)}` : 'Đã kích hoạt' },
+                  { label: 'Lời mời', value: normalizeRoleCode(selectedAccount.role) !== 'EMPLOYEE' ? 'Không áp dụng' : selectedAccount.status === 'INACTIVE' ? `Chờ chấp nhận · hết hạn ${formatDateTime(selectedAccount.invitationExpiresAt)}` : 'Đã chấp nhận' },
                 ]} />
               </div>
             ) : null}
 
             {drawerTab === 'access' ? (
               <div className="space-y-5">
-                <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Loại người dùng<Select className="mt-2" value={draftRoleId} onChange={event => setDraftRoleId(event.target.value)} disabled={selectedAccount.status === 'DELETED'}>{systemRoles.map(role => <option key={role.id} value={role.id}>{getRolePresentation(role).label}</option>)}</Select></label>
+                {selectedRoleProtectionReason ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><ShieldAlert size={18} className="mt-0.5 shrink-0" /><p>{selectedRoleProtectionReason}</p></div> : null}
+                <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Loại người dùng<Select className="mt-2" value={draftRoleId} onChange={event => { setDraftRoleId(event.target.value); setAccessReason(''); }} disabled={selectedAccount.status === 'DELETED' || Boolean(selectedRoleProtectionReason)}>{systemRoles.filter(role => normalizeRoleCode(role) !== 'CUSTOMER').map(role => <option key={role.id} value={role.id}>{getRolePresentation(role).label}</option>)}</Select></label>
                 {normalizeRoleCode(selectedRole) === 'EMPLOYEE' ? (
                   <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Nhóm nghiệp vụ<Select className="mt-2" value={draftAccessProfileId} onChange={event => setDraftAccessProfileId(event.target.value)}>{accessProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.permissions?.length || 0} quyền công việc</option>)}</Select></label>
                 ) : null}
                 {normalizeRoleCode(selectedRole) === 'MANAGER' ? <div className="space-y-2"><p className="text-xs font-black uppercase tracking-wide text-zinc-500">Rạp được phân công</p>{cinemas.map(cinema => { const checked = draftCinemaPublicIds.includes(String(cinema.publicId)); return <button key={cinema.publicId} type="button" onClick={() => setDraftCinemaPublicIds(current => checked ? current.filter(id => id !== String(cinema.publicId)) : [...current, String(cinema.publicId)])} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${checked ? 'border-brand-orange/50 bg-brand-orange/10' : 'border-white/10'}`}><span className="font-semibold text-zinc-200">{cinema.name}</span>{checked ? <CheckCircle2 size={16} className="text-brand-orange" /> : null}</button>; })}</div> : null}
                 {normalizeRoleCode(selectedRole) === 'ADMIN' ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><AlertTriangle size={18} className="mt-0.5 shrink-0" /><p>Quản trị hệ thống có toàn quyền. Thao tác nâng quyền cần được kiểm tra trong nhật ký hoạt động.</p></div> : null}
-                <div className="rounded-xl border border-white/10 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Phạm vi sau khi lưu</p><p className="mt-2 font-bold text-zinc-200">{normalizeRoleCode(selectedRole) === 'MANAGER' ? selectedCinemaNames.join(' · ') || 'Chưa chọn rạp' : selectedRoleInfo.scope}</p></div>
+                {normalizeRoleCode(selectedCurrentRole) !== 'ADMIN' && normalizeRoleCode(selectedRole) === 'ADMIN' ? <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Lý do cấp quyền quản trị *<textarea className="mt-2 min-h-24 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm font-normal normal-case leading-6 text-white outline-none focus:border-brand-orange" value={accessReason} onChange={event => setAccessReason(event.target.value)} maxLength={500} placeholder="Nêu rõ nhu cầu công việc và người phê duyệt…" /></label> : null}
+                <div className="rounded-xl border border-brand-orange/20 bg-brand-orange/[0.05] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-brand-orange">Thay đổi sắp thực hiện</p>
+                  <div className="mt-3 space-y-2 text-sm text-zinc-300"><p><span className="text-zinc-500">Vai trò:</span> {getRolePresentation(selectedCurrentRole).label} → {selectedRoleInfo.label}</p><p><span className="text-zinc-500">Phạm vi:</span> {normalizeRoleCode(selectedRole) === 'MANAGER' ? selectedCinemaNames.join(' · ') || 'Chưa chọn rạp' : selectedRoleInfo.scope}</p><p><span className="text-zinc-500">Quyền bị gỡ:</span> {selectedPermissionImpact.removed}</p><p><span className="text-zinc-500">Quyền được thêm:</span> {selectedPermissionImpact.added}</p></div>
+                  <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-amber-200">Sau khi lưu, tài khoản sẽ bị đăng xuất khỏi tất cả thiết bị để quyền mới có hiệu lực.</p>
+                </div>
               </div>
             ) : null}
 
             {drawerTab === 'security' ? (
               <div className="space-y-3">
-                {selectedAccount.status === 'INACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'invitation')} className="flex w-full items-start gap-3 rounded-xl border border-brand-orange/25 bg-brand-orange/10 p-4 text-left"><Mail size={19} className="mt-0.5 text-brand-orange" /><span><strong className="block text-white">Gửi lại lời mời kích hoạt</strong><span className="mt-1 block text-xs leading-5 text-zinc-400">Lời mời mới có hiệu lực 48 giờ; lời mời cũ sẽ hết hiệu lực.</span></span></button> : null}
-                {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'password')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20"><KeyRound size={19} className="mt-0.5 text-sky-400" /><span><strong className="block text-white">Gửi email đặt lại mật khẩu</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Nhân viên tự đặt mật khẩu mới; admin không thể xem mật khẩu.</span></span></button> : null}
-                {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'sessions')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20"><LogOut size={19} className="mt-0.5 text-amber-400" /><span><strong className="block text-white">Đăng xuất khỏi tất cả thiết bị</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Thu hồi ngay mọi phiên đăng nhập đang hoạt động.</span></span></button> : null}
-                {selectedAccount.status === 'LOCKED' ? <button type="button" onClick={() => handleStatusChange(selectedAccount, 'ACTIVE')} className="w-full rounded-xl border border-emerald-500/30 p-4 text-left font-bold text-emerald-300">Mở khóa tài khoản</button> : selectedAccount.status !== 'DELETED' ? <button type="button" onClick={() => handleStatusChange(selectedAccount, 'LOCKED')} className="w-full rounded-xl border border-red-500/30 p-4 text-left font-bold text-red-300">Tạm khóa tài khoản</button> : <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-500">Quyền truy cập đã được thu hồi. Lịch sử vẫn được giữ nguyên.</p>}
+                {selectedSecurityProtectionReason ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><ShieldAlert size={18} className="mt-0.5 shrink-0" /><p>{selectedSecurityProtectionReason}</p></div> : null}
+                {accountScope === 'INTERNAL' && selectedAccount.status === 'INACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'invitation')} className="flex w-full items-start gap-3 rounded-xl border border-brand-orange/25 bg-brand-orange/10 p-4 text-left"><Mail size={19} className="mt-0.5 text-brand-orange" /><span><strong className="block text-white">Gửi lại lời mời kích hoạt</strong><span className="mt-1 block text-xs leading-5 text-zinc-400">Lời mời mới có hiệu lực 48 giờ; lời mời cũ sẽ hết hiệu lực.</span></span></button> : null}
+                {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'password')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20"><KeyRound size={19} className="mt-0.5 text-sky-400" /><span><strong className="block text-white">Gửi email đặt lại mật khẩu</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Chủ tài khoản tự đặt mật khẩu mới; admin không thể xem mật khẩu.</span></span></button> : null}
+                {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id || Boolean(selectedSecurityProtectionReason)} onClick={() => runSecurityAction(selectedAccount, 'sessions')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-40"><LogOut size={19} className="mt-0.5 text-amber-400" /><span><strong className="block text-white">Đăng xuất khỏi tất cả thiết bị</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Thu hồi ngay mọi phiên đăng nhập đang hoạt động.</span></span></button> : null}
+                {selectedAccount.status === 'LOCKED' ? <button type="button" onClick={() => handleStatusChange(selectedAccount, 'ACTIVE')} className="w-full rounded-xl border border-emerald-500/30 p-4 text-left font-bold text-emerald-300">Mở khóa tài khoản</button> : selectedAccount.status !== 'DELETED' ? <button type="button" disabled={Boolean(selectedSecurityProtectionReason)} onClick={() => handleStatusChange(selectedAccount, 'LOCKED')} className="w-full rounded-xl border border-red-500/30 p-4 text-left font-bold text-red-300 disabled:cursor-not-allowed disabled:opacity-40">Tạm khóa tài khoản</button> : <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-500">Quyền truy cập đã được thu hồi. Lịch sử vẫn được giữ nguyên.</p>}
               </div>
             ) : null}
 
             {drawerTab === 'history' ? (
-              <div className="space-y-2">{accountHistory.length ? accountHistory.map(entry => <article key={entry.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-start justify-between gap-3"><p className="font-bold text-zinc-200">{getAuditActionLabel(entry.action)}</p><span className="whitespace-nowrap text-[10px] text-zinc-600">{formatDateTime(entry.createdAt)}</span></div>{entry.description ? <p className="mt-2 text-xs leading-5 text-zinc-500">{entry.description}</p> : null}</article>) : <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-500">Chưa có thay đổi quyền hoặc bảo mật được ghi nhận.</p>}</div>
+              <div className="space-y-2">{accountHistory.length ? accountHistory.map(entry => {
+                const presentation = presentAccountHistory(entry);
+                return <article key={entry.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-start justify-between gap-3"><p className="font-bold text-zinc-200">{accountScope === 'CUSTOMER' ? getAuditActionLabel(entry.action) : presentation.title}</p><span className="whitespace-nowrap text-[10px] text-zinc-600">{formatDateTime(entry.createdAt)}</span></div>{accountScope === 'INTERNAL' && presentation.change ? <p className="mt-2 text-xs leading-5 text-zinc-500">{presentation.change}</p> : null}</article>;
+              }) : <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-500">{accountScope === 'CUSTOMER' ? 'Chưa có lịch sử đăng nhập được ghi nhận.' : 'Chưa có thay đổi tài khoản được ghi nhận.'}</p>}</div>
             ) : null}
           </div>
         ) : null}
       </DetailDrawer>
 
-      <ActionModal open={createOpen} onClose={() => { setCreateOpen(false); setCreateResult(null); setCreateStep(1); setForm(EMPTY_FORM); }} title={createResult ? 'Đã gửi lời mời' : 'Mời nhân viên sử dụng hệ thống'} description={createResult ? `Lời mời đặt mật khẩu đã được gửi đến ${createResult.email}.` : `Bước ${createStep}/3 · Nhân viên sẽ tự đặt mật khẩu qua email; admin không cần và không thể biết mật khẩu.`} onSubmit={handleCreate} submitLabel={createResult ? 'Xem tài khoản' : createStep < 3 ? 'Tiếp tục' : 'Gửi lời mời và cấp quyền'} submitting={creating} wide>
+      <ActionModal open={createOpen} onClose={() => { setCreateOpen(false); setCreateResult(null); setCreateStep(1); setForm(EMPTY_FORM); }} title={createResult ? 'Đã tạo hồ sơ và gửi lời mời' : 'Tạo hồ sơ & mời nhân viên'} description={createResult ? `Lời mời đặt mật khẩu đã được gửi đến ${createResult.email}.` : `Bước ${createStep}/3 · Hệ thống sẽ đồng thời tạo hồ sơ nhân viên và gửi lời mời kích hoạt tài khoản. Nhân viên tự đặt mật khẩu qua email.`} onSubmit={handleCreate} submitLabel={createResult ? 'Xem tài khoản' : createStep < 3 ? 'Tiếp tục' : 'Tạo hồ sơ và gửi lời mời'} submitting={creating} wide>
         {!createResult ? <div className="grid grid-cols-3 gap-2">{['Xác nhận nhân viên', 'Công việc & phạm vi', 'Gửi lời mời'].map((label, index) => <div key={label} className={`rounded-lg border px-2 py-2 text-center text-[10px] font-bold ${createStep === index + 1 ? 'border-brand-orange/50 bg-brand-orange/10 text-brand-orange' : createStep > index + 1 ? 'border-emerald-500/20 text-emerald-400' : 'border-white/10 text-zinc-600'}`}>{index + 1}. {label}</div>)}</div> : null}
         {!createResult && createStep === 1 ? <>
-          <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-xs leading-5 text-sky-100"><Info size={17} className="mt-0.5 shrink-0" /><span>Thông tin này sẽ được dùng làm hồ sơ nhân sự duy nhất và đồng bộ sang tài khoản truy cập.</span></div>
+          <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-xs leading-5 text-sky-100"><Info size={17} className="mt-0.5 shrink-0" /><span>Hệ thống sẽ đồng thời tạo hồ sơ nhân viên và tài khoản chờ kích hoạt. Email không được trùng với hồ sơ hoặc tài khoản đã có.</span></div>
           <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Họ và tên nhân viên<Input className="mt-2" value={form.fullName} onChange={event => setForm(value => ({ ...value, fullName: event.target.value }))} required minLength={2} autoComplete="name" placeholder="Ví dụ: Nguyễn Văn An" /></label>
           <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Email công việc<Input className="mt-2" type="email" value={form.email} onChange={event => setForm(value => ({ ...value, email: event.target.value }))} required autoComplete="email" placeholder="ten.nhanvien@gmail.com" /></label>
         </> : null}

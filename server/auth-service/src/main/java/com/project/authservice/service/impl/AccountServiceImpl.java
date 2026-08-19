@@ -72,9 +72,17 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public AccountDto updateAccountStatus(Long id, AccountStatus status) {
         Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản"));
+        if (java.util.Objects.equals(id, currentActorAccountId()) && status != AccountStatus.ACTIVE) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Bạn không thể tự khóa hoặc thu hồi tài khoản đang sử dụng");
+        }
+        if (status != AccountStatus.ACTIVE && isLastActiveAdministrator(account)) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Không thể khóa hoặc thu hồi quản trị viên hoạt động cuối cùng");
+        }
         if (Boolean.TRUE.equals(account.getIsDeleted()) && status != AccountStatus.DELETED) {
-            throw new com.project.authservice.exception.BusinessException("Deleted account cannot be reactivated");
+            throw new com.project.authservice.exception.BusinessException("Tài khoản đã thu hồi không thể kích hoạt lại");
         }
         AccountStatus previousStatus = account.getAccountStatus();
         account.setAccountStatus(status);
@@ -96,18 +104,42 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountDto updateAccountRole(Long id, Long roleId) {
+    public AccountDto updateAccountRole(Long id, Long roleId, String reason) {
         Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
-                
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản"));
+
         Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
-                
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò"));
+
         if (account.getRole() != null && account.getRole().getId().equals(role.getId())) {
-            throw new com.project.authservice.exception.BusinessException("Role is already assigned to this account");
+            throw new com.project.authservice.exception.BusinessException("Tài khoản đã thuộc vai trò này");
         }
-                
-        String previousRole = account.getRole() == null ? "NONE" : account.getRole().getCode();
+
+        Role previousRoleEntity = account.getRole();
+        if (previousRoleEntity != null && "CUSTOMER".equals(previousRoleEntity.getCode())
+                && !"CUSTOMER".equals(role.getCode())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Khách hàng chỉ có thể trở thành nhân viên qua quy trình hồ sơ nhân sự và lời mời nội bộ");
+        }
+        boolean removingAdministrator = isAdminRole(previousRoleEntity) && !isAdminRole(role);
+        if (removingAdministrator && java.util.Objects.equals(id, currentActorAccountId())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Bạn không thể tự thu hồi quyền quản trị của tài khoản đang sử dụng");
+        }
+        if (removingAdministrator && isLastActiveAdministrator(account)) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Không thể hạ quyền quản trị viên hoạt động cuối cùng");
+        }
+        String normalizedReason = reason == null ? "" : reason.trim();
+        if (!isAdminRole(previousRoleEntity) && isAdminRole(role) && normalizedReason.length() < 5) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Vui lòng nhập lý do khi cấp quyền Quản trị hệ thống");
+        }
+        if (normalizedReason.length() > 500) {
+            throw new com.project.authservice.exception.BusinessException("Lý do không được vượt quá 500 ký tự");
+        }
+
+        String previousRole = previousRoleEntity == null ? "NONE" : previousRoleEntity.getCode();
         account.setRole(role);
         if (!"EMPLOYEE".equals(role.getCode())) {
             account.setAccessProfile(null);
@@ -122,7 +154,8 @@ public class AccountServiceImpl implements AccountService {
         authOutboxService.record("ACCOUNT_ROLE_CHANGED", account.getId(),
                 java.util.Map.of("accountId", account.getId(), "role", roleCode));
         auditLogService.log(account.getId(), "UPDATE_ACCOUNT_ROLE", servletRequest,
-                account.getId().toString(), "before=" + previousRole + ",after=" + roleCode);
+                account.getId().toString(), "before=" + previousRole + ",after=" + roleCode
+                        + (normalizedReason.isBlank() ? "" : ",reason=" + normalizedReason));
         return mapToDto(account);
     }
 
@@ -311,9 +344,42 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public void revokeAllSessions(Long id) {
         Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản"));
+        if (java.util.Objects.equals(id, currentActorAccountId())) {
+            throw new com.project.authservice.exception.BusinessException(
+                    "Bạn không thể tự đăng xuất tài khoản đang sử dụng khỏi tất cả thiết bị");
+        }
         credentialRevocationService.revokeAll(account.getId());
         auditLogService.log(account.getId(), "ADMIN_REVOKED_ALL_SESSIONS", servletRequest);
+    }
+
+    private boolean isLastActiveAdministrator(Account account) {
+        return isAdminRole(account.getRole())
+                && account.getAccountStatus() == AccountStatus.ACTIVE
+                && Boolean.TRUE.equals(account.getIsEnabled())
+                && !Boolean.TRUE.equals(account.getIsDeleted())
+                && accountRepository.countActiveAdministrators() <= 1;
+    }
+
+    private boolean isAdminRole(Role role) {
+        if (role == null || role.getCode() == null) return false;
+        return java.util.Set.of("ADMIN", "ROLE_ADMIN").contains(role.getCode().toUpperCase(java.util.Locale.ROOT));
+    }
+
+    private Long currentActorAccountId() {
+        org.springframework.security.core.Authentication authentication =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) return null;
+        Object credentials = authentication.getCredentials();
+        if (credentials instanceof Number number) return number.longValue();
+        if (credentials instanceof String value) {
+            try {
+                return Long.valueOf(value);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private void createAndSendInvitation(Account account, String fullName) {

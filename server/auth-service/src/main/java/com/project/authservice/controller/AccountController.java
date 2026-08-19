@@ -48,10 +48,13 @@ public class AccountController {
 
     @PutMapping("/{id}/role")
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')")
-    public ResponseEntity<ApiResponse<AccountDto>> updateRole(@PathVariable Long id, @RequestParam Long roleId) {
+    public ResponseEntity<ApiResponse<AccountDto>> updateRole(
+            @PathVariable Long id,
+            @RequestParam Long roleId,
+            @RequestParam(required = false) String reason) {
         log.info("Update account role called: id={}, roleId={}", id, roleId);
-        AccountDto account = accountService.updateAccountRole(id, roleId);
-        return ResponseEntity.ok(ApiResponse.success("Role updated successfully", account));
+        AccountDto account = accountService.updateAccountRole(id, roleId, reason);
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật vai trò tài khoản", account));
     }
 
     @PutMapping("/{id}/access-profile")

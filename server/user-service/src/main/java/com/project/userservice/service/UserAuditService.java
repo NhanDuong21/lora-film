@@ -64,14 +64,18 @@ public class UserAuditService {
                 .orElseThrow(() -> new com.project.userservice.exception.BusinessException(
                         "Không tìm thấy nhật ký", "USER_AUDIT_NOT_FOUND"));
         String status = request.status().trim().toUpperCase(java.util.Locale.ROOT);
-        if (!java.util.Set.of("REVIEWED", "RESOLVED").contains(status)) {
+        if (!java.util.Set.of("IN_PROGRESS", "REVIEWED", "DISMISSED", "RESOLVED").contains(status)) {
             throw new com.project.userservice.exception.BusinessException(
                     "Trạng thái rà soát không hợp lệ", "USER_AUDIT_REVIEW_INVALID");
         }
+        String note = request.note() == null ? "" : request.note().trim();
+        if (java.util.Set.of("DISMISSED", "RESOLVED").contains(status) && note.length() < 5) {
+            throw new com.project.userservice.exception.BusinessException(
+                    "Vui lòng ghi rõ kết quả xử lý trước khi hoàn tất", "USER_AUDIT_REVIEW_NOTE_REQUIRED");
+        }
         entry.setReviewStatus(status);
         entry.setReviewedBy(CurrentActor.accountId());
-        entry.setReviewNote(request.note() == null || request.note().isBlank()
-                ? null : request.note().trim());
+        entry.setReviewNote(note.isBlank() ? null : note);
         entry.setReviewedAt(java.time.LocalDateTime.now());
         return userAuditMapper.toResponse(repository.save(entry));
     }

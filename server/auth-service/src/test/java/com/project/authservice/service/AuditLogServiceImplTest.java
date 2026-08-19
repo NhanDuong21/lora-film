@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 
 class AuditLogServiceImplTest {
     private final AuditLogRepository repository = mock(AuditLogRepository.class);
@@ -60,5 +61,43 @@ class AuditLogServiceImplTest {
         verify(writer).write(isNull(), isNull(), eq("REGISTER_FAILED"), eq("ACCOUNT"),
                 isNull(), isNull(), eq("FAILED"), eq("NORMAL"), eq("NOT_REQUIRED"),
                 eq("127.0.0.1"), isNull());
+    }
+
+    @Test
+    void firstInvalidPasswordAttemptIsStoredWithoutCreatingAlertWork() {
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+
+        service.log(18L, "LOGIN_FAILED_INVALID_PASSWORD", request);
+
+        verify(writer).write(eq(18L), isNull(), eq("LOGIN_FAILED_INVALID_PASSWORD"), eq("ACCOUNT"),
+                eq("18"), isNull(), eq("FAILED"), eq("NORMAL"), eq("NOT_REQUIRED"),
+                eq("127.0.0.1"), isNull());
+    }
+
+    @Test
+    void fifthInvalidPasswordAttemptCreatesOneAggregatedAlert() {
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(repository.findByAccountIdAndActionAndCreatedAtAfterOrderByCreatedAtAsc(
+                eq(18L), eq("LOGIN_FAILED_INVALID_PASSWORD"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.List.of(
+                        failedLogin("NORMAL", 8), failedLogin("NORMAL", 6),
+                        failedLogin("NORMAL", 4), failedLogin("NORMAL", 2)));
+
+        service.log(18L, "LOGIN_FAILED_INVALID_PASSWORD", request);
+
+        verify(writer).write(eq(18L), isNull(), eq("LOGIN_FAILED_INVALID_PASSWORD"), eq("ACCOUNT"),
+                eq("18"), argThat(value -> value != null && value.contains("failureCount=5")),
+                eq("FAILED"), eq("REVIEW"), eq("UNREVIEWED"),
+                eq("127.0.0.1"), isNull());
+    }
+
+    private com.project.authservice.entity.AuditLog failedLogin(String severity, int minutesAgo) {
+        var entry = com.project.authservice.entity.AuditLog.builder()
+                .action("LOGIN_FAILED_INVALID_PASSWORD")
+                .resource("ACCOUNT")
+                .createdAt(java.time.LocalDateTime.now().minusMinutes(minutesAgo))
+                .build();
+        entry.setSeverity(severity);
+        return entry;
     }
 }

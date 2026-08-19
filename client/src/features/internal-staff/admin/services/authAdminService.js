@@ -6,8 +6,8 @@ export const getAccounts = async (params = {}) => data(await apiClient.get('/api
 export const getAccount = async (id) => data(await apiClient.get(`/api/accounts/${id}`));
 export const updateAccountStatus = async (id, status) =>
   data(await apiClient.put(`/api/accounts/${id}/status`, null, { params: { status } }));
-export const updateAccountRole = async (id, roleId) =>
-  data(await apiClient.put(`/api/accounts/${id}/role`, null, { params: { roleId } }));
+export const updateAccountRole = async (id, roleId, reason) =>
+  data(await apiClient.put(`/api/accounts/${id}/role`, null, { params: { roleId, reason } }));
 export const updateAccountAccessProfile = async (id, accessProfileId) =>
   data(await apiClient.put(`/api/accounts/${id}/access-profile`, null, { params: { accessProfileId } }));
 export const updateManagerCinemaAssignments = async (id, cinemaPublicIds) =>

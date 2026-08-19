@@ -28,15 +28,22 @@ export function MetricStrip({ items = [] }) {
     <div className={`grid overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] sm:grid-cols-2 ${desktopColumns}`}>
       {items.map(item => {
         const Icon = item.icon;
+        const Container = item.onClick ? 'button' : 'div';
         return (
-          <div key={item.label} className="flex min-h-28 items-center justify-between border-b border-white/10 p-5 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0">
+          <Container
+            key={item.label}
+            type={item.onClick ? 'button' : undefined}
+            onClick={item.onClick}
+            aria-label={item.onClick ? `${item.label}: ${item.value}. Bấm để lọc` : undefined}
+            className={`flex min-h-28 items-center justify-between border-b border-white/10 p-5 text-left last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0 ${item.onClick ? 'transition-colors hover:bg-white/[0.04] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-orange/50' : ''}`}
+          >
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{item.label}</p>
               <p className="mt-2 text-2xl font-black text-white">{item.value}</p>
               {item.hint ? <p className="mt-1 text-xs text-zinc-500">{item.hint}</p> : null}
             </div>
             {Icon ? <span className={`rounded-xl border p-3 ${METRIC_TONES[item.tone] || item.tone || 'border-white/10 bg-white/5 text-zinc-300'}`}><Icon size={20} /></span> : null}
-          </div>
+          </Container>
         );
       })}
     </div>
