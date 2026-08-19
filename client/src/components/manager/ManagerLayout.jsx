@@ -89,7 +89,7 @@ export default function ManagerLayout() {
       <aside className="fixed inset-y-0 left-0 z-30 flex w-20 flex-col border-r border-white/10 bg-[#0b0b0e] lg:w-72">
         <div className="border-b border-white/10 px-4 py-5 lg:px-6">
           <button type="button" onClick={() => navigate('/manager')} className="flex w-full items-center justify-center gap-3 lg:justify-start">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-orange font-black text-black">LF</span>
+            <img src="/images/main-logo.png" alt="LoraFilm" loading="eager" decoding="sync" className="h-10 w-10 shrink-0 rounded-xl object-contain" />
             <span className="hidden lg:block"><span className="block text-xl font-black">Lora<span className="text-brand-orange">Film</span></span><span className="block text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Cổng quản lý rạp</span></span>
           </button>
         </div>

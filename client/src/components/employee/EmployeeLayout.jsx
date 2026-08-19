@@ -116,9 +116,13 @@ export default function EmployeeLayout() {
       <aside className="z-30 flex h-full w-20 shrink-0 flex-col justify-between border-r border-zinc-800 bg-zinc-900 md:w-72">
         <div>
           <div className="border-b border-zinc-800 p-4 text-center md:p-6 md:text-left">
-            <span className="hidden text-lg font-black tracking-widest text-amber-500 md:block">LORAFILM</span>
-            <span className="block text-lg font-black text-amber-500 md:hidden">LF</span>
-            <p className="mt-1 hidden text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 md:block">Cổng nhân viên</p>
+            <div className="flex items-center justify-center gap-3 md:justify-start">
+              <img src="/images/main-logo.png" alt="LoraFilm" loading="eager" decoding="sync" className="h-10 w-10 shrink-0 rounded-xl object-contain" />
+              <div className="hidden md:block">
+                <span className="block text-lg font-black tracking-tight text-white">Lora<span className="text-amber-500">Film</span></span>
+                <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Cổng nhân viên</p>
+              </div>
+            </div>
           </div>
           <nav className="space-y-5 p-3">
             {visibleGroups.map(group => <section key={group.id}>
