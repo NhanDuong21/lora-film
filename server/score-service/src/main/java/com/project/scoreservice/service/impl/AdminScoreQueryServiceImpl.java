@@ -50,9 +50,24 @@ public class AdminScoreQueryServiceImpl implements AdminScoreQueryService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<AdminUserScoreResponse> getUserScores(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) {
+            throw new BusinessException("Invalid page or size parameters", "SCORE_INVALID_QUERY", HttpStatus.BAD_REQUEST);
+        }
+        return userScoreRepository.findAll(PageRequest.of(page, size, Sort.by("userId").ascending()))
+                .map(this::mapToUserScoreResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public AdminUserScoreResponse getUserScoreDetail(Long userId) {
         UserScore userScore = userScoreRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException("User score account not found", "SCORE_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND));
+
+        return mapToUserScoreResponse(userScore);
+    }
+
+    private AdminUserScoreResponse mapToUserScoreResponse(UserScore userScore) {
 
         MembershipTier ct = membershipTierService.findTierForPoints(userScore.getAccumulatedPoints());
         MembershipTierResponse currentTier = new MembershipTierResponse(

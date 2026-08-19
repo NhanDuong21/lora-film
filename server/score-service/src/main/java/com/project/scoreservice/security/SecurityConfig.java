@@ -41,8 +41,10 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/membership-tiers").permitAll()
                 .requestMatchers("/internal/**").permitAll() // Internal security is verified by InternalTokenFilter
+                .requestMatchers(HttpMethod.GET, "/api/admin/scores/users").hasAnyAuthority("SCORE_READ", "ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/admin/scores/users/{userId}").hasAnyAuthority("SCORE_READ", "ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/admin/scores/users/{userId}/history").hasAnyAuthority("SCORE_READ", "ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/scores/export").hasAnyAuthority("SCORE_EXPORT", "ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/admin/scores/users/{userId}/adjustments").hasAnyAuthority("SCORE_ADJUST", "ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/admin/scores/users/{userId}/recalculate-tier").hasAnyAuthority("SCORE_MANAGE", "ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/admin/membership-tiers", "/api/admin/membership-tiers/{tierId}").hasAnyAuthority("MEMBERSHIP_TIER_READ", "MEMBERSHIP_TIER_MANAGE", "ROLE_ADMIN", "ADMIN", "ROLE_SUPER_ADMIN", "SUPER_ADMIN")

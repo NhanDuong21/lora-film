@@ -276,10 +276,6 @@ public class ScoreServiceImpl implements ScoreService {
 
         UserScore userScore = getOrInitializeUserScore(request.userId());
 
-        if (userScore.getStatus() == UserScoreStatus.LOCKED) {
-            throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
-        }
-
         BigDecimal earningRate = userScore.getCurrentTier().getEarningRate();
         int earnedPoints = request.eligibleAmount().multiply(earningRate).divide(BigDecimal.valueOf(1000), 0, RoundingMode.FLOOR).intValue();
 
@@ -671,10 +667,6 @@ public class ScoreServiceImpl implements ScoreService {
         UserScore userScore = userScoreRepository.findWithLockByUserId(hold.getUserScore().getUserId())
                 .orElseThrow(() -> new BusinessException("User score not found", "SCORE_USER_NOT_FOUND", HttpStatus.NOT_FOUND));
 
-        if (userScore.getStatus() == UserScoreStatus.LOCKED) {
-            throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
-        }
-
         int pointsToCommit = hold.getPoints();
         if (userScore.getCurrentPoints() < pointsToCommit || userScore.getHeldPoints() < pointsToCommit) {
             throw new BusinessException("Insufficient points to commit", "SCORE_INSUFFICIENT_POINTS", HttpStatus.BAD_REQUEST);
@@ -988,10 +980,6 @@ public class ScoreServiceImpl implements ScoreService {
 
         UserScore userScore = getOrInitializeUserScore(request.userId());
 
-        if (userScore.getStatus() == UserScoreStatus.LOCKED) {
-            throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
-        }
-
         List<ScoreHistory> refunds = scoreHistoryRepository.findByReferenceHistory(orig);
         int alreadyRefunded = 0;
         for (ScoreHistory r : refunds) {
@@ -1135,10 +1123,6 @@ public class ScoreServiceImpl implements ScoreService {
         }
 
         UserScore userScore = getOrInitializeUserScore(request.userId());
-
-        if (userScore.getStatus() == UserScoreStatus.LOCKED) {
-            throw new BusinessException("User membership account is locked", "SCORE_ACCOUNT_LOCKED", HttpStatus.FORBIDDEN);
-        }
 
         List<ScoreHistory> revokes = scoreHistoryRepository.findByReferenceHistory(orig);
         int alreadyRevoked = 0;

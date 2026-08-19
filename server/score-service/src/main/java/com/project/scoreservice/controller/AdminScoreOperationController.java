@@ -80,8 +80,10 @@ public class AdminScoreOperationController {
             @RequestParam(value = "format", defaultValue = "CSV") String format,
             @RequestParam(value = "userId", required = false) Long userId,
             @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
-        byte[] data = adminScoreOperationService.exportScoreData(type, format, userId, from, to);
+            @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestHeader(value = "X-Operator-Id", required = false) String operatorId,
+            @RequestHeader(value = "X-Client-Ip", required = false, defaultValue = "127.0.0.1") String clientIp) {
+        byte[] data = adminScoreOperationService.exportScoreData(type, format, userId, from, to, operatorId, clientIp);
         String filename = type.toLowerCase() + "_export_" + LocalDateTime.now().toString().replace(":", "").substring(0, 15) + ".csv";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")

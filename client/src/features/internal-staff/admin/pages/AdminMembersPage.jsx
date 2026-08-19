@@ -27,6 +27,7 @@ export default function AdminMembersPage() {
   const navigate = useNavigate();
   const outlet = useOutletContext();
   const notify = outlet?.triggerToast || (() => undefined);
+  const confirm = outlet?.triggerConfirm || (async () => false);
   const [filters, setFilters] = useState({ keyword: '', status: '', page: 0, size: 15 });
   const deferredKeyword = useDeferredValue(filters.keyword);
   const [result, setResult] = useState(EMPTY_RESULT);
@@ -98,18 +99,30 @@ export default function AdminMembersPage() {
     }
   };
 
-  const exportVisible = () => {
+  const exportVisible = async () => {
+    const accepted = await confirm({
+      title: 'Xác nhận xuất danh sách khách hàng',
+      message: `Tệp chứa email và số điện thoại của ${result.content.length} khách hàng đang hiển thị. Chỉ lưu và chia sẻ trong phạm vi được phân quyền.`,
+      confirmLabel: 'Xuất tệp CSV',
+    });
+    if (!accepted) return;
+    const safeCell = value => {
+      let text = String(value ?? '');
+      if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+      return `"${text.replaceAll('"', '""')}"`;
+    };
     const rows = [
       ['Mã khách hàng', 'Họ tên', 'Email', 'Số điện thoại', 'Trạng thái', 'Ngày tham gia'],
       ...result.content.map(item => [item.customerCode, item.fullName, item.email, item.phoneNumber, item.status, item.joinedAt])
     ];
-    const csv = rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+    const csv = rows.map(row => row.map(safeCell).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
     link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    notify('Đã xuất danh sách đang hiển thị.');
   };
 
   const metrics = [
@@ -122,7 +135,7 @@ export default function AdminMembersPage() {
   return (
     <section className="min-h-full space-y-6 bg-[#050506] p-5 text-white md:p-8">
       <OperationsHeader
-        eyebrow="Customer operations"
+        eyebrow="Vận hành khách hàng"
         title="Trung tâm khách hàng"
         description="Tra cứu hồ sơ thành viên, kiểm soát quyền truy cập và theo dõi trạng thái bằng dữ liệu vận hành thực. Tài khoản nhân sự được loại khỏi không gian này."
         actions={(
@@ -141,7 +154,7 @@ export default function AdminMembersPage() {
             <input
               value={filters.keyword}
               onChange={event => setFilters(value => ({ ...value, keyword: event.target.value, page: 0 }))}
-              placeholder="Tên, email, số điện thoại, CCCD hoặc mã khách hàng"
+              placeholder="Tên, email, số điện thoại hoặc mã khách hàng"
               aria-label="Tìm khách hàng"
               className="h-11 w-full rounded-xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm outline-none transition focus:border-brand-orange"
             />

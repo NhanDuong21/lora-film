@@ -13,6 +13,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import AdminSidebar from './AdminSidebar';
 import Breadcrumbs from '@/components/common/Breadcrumbs';
 import apiClient from '@/services/apiClient';
+import scoreAdminService from '@/features/score/admin/services/scoreAdminService';
+import { getDashboard as getCustomerDashboard } from '@/features/internal-staff/admin/services/userAdminService';
 
 export default function AdminLayout({ onBackHome }) {
   const { user, logout } = useAuth();
@@ -48,10 +50,10 @@ export default function AdminLayout({ onBackHome }) {
     if (path.endsWith('/members')) return 'customers';
     if (path.endsWith('/scores/dashboard')) return 'scores-dashboard';
     if (path.endsWith('/scores/tiers')) return 'scores-tiers';
-    if (path.endsWith('/scores/viewer')) return 'scores-viewer';
-    if (path.endsWith('/scores/adjustments')) return 'scores-adjustments';
+    if (path.endsWith('/scores/viewer')) return 'customers';
+    if (path.endsWith('/scores/adjustments')) return 'customers';
     if (path.endsWith('/scores/reconciliation')) return 'scores-reconciliation';
-    if (path.endsWith('/scores/audit-logs')) return 'scores-audit-logs';
+    if (path.endsWith('/scores/audit-logs')) return 'scores-reconciliation';
     if (path.endsWith('/staff')) return 'staff';
     if (path.endsWith('/hr')) return 'hr';
     if (path.endsWith('/approvals')) return 'approvals';
@@ -75,18 +77,38 @@ export default function AdminLayout({ onBackHome }) {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [attentionCount, setAttentionCount] = useState(null);
+  const [scoreWarningCount, setScoreWarningCount] = useState(0);
+  const [attentionLoaded, setAttentionLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
     Promise.allSettled([
       apiClient.get('/api/audits', { params: { attentionOnly: true, page: 0, size: 1 } }),
-      apiClient.get('/api/user-audits', { params: { attentionOnly: true, page: 0, size: 1 } }),
+      apiClient.get('/api/admin/user-audits', { params: { attentionOnly: true, page: 0, size: 1 } }),
+      scoreAdminService.getDashboardStats(),
+      getCustomerDashboard(),
     ]).then(responses => {
       if (!active) return;
-      const total = responses.reduce((sum, response) => response.status === 'fulfilled'
+      const auditTotal = responses.slice(0, 2).reduce((sum, response) => response.status === 'fulfilled'
         ? sum + Number(response.value?.data?.data?.totalElements || 0)
         : sum, 0);
-      setAttentionCount(total);
+      const scoreStats = responses[2].status === 'fulfilled' ? responses[2].value : null;
+      const customerStats = responses[3].status === 'fulfilled' ? responses[3].value : null;
+      const scoreTotal = Number(scoreStats?.totalMembers ?? 0);
+      const customerTotal = Number(customerStats?.totalCustomers ?? 0);
+      const reconTotal = Number(scoreStats?.lastReconciliationTotalUsers ?? 0);
+      const reconFinishedAt = scoreStats?.lastReconciliationFinishedAt || scoreStats?.lastReconciliationTime;
+      const reconIsStale = !reconFinishedAt
+        || (Date.now() - new Date(reconFinishedAt).getTime()) > 24 * 60 * 60 * 1000;
+      const scoreWarnings = [
+        scoreStats && customerStats && scoreTotal !== customerTotal,
+        scoreStats && reconTotal < scoreTotal,
+        scoreStats && Number(scoreStats.pendingReconciliationMismatches ?? 0) > 0,
+        scoreStats && reconIsStale,
+      ].filter(Boolean).length;
+      setScoreWarningCount(scoreWarnings);
+      setAttentionCount(auditTotal + scoreWarnings);
+      setAttentionLoaded(responses.every(response => response.status === 'fulfilled'));
     });
     return () => { active = false; };
   }, [location.pathname]);
@@ -347,8 +369,8 @@ export default function AdminLayout({ onBackHome }) {
             <Breadcrumbs />
           </div>
           <div className="flex items-center gap-4">
-            <button type="button" onClick={() => navigate('/admin/audits?tab=attention')} className="hidden rounded-full border border-brand-orange/20 bg-brand-orange/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-brand-orange hover:bg-brand-orange/15 md:block">
-              {attentionCount === 0 ? 'Không có cảnh báo' : attentionCount === null ? 'Xem cảnh báo cần kiểm tra' : `${attentionCount} cảnh báo cần kiểm tra`}
+            <button type="button" onClick={() => navigate(scoreWarningCount > 0 ? '/admin/scores/reconciliation?view=control' : '/admin/audits?tab=attention')} className="hidden rounded-full border border-brand-orange/20 bg-brand-orange/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-brand-orange hover:bg-brand-orange/15 md:block">
+              {!attentionLoaded || attentionCount === null ? 'Chưa tải trạng thái cảnh báo' : attentionCount === 0 ? 'Hệ thống đang hoạt động' : `${attentionCount} tín hiệu cần kiểm tra`}
             </button>
             <div className="h-6 w-px bg-zinc-800 hidden md:block"></div>
             <button className="text-zinc-400 hover:text-white transition-colors p-2" title="Thông báo" aria-label="Thông báo">

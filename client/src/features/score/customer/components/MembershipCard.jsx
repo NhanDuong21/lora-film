@@ -90,7 +90,7 @@ export default function MembershipCard({ scoreData, user }) {
             <span className="text-5xl md:text-6xl font-black tracking-tighter text-white drop-shadow-lg">
               {currentPoints.toLocaleString('vi-VN')}
             </span>
-            <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest pb-1.5">PTS</span>
+            <span className="text-sm font-bold text-zinc-400 tracking-widest pb-1.5">điểm</span>
           </div>
         </div>
 

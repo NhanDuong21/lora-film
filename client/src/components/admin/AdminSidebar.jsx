@@ -16,7 +16,6 @@ import {
   DoorOpen,
   FileSearch,
   Film,
-  Gift,
   History,
   Inbox,
   Home,
@@ -239,20 +238,17 @@ export default function AdminSidebar({
     },
     {
       key: 'customers',
-      label: 'Khách hàng & tích điểm',
+      label: 'Khách hàng & điểm',
       visible: isFullAdmin || canManageCustomers,
       items: [
         ...(canManageCustomers
-          ? [{ key: 'customers', label: 'Danh sách khách hàng', path: '/admin/members', icon: Users }]
+          ? [{ key: 'customers', label: 'Trung tâm khách hàng', path: '/admin/members', icon: Users }]
           : []),
         ...(isFullAdmin
           ? [
-              { key: 'scores-dashboard', label: 'Tổng quan tích điểm', path: '/admin/scores/dashboard', icon: Award },
-              { key: 'scores-tiers', label: 'Hạng thành viên', path: '/admin/scores/tiers', icon: Award },
-              { key: 'scores-viewer', label: 'Tra cứu điểm thưởng', path: '/admin/scores/viewer', icon: Gift },
-              { key: 'scores-adjustments', label: 'Xử lý khiếu nại điểm', path: '/admin/scores/adjustments', icon: ClipboardCheck },
-              { key: 'scores-reconciliation', label: 'Đối soát điểm', path: '/admin/scores/reconciliation', icon: History },
-              { key: 'scores-audit-logs', label: 'Nhật ký tích điểm', path: '/admin/scores/audit-logs', icon: FileClock },
+              { key: 'scores-dashboard', label: 'Bàn điều hành điểm', path: '/admin/scores/dashboard', icon: Award },
+              { key: 'scores-tiers', label: 'Chính sách hạng', path: '/admin/scores/tiers', icon: Award },
+              { key: 'scores-reconciliation', label: 'Kiểm soát & nhật ký', path: '/admin/scores/reconciliation', icon: History },
             ]
           : []),
       ],

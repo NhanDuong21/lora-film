@@ -9,6 +9,8 @@ import org.springframework.data.domain.Page;
 import java.time.LocalDateTime;
 
 public interface AdminScoreQueryService {
+    Page<AdminUserScoreResponse> getUserScores(int page, int size);
+
     AdminUserScoreResponse getUserScoreDetail(Long userId);
 
     Page<AdminScoreHistoryItemResponse> getUserHistory(

@@ -48,3 +48,6 @@ artifacts/
 
 .ui-prototype/
 **/target/
+
+# Large local media (do not push)
+client/public/video/hero_banner.mp4

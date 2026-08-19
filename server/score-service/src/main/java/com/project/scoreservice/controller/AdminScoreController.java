@@ -32,6 +32,15 @@ public class AdminScoreController {
         this.adminScoreOperationService = adminScoreOperationService;
     }
 
+    @GetMapping
+    @Operation(summary = "List score accounts", description = "Retrieve a paginated operational index of score accounts.")
+    public ResponseEntity<ApiResponse<PageResponse<AdminUserScoreResponse>>> getUserScores(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        Page<AdminUserScoreResponse> springPage = adminScoreQueryService.getUserScores(page, size);
+        return ResponseEntity.ok(ApiResponse.success("Score accounts retrieved successfully", new PageResponse<>(springPage)));
+    }
+
     @GetMapping("/{userId}")
     @Operation(summary = "Get user score detail", description = "Retrieve score detail of a user. Returns 404 if the score account does not exist.")
     public ResponseEntity<ApiResponse<AdminUserScoreResponse>> getUserScoreDetail(@PathVariable Long userId) {

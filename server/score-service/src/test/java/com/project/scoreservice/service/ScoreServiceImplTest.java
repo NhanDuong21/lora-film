@@ -138,6 +138,22 @@ public class ScoreServiceImplTest {
     }
 
     @Test
+    void lockedAccount_ShouldStillReceiveSystemEarnButRejectCustomerRedeem() {
+        userScore.setStatus(UserScoreStatus.LOCKED);
+        userScoreRepository.saveAndFlush(userScore);
+
+        ScoreEarnResponse earned = scoreService.earnPoints(new ScoreEarnRequest(
+                100L, 201L, new BigDecimal("100000.00"), "EVT-LOCKED-EARN", "EARN-LOCKED-01"));
+
+        assertEquals(5, earned.pointChange());
+        assertEquals(505, earned.balanceAfter());
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> scoreService.redeemPoints(
+                new ScoreRedeemRequest(100L, 301L, 10, "EVT-LOCKED-REDEEM", "REDEEM-LOCKED-01")));
+        assertEquals("SCORE_ACCOUNT_LOCKED", exception.getErrorCode());
+    }
+
+    @Test
     void redeemPoints_WhenInsufficientPoints_ShouldThrowException() {
         ScoreRedeemRequest request = new ScoreRedeemRequest(
                 100L,

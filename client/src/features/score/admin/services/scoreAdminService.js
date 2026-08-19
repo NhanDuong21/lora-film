@@ -36,6 +36,11 @@ export const normalizeScoreDashboardStats = (raw = {}) => ({
 });
 
 const scoreAdminService = {
+  getScoreAccounts: async (params = {}) => {
+    const response = await apiClient.get(ADMIN_SCORE_API_URL, { params });
+    return response.data?.data || response.data;
+  },
+
   /**
    * Get user score details by accountId (Lazy Initializes if not found in DB)
    */

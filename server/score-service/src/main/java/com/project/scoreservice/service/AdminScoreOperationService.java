@@ -25,5 +25,8 @@ public interface AdminScoreOperationService {
 
     byte[] exportScoreData(String type, String format, Long userId, LocalDateTime from, LocalDateTime to);
 
+    byte[] exportScoreData(String type, String format, Long userId, LocalDateTime from, LocalDateTime to,
+                           String operatorId, String clientIp);
+
     ScoreDashboardResponse getDashboardStats();
 }

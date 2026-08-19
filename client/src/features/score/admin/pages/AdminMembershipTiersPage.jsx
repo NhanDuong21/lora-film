@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import useAdminScore from '../hooks/useAdminScore';
 import TierModal from '../components/TierModal';
@@ -19,6 +19,11 @@ export default function AdminMembershipTiersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState(null);
   const [notification, setNotification] = useState(null);
+  const policyWritesEnabled = import.meta.env.DEV || import.meta.env.VITE_ALLOW_TIER_POLICY_WRITES === 'true';
+  const sortedTiers = useMemo(
+    () => [...tiers].sort((left, right) => Number(left.minAccumulatedPoints) - Number(right.minAccumulatedPoints)),
+    [tiers],
+  );
 
   useEffect(() => {
     fetchTiers();
@@ -47,7 +52,7 @@ export default function AdminMembershipTiersPage() {
     const accepted = await confirm({
       title: selectedTier ? 'Xác nhận thay đổi chính sách hạng' : 'Xác nhận tạo chính sách hạng',
       message: selectedTier
-        ? `${selectedTier.userCount || 0} tài khoản đang ở hạng ${selectedTier.tierName}. ${changedThreshold ? 'Thay đổi mốc có thể yêu cầu tính lại hạng. ' : ''}${changedRate ? 'Tỷ lệ mới chỉ áp dụng cho lần tích điểm phát sinh sau khi lưu. ' : ''}Giao dịch cũ giữ snapshot cũ.`
+        ? `${selectedTier.userCount || 0} tài khoản đang ở hạng ${selectedTier.tierName}. ${changedThreshold ? 'Thay đổi mốc có thể yêu cầu tính lại hạng. ' : ''}${changedRate ? 'Tỷ lệ mới chỉ áp dụng cho lần tích điểm phát sinh sau khi lưu. ' : ''}Giao dịch cũ giữ nguyên chính sách tại thời điểm phát sinh.`
         : `Tạo hạng ${formData.tierName} từ ${Number(formData.minAccumulatedPoints).toLocaleString('vi-VN')} điểm hạng với tỷ lệ ${Number(formData.earningRate * 100).toLocaleString('vi-VN')}%.`,
       confirmLabel: selectedTier ? 'Lưu chính sách' : 'Tạo hạng',
     });
@@ -78,10 +83,10 @@ export default function AdminMembershipTiersPage() {
         <div>
           <div className="flex items-center gap-2 text-brand-orange mb-1.5">
             <Award className="h-5 w-5" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Hệ thống Loyalty</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Chính sách thành viên</span>
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">Chính sách hạng thành viên</h1>
-          <p className="text-[11px] text-zinc-400 mt-1 font-medium tracking-wide">Mốc điểm hạng và tỷ lệ tích áp dụng cho giao dịch mới; lịch sử giữ snapshot tại thời điểm phát sinh.</p>
+          <p className="text-[11px] text-zinc-400 mt-1 font-medium tracking-wide">Mốc điểm hạng và tỷ lệ tích áp dụng cho giao dịch mới; lịch sử giữ nguyên chính sách tại thời điểm phát sinh.</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -93,14 +98,20 @@ export default function AdminMembershipTiersPage() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoadingTiers ? 'animate-spin' : ''}`} />
           </button>
-          <button
+          {policyWritesEnabled ? <button
             onClick={handleOpenCreate}
             className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-brand-orange hover:bg-opacity-90 text-zinc-950 font-black text-[11px] uppercase tracking-widest transition-all shadow-xl shadow-brand-orange/20 cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             <span>Thêm hạng thẻ mới</span>
-          </button>
+          </button> : null}
         </div>
+      </div>
+
+      <div className={`rounded-2xl border p-4 text-xs leading-5 ${policyWritesEnabled ? 'border-amber-500/20 bg-amber-500/[0.06] text-amber-100' : 'border-sky-500/20 bg-sky-500/[0.05] text-sky-100'}`}>
+        {policyWritesEnabled
+          ? 'Chế độ local/UAT: cho phép chỉnh chính sách để kiểm thử. Mọi thay đổi đều cần xác nhận và phải được kiểm tra lại tác động đến hạng.'
+          : 'Chính sách production đang ở chế độ chỉ đọc. Thay đổi mốc/tỷ lệ phải đi qua cấu hình có version, review và kế hoạch hiệu lực; không chỉnh trực tiếp trên màn hình vận hành.'}
       </div>
 
       {/* Error */}
@@ -132,9 +143,9 @@ export default function AdminMembershipTiersPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-zinc-800/50 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  <th className="py-4 px-4 font-black">Mã hạng (Code)</th>
+                  <th className="py-4 px-4 font-black">Mã hạng</th>
                   <th className="py-4 px-4 font-black">Tên hạng hiển thị</th>
-                  <th className="py-4 px-4 text-right font-black">Điểm tối thiểu</th>
+                  <th className="py-4 px-4 text-right font-black">Khoảng điểm xét hạng</th>
                   <th className="py-4 px-4 text-right font-black">Tỷ lệ tích</th>
                   <th className="py-4 px-4 font-black">Trạng thái</th>
                   <th className="py-4 px-4 font-black">Mô tả</th>
@@ -142,7 +153,11 @@ export default function AdminMembershipTiersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/30 text-xs text-zinc-300">
-                {tiers.map((tier) => (
+                {sortedTiers.map((tier, index) => {
+                  const nextTier = sortedTiers[index + 1];
+                  const minimum = Number(tier.minAccumulatedPoints || 0);
+                  const maximum = nextTier ? Number(nextTier.minAccumulatedPoints) - 1 : null;
+                  return (
                   <tr key={tier.tierCode} className="hover:bg-white/5 transition-colors group">
                     <td className="py-4 px-4 font-mono font-black text-brand-orange uppercase whitespace-nowrap tracking-wide">
                       {tier.tierCode}
@@ -151,7 +166,9 @@ export default function AdminMembershipTiersPage() {
                       {tier.tierName}
                     </td>
                     <td className="py-4 px-4 text-right font-black text-white whitespace-nowrap tracking-wider">
-                      {(tier.minAccumulatedPoints || 0).toLocaleString('vi-VN')} <span className="text-[9px] text-zinc-500 uppercase tracking-widest ml-0.5">pts</span>
+                      {maximum === null
+                        ? `Từ ${minimum.toLocaleString('vi-VN')}`
+                        : `${minimum.toLocaleString('vi-VN')} – ${maximum.toLocaleString('vi-VN')}`} <span className="text-[9px] text-zinc-500 uppercase tracking-widest ml-0.5">điểm</span>
                     </td>
                     <td className="py-4 px-4 text-right font-black text-emerald-400 whitespace-nowrap tracking-wide">
                       {Math.round((tier.earningRate || 0.05) * 100)}%
@@ -174,16 +191,16 @@ export default function AdminMembershipTiersPage() {
                       {tier.description || '—'}
                     </td>
                     <td className="py-4 px-4 text-right whitespace-nowrap">
-                      <button
+                      {policyWritesEnabled ? <button
                         onClick={() => handleOpenEdit(tier)}
                         className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/10 shadow-sm"
                         title="Chỉnh sửa hạng thẻ"
                       >
                         <Edit2 className="h-4 w-4" />
-                      </button>
+                      </button> : <span className="text-[10px] font-bold text-zinc-600">Chỉ đọc</span>}
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div>
@@ -191,13 +208,13 @@ export default function AdminMembershipTiersPage() {
       </div>
 
       {/* Modal */}
-      <TierModal
+      {policyWritesEnabled ? <TierModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveTier}
         initialData={selectedTier}
         existingTiers={tiers}
-      />
+      /> : null}
     </div>
   );
 }

@@ -67,11 +67,11 @@ export default function TierProgressBar({ scoreData }) {
 
         {/* Milestones Labels */}
         <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-          <span>{currentMin.toLocaleString('vi-VN')} PTS</span>
+          <span>{currentMin.toLocaleString('vi-VN')} điểm</span>
           <span className="text-zinc-300 font-black px-3 py-1 bg-white/5 rounded-lg border border-white/5">
             {accumulatedPoints.toLocaleString('vi-VN')} / {targetMin.toLocaleString('vi-VN')}
           </span>
-          <span>{targetMin.toLocaleString('vi-VN')} PTS</span>
+          <span>{targetMin.toLocaleString('vi-VN')} điểm</span>
         </div>
       </div>
     </div>

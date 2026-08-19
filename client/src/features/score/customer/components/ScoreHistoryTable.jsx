@@ -78,7 +78,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
   };
 
   const customerDescription = item => {
-    const booking = item.bookingId ? ` cho Booking ID ${item.bookingId}` : '';
+    const booking = item.bookingId ? ` cho mã đặt vé ${item.bookingId}` : '';
     switch (item.transactionType) {
       case 'EARN':
       case 'EARN_BY_BOOKING': return `Tích điểm từ đơn hàng${booking}`;
@@ -204,7 +204,7 @@ export default function ScoreHistoryTable({ history, isLoading, onPageChange, on
                       {getTransactionBadge(item.transactionType)}
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap font-mono text-zinc-500 font-bold tracking-wide">
-                      {item.bookingId ? `Booking ID ${item.bookingId}` : (item.eventId || '—')}
+                      {item.bookingId ? `Mã đặt vé ${item.bookingId}` : (item.eventId || '—')}
                     </td>
                     <td className={`py-4 px-4 whitespace-nowrap text-right font-black text-sm tracking-wide ${isPositive ? 'text-emerald-400' : 'text-amber-400'}`}>
                       {isPositive ? `+${changeVal.toLocaleString('vi-VN')}` : changeVal.toLocaleString('vi-VN')}

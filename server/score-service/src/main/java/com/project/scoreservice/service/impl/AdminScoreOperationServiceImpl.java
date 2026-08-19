@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -548,6 +549,22 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
     @Override
     @Transactional(readOnly = true)
     public byte[] exportScoreData(String type, String format, Long userId, LocalDateTime from, LocalDateTime to) {
+        return buildScoreExport(type, userId, from, to);
+    }
+
+    @Override
+    @Transactional
+    public byte[] exportScoreData(String type, String format, Long userId, LocalDateTime from, LocalDateTime to,
+                                  String operatorId, String clientIp) {
+        byte[] data = buildScoreExport(type, userId, from, to);
+        saveAuditLog(parseOperatorId(operatorId), userId, null, "ACTION_EXPORT_SCORE_DATA",
+                "SCORE_EXPORT_" + String.valueOf(type).toUpperCase(), 200, clientIp,
+                Map.of("type", String.valueOf(type), "format", String.valueOf(format), "from", from != null ? from.toString() : "", "to", to != null ? to.toString() : ""),
+                Map.of("bytes", data.length), 0L);
+        return data;
+    }
+
+    private byte[] buildScoreExport(String type, Long userId, LocalDateTime from, LocalDateTime to) {
         StringBuilder csv = new StringBuilder();
         // Add UTF-8 BOM for Excel support
         csv.append("\uFEFF");
@@ -677,7 +694,12 @@ public class AdminScoreOperationServiceImpl implements AdminScoreOperationServic
 
     private String escapeCsv(String val) {
         if (val == null) return "";
-        return val.replace("\"", "\"\"");
+        String safe = val;
+        if (!safe.isEmpty() && (safe.charAt(0) == '=' || safe.charAt(0) == '+' || safe.charAt(0) == '-'
+                || safe.charAt(0) == '@' || safe.charAt(0) == '\t' || safe.charAt(0) == '\r')) {
+            safe = "'" + safe;
+        }
+        return safe.replace("\"", "\"\"");
     }
 
     private long parseOperatorId(String operatorId) {

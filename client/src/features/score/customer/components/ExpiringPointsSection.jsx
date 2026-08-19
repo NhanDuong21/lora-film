@@ -46,7 +46,7 @@ export default function ExpiringPointsSection({ expiringPoints = [], isLoading =
               </span>
             </div>
             <p className="text-[11px] text-zinc-400 font-medium tracking-wide">
-              Thời hạn sử dụng 12 tháng kể từ ngày tích lũy. Ưu tiên trừ điểm cũ trước (FIFO).
+              Thời hạn sử dụng 12 tháng kể từ ngày tích lũy. Hệ thống ưu tiên trừ lô điểm hết hạn trước.
             </p>
           </div>
         </div>
@@ -99,12 +99,12 @@ export default function ExpiringPointsSection({ expiringPoints = [], isLoading =
                         <span className="text-3xl font-black tracking-tighter text-white">
                           {bucket.remainingPoints.toLocaleString('vi-VN')}
                         </span>
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1">PTS</span>
+                        <span className="text-[10px] font-bold text-zinc-500 tracking-widest pb-1">điểm</span>
                       </div>
                       <div className="text-[10px] text-zinc-400 font-medium tracking-wide flex flex-col gap-0.5">
                         <span>Ban đầu: <strong className="text-zinc-300">{bucket.earnedPoints.toLocaleString('vi-VN')}</strong></span>
                         {bucket.bookingId && (
-                          <span>Booking ID: <strong className="text-zinc-300">{bucket.bookingId}</strong></span>
+                          <span>Mã đặt vé: <strong className="text-zinc-300">{bucket.bookingId}</strong></span>
                         )}
                       </div>
                     </div>

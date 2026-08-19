@@ -89,6 +89,17 @@ public class AdminScoreControllerIntegrationTest {
 
     @Test
     @WithMockUser(username = "999", authorities = {"SCORE_READ"})
+    public void testListUserScores_ReturnsPaginatedAccounts() throws Exception {
+        mockMvc.perform(get("/api/admin/scores/users").param("page", "0").param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.totalElements", is(1)))
+                .andExpect(jsonPath("$.data.content[0].userId", is(15)))
+                .andExpect(jsonPath("$.data.content[0].currentPoints", is(100)));
+    }
+
+    @Test
+    @WithMockUser(username = "999", authorities = {"SCORE_READ"})
     public void testGetUserScoreDetail_UserNotFound_Returns404() throws Exception {
         mockMvc.perform(get("/api/admin/scores/users/99"))
                 .andExpect(status().isNotFound())
