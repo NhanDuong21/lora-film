@@ -941,11 +941,7 @@ export default function AdminPromotionCenterPage() {
           <TaskBoard
             campaigns={campaigns.content}
             loading={loading}
-            canAuthor={canAuthor}
             isAdmin={isAdmin}
-            onCreate={() =>
-              setModal({ type: "authoring-wizard", initialNow: Date.now() })
-            }
             onAction={openCampaignAction}
           />
         ) : view === "operations" ? (
@@ -1228,7 +1224,7 @@ function EmptyPromotions({ type }) {
   );
 }
 
-function TaskBoard({ campaigns, loading, canAuthor, isAdmin, onCreate, onAction }) {
+function TaskBoard({ campaigns, loading, isAdmin, onAction }) {
   if (loading) {
     return (
       <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-zinc-500">
@@ -1279,15 +1275,6 @@ function TaskBoard({ campaigns, loading, canAuthor, isAdmin, onCreate, onAction 
               Bắt đầu từ thẻ đầu tiên; mỗi chương trình chỉ hiển thị một hành động chính.
             </p>
           </div>
-          {canAuthor && (
-            <button
-              type="button"
-              onClick={onCreate}
-              className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
-            >
-              <Plus className="h-4 w-4" /> Tạo chương trình mới
-            </button>
-          )}
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[

@@ -129,6 +129,8 @@ describe("AdminPromotionCenterPage", () => {
     const navigation = screen.getByRole("navigation", {
       name: "Khu vực quản lý khuyến mãi",
     });
+    expect(screen.getAllByRole("button", { name: "Tạo chương trình" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Tạo chương trình mới" })).not.toBeInTheDocument();
     expect(within(navigation).getByRole("button", { name: "Việc cần làm" })).toBeInTheDocument();
     expect(within(navigation).getByRole("button", { name: "Chương trình khuyến mãi" })).toBeInTheDocument();
     expect(within(navigation).getByRole("button", { name: "Phân phối cho khách" })).toBeInTheDocument();
