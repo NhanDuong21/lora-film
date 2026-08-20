@@ -41,7 +41,7 @@ describe('adminPromotionService', () => {
     );
     expect(apiClient.post).toHaveBeenCalledWith(
       '/api/admin/promotion-campaigns/campaign-1/legal-review',
-      { status: 'PASSED', comment: 'Legal checked', legalNotificationRef: null }
+      { status: 'PASSED', comment: 'Legal checked' }
     );
   });
 

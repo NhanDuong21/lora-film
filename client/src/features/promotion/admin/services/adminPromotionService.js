@@ -38,8 +38,8 @@ const adminPromotionService = {
       campaignVersion: impact?.campaignVersion,
     }, { headers: { 'Idempotency-Key': idempotencyKey } }
   )),
-  reviewCampaignLegal: async (id, status, comment, legalNotificationRef = null) => unwrap(await apiClient.post(
-    `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment, legalNotificationRef }
+  reviewCampaignLegal: async (id, status, comment) => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment }
   )),
 
   searchPromotions: async (params = {}) =>

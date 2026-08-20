@@ -238,7 +238,7 @@ const campaignCustomerOutcome = (campaign) => {
   return [...new Set(outcomes)].join(" ");
 };
 
-const campaignJourney = (campaign) => {
+const campaignJourney = (campaign, isAdmin = false) => {
   const actions = new Set(campaign?.allowedActions || []);
   const promotionCount = Array.isArray(campaign?.promotions)
     ? campaign.promotions.length
@@ -326,8 +326,8 @@ const campaignJourney = (campaign) => {
     return {
       headline: missingPromotion ? "Cần thêm ít nhất một ưu đãi" : "Đang soạn chương trình",
       description: missingPromotion
-        ? "Chọn cách khách nhận ưu đãi và thiết lập quyền lợi trước khi gửi duyệt."
-        : "Kiểm tra nội dung, quyền lợi và phạm vi trước khi gửi duyệt.",
+        ? `Chọn cách khách nhận ưu đãi và thiết lập quyền lợi trước khi ${isAdmin ? "hoàn tất cấu hình" : "gửi duyệt"}.`
+        : `Kiểm tra nội dung, quyền lợi và phạm vi trước khi ${isAdmin ? "hoàn tất cấu hình" : "gửi duyệt"}.`,
       actionLabel: missingPromotion ? "Thêm ưu đãi" : "Tiếp tục thiết lập",
       actionCode: "OPEN_WORKSPACE",
       step: missingPromotion ? 2 : 4,
@@ -376,9 +376,9 @@ function IconButton({
   );
 }
 
-const campaignActionTitle = (action) =>
+const campaignActionTitle = (action, isAdmin = false) =>
   ({
-    SUBMIT: "Gửi chiến dịch để duyệt?",
+    SUBMIT: isAdmin ? "Hoàn tất cấu hình chương trình?" : "Gửi chiến dịch để duyệt?",
     APPROVE: "Phê duyệt chiến dịch?",
     LEGAL: "Xác nhận kiểm tra pháp lý?",
     PUBLISH: "Xuất bản chiến dịch?",
@@ -391,8 +391,10 @@ const campaignActionTitle = (action) =>
     KILL_SWITCH: "Dừng khẩn cấp chiến dịch?",
   })[action] || "Cập nhật chiến dịch?";
 
-const campaignActionDescription = (campaign, action) => {
+const campaignActionDescription = (campaign, action, isAdmin = false) => {
   const name = `“${campaign.name}”`;
+  if (action === "SUBMIT" && isAdmin)
+    return `${name} sẽ được xác nhận ngay bằng quyền quản trị và không phải chờ người khác phê duyệt.`;
   if (action === "PUBLISH")
     return `${name} sẽ tự chạy theo thời gian hiệu lực. Các ưu đãi thuộc chiến dịch sẽ không được bật thủ công.`;
   if (action === "ACTIVATE")
@@ -403,7 +405,7 @@ const campaignActionDescription = (campaign, action) => {
     return `${name} sẽ bị chặn áp dụng mới vĩnh viễn và không thể tiếp tục lại.`;
   if (action === "KILL_SWITCH")
     return `${name} sẽ bị chặn áp dụng mới ngay lập tức. Các lượt đang giữ không tự giải phóng; thao tác thu hồi khẩn cấp được tách riêng để bảo vệ các đơn đang thanh toán.`;
-  return `Bạn đang cập nhật bước ${campaignActionTitle(action).replace("?", "").toLowerCase()} cho ${name}.`;
+  return `Bạn đang cập nhật bước ${campaignActionTitle(action, isAdmin).replace("?", "").toLowerCase()} cho ${name}.`;
 };
 
 export default function AdminPromotionCenterPage() {
@@ -414,6 +416,7 @@ export default function AdminPromotionCenterPage() {
   const normalizedRole = String(user?.role || "")
     .replace(/^ROLE_/, "")
     .toUpperCase();
+  const isAdmin = normalizedRole === "ADMIN";
   const isManager = normalizedRole === "MANAGER";
   const managerCinemaPublicIds = isManager
     ? Array.from(
@@ -705,8 +708,8 @@ export default function AdminPromotionCenterPage() {
       return;
     }
     runConfirmed({
-      title: campaignActionTitle(action),
-      description: campaignActionDescription(item, action),
+      title: campaignActionTitle(action, isAdmin),
+      description: campaignActionDescription(item, action, isAdmin),
       action: () => campaignAction(item, action),
       success: "Đã cập nhật chương trình.",
       refreshCampaigns: true,
@@ -726,7 +729,9 @@ export default function AdminPromotionCenterPage() {
       await adminPromotionService.transitionCampaign(
         createdCampaign.publicId,
         "SUBMIT",
-        "Gửi duyệt từ hướng dẫn tạo chương trình",
+        isAdmin
+          ? "Hoàn tất cấu hình bởi quản trị viên"
+          : "Gửi duyệt từ hướng dẫn tạo chương trình",
         createdCampaign.version,
       );
       setModal(null);
@@ -743,7 +748,9 @@ export default function AdminPromotionCenterPage() {
       await loadCampaignOptions();
       setMessage({
         kind: "success",
-        text: "Đã tạo chương trình, thêm ưu đãi đầu tiên và gửi sang bước phê duyệt.",
+        text: isAdmin
+          ? "Đã tạo chương trình và xác nhận cấu hình. Không cần chờ người khác phê duyệt."
+          : "Đã tạo chương trình, thêm ưu đãi đầu tiên và gửi sang bước phê duyệt.",
       });
     } catch (error) {
       setModal(null);
@@ -751,7 +758,7 @@ export default function AdminPromotionCenterPage() {
       setMessage({
         kind: "error",
         text: createdCampaign
-          ? `Chương trình đã được lưu nhưng chưa hoàn tất ưu đãi hoặc gửi duyệt. Hãy mở “${createdCampaign.name}” để tiếp tục. ${errorText(error)}`
+          ? `Chương trình đã được lưu nhưng chưa hoàn tất ưu đãi hoặc ${isAdmin ? "xác nhận cấu hình" : "gửi duyệt"}. Hãy mở “${createdCampaign.name}” để tiếp tục. ${errorText(error)}`
           : errorText(error),
       });
     } finally {
@@ -935,6 +942,7 @@ export default function AdminPromotionCenterPage() {
             campaigns={campaigns.content}
             loading={loading}
             canAuthor={canAuthor}
+            isAdmin={isAdmin}
             onCreate={() =>
               setModal({ type: "authoring-wizard", initialNow: Date.now() })
             }
@@ -953,6 +961,7 @@ export default function AdminPromotionCenterPage() {
             <CampaignTable
               rows={campaigns.content}
               busy={busy}
+              isAdmin={isAdmin}
               onAction={openCampaignAction}
             />
           ) : promotions.content.length === 0 ? (
@@ -1021,6 +1030,7 @@ export default function AdminPromotionCenterPage() {
 
       {modal?.type === "authoring-wizard" && (
         <CampaignAuthoringWizard
+          isAdmin={isAdmin}
           isManager={isManager}
           managerCinemaPublicIds={managerCinemaPublicIds}
           initialNow={modal.initialNow}
@@ -1073,6 +1083,7 @@ export default function AdminPromotionCenterPage() {
       {modal?.type === "campaign-detail" && (
         <CampaignDetailModal
           record={modal.record}
+          isAdmin={isAdmin}
           onClose={() => setModal(null)}
           onPrimaryAction={(campaign, action) => {
             setModal(null);
@@ -1111,7 +1122,7 @@ export default function AdminPromotionCenterPage() {
           action={modal.action}
           busy={busy}
           onClose={() => setModal(null)}
-          onSubmit={({ comment, legalStatus, legalReference, campaignCode, incidentReference }) => run(
+          onSubmit={({ comment, legalStatus, campaignCode, incidentReference }) => run(
             () => modal.action === "APPROVE"
               ? adminPromotionService.approveCampaign(modal.record.publicId, comment)
               : modal.action === "REJECT"
@@ -1120,7 +1131,7 @@ export default function AdminPromotionCenterPage() {
                   ? adminPromotionService.overrideCampaignApproval(
                     modal.record.publicId, campaignCode, incidentReference, comment,
                   )
-                  : adminPromotionService.reviewCampaignLegal(modal.record.publicId, legalStatus, comment, legalReference),
+                  : adminPromotionService.reviewCampaignLegal(modal.record.publicId, legalStatus, comment),
             "Đã ghi nhận quyết định và cập nhật luồng chiến dịch.",
             true,
           )}
@@ -1217,7 +1228,7 @@ function EmptyPromotions({ type }) {
   );
 }
 
-function TaskBoard({ campaigns, loading, canAuthor, onCreate, onAction }) {
+function TaskBoard({ campaigns, loading, canAuthor, isAdmin, onCreate, onAction }) {
   if (loading) {
     return (
       <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-zinc-500">
@@ -1244,7 +1255,7 @@ function TaskBoard({ campaigns, loading, canAuthor, onCreate, onAction }) {
     return item.status === "KILLED" || (budget > 0 && exposure / budget >= 0.8);
   }).length;
   const workItems = rows.filter((item) => {
-    const journey = campaignJourney(item);
+    const journey = campaignJourney(item, isAdmin);
     return (
       item.status === "DRAFT" ||
       item.status === "PAUSED" ||
@@ -1298,7 +1309,7 @@ function TaskBoard({ campaigns, loading, canAuthor, onCreate, onAction }) {
         <h3 className="text-sm font-black text-white">Theo thứ tự ưu tiên</h3>
         <div className="mt-3 grid gap-3">
           {workItems.map((campaign) => {
-            const journey = campaignJourney(campaign);
+            const journey = campaignJourney(campaign, isAdmin);
             return (
               <article
                 key={campaign.publicId}
@@ -1535,7 +1546,7 @@ const campaignActionLabel = {
   APPROVE: "Phê duyệt",
   REJECT: "Từ chối",
   OVERRIDE_APPROVE: "Duyệt ngoại lệ",
-  LEGAL_REVIEW: "Duyệt pháp lý",
+  LEGAL_REVIEW: "Kiểm tra pháp lý",
   PUBLISH: "Xuất bản",
   ACTIVATE: "Kích hoạt",
   RESUME: "Tiếp tục",
@@ -1546,7 +1557,7 @@ const campaignActionLabel = {
   DELETE: "Xóa bản nháp",
 };
 
-function CampaignTable({ rows, busy, onAction }) {
+function CampaignTable({ rows, busy, isAdmin, onAction }) {
   return (
     <table className="w-full min-w-[900px] text-left text-sm">
       <thead className="bg-zinc-950 text-[10px] font-bold uppercase text-zinc-500">
@@ -1566,7 +1577,7 @@ function CampaignTable({ rows, busy, onAction }) {
       </thead>
       <tbody className="divide-y divide-zinc-800">
         {rows.map((row) => {
-          const journey = campaignJourney(row);
+          const journey = campaignJourney(row, isAdmin);
           const budgetAmount = Number(row.budgetAmount || 0);
           const budgetExposure = Number(row.budgetUsed || 0) + Number(row.budgetReserved || 0);
           return (
@@ -2249,12 +2260,10 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
   const override = action === "OVERRIDE_APPROVE";
   const [comment, setComment] = useState("");
   const [legalStatus, setLegalStatus] = useState("PASSED");
-  const [legalReference, setLegalReference] = useState(campaign.legalNotificationRef || "");
   const [campaignCode, setCampaignCode] = useState("");
   const [incidentReference, setIncidentReference] = useState("");
   const valid = comment.trim().length >= 3
-    && (!override || (campaignCode === campaign.code && incidentReference.trim().length >= 3))
-    && (!legal || legalReference.trim().length > 0);
+    && (!override || (campaignCode === campaign.code && incidentReference.trim().length >= 3));
 
   return (
     <ModalShell
@@ -2268,7 +2277,6 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
           if (valid) onSubmit({
             comment: comment.trim(),
             legalStatus,
-            legalReference: legalReference.trim(),
             campaignCode,
             incidentReference: incidentReference.trim(),
           });
@@ -2283,9 +2291,9 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
                 <option value="FAILED">Không đạt</option>
               </select>
             </Field>
-            <Field label="Mã văn bản / ticket pháp lý" required>
-              <input value={legalReference} onChange={(event) => setLegalReference(event.target.value)} className={fieldClass} />
-            </Field>
+            <p className="rounded-lg border border-sky-500/20 bg-sky-500/[0.05] px-3 py-2 text-xs leading-5 text-sky-100">
+              Hệ thống tự lưu người xác nhận, thời gian và chương trình trong nhật ký kiểm tra.
+            </p>
           </>
         )}
         {override && (
@@ -2512,6 +2520,7 @@ const blockedReasonLabel = {
 
 function CampaignDetailModal({
   record,
+  isAdmin,
   onClose,
   onPrimaryAction,
   onAddBenefit,
@@ -2538,7 +2547,7 @@ function CampaignDetailModal({
     return () => { active = false; };
   }, [record.publicId]);
 
-  const journey = campaignJourney(detail);
+  const journey = campaignJourney(detail, isAdmin);
   const customerOutcome = campaignCustomerOutcome(detail);
 
   return (
@@ -2715,7 +2724,6 @@ function CampaignDetailModal({
         ) : activeTab === "Duyệt & pháp lý" ? (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2"><StatusBadge value={detail.approvalStatus} /><StatusBadge value={detail.legalStatus} text={legalStatusText(detail)} /></div>
-            <DetailCard label="Tham chiếu pháp lý" value={detail.legalNotificationRef || "Chưa có"} />
             <HistoryList history={history} />
           </div>
         ) : (
@@ -2824,6 +2832,7 @@ function BenefitChoiceModal({ campaign, onClose, onChoose }) {
 }
 
 function CampaignAuthoringWizard({
+  isAdmin,
   isManager,
   managerCinemaPublicIds,
   initialNow,
@@ -2837,7 +2846,7 @@ function CampaignAuthoringWizard({
     "Phạm vi áp dụng",
     "Thời gian & hạn mức",
     "Khách hàng sẽ thấy gì",
-    "Kiểm tra & gửi duyệt",
+    isAdmin ? "Kiểm tra & hoàn tất" : "Kiểm tra & gửi duyệt",
   ];
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
@@ -3116,7 +3125,7 @@ function CampaignAuthoringWizard({
               <p className="mt-3 text-sm leading-6 text-zinc-300">{form.description || choice.customerOutcome}</p>
               <p className="mt-4 rounded-lg bg-black/25 px-3 py-2 text-xs leading-5 text-zinc-400">{choice.customerOutcome}</p>
             </div>
-            <p className="text-xs text-zinc-500">Nếu câu chữ chưa rõ với khách hàng, hãy quay lại sửa tên hoặc mô tả trước khi gửi duyệt.</p>
+            <p className="text-xs text-zinc-500">Nếu câu chữ chưa rõ với khách hàng, hãy quay lại sửa tên hoặc mô tả trước khi {isAdmin ? "hoàn tất" : "gửi duyệt"}.</p>
           </div>
         )}
         {step === 5 && choice && (
@@ -3129,7 +3138,9 @@ function CampaignAuthoringWizard({
                 <DetailItem label="Phạm vi">{selectedCinemaNames.length ? selectedCinemaNames.join(", ") : "Toàn hệ thống"}</DetailItem>
                 <DetailItem label="Ngân sách">{money(form.budgetAmount)}</DetailItem>
                 <DetailItem label="Hiệu lực">{dateTime(fromLocalInput(form.startAt))} → {dateTime(fromLocalInput(form.endAt))}</DetailItem>
-                <DetailItem label="Sau khi gửi">Chờ một người khác phê duyệt</DetailItem>
+                <DetailItem label={isAdmin ? "Sau khi hoàn tất" : "Sau khi gửi"}>
+                  {isAdmin ? "Được xác nhận ngay, không chờ người khác duyệt" : "Chờ một người khác phê duyệt"}
+                </DetailItem>
               </div>
             </div>
             <details className="rounded-xl border border-zinc-800 p-4">
@@ -3153,7 +3164,7 @@ function CampaignAuthoringWizard({
           ) : (
             <button type="button" disabled={busy} onClick={submit} className={`${buttonClass} h-10 bg-orange-500 text-white`}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {busy ? "Đang tạo chương trình..." : "Tạo và gửi duyệt"}
+              {busy ? "Đang tạo chương trình..." : isAdmin ? "Tạo và hoàn tất" : "Tạo và gửi duyệt"}
             </button>
           )}
         </div>

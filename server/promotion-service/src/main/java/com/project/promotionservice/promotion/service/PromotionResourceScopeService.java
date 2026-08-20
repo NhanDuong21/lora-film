@@ -137,6 +137,13 @@ public class PromotionResourceScopeService {
                 .anyMatch("MANAGER"::equals);
     }
 
+    public boolean isAdmin(UserPrincipal principal) {
+        return principal != null && principal.getRoles().stream()
+                .filter(StringUtils::hasText)
+                .map(role -> role.replaceFirst("^ROLE_", "").toUpperCase(Locale.ROOT))
+                .anyMatch("ADMIN"::equals);
+    }
+
     public String scopeJson(CreationScope scope) {
         try {
             return scope.type() == CampaignScopeType.GLOBAL

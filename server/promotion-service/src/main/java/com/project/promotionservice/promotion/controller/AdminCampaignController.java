@@ -169,8 +169,13 @@ public class AdminCampaignController {
         CampaignResponse data;
         switch (action) {
             case SUBMIT -> {
-                String finalComment = comment != null ? comment : "Submitted for approval";
-                data = campaignService.submitCampaign(publicId, finalComment, actor);
+                boolean approveImmediately = resourceScope.isAdmin(userPrincipal);
+                String finalComment = comment != null ? comment
+                        : approveImmediately
+                                ? "Configuration completed by administrator"
+                                : "Submitted for approval";
+                data = campaignService.submitCampaign(
+                        publicId, finalComment, actor, approveImmediately);
             }
             case PUBLISH -> data = campaignService.publishCampaign(publicId, actor);
             case ACTIVATE -> data = campaignService.activateCampaign(publicId, actor);

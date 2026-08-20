@@ -8,7 +8,9 @@ import com.project.promotionservice.promotion.dto.request.CampaignCreateRequest;
 import com.project.promotionservice.promotion.dto.request.CampaignUpdateRequest;
 import com.project.promotionservice.promotion.dto.request.LegalReviewRequest;
 import com.project.promotionservice.promotion.dto.response.CampaignResponse;
+import com.project.promotionservice.promotion.entity.ApprovalHistory;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
+import com.project.promotionservice.promotion.enums.ApprovalAction;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.LegalStatus;
@@ -201,6 +203,35 @@ class CampaignServiceImplTest {
         assertEquals("PROMOTION_APPROVE_STANDARD",
                 campaign.getRequiredApprovalCapability());
         verify(approvalHistoryRepository).save(any());
+    }
+
+    @Test
+    void submitCampaign_byAdmin_isApprovedImmediatelyWithoutApprovalQueue() {
+        PromotionCampaign campaign = draftCouponCampaign();
+        CampaignResponse response = new CampaignResponse();
+        response.setApprovalStatus(CampaignApprovalStatus.APPROVED);
+        when(campaignRepository.findByPublicId(campaign.getPublicId()))
+                .thenReturn(Optional.of(campaign));
+        when(promotionRepository.existsConfiguredForCampaign(
+                eq(campaign.getPublicId()), any(), eq(campaign.getStartAt()), eq(campaign.getEndAt())))
+                .thenReturn(true);
+        when(campaignRepository.save(campaign)).thenReturn(campaign);
+        when(campaignMapper.toResponse(campaign)).thenReturn(response);
+
+        CampaignResponse result = campaignService.submitCampaign(
+                campaign.getPublicId(), "Configuration completed", "admin-1", true);
+
+        assertEquals(CampaignApprovalStatus.APPROVED, result.getApprovalStatus());
+        assertEquals(CampaignApprovalStatus.APPROVED, campaign.getApprovalStatus());
+        assertEquals("admin-1", campaign.getApprovedBy());
+        assertNotNull(campaign.getApprovedAt());
+        assertNull(campaign.getRequiredApprovalCapability());
+
+        var historyCaptor = org.mockito.ArgumentCaptor.forClass(ApprovalHistory.class);
+        verify(approvalHistoryRepository).save(historyCaptor.capture());
+        assertEquals(ApprovalAction.APPROVE, historyCaptor.getValue().getAction());
+        assertEquals("APPROVED", historyCaptor.getValue().getNewStatus());
+        assertTrue(historyCaptor.getValue().getComment().startsWith("ADMIN_DIRECT_APPROVAL:"));
     }
 
     @Test

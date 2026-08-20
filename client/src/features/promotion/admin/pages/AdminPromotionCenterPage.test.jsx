@@ -218,7 +218,7 @@ describe("AdminPromotionCenterPage", () => {
       fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
       fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
       fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
-      fireEvent.click(screen.getByRole("button", { name: "Tạo và gửi duyệt" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tạo và hoàn tất" }));
 
       await waitFor(() => expect(adminPromotionService.createPromotion).toHaveBeenCalled());
       const promotionPayload = adminPromotionService.createPromotion.mock.calls.at(-1)[0];
@@ -236,7 +236,7 @@ describe("AdminPromotionCenterPage", () => {
       expect(adminPromotionService.transitionCampaign).toHaveBeenCalledWith(
         "campaign-created",
         "SUBMIT",
-        "Gửi duyệt từ hướng dẫn tạo chương trình",
+        "Hoàn tất cấu hình bởi quản trị viên",
         1,
       );
     },

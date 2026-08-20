@@ -281,6 +281,14 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional
     public CampaignResponse submitCampaign(String publicId, String comment, String user) {
+        return submitCampaign(publicId, comment, user, false);
+    }
+
+    @Override
+    @Transactional
+    public CampaignResponse submitCampaign(
+            String publicId, String comment, String user,
+            boolean approveImmediately) {
         PromotionCampaign campaign = campaignRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));
 
@@ -299,31 +307,45 @@ public class CampaignServiceImpl implements CampaignService {
         requireConfiguredBenefit(campaign);
 
         String oldStatus = campaign.getApprovalStatus().name();
-        campaign.setApprovalStatus(CampaignApprovalStatus.PENDING);
+        CampaignApprovalStatus submittedStatus = approveImmediately
+                ? CampaignApprovalStatus.APPROVED
+                : CampaignApprovalStatus.PENDING;
+        Instant submittedAt = Instant.now();
+        campaign.setApprovalStatus(submittedStatus);
         campaign.setApprovalThresholdApplied(highBudgetThreshold);
         campaign.setApprovalPolicyVersion(approvalPolicyVersion);
-        campaign.setRequiredApprovalCapability(
-                campaign.getBudgetAmount().compareTo(highBudgetThreshold) > 0
+        campaign.setRequiredApprovalCapability(approveImmediately
+                ? null
+                : campaign.getBudgetAmount().compareTo(highBudgetThreshold) > 0
                         ? "PROMOTION_APPROVE_HIGH_BUDGET"
                         : "PROMOTION_APPROVE_STANDARD");
+        if (approveImmediately) {
+            campaign.setApprovedBy(user);
+            campaign.setApprovedAt(submittedAt);
+        }
         campaign.setUpdatedBy(user);
         PromotionCampaign saved = campaignRepository.save(campaign);
 
-        // Record Approval History
+        // Keep an explicit audit trail even when ADMIN does not require another approver.
         ApprovalHistory history = new ApprovalHistory();
         history.setTargetType(ApprovalTargetType.CAMPAIGN);
         history.setTargetPublicId(publicId);
-        history.setAction(ApprovalAction.SUBMIT);
+        history.setAction(approveImmediately ? ApprovalAction.APPROVE : ApprovalAction.SUBMIT);
         history.setOldStatus(oldStatus);
-        history.setNewStatus(CampaignApprovalStatus.PENDING.name());
-        history.setApproverPublicId(user); // initially requester is the one who submits
-        history.setComment(comment);
-        history.setApprovedAt(Instant.now());
+        history.setNewStatus(submittedStatus.name());
+        history.setApproverPublicId(user);
+        history.setComment(approveImmediately
+                ? "ADMIN_DIRECT_APPROVAL: " + comment
+                : comment);
+        history.setApprovedAt(submittedAt);
         history.setCreatedBy(user);
         history.setUpdatedBy(user);
         approvalHistoryRepository.save(history);
 
-        recordOutboxEvent("CAMPAIGN", saved.getPublicId(), "CAMPAIGN_SUBMITTED", campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
+        recordOutboxEvent(
+                "CAMPAIGN", saved.getPublicId(),
+                approveImmediately ? "CAMPAIGN_APPROVED" : "CAMPAIGN_SUBMITTED",
+                campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
 
         return campaignMapper.toResponse(saved);
     }
