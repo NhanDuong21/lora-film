@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.List;
+import java.util.Collection;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpecificationExecutor<Booking> {
@@ -39,6 +40,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     Page<Booking> findByUserId(Long userId, Pageable pageable);
 
     Page<Booking> findByUserIdAndBookingStatus(Long userId, BookingStatus bookingStatus, Pageable pageable);
+
+    long countByUserIdAndBookingStatusInAndIsDeletedFalse(
+            Long userId, Collection<BookingStatus> bookingStatuses);
 
     @Query("""
             SELECT SUM(b.finalAmount)

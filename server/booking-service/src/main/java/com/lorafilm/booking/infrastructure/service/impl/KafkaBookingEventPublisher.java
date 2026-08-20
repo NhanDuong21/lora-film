@@ -97,6 +97,11 @@ public class KafkaBookingEventPublisher implements BookingEventPublisher {
         ProducerRecord<String, String> record =
                 new ProducerRecord<>(bookingEventsTopic, eventKey, event.getPayload());
         record.headers().add("event-id", event.getEventId().getBytes(StandardCharsets.UTF_8));
+        record.headers().add("X-Event-ID", event.getEventId().getBytes(StandardCharsets.UTF_8));
+        record.headers().add("X-Event-Type", event.getEventType().getBytes(StandardCharsets.UTF_8));
+        record.headers().add("X-Event-Schema-Version", "1.0".getBytes(StandardCharsets.UTF_8));
+        record.headers().add("X-Correlation-ID", event.getEventId().getBytes(StandardCharsets.UTF_8));
+        record.headers().add("X-Trace-ID", event.getEventId().getBytes(StandardCharsets.UTF_8));
         kafkaTemplate.send(record).get(10, TimeUnit.SECONDS);
     }
 

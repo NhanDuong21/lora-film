@@ -35,6 +35,8 @@ import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.common.audit.Auditable;
 import com.project.promotionservice.promotion.service.CampaignService;
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
+import com.project.promotionservice.promotion.service.CampaignCompliancePolicy;
+import com.project.promotionservice.promotion.enums.ComplianceStatus;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -73,6 +75,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final UserPromotionRepository walletRepository;
     private final PromotionOutboxEnvelopeFactory envelopeFactory;
     private final CampaignConfigurationPolicy configurationPolicy;
+    private final CampaignCompliancePolicy compliancePolicy;
 
     public CampaignServiceImpl(PromotionCampaignRepository campaignRepository,
                                PromotionRepository promotionRepository,
@@ -84,7 +87,8 @@ public class CampaignServiceImpl implements CampaignService {
                                PromotionRedemptionRepository redemptionRepository,
                                UserPromotionRepository walletRepository,
                                PromotionOutboxEnvelopeFactory envelopeFactory,
-                               CampaignConfigurationPolicy configurationPolicy) {
+                               CampaignConfigurationPolicy configurationPolicy,
+                               CampaignCompliancePolicy compliancePolicy) {
         this.campaignRepository = campaignRepository;
         this.promotionRepository = promotionRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
@@ -96,6 +100,7 @@ public class CampaignServiceImpl implements CampaignService {
         this.walletRepository = walletRepository;
         this.envelopeFactory = envelopeFactory;
         this.configurationPolicy = configurationPolicy;
+        this.compliancePolicy = compliancePolicy;
     }
 
     @Override
@@ -281,14 +286,6 @@ public class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional
     public CampaignResponse submitCampaign(String publicId, String comment, String user) {
-        return submitCampaign(publicId, comment, user, false);
-    }
-
-    @Override
-    @Transactional
-    public CampaignResponse submitCampaign(
-            String publicId, String comment, String user,
-            boolean approveImmediately) {
         PromotionCampaign campaign = campaignRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Campaign not found", HttpStatus.NOT_FOUND));
 
@@ -307,36 +304,36 @@ public class CampaignServiceImpl implements CampaignService {
         requireConfiguredBenefit(campaign);
 
         String oldStatus = campaign.getApprovalStatus().name();
-        CampaignApprovalStatus submittedStatus = approveImmediately
-                ? CampaignApprovalStatus.APPROVED
-                : CampaignApprovalStatus.PENDING;
+        CampaignApprovalStatus submittedStatus = CampaignApprovalStatus.PENDING;
         Instant submittedAt = Instant.now();
         campaign.setApprovalStatus(submittedStatus);
         campaign.setApprovalThresholdApplied(highBudgetThreshold);
         campaign.setApprovalPolicyVersion(approvalPolicyVersion);
-        campaign.setRequiredApprovalCapability(approveImmediately
-                ? null
-                : campaign.getBudgetAmount().compareTo(highBudgetThreshold) > 0
+        campaign.setRequiredApprovalCapability(
+                campaign.getBudgetAmount().compareTo(highBudgetThreshold) > 0
                         ? "PROMOTION_APPROVE_HIGH_BUDGET"
                         : "PROMOTION_APPROVE_STANDARD");
-        if (approveImmediately) {
-            campaign.setApprovedBy(user);
-            campaign.setApprovedAt(submittedAt);
-        }
+        CampaignCompliancePolicy.Decision compliance = compliancePolicy.evaluate(campaign);
+        campaign.setLegalNotificationRequired(compliance.legalNotificationRequired());
+        campaign.setComplianceReason(compliance.reason());
+        campaign.setCompliancePolicyVersion(compliance.policyVersion());
+        campaign.setComplianceStatus(compliance.legalNotificationRequired()
+                ? ComplianceStatus.REVIEW_REQUIRED : ComplianceStatus.NOT_REQUIRED);
+        campaign.setLegalStatus(compliance.legalNotificationRequired()
+                ? LegalStatus.PENDING : LegalStatus.PASSED);
+        campaign.setComplianceVerifiedBy(null);
+        campaign.setComplianceVerifiedAt(null);
         campaign.setUpdatedBy(user);
         PromotionCampaign saved = campaignRepository.save(campaign);
 
-        // Keep an explicit audit trail even when ADMIN does not require another approver.
         ApprovalHistory history = new ApprovalHistory();
         history.setTargetType(ApprovalTargetType.CAMPAIGN);
         history.setTargetPublicId(publicId);
-        history.setAction(approveImmediately ? ApprovalAction.APPROVE : ApprovalAction.SUBMIT);
+        history.setAction(ApprovalAction.SUBMIT);
         history.setOldStatus(oldStatus);
         history.setNewStatus(submittedStatus.name());
         history.setApproverPublicId(user);
-        history.setComment(approveImmediately
-                ? "ADMIN_DIRECT_APPROVAL: " + comment
-                : comment);
+        history.setComment(comment);
         history.setApprovedAt(submittedAt);
         history.setCreatedBy(user);
         history.setUpdatedBy(user);
@@ -344,7 +341,7 @@ public class CampaignServiceImpl implements CampaignService {
 
         recordOutboxEvent(
                 "CAMPAIGN", saved.getPublicId(),
-                approveImmediately ? "CAMPAIGN_APPROVED" : "CAMPAIGN_SUBMITTED",
+                "CAMPAIGN_SUBMITTED",
                 campaignMapper.toResponse(saved), "promotion.campaign.lifecycle", user);
 
         return campaignMapper.toResponse(saved);
@@ -440,10 +437,20 @@ public class CampaignServiceImpl implements CampaignService {
     }
 
     private void requireLegalAndBudgetApproval(PromotionCampaign campaign) {
-        if (campaign.getLegalStatus() != LegalStatus.PASSED) {
+        boolean complianceReady = campaign.getComplianceStatus() == ComplianceStatus.NOT_REQUIRED
+                || campaign.getComplianceStatus() == ComplianceStatus.VERIFIED;
+        if (campaign.getLegalStatus() != LegalStatus.PASSED || !complianceReady) {
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST_PARAMETER,
                     "Campaign must pass legal compliance review before publication or activation",
+                    HttpStatus.BAD_REQUEST);
+        }
+        if (Boolean.TRUE.equals(campaign.getLegalNotificationRequired())
+                && (campaign.getLegalNotificationRef() == null
+                    || campaign.getLegalNotificationRef().isBlank())) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "A legal notification reference is required by the compliance policy",
                     HttpStatus.BAD_REQUEST);
         }
         if (campaign.getBudgetAmount() == null || campaign.getBudgetAmount().signum() <= 0) {
@@ -487,7 +494,20 @@ public class CampaignServiceImpl implements CampaignService {
                     "Legal review result must be PASSED or FAILED",
                     HttpStatus.BAD_REQUEST);
         }
+        if (request.getStatus() == LegalStatus.PASSED
+                && Boolean.TRUE.equals(campaign.getLegalNotificationRequired())
+                && (request.getLegalNotificationRef() == null
+                    || request.getLegalNotificationRef().isBlank())) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST_PARAMETER,
+                    "legalNotificationRef is required for this campaign",
+                    HttpStatus.BAD_REQUEST);
+        }
         campaign.setLegalStatus(request.getStatus());
+        campaign.setComplianceStatus(request.getStatus() == LegalStatus.PASSED
+                ? ComplianceStatus.VERIFIED : ComplianceStatus.BLOCKED);
+        campaign.setComplianceVerifiedBy(reviewer);
+        campaign.setComplianceVerifiedAt(Instant.now());
         if (request.getLegalNotificationRef() != null
                 && !request.getLegalNotificationRef().isBlank()) {
             campaign.setLegalNotificationRef(request.getLegalNotificationRef().trim());

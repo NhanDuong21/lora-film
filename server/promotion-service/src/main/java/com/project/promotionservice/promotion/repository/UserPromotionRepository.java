@@ -20,6 +20,13 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Lo
 
     Optional<UserPromotion> findByPublicIdAndDeletedAtIsNull(String publicId);
 
+    Optional<UserPromotion> findByIssuanceKey(String issuanceKey);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select up from UserPromotion up where up.issuanceKey = :issuanceKey and up.deletedAt is null")
+    Optional<UserPromotion> findByIssuanceKeyForUpdate(
+            @Param("issuanceKey") String issuanceKey);
+
     Optional<UserPromotion> findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
             String userPublicId, String promotionPublicId);
 

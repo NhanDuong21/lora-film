@@ -370,7 +370,7 @@ export default function AdminLayout({ onBackHome }) {
           </div>
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => navigate(scoreWarningCount > 0 ? '/admin/scores/reconciliation?view=control' : '/admin/audits?tab=attention')} className="hidden rounded-full border border-brand-orange/20 bg-brand-orange/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-brand-orange hover:bg-brand-orange/15 md:block">
-              {!attentionLoaded || attentionCount === null ? 'Chưa tải trạng thái cảnh báo' : attentionCount === 0 ? 'Hệ thống đang hoạt động' : `${attentionCount} tín hiệu cần kiểm tra`}
+              {!attentionLoaded || attentionCount === null ? 'Chưa tải trạng thái cảnh báo' : attentionCount === 0 ? 'Hệ thống đang hoạt động' : `${attentionCount} tín hiệu toàn hệ thống cần kiểm tra`}
             </button>
             <div className="h-6 w-px bg-zinc-800 hidden md:block"></div>
             <button className="text-zinc-400 hover:text-white transition-colors p-2" title="Thông báo" aria-label="Thông báo">

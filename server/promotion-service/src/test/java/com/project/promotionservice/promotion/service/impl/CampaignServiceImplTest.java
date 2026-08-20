@@ -22,6 +22,8 @@ import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import com.project.promotionservice.promotion.repository.UserPromotionRepository;
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
+import com.project.promotionservice.promotion.service.CampaignCompliancePolicy;
+import com.project.promotionservice.promotion.enums.ComplianceStatus;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +67,8 @@ class CampaignServiceImplTest {
     @Spy
     private CampaignConfigurationPolicy configurationPolicy =
             new CampaignConfigurationPolicy();
+    @Mock
+    private CampaignCompliancePolicy compliancePolicy;
 
     @InjectMocks
     private CampaignServiceImpl campaignService;
@@ -72,6 +76,9 @@ class CampaignServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        lenient().when(compliancePolicy.evaluate(any(PromotionCampaign.class)))
+                .thenReturn(new CampaignCompliancePolicy.Decision(
+                        true, "Internal policy test", "test-v1"));
     }
 
     @Test
@@ -206,10 +213,10 @@ class CampaignServiceImplTest {
     }
 
     @Test
-    void submitCampaign_byAdmin_isApprovedImmediatelyWithoutApprovalQueue() {
+    void submitCampaign_byAdmin_stillRequiresAnotherApprover() {
         PromotionCampaign campaign = draftCouponCampaign();
         CampaignResponse response = new CampaignResponse();
-        response.setApprovalStatus(CampaignApprovalStatus.APPROVED);
+        response.setApprovalStatus(CampaignApprovalStatus.PENDING);
         when(campaignRepository.findByPublicId(campaign.getPublicId()))
                 .thenReturn(Optional.of(campaign));
         when(promotionRepository.existsConfiguredForCampaign(
@@ -219,19 +226,20 @@ class CampaignServiceImplTest {
         when(campaignMapper.toResponse(campaign)).thenReturn(response);
 
         CampaignResponse result = campaignService.submitCampaign(
-                campaign.getPublicId(), "Configuration completed", "admin-1", true);
+                campaign.getPublicId(), "Configuration completed", "admin-1");
 
-        assertEquals(CampaignApprovalStatus.APPROVED, result.getApprovalStatus());
-        assertEquals(CampaignApprovalStatus.APPROVED, campaign.getApprovalStatus());
-        assertEquals("admin-1", campaign.getApprovedBy());
-        assertNotNull(campaign.getApprovedAt());
-        assertNull(campaign.getRequiredApprovalCapability());
+        assertEquals(CampaignApprovalStatus.PENDING, result.getApprovalStatus());
+        assertEquals(CampaignApprovalStatus.PENDING, campaign.getApprovalStatus());
+        assertNull(campaign.getApprovedBy());
+        assertNull(campaign.getApprovedAt());
+        assertEquals("PROMOTION_APPROVE_STANDARD", campaign.getRequiredApprovalCapability());
+        assertEquals(ComplianceStatus.REVIEW_REQUIRED, campaign.getComplianceStatus());
 
         var historyCaptor = org.mockito.ArgumentCaptor.forClass(ApprovalHistory.class);
         verify(approvalHistoryRepository).save(historyCaptor.capture());
-        assertEquals(ApprovalAction.APPROVE, historyCaptor.getValue().getAction());
-        assertEquals("APPROVED", historyCaptor.getValue().getNewStatus());
-        assertTrue(historyCaptor.getValue().getComment().startsWith("ADMIN_DIRECT_APPROVAL:"));
+        assertEquals(ApprovalAction.SUBMIT, historyCaptor.getValue().getAction());
+        assertEquals("PENDING", historyCaptor.getValue().getNewStatus());
+        assertFalse(historyCaptor.getValue().getComment().contains("ADMIN_DIRECT_APPROVAL"));
     }
 
     @Test
@@ -292,6 +300,8 @@ class CampaignServiceImplTest {
         campaign.setStatus(CampaignStatus.PAUSED);
         campaign.setApprovalStatus(CampaignApprovalStatus.APPROVED);
         campaign.setLegalStatus(LegalStatus.PASSED);
+        campaign.setComplianceStatus(ComplianceStatus.NOT_REQUIRED);
+        campaign.setLegalNotificationRequired(false);
         campaign.setBudgetAmount(new BigDecimal("100000.00"));
         campaign.setStartAt(Instant.now().minusSeconds(7200));
         campaign.setEndAt(Instant.now().minusSeconds(60));

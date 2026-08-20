@@ -30,7 +30,7 @@ public class AuditTrailService {
         log.setEntityPublicId(entityPublicId);
         log.setAction(action);
         log.setActorPublicId(actor);
-        log.setActorType(actor != null && actor.endsWith("_SERVICE") ? "SERVICE" : "USER");
+        log.setActorType(actorType(actor));
         log.setCreatedBy(actor);
         log.setRequestId(MDC.get("correlationId"));
         log.setTraceId(MDC.get("traceId"));
@@ -52,13 +52,20 @@ public class AuditTrailService {
         log.setEntityPublicId(entityPublicId);
         log.setAction(action);
         log.setActorPublicId(actor);
-        log.setActorType(actor != null && actor.endsWith("_SERVICE") ? "SERVICE" : "SYSTEM");
+        log.setActorType(actorType(actor));
         log.setCreatedBy(actor);
         log.setRequestId(MDC.get("correlationId"));
         log.setTraceId(MDC.get("traceId"));
         log.setBeforeData(toJson(before));
         log.setAfterData(toJson(after));
         repository.save(log);
+    }
+
+    private String actorType(String actor) {
+        if (actor == null || "SYSTEM".equalsIgnoreCase(actor)) {
+            return "SYSTEM";
+        }
+        return actor.endsWith("_SERVICE") ? "SERVICE" : "USER";
     }
 
     private String toJson(Object value) {

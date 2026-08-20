@@ -5,6 +5,7 @@ import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignScopeType;
 import com.project.promotionservice.promotion.enums.LegalStatus;
+import com.project.promotionservice.promotion.enums.ComplianceStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -121,6 +122,25 @@ public class PromotionCampaign extends BaseAuditableEntity {
 
     @Column(name = "legal_notification_ref", length = 150)
     private String legalNotificationRef;
+
+    @Column(name = "legal_notification_required", nullable = false)
+    private Boolean legalNotificationRequired = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "compliance_status", length = 30, nullable = false)
+    private ComplianceStatus complianceStatus = ComplianceStatus.REVIEW_REQUIRED;
+
+    @Column(name = "compliance_reason", length = 500)
+    private String complianceReason;
+
+    @Column(name = "compliance_policy_version", length = 50)
+    private String compliancePolicyVersion;
+
+    @Column(name = "compliance_verified_by", length = 36)
+    private String complianceVerifiedBy;
+
+    @Column(name = "compliance_verified_at")
+    private Instant complianceVerifiedAt;
 
     @Column(name = "remarks", columnDefinition = "TEXT")
     private String remarks;
@@ -419,6 +439,19 @@ public class PromotionCampaign extends BaseAuditableEntity {
     public void setLegalNotificationRef(String legalNotificationRef) {
         this.legalNotificationRef = legalNotificationRef;
     }
+
+    public Boolean getLegalNotificationRequired() { return legalNotificationRequired; }
+    public void setLegalNotificationRequired(Boolean value) { this.legalNotificationRequired = value; }
+    public ComplianceStatus getComplianceStatus() { return complianceStatus; }
+    public void setComplianceStatus(ComplianceStatus value) { this.complianceStatus = value; }
+    public String getComplianceReason() { return complianceReason; }
+    public void setComplianceReason(String value) { this.complianceReason = value; }
+    public String getCompliancePolicyVersion() { return compliancePolicyVersion; }
+    public void setCompliancePolicyVersion(String value) { this.compliancePolicyVersion = value; }
+    public String getComplianceVerifiedBy() { return complianceVerifiedBy; }
+    public void setComplianceVerifiedBy(String value) { this.complianceVerifiedBy = value; }
+    public Instant getComplianceVerifiedAt() { return complianceVerifiedAt; }
+    public void setComplianceVerifiedAt(Instant value) { this.complianceVerifiedAt = value; }
 
     public String getRemarks() {
         return remarks;

@@ -48,6 +48,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("""
             select u from User u
             where u.isDeleted = false
+              and u.status = com.project.userservice.enumtype.UserStatus.ACTIVE
+              and u.accountType = com.project.userservice.enumtype.AccountType.CUSTOMER
+              and u.birthday is not null
+              and ((month(u.birthday) = :month and day(u.birthday) = :day)
+                   or (:includeLeapDay = true
+                       and month(u.birthday) = 2 and day(u.birthday) = 29))
+            order by u.accountId asc
+            """)
+    List<User> findBirthdayEligible(
+            @Param("month") int month,
+            @Param("day") int day,
+            @Param("includeLeapDay") boolean includeLeapDay,
+            Pageable pageable);
+
+    @Query("""
+            select u from User u
+            where u.isDeleted = false
               and (lower(u.fullName) like :query
                or lower(coalesce(u.email, '')) like :query
                or (:queryHash is not null and u.phoneHash = :queryHash))

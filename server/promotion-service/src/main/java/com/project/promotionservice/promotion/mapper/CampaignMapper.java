@@ -118,6 +118,12 @@ public class CampaignMapper {
         response.setRedemptionCount(entity.getRedemptionCount());
         response.setMaxRedemptionsPerUser(entity.getMaxRedemptionsPerUser());
         response.setLegalNotificationRef(entity.getLegalNotificationRef());
+        response.setLegalNotificationRequired(entity.getLegalNotificationRequired());
+        response.setComplianceStatus(entity.getComplianceStatus());
+        response.setComplianceReason(entity.getComplianceReason());
+        response.setCompliancePolicyVersion(entity.getCompliancePolicyVersion());
+        response.setComplianceVerifiedBy(entity.getComplianceVerifiedBy());
+        response.setComplianceVerifiedAt(entity.getComplianceVerifiedAt());
         response.setRemarks(entity.getRemarks());
         response.setCreatedAt(entity.getCreatedAt());
         response.setCreatedBy(entity.getCreatedBy());

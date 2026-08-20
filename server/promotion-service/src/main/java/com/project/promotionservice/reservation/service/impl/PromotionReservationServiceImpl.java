@@ -676,6 +676,16 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         if (usage >= wallet.getMaxUsage()) {
             wallet.setStatus(UserPromotionStatus.USED);
         }
+        if (Boolean.TRUE.equals(wallet.getRevocationPending())) {
+            wallet.setRevocationPending(false);
+            eventService.record("USER_PROMOTION", wallet.getPublicId(),
+                    "PROMOTION_AUTOMATION_REFUND_ANOMALY",
+                    Map.of(
+                            "reason", Objects.toString(
+                                    wallet.getRevocationReason(), "SOURCE_BOOKING_REFUNDED"),
+                            "resolution", "REDEEMED_WHILE_REVOCATION_PENDING"),
+                    "SYSTEM");
+        }
         wallet.setUpdatedBy(actor);
         walletRepository.save(wallet);
     }
@@ -726,6 +736,11 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         List<PromotionRedemption> redemptions =
                 redemptionRepository.findByReservationPublicIdForUpdate(
                         reservation.getPublicId());
+        List<String> walletIds = redemptions.stream()
+                .map(PromotionRedemption::getUserPromotionPublicId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
         Map<String, BigDecimal> releaseByCampaign = new LinkedHashMap<>();
         for (PromotionRedemption redemption : redemptions) {
             if (redemption.getStatus() != PromotionRedemptionStatus.RESERVED) {
@@ -749,6 +764,23 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
                     campaign.getBudgetReserved().subtract(entry.getValue())));
             campaign.setUpdatedBy(actor);
             campaignRepository.save(campaign);
+        }
+        for (String walletId : walletIds) {
+            UserPromotion wallet = walletRepository.findByPublicIdForUpdate(walletId)
+                    .orElse(null);
+            if (wallet == null || !Boolean.TRUE.equals(wallet.getRevocationPending())
+                    || wallet.getUsageCount() > 0) {
+                continue;
+            }
+            wallet.setStatus(UserPromotionStatus.REVOKED);
+            wallet.setRevocationPending(false);
+            wallet.setUpdatedBy("SYSTEM");
+            walletRepository.save(wallet);
+            eventService.record("USER_PROMOTION", wallet.getPublicId(),
+                    "PROMOTION_AUTOMATION_REVOKED_AFTER_RESERVATION_RELEASE",
+                    Map.of("reason", Objects.toString(
+                            wallet.getRevocationReason(), "SOURCE_BOOKING_REFUNDED")),
+                    "SYSTEM");
         }
     }
 

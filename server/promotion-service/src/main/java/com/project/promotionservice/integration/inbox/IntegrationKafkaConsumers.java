@@ -28,7 +28,7 @@ public class IntegrationKafkaConsumers {
     }
 
     @KafkaListener(
-            topics = "${promotion.integration.consume-topics:booking.events,payment.events,notification.events,score.events,movie.events}",
+            topics = "#{'${promotion.integration.consume-topics:booking.events.v1,payment.events,notification.events,score.events,movie.events}'.split(',')}",
             groupId = "${spring.kafka.consumer.group-id:promotion-service-group}",
             containerFactory = "kafkaListenerContainerFactory")
     public void consume(ConsumerRecord<String, String> record) {
@@ -56,7 +56,7 @@ public class IntegrationKafkaConsumers {
     }
 
     @KafkaListener(
-            topics = "${promotion.integration.dlq-topics:booking.events.dlq,payment.events.dlq,notification.events.dlq,score.events.dlq,movie.events.dlq}",
+            topics = "#{'${promotion.integration.dlq-topics:booking.events.dlq,payment.events.dlq,notification.events.dlq,score.events.dlq,movie.events.dlq}'.split(',')}",
             groupId = "${spring.kafka.consumer.dlq-group-id:promotion-service-dlq-group}",
             containerFactory = "kafkaListenerContainerFactory")
     public void consumeDeadLetter(ConsumerRecord<String, String> record) {

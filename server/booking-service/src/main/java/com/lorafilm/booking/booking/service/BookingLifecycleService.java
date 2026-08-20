@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.EnumSet;
 
 /**
  * The single non-payment lifecycle coordinator.  Payment SUCCESS has an
@@ -170,8 +171,6 @@ public class BookingLifecycleService {
                 BookingStatus.CONFIRMED.name(), null, null, null, null);
         operationLogService.logOperation(saved.getId(), "PAYMENT_CONFIRMATION",
                 "PAYMENT", true, 0L, null, null, "HELD_TO_BOOKED");
-        outboxService.createOutboxEvent("BOOKING", saved.getId(),
-                "BOOKING_CONFIRMED", saved);
         if (saved.getFoodOrder() != null) {
             com.lorafilm.booking.food.event.FoodOrderConfirmedEvent foodEvent =
                     new com.lorafilm.booking.food.event.FoodOrderConfirmedEvent(
@@ -182,6 +181,22 @@ public class BookingLifecycleService {
                     "FOOD_ORDER_CONFIRMED", foodEvent);
         }
         ticketService.generateTicketsForConfirmedBooking(saved.getId());
+        long validBookingCount = bookingRepository
+                .countByUserIdAndBookingStatusInAndIsDeletedFalse(
+                        saved.getUserId(), EnumSet.of(
+                                BookingStatus.CONFIRMED, BookingStatus.COMPLETED));
+        boolean counterAnonymous = saved.getCounterCustomerName() != null
+                && saved.getCounterCustomerAccountId() == null;
+        Long automationCustomerId = saved.getCounterCustomerAccountId() != null
+                ? saved.getCounterCustomerAccountId() : saved.getUserId();
+        saved.setFirstConfirmedBooking(validBookingCount == 1);
+        saved.setTicketIssued(true);
+        saved.setAutomationCustomerId(counterAnonymous ? null : automationCustomerId);
+        saved.setAutomationEligible(!counterAnonymous
+                && saved.getFinalAmount() != null
+                && saved.getFinalAmount().signum() > 0);
+        outboxService.createOutboxEvent("BOOKING", saved.getId(),
+                "BOOKING_CONFIRMED", saved);
         metricsManager.incrementBookingConfirmed();
         metricsManager.incrementPaymentSuccess();
         return saved;

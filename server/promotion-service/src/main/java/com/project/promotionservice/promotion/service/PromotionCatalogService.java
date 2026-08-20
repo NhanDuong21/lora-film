@@ -340,6 +340,138 @@ public class PromotionCatalogService {
         return response;
     }
 
+    /**
+     * Idempotent single-recipient bridge used by the automation worker. The
+     * synchronous admin issue endpoint remains unchanged for small operations.
+     */
+    @Transactional
+    public AutomationIssueOutcome issueFromAutomation(
+            String promotionPublicId, String userPublicId, String issuanceKey,
+            String runPublicId, String audienceMemberPublicId, Integer validityDays) {
+        UserPromotion existingByKey = walletRepository.findByIssuanceKey(issuanceKey)
+                .orElse(null);
+        if (existingByKey != null) {
+            return new AutomationIssueOutcome(
+                    false, true, existingByKey.getPublicId(), true);
+        }
+        Promotion promotion = requirePromotionForUpdate(promotionPublicId);
+        if (promotion.getPromotionType() == PromotionType.AUTO) {
+            throw new BusinessException(
+                    "PROMOTION_NOT_ISSUABLE", "AUTO promotion does not use the customer wallet",
+                    HttpStatus.BAD_REQUEST);
+        }
+        PromotionCampaign campaign = requireRuntimeActive(promotion, Instant.now());
+        if (promotion.getMaxRedemptions() != null
+                && walletRepository.countByPromotionPublicIdAndDeletedAtIsNull(
+                        promotionPublicId) >= promotion.getMaxRedemptions()) {
+            throw conflict("Promotion issuance capacity has been reached");
+        }
+        UserPromotion previous = walletRepository
+                .findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
+                        userPublicId, promotionPublicId)
+                .orElse(null);
+        if (previous != null && previous.getStatus() == UserPromotionStatus.AVAILABLE) {
+            return new AutomationIssueOutcome(
+                    false, true, previous.getPublicId(), false);
+        }
+        UserPromotion grant = new UserPromotion();
+        grant.setUserPublicId(userPublicId);
+        grant.setPromotionPublicId(promotion.getPublicId());
+        grant.setStatus(UserPromotionStatus.AVAILABLE);
+        grant.setClaimedAt(Instant.now());
+        Instant issuedAt = Instant.now();
+        grant.setValidFrom(issuedAt.isAfter(promotion.getValidFrom())
+                ? issuedAt : promotion.getValidFrom());
+        Instant configuredValidTo = validityDays == null
+                ? promotion.getValidTo()
+                : issuedAt.plus(java.time.Duration.ofDays(validityDays));
+        grant.setValidTo(configuredValidTo.isBefore(promotion.getValidTo())
+                ? configuredValidTo : promotion.getValidTo());
+        grant.setMaxUsage(promotion.getMaxRedemptionsPerUser());
+        grant.setAutomationRunPublicId(runPublicId);
+        grant.setAudienceMemberPublicId(audienceMemberPublicId);
+        grant.setIssuanceKey(issuanceKey);
+        grant.setCreatedBy("SYSTEM");
+        grant.setUpdatedBy("SYSTEM");
+        UserPromotion saved = walletRepository.save(grant);
+        if (promotion.getPromotionType() != PromotionType.COUPON) {
+            eventService.record("USER_PROMOTION", saved.getPublicId(),
+                    "PROMOTION_ADDED_TO_WALLET", mapper.wallet(saved, promotion, campaign), "SYSTEM");
+        }
+        recordVoucherGranted(saved, promotion, campaign, userPublicId, "SYSTEM");
+        return new AutomationIssueOutcome(true, false, saved.getPublicId(), true);
+    }
+
+    public record AutomationIssueOutcome(
+            boolean issued, boolean alreadyGranted, String walletPublicId,
+            boolean budgetCommitted) {
+    }
+
+    @Transactional
+    public AutomationCompensationOutcome compensateAutomationIssuance(
+            String issuanceKey, String reason) {
+        UserPromotion wallet = walletRepository
+                .findByIssuanceKeyForUpdate(issuanceKey).orElse(null);
+        if (wallet == null) return AutomationCompensationOutcome.NOT_FOUND;
+        if (wallet.getStatus() == UserPromotionStatus.USED
+                || wallet.getUsageCount() > 0) {
+            wallet.setRevocationPending(false);
+            wallet.setRevocationReason(reason);
+            wallet.setUpdatedBy("SYSTEM");
+            walletRepository.save(wallet);
+            eventService.record("USER_PROMOTION", wallet.getPublicId(),
+                    "PROMOTION_AUTOMATION_REFUND_ANOMALY",
+                    java.util.Map.of(
+                            "issuanceKey", issuanceKey,
+                            "reason", reason,
+                            "resolution", "KEEP_HISTORY_AND_REVIEW_ABUSE"),
+                    "SYSTEM");
+            return AutomationCompensationOutcome.ANOMALY_REVIEW_REQUIRED;
+        }
+        long activeReservations = redemptionRepository
+                .countByUserPromotionPublicIdAndStatusInAndDeletedAtIsNull(
+                        wallet.getPublicId(),
+                        EnumSet.of(PromotionRedemptionStatus.RESERVED));
+        if (activeReservations > 0) {
+            wallet.setRevocationPending(true);
+            wallet.setRevocationReason(reason);
+            wallet.setUpdatedBy("SYSTEM");
+            walletRepository.save(wallet);
+            eventService.record("USER_PROMOTION", wallet.getPublicId(),
+                    "PROMOTION_AUTOMATION_REVOCATION_DEFERRED",
+                    java.util.Map.of(
+                            "issuanceKey", issuanceKey,
+                            "reason", reason,
+                            "activeReservations", activeReservations),
+                    "SYSTEM");
+            return AutomationCompensationOutcome.REVOCATION_PENDING;
+        }
+        if (wallet.getStatus() != UserPromotionStatus.AVAILABLE) {
+            return AutomationCompensationOutcome.ALREADY_UNAVAILABLE;
+        }
+        wallet.setStatus(UserPromotionStatus.REVOKED);
+        wallet.setRevocationPending(false);
+        wallet.setRevocationReason(reason);
+        wallet.setUpdatedBy("SYSTEM");
+        walletRepository.save(wallet);
+        eventService.record("USER_PROMOTION", wallet.getPublicId(),
+                "PROMOTION_AUTOMATION_REVOKED",
+                java.util.Map.of("issuanceKey", issuanceKey, "reason", reason), "SYSTEM");
+        return AutomationCompensationOutcome.REVOKED;
+    }
+
+    /** Kept for callers that only need the previous boolean contract. */
+    @Transactional
+    public boolean revokeAutomationIssuance(String issuanceKey, String reason) {
+        return compensateAutomationIssuance(issuanceKey, reason)
+                == AutomationCompensationOutcome.REVOKED;
+    }
+
+    public enum AutomationCompensationOutcome {
+        REVOKED, REVOCATION_PENDING, ANOMALY_REVIEW_REQUIRED,
+        ALREADY_UNAVAILABLE, NOT_FOUND
+    }
+
     @Transactional
     public PagedResponse<WalletPromotionResponse> wallet(
             String userPublicId, UserPromotionStatus status, Pageable pageable) {

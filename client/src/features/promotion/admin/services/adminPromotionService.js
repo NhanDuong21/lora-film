@@ -38,8 +38,36 @@ const adminPromotionService = {
       campaignVersion: impact?.campaignVersion,
     }, { headers: { 'Idempotency-Key': idempotencyKey } }
   )),
-  reviewCampaignLegal: async (id, status, comment) => unwrap(await apiClient.post(
-    `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment }
+  reviewCampaignLegal: async (id, status, comment, legalNotificationRef) => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment, legalNotificationRef }
+  )),
+
+  getPromotionOpportunities: async () => unwrap(await apiClient.get(
+    '/api/admin/promotion-opportunities'
+  )),
+  getPromotionPlaybooks: async () => unwrap(await apiClient.get(
+    '/api/admin/promotion-playbooks'
+  )),
+  updatePromotionPlaybook: async (id, payload) => unwrap(await apiClient.put(
+    `/api/admin/promotion-playbooks/${id}`, payload
+  )),
+  submitPromotionPlaybook: async id => unwrap(await apiClient.post(
+    `/api/admin/promotion-playbooks/${id}/submit`
+  )),
+  approvePromotionPlaybook: async id => unwrap(await apiClient.post(
+    `/api/admin/promotion-playbooks/${id}/approve`
+  )),
+  pausePromotionPlaybook: async id => unwrap(await apiClient.post(
+    `/api/admin/promotion-playbooks/${id}/pause`
+  )),
+  runPromotionPlaybook: async id => unwrap(await apiClient.post(
+    `/api/admin/promotion-playbooks/${id}/run`
+  )),
+  getPromotionRuns: async () => unwrap(await apiClient.get(
+    '/api/admin/promotion-runs'
+  )),
+  createPromotionIssueJob: async (id, batchSize = 200) => unwrap(await apiClient.post(
+    `/api/admin/promotion-runs/${id}/issue-jobs`, { batchSize }
   )),
 
   searchPromotions: async (params = {}) =>

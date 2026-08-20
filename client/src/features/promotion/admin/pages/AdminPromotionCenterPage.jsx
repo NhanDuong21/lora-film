@@ -26,6 +26,7 @@ import {
   Send,
   Tag,
   Users,
+  Workflow,
   X,
 } from "lucide-react";
 import adminPromotionService from "../services/adminPromotionService";
@@ -79,6 +80,15 @@ const labels = {
   REVERSED: "Đã hoàn lại",
   RESERVED: "Đang giữ",
   ROLLBACKED: "Đã thu hồi",
+  PENDING_APPROVAL: "Chờ người khác phê duyệt",
+  AUDIENCE_READY: "Đã chọn danh sách người nhận",
+  ISSUING: "Đang cấp ưu đãi",
+  PARTIAL_SUCCESS: "Hoàn tất một phần",
+  REVIEW_REQUIRED: "Cần kiểm tra bất thường",
+  NOT_REQUIRED: "Không yêu cầu",
+  REVIEW_REQUIRED: "Cần kiểm tra",
+  VERIFIED: "Đã xác minh",
+  BLOCKED: "Bị chặn",
   AUTO: "Ưu đãi tự động",
   VOUCHER: "Voucher sự kiện",
   COUPON: "Coupon theo khách",
@@ -154,10 +164,10 @@ const deliveryChoices = [
 const badge = (status) => {
   if (["ACTIVE", "APPROVED", "PASSED"].includes(status))
     return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-  if (["PAUSED", "PENDING", "SCHEDULED"].includes(status))
+  if (["PAUSED", "PENDING", "PENDING_APPROVAL", "SCHEDULED"].includes(status))
     return "border-amber-500/30 bg-amber-500/10 text-amber-300";
   if (
-    ["REJECTED", "FAILED", "CANCELLED", "DISABLED", "EXPIRED"].includes(status)
+    ["REJECTED", "FAILED", "REVIEW_REQUIRED", "CANCELLED", "DISABLED", "EXPIRED"].includes(status)
   )
     return "border-red-500/30 bg-red-500/10 text-red-300";
   return "border-zinc-700 bg-zinc-800 text-zinc-300";
@@ -208,6 +218,10 @@ const nestedPageData = (payload) =>
 const errorText = (error) => friendlyPromotionError(error);
 
 const legalStatusText = (campaign) => {
+  if (campaign?.complianceStatus === "NOT_REQUIRED") return "Không yêu cầu thông báo";
+  if (campaign?.complianceStatus === "VERIFIED") return "Đã xác minh compliance";
+  if (campaign?.complianceStatus === "BLOCKED") return "Compliance đang chặn";
+  if (campaign?.complianceStatus === "REVIEW_REQUIRED") return "Cần kiểm tra compliance";
   if (campaign?.legalStatus === "PASSED") return "Đạt pháp lý";
   if (campaign?.legalStatus === "FAILED") return "Cần chỉnh sửa";
   if (
@@ -326,8 +340,8 @@ const campaignJourney = (campaign, isAdmin = false) => {
     return {
       headline: missingPromotion ? "Cần thêm ít nhất một ưu đãi" : "Đang soạn chương trình",
       description: missingPromotion
-        ? `Chọn cách khách nhận ưu đãi và thiết lập quyền lợi trước khi ${isAdmin ? "hoàn tất cấu hình" : "gửi duyệt"}.`
-        : `Kiểm tra nội dung, quyền lợi và phạm vi trước khi ${isAdmin ? "hoàn tất cấu hình" : "gửi duyệt"}.`,
+        ? "Chọn cách khách nhận ưu đãi và thiết lập quyền lợi trước khi gửi duyệt."
+        : "Kiểm tra nội dung, quyền lợi và phạm vi trước khi gửi duyệt.",
       actionLabel: missingPromotion ? "Thêm ưu đãi" : "Tiếp tục thiết lập",
       actionCode: "OPEN_WORKSPACE",
       step: missingPromotion ? 2 : 4,
@@ -378,7 +392,7 @@ function IconButton({
 
 const campaignActionTitle = (action, isAdmin = false) =>
   ({
-    SUBMIT: isAdmin ? "Hoàn tất cấu hình chương trình?" : "Gửi chiến dịch để duyệt?",
+    SUBMIT: "Gửi chương trình để duyệt?",
     APPROVE: "Phê duyệt chiến dịch?",
     LEGAL: "Xác nhận kiểm tra pháp lý?",
     PUBLISH: "Xuất bản chiến dịch?",
@@ -393,8 +407,8 @@ const campaignActionTitle = (action, isAdmin = false) =>
 
 const campaignActionDescription = (campaign, action, isAdmin = false) => {
   const name = `“${campaign.name}”`;
-  if (action === "SUBMIT" && isAdmin)
-    return `${name} sẽ được xác nhận ngay bằng quyền quản trị và không phải chờ người khác phê duyệt.`;
+  if (action === "SUBMIT")
+    return `${name} sẽ được gửi cho một người khác có quyền phê duyệt; người tạo không thể tự duyệt.`;
   if (action === "PUBLISH")
     return `${name} sẽ tự chạy theo thời gian hiệu lực. Các ưu đãi thuộc chiến dịch sẽ không được bật thủ công.`;
   if (action === "ACTIVATE")
@@ -432,6 +446,9 @@ export default function AdminPromotionCenterPage() {
   const [campaigns, setCampaigns] = useState(emptyPage);
   const [campaignOptions, setCampaignOptions] = useState([]);
   const [promotions, setPromotions] = useState(emptyPage);
+  const [opportunities, setOpportunities] = useState([]);
+  const [automationPlaybooks, setAutomationPlaybooks] = useState([]);
+  const [automationRuns, setAutomationRuns] = useState([]);
   const [operations, setOperations] = useState({
     promotion: null,
     booking: null,
@@ -477,15 +494,42 @@ export default function AdminPromotionCenterPage() {
         ]);
         setOperations({ promotion, booking });
       } else if (view === "tasks") {
-        setCampaigns(
-          pageData(
-            await adminPromotionService.searchCampaigns({
+        const [campaignResult, opportunityResult, playbookResult, runResult] = await Promise.allSettled([
+          adminPromotionService.searchCampaigns({
               page: 0,
               size: 100,
               sort: "createdAt,desc",
-            }),
-          ),
+          }),
+          adminPromotionService.getPromotionOpportunities?.() ?? Promise.resolve([]),
+          adminPromotionService.getPromotionPlaybooks?.() ?? Promise.resolve([]),
+          adminPromotionService.getPromotionRuns?.() ?? Promise.resolve([]),
+        ]);
+        if (campaignResult.status === "fulfilled") {
+          setCampaigns(pageData(campaignResult.value));
+        } else {
+          throw campaignResult.reason;
+        }
+        setOpportunities(
+          opportunityResult.status === "fulfilled" && Array.isArray(opportunityResult.value)
+            ? opportunityResult.value : [],
         );
+        setAutomationPlaybooks(
+          playbookResult.status === "fulfilled" && Array.isArray(playbookResult.value)
+            ? playbookResult.value : [],
+        );
+        setAutomationRuns(
+          runResult.status === "fulfilled" && Array.isArray(runResult.value)
+            ? runResult.value : [],
+        );
+        if (!campaignOptions.length) await loadCampaignOptions();
+      } else if (view === "automations") {
+        const [playbookResult, runResult] = await Promise.all([
+          adminPromotionService.getPromotionPlaybooks(),
+          adminPromotionService.getPromotionRuns(),
+        ]);
+        setAutomationPlaybooks(Array.isArray(playbookResult) ? playbookResult : []);
+        setAutomationRuns(Array.isArray(runResult) ? runResult : []);
+        if (!campaignOptions.length) await loadCampaignOptions();
       } else if (view === "campaigns") {
         setCampaigns(
           pageData(
@@ -729,9 +773,7 @@ export default function AdminPromotionCenterPage() {
       await adminPromotionService.transitionCampaign(
         createdCampaign.publicId,
         "SUBMIT",
-        isAdmin
-          ? "Hoàn tất cấu hình bởi quản trị viên"
-          : "Gửi duyệt từ hướng dẫn tạo chương trình",
+        "Gửi duyệt từ hướng dẫn tạo chương trình",
         createdCampaign.version,
       );
       setModal(null);
@@ -748,9 +790,7 @@ export default function AdminPromotionCenterPage() {
       await loadCampaignOptions();
       setMessage({
         kind: "success",
-        text: isAdmin
-          ? "Đã tạo chương trình và xác nhận cấu hình. Không cần chờ người khác phê duyệt."
-          : "Đã tạo chương trình, thêm ưu đãi đầu tiên và gửi sang bước phê duyệt.",
+        text: "Đã tạo chương trình, thêm ưu đãi đầu tiên và gửi sang bước phê duyệt.",
       });
     } catch (error) {
       setModal(null);
@@ -758,7 +798,7 @@ export default function AdminPromotionCenterPage() {
       setMessage({
         kind: "error",
         text: createdCampaign
-          ? `Chương trình đã được lưu nhưng chưa hoàn tất ưu đãi hoặc ${isAdmin ? "xác nhận cấu hình" : "gửi duyệt"}. Hãy mở “${createdCampaign.name}” để tiếp tục. ${errorText(error)}`
+          ? `Chương trình đã được lưu nhưng chưa hoàn tất ưu đãi hoặc gửi duyệt. Hãy mở “${createdCampaign.name}” để tiếp tục. ${errorText(error)}`
           : errorText(error),
       });
     } finally {
@@ -779,6 +819,8 @@ export default function AdminPromotionCenterPage() {
                   ? "Tạo và theo dõi chương trình từ khi soạn đến khi kết thúc"
                   : view === "tasks"
                     ? "Những việc cần xử lý tiếp theo, theo đúng thứ tự"
+                    : view === "automations"
+                      ? "Theo dõi các luồng tự động, hạn mức và kết quả gần nhất"
                     : "Cấp voucher hoặc gửi mã cho những khách hàng được chọn"}
             </p>
           </div>
@@ -793,15 +835,15 @@ export default function AdminPromotionCenterPage() {
               />{" "}
               Làm mới
             </button>
-            {canAuthor && ["tasks", "campaigns"].includes(view) && (
+            {canAuthor && view === "campaigns" && (
               <button
                 type="button"
                 onClick={() =>
                   setModal({ type: "authoring-wizard", initialNow: Date.now() })
                 }
-                className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
+                className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:border-orange-500/50 hover:text-orange-300`}
               >
-                <Plus className="h-4 w-4" /> Tạo chương trình
+                <Plus className="h-4 w-4" /> Tạo tùy chỉnh nâng cao
               </button>
             )}
           </div>
@@ -809,8 +851,9 @@ export default function AdminPromotionCenterPage() {
         <nav aria-label="Khu vực quản lý khuyến mãi" className="mt-5 flex gap-1 overflow-x-auto border-b border-zinc-800">
           {[
             ["tasks", "Việc cần làm"],
-            ["campaigns", "Chương trình khuyến mãi"],
-            ["promotions", "Phân phối cho khách"],
+            ["automations", "Luồng tự động"],
+            ["campaigns", "Chương trình"],
+            ["promotions", "Phân phối"],
             ...(canViewOperations ? [["operations", "Sự cố & đối soát"]] : []),
           ].map(([key, label]) => (
             <button
@@ -940,9 +983,30 @@ export default function AdminPromotionCenterPage() {
         {view === "tasks" ? (
           <TaskBoard
             campaigns={campaigns.content}
+            opportunities={opportunities}
+            playbooks={automationPlaybooks}
+            automationRuns={automationRuns}
             loading={loading}
             isAdmin={isAdmin}
             onAction={openCampaignAction}
+            onOpenOperations={() => setView("operations")}
+            onOpportunityAction={(opportunity) => {
+              if (opportunity.actionTarget?.startsWith("/")) {
+                window.location.assign(opportunity.actionTarget === "/admin/showtime-pricing"
+                  ? "/admin/pricing" : opportunity.actionTarget);
+                return;
+              }
+              if (opportunity.playbook) {
+                setModal({ type: "playbook", record: opportunity.playbook });
+              }
+            }}
+          />
+        ) : view === "automations" ? (
+          <AutomationHub
+            playbooks={automationPlaybooks}
+            runs={automationRuns}
+            loading={loading}
+            onOpen={(playbook) => setModal({ type: "playbook", record: playbook })}
           />
         ) : view === "operations" ? (
           <OperationsDashboard data={operations} loading={loading} />
@@ -1035,6 +1099,43 @@ export default function AdminPromotionCenterPage() {
           onSubmit={createProgramWorkflow}
         />
       )}
+      {modal?.type === "playbook" && (
+        <PlaybookModal
+          record={modal.record}
+          campaigns={campaignOptions}
+          busy={busy}
+          canApprove={(permissions.includes("PROMOTION_APPROVE_STANDARD")
+            || permissions.includes("PROMOTION_APPROVE_HIGH_BUDGET"))
+            && String(user?.id ?? "") !== String(modal.record.submittedBy ?? "")}
+          onClose={() => setModal(null)}
+          onSaveAndSubmit={async (payload) => {
+            const saved = await run(
+              () => adminPromotionService.updatePromotionPlaybook(modal.record.publicId, payload),
+              "Đã lưu luồng tự động.",
+            );
+            if (saved) {
+              await run(
+                () => adminPromotionService.submitPromotionPlaybook(saved.publicId),
+                "Đã gửi luồng cho người khác phê duyệt.",
+              );
+            }
+          }}
+          onApprove={() => run(
+            () => adminPromotionService.approvePromotionPlaybook(modal.record.publicId),
+            "Đã phê duyệt đúng phiên bản; hệ thống được phép chạy trong giới hạn an toàn.",
+          )}
+          onRun={() => run(
+            async () => {
+              const created = await adminPromotionService.runPromotionPlaybook(modal.record.publicId);
+              if (created?.status === "AUDIENCE_READY") {
+                await adminPromotionService.createPromotionIssueJob(created.publicId, 200);
+              }
+              return created;
+            },
+            "Đã chốt danh sách người nhận và đưa việc cấp ưu đãi vào hàng đợi.",
+          )}
+        />
+      )}
       {modal?.type === "benefit-choice" && (
         <BenefitChoiceModal
           campaign={modal.record}
@@ -1118,7 +1219,7 @@ export default function AdminPromotionCenterPage() {
           action={modal.action}
           busy={busy}
           onClose={() => setModal(null)}
-          onSubmit={({ comment, legalStatus, campaignCode, incidentReference }) => run(
+          onSubmit={({ comment, legalStatus, legalNotificationRef, campaignCode, incidentReference }) => run(
             () => modal.action === "APPROVE"
               ? adminPromotionService.approveCampaign(modal.record.publicId, comment)
               : modal.action === "REJECT"
@@ -1127,7 +1228,9 @@ export default function AdminPromotionCenterPage() {
                   ? adminPromotionService.overrideCampaignApproval(
                     modal.record.publicId, campaignCode, incidentReference, comment,
                   )
-                  : adminPromotionService.reviewCampaignLegal(modal.record.publicId, legalStatus, comment),
+                  : adminPromotionService.reviewCampaignLegal(
+                    modal.record.publicId, legalStatus, comment, legalNotificationRef,
+                  ),
             "Đã ghi nhận quyết định và cập nhật luồng chiến dịch.",
             true,
           )}
@@ -1224,7 +1327,17 @@ function EmptyPromotions({ type }) {
   );
 }
 
-function TaskBoard({ campaigns, loading, isAdmin, onAction }) {
+function TaskBoard({
+  campaigns,
+  opportunities = [],
+  playbooks = [],
+  automationRuns = [],
+  loading,
+  isAdmin,
+  onAction,
+  onOpenOperations,
+  onOpportunityAction,
+}) {
   if (loading) {
     return (
       <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-zinc-500">
@@ -1261,79 +1374,200 @@ function TaskBoard({ campaigns, loading, isAdmin, onAction }) {
       journey.actionCode === "LEGAL_REVIEW"
     );
   });
+  const pendingPlaybooks = playbooks.filter((item) =>
+    ["PENDING_APPROVAL", "DRAFT", "REJECTED", "PAUSED"].includes(item.status),
+  );
+  const reviewRuns = automationRuns.filter((item) =>
+    ["FAILED", "PARTIAL_SUCCESS", "REVIEW_REQUIRED"].includes(item.status),
+  );
+  const totalWork = workItems.length + pendingPlaybooks.length + reviewRuns.length;
+  const activeBirthday = playbooks.find(
+    (item) => item.code === "BIRTHDAY_REWARD" && item.status === "ACTIVE",
+  );
 
   return (
     <div className="space-y-6">
       <section>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-orange-300">
-              Hôm nay
-            </p>
-            <h2 className="mt-1 text-2xl font-black text-white">Việc cần làm</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Bắt đầu từ thẻ đầu tiên; mỗi chương trình chỉ hiển thị một hành động chính.
-            </p>
+            <p className="text-xs font-black uppercase tracking-wide text-orange-300">Hôm nay</p>
+            <h2 className="mt-1 text-2xl font-black text-white">Cần xử lý hôm nay</h2>
+            <p className="mt-1 text-sm text-zinc-500">Các việc đang chờ quyết định hoặc cần kiểm tra trước.</p>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            [drafting, "Chương trình đang soạn", "Tiếp tục thiết lập nội dung"],
-            [pending, "Đang chờ kiểm tra", "Phê duyệt hoặc pháp lý"],
-            [ready, "Sẵn sàng phát hành", "Khách vẫn chưa thấy ưu đãi"],
-            [warnings, "Cảnh báo vận hành", "Ngân sách hoặc dừng khẩn cấp"],
-          ].map(([value, title, description]) => (
-            <article key={title} className="rounded-xl border border-zinc-800 bg-zinc-950/35 p-4">
-              <p className="text-2xl font-black text-white">{value}</p>
-              <p className="mt-1 text-sm font-bold text-zinc-200">{title}</p>
-              <p className="mt-1 text-xs leading-5 text-zinc-600">{description}</p>
-            </article>
-          ))}
-        </div>
+        {totalWork === 0 ? (
+          <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-6 text-center">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400" />
+            <p className="mt-3 font-black text-white">Không có việc khẩn cấp cần xử lý</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              {activeBirthday
+                ? "Lần chạy Quà sinh nhật tiếp theo: 00:05 ngày mai."
+                : "Các chương trình và luồng tự động hiện không có cảnh báo mới."}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-3">
+            {pendingPlaybooks.map((playbook) => (
+              <article key={playbook.publicId} className="grid gap-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 md:grid-cols-[minmax(0,1fr)_230px] md:items-center">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Workflow className="h-4 w-4 text-amber-300" />
+                    <h3 className="font-black text-white">{playbook.name}</h3>
+                    <StatusBadge value={playbook.status} />
+                  </div>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    {playbook.status === "PENDING_APPROVAL"
+                      ? "Luồng đã được cấu hình nhưng chưa thể chạy vì đang chờ một người khác phê duyệt."
+                      : playbook.status === "PAUSED"
+                        ? "Luồng đang tạm dừng và sẽ không cấp ưu đãi mới."
+                        : "Luồng cần được cấu hình đầy đủ và gửi phê duyệt."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => onOpportunityAction?.({ playbook })} className={`${buttonClass} h-10 bg-amber-500 text-zinc-950 hover:bg-amber-400`}>
+                  {playbook.status === "PENDING_APPROVAL" ? "Xem yêu cầu phê duyệt" : "Tiếp tục cấu hình"}
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </article>
+            ))}
+            {reviewRuns.map((runItem) => (
+              <article key={runItem.publicId} className="grid gap-4 rounded-xl border border-red-500/30 bg-red-500/[0.06] p-4 md:grid-cols-[minmax(0,1fr)_230px] md:items-center">
+                <div>
+                  <h3 className="font-black text-white">Có bất thường cần đối soát</h3>
+                  <p className="mt-2 text-sm text-zinc-300">{runItem.playbookCode === "SECOND_BOOKING_INCENTIVE" ? "Ưu đãi booking lần hai có trường hợp hoàn booking nguồn sau khi quyền lợi đã được dùng." : "Một lần cấp ưu đãi chưa hoàn tất trọn vẹn."}</p>
+                </div>
+                <button type="button" onClick={onOpenOperations} className={`${buttonClass} h-10 bg-red-500 text-white hover:bg-red-400`}>
+                  Mở đối soát <ChevronRight className="h-4 w-4" />
+                </button>
+              </article>
+            ))}
+            {workItems.map((campaign) => {
+              const journey = campaignJourney(campaign, isAdmin);
+              return (
+                <article key={campaign.publicId} className="grid gap-4 rounded-xl border border-zinc-800 bg-zinc-950/30 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-black text-white">{campaign.name}</h4>
+                      <span className="rounded-full bg-orange-500/10 px-2 py-1 text-[10px] font-black text-orange-300">Bước {journey.step}/6</span>
+                    </div>
+                    <p className="mt-2 text-sm font-bold text-zinc-200">{journey.headline}</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">{journey.description}</p>
+                  </div>
+                  <button type="button" onClick={() => onAction(campaign, journey.actionCode)} className={`${buttonClass} h-10 bg-orange-500 text-white hover:bg-orange-600`}>
+                    {journey.actionLabel} <ChevronRight className="h-4 w-4" />
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        {totalWork > 0 && (
+          <p className="mt-3 text-xs text-zinc-600">
+            Tổng cộng {totalWork} việc cần xử lý: {drafting} bản nháp, {pending + pendingPlaybooks.length} chờ kiểm tra, {ready} sẵn sàng phát hành và {warnings + reviewRuns.length} cảnh báo.
+          </p>
+        )}
       </section>
 
-      <section>
-        <h3 className="text-sm font-black text-white">Theo thứ tự ưu tiên</h3>
-        <div className="mt-3 grid gap-3">
-          {workItems.map((campaign) => {
-            const journey = campaignJourney(campaign, isAdmin);
-            return (
-              <article
-                key={campaign.publicId}
-                className="grid gap-4 rounded-xl border border-zinc-800 bg-zinc-950/30 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-center"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="font-black text-white">{campaign.name}</h4>
-                    <span className="rounded-full bg-orange-500/10 px-2 py-1 text-[10px] font-black text-orange-300">
-                      Bước {journey.step}/6
-                    </span>
+      {opportunities.length > 0 && (
+        <section aria-labelledby="promotion-opportunities-heading">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-300">Có dữ liệu thực</p>
+            <h2 id="promotion-opportunities-heading" className="mt-1 text-2xl font-black text-white">Cơ hội kinh doanh</h2>
+            <p className="mt-1 text-sm text-zinc-500">Mỗi gợi ý cho biết lý do, phạm vi áp dụng, giới hạn chi phí và việc cần làm tiếp theo.</p>
+          </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            {opportunities.map((item) => (
+              <article key={item.code} className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/[0.08] to-zinc-950 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-300">Sẵn sàng thực hiện</p>
+                    <h3 className="mt-2 text-lg font-black text-white">{item.title}</h3>
                   </div>
-                  <p className="mt-2 text-sm font-bold text-zinc-200">{journey.headline}</p>
-                  <p className="mt-1 text-xs leading-5 text-zinc-500">{journey.description}</p>
-                  <p className="mt-2 text-[11px] text-zinc-600">
-                    Người xử lý: <span className="font-bold text-zinc-400">{journey.owner}</span>
-                  </p>
+                  <Gift className="h-6 w-6 shrink-0 text-emerald-300" />
+                </div>
+                <p className="mt-3 text-sm leading-6 text-zinc-200">{item.insight}</p>
+                <p className="mt-2 text-xs leading-5 text-zinc-500">Vì sao: {item.reason}</p>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <DetailCard label="Sẽ nhận hôm nay" value={`${item.relatedCount || 0} khách`} />
+                  <DetailCard label="Không cấp" value={`${item.excludedCount || 0} khách`} />
+                  <DetailCard label="Chi phí dự kiến hôm nay" value={money(item.expectedCost)} />
+                  <DetailCard label="Ngân sách tháng còn lại" value={money(item.budgetRemaining)} />
                 </div>
                 <button
                   type="button"
-                  onClick={() => onAction(campaign, journey.actionCode)}
-                  className={`${buttonClass} h-10 bg-orange-500 text-white hover:bg-orange-600`}
-                >
-                  {journey.actionLabel} <ChevronRight className="h-4 w-4" />
+                  onClick={() => onOpportunityAction?.(item)}
+                className={`${buttonClass} mt-4 h-10 bg-emerald-500 text-zinc-950 hover:bg-emerald-400`}
+              >
+                  {item.actionLabel} <ChevronRight className="h-4 w-4" />
                 </button>
               </article>
-            );
-          })}
-          {!workItems.length && (
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-8 text-center">
-              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400" />
-              <p className="mt-3 font-black text-white">Không có việc tồn đọng</p>
-              <p className="mt-1 text-sm text-zinc-500">Các chương trình hiện không cần xử lý ngay.</p>
-            </div>
-          )}
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function AutomationHub({ playbooks = [], runs = [], loading, onOpen }) {
+  if (loading) {
+    return <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải các luồng tự động</div>;
+  }
+  const lastRun = (code) => runs.find((item) => item.playbookCode === code);
+  const rows = [
+    ...playbooks.map((playbook) => ({
+      ...playbook,
+      last: lastRun(playbook.code),
+      next: playbook.status !== "ACTIVE"
+        ? "Sau khi được kích hoạt"
+        : playbook.code === "BIRTHDAY_REWARD"
+          ? "00:05 ngày mai"
+          : "Khi có booking đầu tiên hợp lệ",
+    })),
+    {
+      publicId: "low-occupancy-unavailable",
+      name: "Suất chiếu vắng",
+      status: "UNAVAILABLE",
+      next: "Chưa xác định",
+      description: "Chưa đủ dữ liệu để chọn đúng nhóm khách nhận ưu đãi.",
+    },
+  ];
+  return (
+    <div className="space-y-6">
+      <section>
+        <p className="text-xs font-black uppercase tracking-wide text-sky-300">Theo dõi cố định</p>
+        <h2 className="mt-1 text-2xl font-black text-white">Luồng tự động</h2>
+        <p className="mt-1 text-sm text-zinc-500">Xem trạng thái, hạn mức, lần chạy tiếp theo và kết quả gần nhất.</p>
+        <div className="mt-5 overflow-x-auto rounded-xl border border-zinc-800">
+          <table className="min-w-[900px] w-full text-left text-xs">
+            <thead className="bg-zinc-900/80 text-zinc-500"><tr><th className="px-4 py-3">Luồng</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Lần gần nhất</th><th className="px-4 py-3">Lần tiếp theo</th><th className="px-4 py-3">Kết quả</th><th className="px-4 py-3">Thao tác</th></tr></thead>
+            <tbody className="divide-y divide-zinc-800">
+              {rows.map((item) => (
+                <tr key={item.publicId} className="bg-zinc-950/30">
+                  <td className="px-4 py-4"><p className="font-black text-white">{item.name}</p><p className="mt-1 max-w-xs text-zinc-600">{item.description}</p></td>
+                  <td className="px-4 py-4"><StatusBadge value={item.status} text={item.status === "UNAVAILABLE" ? "Chưa khả dụng" : undefined} /></td>
+                  <td className="px-4 py-4 text-zinc-400">{item.last ? dateTime(item.last.completedAt || item.last.startedAt) : "Chưa chạy"}</td>
+                  <td className="px-4 py-4 text-zinc-400">{item.next}</td>
+                  <td className="px-4 py-4 text-zinc-300">{item.last ? `${item.last.issuedCount || 0} đã cấp · ${item.last.skippedCount || 0} không cấp` : "—"}</td>
+                  <td className="px-4 py-4">{item.code ? <button type="button" onClick={() => onOpen(item)} className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:bg-zinc-800`}>Xem chi tiết</button> : <span className="text-zinc-600">Không có thao tác</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
+      {runs.length > 0 && (
+        <section>
+          <h3 className="text-sm font-black text-white">Lịch sử cấp ưu đãi gần đây</h3>
+          <div className="mt-3 overflow-hidden rounded-xl border border-zinc-800">
+            {runs.slice(0, 8).map((runItem) => (
+              <article key={runItem.publicId} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4 last:border-b-0">
+                <div><p className="font-bold text-white">{runItem.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p><p className="mt-1 text-xs text-zinc-500">Phiên bản {runItem.playbookVersion} · phê duyệt bởi {runItem.authorizedBy || "—"}</p></div>
+                <div className="text-right"><StatusBadge value={runItem.status} /><p className="mt-2 text-xs text-zinc-400">{runItem.issuedCount || 0} đã cấp · {runItem.skippedCount || 0} không cấp · {runItem.failedCount || 0} lỗi</p></div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -2242,14 +2476,169 @@ function ModalShell({ title, icon: Icon, onClose, children }) {
   );
 }
 
+function PlaybookModal({
+  record,
+  campaigns,
+  busy,
+  canApprove,
+  onClose,
+  onSaveAndSubmit,
+  onApprove,
+  onRun,
+}) {
+  const [form, setForm] = useState({
+    campaignPublicId: record.campaignPublicId || "",
+    promotionPublicId: record.promotionPublicId || "",
+    budgetLimit: record.budgetLimit || 20000000,
+    quotaLimit: record.quotaLimit || 100000,
+  });
+  const [benefits, setBenefits] = useState([]);
+  const editable = ["DRAFT", "REJECTED", "PAUSED"].includes(record.status);
+
+  useEffect(() => {
+    let active = true;
+    if (!form.campaignPublicId) {
+      setBenefits([]);
+      return () => { active = false; };
+    }
+    adminPromotionService.searchPromotions({
+      campaignPublicId: form.campaignPublicId,
+      page: 0,
+      size: 100,
+    }).then((payload) => {
+      if (active) setBenefits(pageData(payload).content || []);
+    }).catch(() => {
+      if (active) setBenefits([]);
+    });
+    return () => { active = false; };
+  }, [form.campaignPublicId]);
+
+  const payload = {
+    code: record.code,
+    name: record.name,
+    description: record.description,
+    triggerType: record.triggerType,
+    campaignPublicId: form.campaignPublicId,
+    promotionPublicId: form.promotionPublicId,
+    configJson: record.configJson || "{}",
+    scopeJson: record.scopeJson || "{}",
+    budgetLimit: Number(form.budgetLimit),
+    quotaLimit: Number(form.quotaLimit),
+  };
+
+  return (
+    <ModalShell title={`Luồng tự động · ${record.name}`} icon={Gift} onClose={onClose}>
+      <div className="space-y-4 p-5">
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-emerald-300">Phiên bản {record.playbookVersion}</p>
+              <p className="mt-2 text-sm leading-6 text-zinc-200">{record.description}</p>
+            </div>
+            <StatusBadge value={record.status} />
+          </div>
+          <p className="mt-3 text-xs text-zinc-500">
+            Cách chạy: <b className="text-zinc-300">{record.triggerType === "DAILY_SCHEDULE" ? "Mỗi ngày lúc 00:05" : "Ngay sau booking đầu tiên hợp lệ"}</b>
+          </p>
+        </div>
+
+        {editable && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Chương trình đã được duyệt" required wide>
+              <select
+                value={form.campaignPublicId}
+                onChange={(event) => setForm((current) => ({
+                  ...current,
+                  campaignPublicId: event.target.value,
+                  promotionPublicId: "",
+                }))}
+                className={fieldClass}
+              >
+                <option value="">Chọn chương trình</option>
+                {campaigns.filter((item) => item.item?.approvalStatus === "APPROVED").map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Quyền lợi cấp vào ví" required wide>
+              <select
+                value={form.promotionPublicId}
+                onChange={(event) => setForm((current) => ({ ...current, promotionPublicId: event.target.value }))}
+                className={fieldClass}
+              >
+                <option value="">Chọn voucher/coupon</option>
+                {benefits.filter((item) => item.promotionType !== "AUTO").map((item) => (
+                  <option key={item.publicId} value={item.publicId}>{item.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Ngân sách tối đa">
+              <input type="number" min="1" value={form.budgetLimit} onChange={(event) => setForm((current) => ({ ...current, budgetLimit: event.target.value }))} className={fieldClass} />
+            </Field>
+            <Field label="Số lượt tối đa mỗi tháng">
+              <input type="number" min="1" value={form.quotaLimit} onChange={(event) => setForm((current) => ({ ...current, quotaLimit: event.target.value }))} className={fieldClass} />
+            </Field>
+          </div>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DetailCard label="Người thực hiện" value="Hệ thống tự động" />
+          <DetailCard label="Người phê duyệt" value={record.approvedBy || "Chưa được phê duyệt"} />
+          <DetailCard label="Ngân sách tháng" value={money(record.budgetLimit)} />
+          <DetailCard label="Còn lại trong tháng" value={money(record.budgetRemaining ?? record.budgetLimit)} />
+          <DetailCard label="Số lượt đã giữ" value={record.quotaCommitted || 0} />
+          <DetailCard label="Số lượt tối đa" value={record.quotaLimit || "Chưa đặt"} />
+        </div>
+        <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">
+          Nếu thay chương trình, quyền lợi, phạm vi, ngân sách hoặc số lượt tối đa, bản phê duyệt hiện tại sẽ hết hiệu lực và phải gửi lại cho một người khác duyệt.
+        </p>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800 pt-4">
+          <button type="button" onClick={onClose} className={`${buttonClass} border border-zinc-700 text-zinc-300`}>Đóng</button>
+          {editable && (
+            <button
+              type="button"
+              disabled={busy || !form.campaignPublicId || !form.promotionPublicId}
+              onClick={() => onSaveAndSubmit(payload)}
+              className={`${buttonClass} bg-orange-500 text-white`}
+            >
+              Lưu & gửi duyệt
+            </button>
+          )}
+          {record.status === "PENDING_APPROVAL" && canApprove && (
+            <button type="button" disabled={busy} onClick={onApprove} className={`${buttonClass} bg-emerald-500 text-zinc-950`}>
+              Phê duyệt phiên bản này
+            </button>
+          )}
+          {record.status === "PENDING_APPROVAL" && !canApprove && (
+            <p className="w-full text-right text-xs leading-5 text-amber-300">
+              Đang chờ một người khác có quyền phê duyệt phiên bản này. Người gửi không thể tự duyệt.
+            </p>
+          )}
+          {record.status === "ACTIVE" && record.code === "BIRTHDAY_REWARD" && (
+            <button type="button" disabled={busy} onClick={onRun} className={`${buttonClass} bg-emerald-500 text-zinc-950`}>
+              Chạy ngay trong giới hạn an toàn
+            </button>
+          )}
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
   const legal = action === "LEGAL_REVIEW";
   const override = action === "OVERRIDE_APPROVE";
   const [comment, setComment] = useState("");
   const [legalStatus, setLegalStatus] = useState("PASSED");
+  const [legalNotificationRef, setLegalNotificationRef] = useState(
+    campaign.legalNotificationRef || "",
+  );
   const [campaignCode, setCampaignCode] = useState("");
   const [incidentReference, setIncidentReference] = useState("");
+  const referenceRequired = legal && legalStatus === "PASSED"
+    && campaign.legalNotificationRequired;
   const valid = comment.trim().length >= 3
+    && (!referenceRequired || legalNotificationRef.trim().length >= 3)
     && (!override || (campaignCode === campaign.code && incidentReference.trim().length >= 3));
 
   return (
@@ -2264,6 +2653,7 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
           if (valid) onSubmit({
             comment: comment.trim(),
             legalStatus,
+            legalNotificationRef: legalNotificationRef.trim() || null,
             campaignCode,
             incidentReference: incidentReference.trim(),
           });
@@ -2279,8 +2669,18 @@ function CampaignReviewModal({ campaign, action, busy, onClose, onSubmit }) {
               </select>
             </Field>
             <p className="rounded-lg border border-sky-500/20 bg-sky-500/[0.05] px-3 py-2 text-xs leading-5 text-sky-100">
-              Hệ thống tự lưu người xác nhận, thời gian và chương trình trong nhật ký kiểm tra.
+              {campaign.complianceReason || "Hệ thống tự lưu người xác nhận, thời gian và policy trong nhật ký kiểm tra."}
             </p>
+            {campaign.legalNotificationRequired && legalStatus === "PASSED" && (
+              <Field label="Mã tham chiếu thông báo pháp lý" required>
+                <input
+                  value={legalNotificationRef}
+                  onChange={(event) => setLegalNotificationRef(event.target.value)}
+                  placeholder="VD: LEGAL-2026-08-001"
+                  className={fieldClass}
+                />
+              </Field>
+            )}
           </>
         )}
         {override && (
@@ -2603,6 +3003,18 @@ function CampaignDetailModal({
               <p className="text-xs font-black uppercase tracking-wide text-sky-300">Khách hàng sẽ thấy gì?</p>
               <p className="mt-2 text-sm leading-6 text-zinc-200">{customerOutcome}</p>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <DetailCard label="Cơ chế chạy" value={(detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Tự áp dụng tại checkout" : "Thủ công"} />
+              <DetailCard label="Đối tượng" value={(detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Khách đủ điều kiện checkout" : "Chưa xác định"} />
+              <DetailCard label="Trigger" value="Không có" />
+              <DetailCard label="Cấp vào ví" value={(detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Không dùng ví" : "Nhân viên thực hiện"} />
+              <DetailCard label="Điều kiện sinh nhật" value="Không được cấu hình" />
+            </div>
+            {/sinh nhật/i.test(detail.name || "") && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] p-4 text-xs leading-5 text-amber-100">
+                Tên chương trình có nhắc sinh nhật nhưng campaign này không có birthday trigger. Hãy đổi tên thành voucher cấp thủ công hoặc liên kết với Birthday Playbook thật.
+              </div>
+            )}
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4">
               <p className="text-xs font-black uppercase tracking-wide text-zinc-500">Vì sao chương trình chưa thể phát hành?</p>
               {detail.blockedReasons?.length ? (
@@ -2711,6 +3123,13 @@ function CampaignDetailModal({
         ) : activeTab === "Duyệt & pháp lý" ? (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2"><StatusBadge value={detail.approvalStatus} /><StatusBadge value={detail.legalStatus} text={legalStatusText(detail)} /></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailCard label="Compliance" value={labels[detail.complianceStatus] || detail.complianceStatus} />
+              <DetailCard label="Yêu cầu thông báo pháp lý" value={detail.legalNotificationRequired ? "Có" : "Không"} />
+              <DetailCard label="Tham chiếu pháp lý" value={detail.legalNotificationRef || "Chưa có"} />
+              <DetailCard label="Policy" value={detail.compliancePolicyVersion || "Chưa đánh giá"} />
+            </div>
+            {detail.complianceReason && <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">{detail.complianceReason}</p>}
             <HistoryList history={history} />
           </div>
         ) : (
@@ -2833,7 +3252,7 @@ function CampaignAuthoringWizard({
     "Phạm vi áp dụng",
     "Thời gian & hạn mức",
     "Khách hàng sẽ thấy gì",
-    isAdmin ? "Kiểm tra & hoàn tất" : "Kiểm tra & gửi duyệt",
+    "Kiểm tra & gửi duyệt",
   ];
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
@@ -3007,7 +3426,7 @@ function CampaignAuthoringWizard({
   };
 
   return (
-    <ModalShell title="Tạo chương trình khuyến mãi" icon={Gift} onClose={onClose}>
+    <ModalShell title="Tạo chương trình tùy chỉnh · Nâng cao" icon={Gift} onClose={onClose}>
       <div className="border-b border-zinc-800 px-5 py-4">
         <p className="text-xs font-black text-orange-300">Bước {step + 1}/6</p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
@@ -3112,7 +3531,7 @@ function CampaignAuthoringWizard({
               <p className="mt-3 text-sm leading-6 text-zinc-300">{form.description || choice.customerOutcome}</p>
               <p className="mt-4 rounded-lg bg-black/25 px-3 py-2 text-xs leading-5 text-zinc-400">{choice.customerOutcome}</p>
             </div>
-            <p className="text-xs text-zinc-500">Nếu câu chữ chưa rõ với khách hàng, hãy quay lại sửa tên hoặc mô tả trước khi {isAdmin ? "hoàn tất" : "gửi duyệt"}.</p>
+            <p className="text-xs text-zinc-500">Nếu câu chữ chưa rõ với khách hàng, hãy quay lại sửa tên hoặc mô tả trước khi gửi duyệt.</p>
           </div>
         )}
         {step === 5 && choice && (
@@ -3125,8 +3544,8 @@ function CampaignAuthoringWizard({
                 <DetailItem label="Phạm vi">{selectedCinemaNames.length ? selectedCinemaNames.join(", ") : "Toàn hệ thống"}</DetailItem>
                 <DetailItem label="Ngân sách">{money(form.budgetAmount)}</DetailItem>
                 <DetailItem label="Hiệu lực">{dateTime(fromLocalInput(form.startAt))} → {dateTime(fromLocalInput(form.endAt))}</DetailItem>
-                <DetailItem label={isAdmin ? "Sau khi hoàn tất" : "Sau khi gửi"}>
-                  {isAdmin ? "Được xác nhận ngay, không chờ người khác duyệt" : "Chờ một người khác phê duyệt"}
+                <DetailItem label="Sau khi gửi">
+                  Chờ một người khác phê duyệt theo maker–checker
                 </DetailItem>
               </div>
             </div>
@@ -3151,7 +3570,7 @@ function CampaignAuthoringWizard({
           ) : (
             <button type="button" disabled={busy} onClick={submit} className={`${buttonClass} h-10 bg-orange-500 text-white`}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {busy ? "Đang tạo chương trình..." : isAdmin ? "Tạo và hoàn tất" : "Tạo và gửi duyệt"}
+              {busy ? "Đang tạo chương trình..." : "Tạo và gửi duyệt"}
             </button>
           )}
         </div>
@@ -3189,7 +3608,6 @@ function CampaignModal({
     budgetAmount: source?.budgetAmount ?? 100000000,
     maxRedemptions: source?.maxRedemptions ?? "",
     maxRedemptionsPerUser: source?.maxRedemptionsPerUser ?? 1,
-    legalNotificationRef: source?.legalNotificationRef || "",
     remarks: source?.remarks || "",
     cinemaPublicIds:
       isManager && Array.isArray(source?.cinemaScope)
@@ -3241,7 +3659,6 @@ function CampaignModal({
       maxRedemptionsPerUser: Number(form.maxRedemptionsPerUser),
       startAt: fromLocalInput(form.startAt),
       endAt: fromLocalInput(form.endAt),
-      legalNotificationRef: form.legalNotificationRef || null,
       remarks: form.remarks || null,
       ...(!editing
         ? {

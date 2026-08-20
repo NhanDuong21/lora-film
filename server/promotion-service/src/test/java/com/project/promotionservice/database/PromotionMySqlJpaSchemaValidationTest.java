@@ -1,6 +1,12 @@
 package com.project.promotionservice.database;
 
 import jakarta.persistence.EntityManagerFactory;
+import com.project.promotionservice.automation.entity.PromotionAudienceMember;
+import com.project.promotionservice.automation.entity.PromotionPlaybook;
+import com.project.promotionservice.automation.enums.PlaybookStatus;
+import com.project.promotionservice.automation.repository.PromotionAudienceMemberRepository;
+import com.project.promotionservice.automation.repository.PromotionPlaybookRepository;
+import com.project.promotionservice.automation.service.PromotionAutomationBudgetService;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -22,6 +28,11 @@ import java.sql.ResultSet;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,6 +76,9 @@ class PromotionMySqlJpaSchemaValidationTest {
 
     @Autowired private EntityManagerFactory entityManagerFactory;
     @Autowired private DataSource dataSource;
+    @Autowired private PromotionPlaybookRepository playbookRepository;
+    @Autowired private PromotionAudienceMemberRepository memberRepository;
+    @Autowired private PromotionAutomationBudgetService budgetService;
 
     @Test
     void canonicalSqlSchemaMatchesEveryJpaEntity() throws Exception {
@@ -77,6 +91,70 @@ class PromotionMySqlJpaSchemaValidationTest {
             assertThat(result.next()).isTrue();
             assertThat(result.getInt(1)).isZero();
         }
+    }
+
+    @Test
+    void concurrentWorkersCannotOverspendTheSameMonthlyPlaybookBudget() throws Exception {
+        PromotionPlaybook playbook = new PromotionPlaybook();
+        playbook.setCode("CONCURRENCY_BUDGET_TEST");
+        playbook.setName("Concurrency budget test");
+        playbook.setTriggerType("TEST");
+        playbook.setConfigJson("{}");
+        playbook.setScopeJson("{}");
+        playbook.setBudgetLimit(new BigDecimal("5000000.00"));
+        playbook.setQuotaLimit(2);
+        playbook.setStatus(PlaybookStatus.ACTIVE);
+        playbook.setCreatedBy("TEST");
+        playbook.setUpdatedBy("TEST");
+        playbook = playbookRepository.saveAndFlush(playbook);
+
+        PromotionAudienceMember first = member("run-budget-test", "customer-a", "issue-a");
+        PromotionAudienceMember second = member("run-budget-test", "customer-b", "issue-b");
+        memberRepository.saveAllAndFlush(List.of(first, second));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            String playbookId = playbook.getPublicId();
+            Future<PromotionAutomationBudgetService.ReservationResult> one = executor.submit(
+                    () -> reserveTogether(ready, start, first.getPublicId(), playbookId));
+            Future<PromotionAutomationBudgetService.ReservationResult> two = executor.submit(
+                    () -> reserveTogether(ready, start, second.getPublicId(), playbookId));
+            ready.await();
+            start.countDown();
+            List<PromotionAutomationBudgetService.ReservationResult> results =
+                    List.of(one.get(), two.get());
+            assertThat(results).containsExactlyInAnyOrder(
+                    PromotionAutomationBudgetService.ReservationResult.RESERVED,
+                    PromotionAutomationBudgetService.ReservationResult.BUDGET_EXHAUSTED);
+        }
+
+        PromotionPlaybook reloaded = playbookRepository
+                .findByPublicIdAndDeletedAtIsNull(playbook.getPublicId()).orElseThrow();
+        assertThat(reloaded.getBudgetCommitted())
+                .isEqualByComparingTo("4000000.00");
+        assertThat(reloaded.getQuotaCommitted()).isEqualTo(1);
+    }
+
+    private PromotionAutomationBudgetService.ReservationResult reserveTogether(
+            CountDownLatch ready, CountDownLatch start,
+            String memberId, String playbookId) throws Exception {
+        ready.countDown();
+        start.await();
+        return budgetService.reserveForMember(
+                memberId, playbookId, new BigDecimal("4000000.00"));
+    }
+
+    private PromotionAudienceMember member(
+            String runId, String customerId, String issuanceKey) {
+        PromotionAudienceMember member = new PromotionAudienceMember();
+        member.setSnapshotPublicId("snapshot-budget-test");
+        member.setRunPublicId(runId);
+        member.setCustomerPublicId(customerId);
+        member.setIssuanceKey(issuanceKey);
+        member.setCreatedBy("TEST");
+        member.setUpdatedBy("TEST");
+        return member;
     }
 
     static class SchemaInitializer

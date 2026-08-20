@@ -39,6 +39,19 @@ public class UserPromotion extends BaseAuditableEntity {
     @Column(name = "max_usage", nullable = false)
     private Integer maxUsage = 1;
 
+    @Column(name = "automation_run_public_id", length = 36)
+    private String automationRunPublicId;
+
+    @Column(name = "audience_member_public_id", length = 36)
+    private String audienceMemberPublicId;
+
+    @Column(name = "issuance_key", length = 180, unique = true)
+    private String issuanceKey;
+    @Column(name = "revocation_pending", nullable = false)
+    private Boolean revocationPending = false;
+    @Column(name = "revocation_reason", length = 100)
+    private String revocationReason;
+
     public String getUserPublicId() {
         return userPublicId;
     }
@@ -102,4 +115,15 @@ public class UserPromotion extends BaseAuditableEntity {
     public void setMaxUsage(Integer maxUsage) {
         this.maxUsage = maxUsage;
     }
+
+    public String getAutomationRunPublicId() { return automationRunPublicId; }
+    public void setAutomationRunPublicId(String value) { automationRunPublicId = value; }
+    public String getAudienceMemberPublicId() { return audienceMemberPublicId; }
+    public void setAudienceMemberPublicId(String value) { audienceMemberPublicId = value; }
+    public String getIssuanceKey() { return issuanceKey; }
+    public void setIssuanceKey(String value) { issuanceKey = value; }
+    public Boolean getRevocationPending() { return revocationPending; }
+    public void setRevocationPending(Boolean value) { revocationPending = value; }
+    public String getRevocationReason() { return revocationReason; }
+    public void setRevocationReason(String value) { revocationReason = value; }
 }

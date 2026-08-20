@@ -13,6 +13,7 @@ import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.mapper.PromotionMapper;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
@@ -274,6 +275,80 @@ class PromotionCatalogServiceTest {
                             .isEqualTo("50000");
                     assertThat(payload).containsEntry("deepLink", "/booking");
                 });
+    }
+
+    @Test
+    void refundAfterAutomatedBenefitWasUsedKeepsHistoryAndRaisesAnomaly() {
+        UserPromotion wallet = new UserPromotion();
+        wallet.setPublicId("wallet-used");
+        wallet.setStatus(UserPromotionStatus.USED);
+        wallet.setUsageCount(1);
+        when(walletRepository.findByIssuanceKeyForUpdate("SECOND_BOOKING:42"))
+                .thenReturn(Optional.of(wallet));
+
+        PromotionCatalogService.AutomationCompensationOutcome outcome =
+                service.compensateAutomationIssuance(
+                        "SECOND_BOOKING:42", "SOURCE_BOOKING_REFUNDED");
+
+        assertThat(outcome).isEqualTo(
+                PromotionCatalogService.AutomationCompensationOutcome
+                        .ANOMALY_REVIEW_REQUIRED);
+        assertThat(wallet.getStatus()).isEqualTo(UserPromotionStatus.USED);
+        assertThat(wallet.getRevocationPending()).isFalse();
+        assertThat(wallet.getRevocationReason())
+                .isEqualTo("SOURCE_BOOKING_REFUNDED");
+        verify(eventService).record(eq("USER_PROMOTION"), eq("wallet-used"),
+                eq("PROMOTION_AUTOMATION_REFUND_ANOMALY"), any(), eq("SYSTEM"));
+    }
+
+    @Test
+    void refundWhileAutomatedBenefitIsReservedDefersRevocation() {
+        UserPromotion wallet = new UserPromotion();
+        wallet.setPublicId("wallet-reserved");
+        wallet.setStatus(UserPromotionStatus.AVAILABLE);
+        wallet.setUsageCount(0);
+        when(walletRepository.findByIssuanceKeyForUpdate("SECOND_BOOKING:43"))
+                .thenReturn(Optional.of(wallet));
+        when(redemptionRepository
+                .countByUserPromotionPublicIdAndStatusInAndDeletedAtIsNull(
+                        eq("wallet-reserved"), any()))
+                .thenReturn(1L);
+
+        PromotionCatalogService.AutomationCompensationOutcome outcome =
+                service.compensateAutomationIssuance(
+                        "SECOND_BOOKING:43", "SOURCE_BOOKING_REFUNDED");
+
+        assertThat(outcome).isEqualTo(
+                PromotionCatalogService.AutomationCompensationOutcome.REVOCATION_PENDING);
+        assertThat(wallet.getStatus()).isEqualTo(UserPromotionStatus.AVAILABLE);
+        assertThat(wallet.getRevocationPending()).isTrue();
+        verify(eventService).record(eq("USER_PROMOTION"), eq("wallet-reserved"),
+                eq("PROMOTION_AUTOMATION_REVOCATION_DEFERRED"), any(), eq("SYSTEM"));
+    }
+
+    @Test
+    void refundBeforeAutomatedBenefitIsReservedRevokesImmediately() {
+        UserPromotion wallet = new UserPromotion();
+        wallet.setPublicId("wallet-available");
+        wallet.setStatus(UserPromotionStatus.AVAILABLE);
+        wallet.setUsageCount(0);
+        when(walletRepository.findByIssuanceKeyForUpdate("SECOND_BOOKING:44"))
+                .thenReturn(Optional.of(wallet));
+        when(redemptionRepository
+                .countByUserPromotionPublicIdAndStatusInAndDeletedAtIsNull(
+                        eq("wallet-available"), any()))
+                .thenReturn(0L);
+
+        PromotionCatalogService.AutomationCompensationOutcome outcome =
+                service.compensateAutomationIssuance(
+                        "SECOND_BOOKING:44", "SOURCE_BOOKING_REFUNDED");
+
+        assertThat(outcome).isEqualTo(
+                PromotionCatalogService.AutomationCompensationOutcome.REVOKED);
+        assertThat(wallet.getStatus()).isEqualTo(UserPromotionStatus.REVOKED);
+        assertThat(wallet.getRevocationPending()).isFalse();
+        verify(eventService).record(eq("USER_PROMOTION"), eq("wallet-available"),
+                eq("PROMOTION_AUTOMATION_REVOKED"), any(), eq("SYSTEM"));
     }
 
     private Promotion couponPromotion() {

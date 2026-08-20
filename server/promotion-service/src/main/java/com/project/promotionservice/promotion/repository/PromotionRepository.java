@@ -41,6 +41,9 @@ public interface PromotionRepository
 
     boolean existsByCampaignPublicIdAndDeletedAtIsNull(String campaignPublicId);
 
+    boolean existsByCampaignPublicIdAndPublicVisibleTrueAndDeletedAtIsNull(
+            String campaignPublicId);
+
     List<Promotion> findByPublicIdInAndDeletedAtIsNull(Collection<String> publicIds);
 
     List<Promotion> findByCampaignPublicIdAndDeletedAtIsNullOrderByPriorityAsc(

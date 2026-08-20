@@ -5,6 +5,7 @@ import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.CampaignScopeType;
 import com.project.promotionservice.promotion.enums.CampaignAvailabilityStatus;
 import com.project.promotionservice.promotion.enums.LegalStatus;
+import com.project.promotionservice.promotion.enums.ComplianceStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -47,6 +48,12 @@ public class CampaignResponse {
     private Integer redemptionCount;
     private Integer maxRedemptionsPerUser;
     private String legalNotificationRef;
+    private Boolean legalNotificationRequired;
+    private ComplianceStatus complianceStatus;
+    private String complianceReason;
+    private String compliancePolicyVersion;
+    private String complianceVerifiedBy;
+    private Instant complianceVerifiedAt;
     private String remarks;
     private Instant createdAt;
     private String createdBy;
@@ -318,6 +325,19 @@ public class CampaignResponse {
     public void setLegalNotificationRef(String legalNotificationRef) {
         this.legalNotificationRef = legalNotificationRef;
     }
+
+    public Boolean getLegalNotificationRequired() { return legalNotificationRequired; }
+    public void setLegalNotificationRequired(Boolean value) { this.legalNotificationRequired = value; }
+    public ComplianceStatus getComplianceStatus() { return complianceStatus; }
+    public void setComplianceStatus(ComplianceStatus value) { this.complianceStatus = value; }
+    public String getComplianceReason() { return complianceReason; }
+    public void setComplianceReason(String value) { this.complianceReason = value; }
+    public String getCompliancePolicyVersion() { return compliancePolicyVersion; }
+    public void setCompliancePolicyVersion(String value) { this.compliancePolicyVersion = value; }
+    public String getComplianceVerifiedBy() { return complianceVerifiedBy; }
+    public void setComplianceVerifiedBy(String value) { this.complianceVerifiedBy = value; }
+    public Instant getComplianceVerifiedAt() { return complianceVerifiedAt; }
+    public void setComplianceVerifiedAt(Instant value) { this.complianceVerifiedAt = value; }
 
     public String getRemarks() {
         return remarks;

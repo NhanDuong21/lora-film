@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Transient;
 import com.lorafilm.booking.food.entity.FoodOrder;
 
 import java.math.BigDecimal;
@@ -149,6 +150,18 @@ public class Booking extends FullAuditableEntity {
 
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
+
+    @Transient
+    private Boolean firstConfirmedBooking;
+
+    @Transient
+    private Boolean ticketIssued;
+
+    @Transient
+    private Long automationCustomerId;
+
+    @Transient
+    private Boolean automationEligible;
 
     public Booking() {
     }
@@ -677,6 +690,15 @@ public class Booking extends FullAuditableEntity {
     public void setNote(String note) {
         this.note = note;
     }
+
+    public Boolean getFirstConfirmedBooking() { return firstConfirmedBooking; }
+    public void setFirstConfirmedBooking(Boolean value) { firstConfirmedBooking = value; }
+    public Boolean getTicketIssued() { return ticketIssued; }
+    public void setTicketIssued(Boolean value) { ticketIssued = value; }
+    public Long getAutomationCustomerId() { return automationCustomerId; }
+    public void setAutomationCustomerId(Long value) { automationCustomerId = value; }
+    public Boolean getAutomationEligible() { return automationEligible; }
+    public void setAutomationEligible(Boolean value) { automationEligible = value; }
 
     public FoodOrder getFoodOrder() {
         return foodOrder;

@@ -705,6 +705,12 @@ items make the recently added runtime APIs explicit:
 | Scheduler hook | POST | `/internal/schedulers/campaigns/activate` | trusted operations caller |
 | Internal configuration | GET | `/internal/configurations/{key}` | trusted internal caller |
 | Customer wallet | GET | `/api/customers/me/vouchers` | authenticated customer; identity comes from JWT |
+| Smart opportunity | GET | `/api/admin/promotion-opportunities` | `PROMOTION_VIEW` |
+| Automation playbook | GET/PUT | `/api/admin/promotion-playbooks[/{id}]` | `PROMOTION_VIEW` / `PROMOTION_AUTHOR` |
+| Automation playbook | POST | `/api/admin/promotion-playbooks/{id}/submit` | `PROMOTION_AUTHOR`; maker only |
+| Automation playbook | POST | `/api/admin/promotion-playbooks/{id}/approve` | `PROMOTION_APPROVE_*`; checker must differ from maker |
+| Automation run | GET | `/api/admin/promotion-runs[/{id}]` | `PROMOTION_VIEW` |
+| Automation issue job | POST | `/api/admin/promotion-runs/{id}/issue-jobs` | `PROMOTION_OPERATE`; returns `202 Accepted` |
 
 Admin authorization is method-level and role-specific. The broad `/api/admin/**`
 matcher only requires authentication so that `MARKETING_*`, `FINANCE_*`,
@@ -725,10 +731,23 @@ not be exposed through the public gateway. Reservation expiration remains an
 in-process/DB-claimed job; the hook list covers campaign activation/expiry,
 benefit expiry, outbox publish/retry, and cache refresh.
 
-An inbox/Kafka consumer is present for a future versioned event contract, but
-`promotion.integration.consumers-enabled` defaults to `false`; it must remain
-disabled until Booking/Payment publish the envelope and ownership rules agreed
-with Promotion.
+The inbox consumer accepts the versioned headers emitted by Booking on
+`booking.events.v1`. `promotion.integration.consumers-enabled` remains an
+explicit deployment switch; enable it when the configured topics exist. The
+consumer property is split into individual topic names, not interpreted as one
+comma-containing topic.
+
+Automation governance has two levels: a maker and a different checker approve
+each playbook version once; subsequent runs execute as `SYSTEM` inside the
+snapshotted budget/quota/config and retain `authorizedBy`. A deployment needs
+at least two distinct accounts with the corresponding author/approval
+permissions, otherwise a submitted playbook will correctly remain pending.
+The approval snapshot contains a SHA-256 hash of the playbook and its linked
+campaign/promotion; a changed benefit or scope invalidates the approval. The
+opportunity response deliberately exposes `expectedCost` (this audience),
+`monthlyBudget` (the configured monthly ceiling), and `budgetRemaining` as
+separate values. Budget/quota reservation is member-idempotent and protected by
+database row locks before wallet issuance.
 
 ## 7. Đặc Tả Chi Tiết Các API Chính
 

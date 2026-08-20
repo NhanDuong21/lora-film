@@ -36,6 +36,9 @@ vi.mock("../services/adminPromotionService", () => ({
     createCampaign: vi.fn(),
     createPromotion: vi.fn(),
     transitionCampaign: vi.fn(),
+    getPromotionOpportunities: vi.fn(),
+    getPromotionPlaybooks: vi.fn(),
+    getPromotionRuns: vi.fn(),
   },
 }));
 
@@ -50,7 +53,8 @@ vi.mock("@/features/facilities/admin/services/adminCinemaService", () => ({
 }));
 
 const openWizard = () => {
-  fireEvent.click(screen.getByRole("button", { name: "Tạo chương trình" }));
+  fireEvent.click(screen.getByRole("button", { name: "Chương trình" }));
+  fireEvent.click(screen.getByRole("button", { name: "Tạo tùy chỉnh nâng cao" }));
 };
 
 const goToScopeStep = async (
@@ -66,7 +70,7 @@ const goToScopeStep = async (
     { target: { value: name } },
   );
   if (fixedAmount) {
-    fireEvent.change(screen.getByRole("combobox"), {
+    fireEvent.change(screen.getAllByRole("combobox").at(-1), {
       target: { value: "FIXED_AMOUNT" },
     });
     fireEvent.change(screen.getAllByRole("spinbutton")[0], {
@@ -99,6 +103,9 @@ describe("AdminPromotionCenterPage", () => {
       publicId: "promotion-created",
     });
     adminPromotionService.transitionCampaign.mockResolvedValue({});
+    adminPromotionService.getPromotionOpportunities.mockResolvedValue([]);
+    adminPromotionService.getPromotionPlaybooks.mockResolvedValue([]);
+    adminPromotionService.getPromotionRuns.mockResolvedValue([]);
     adminCinemaService.getCinemas.mockResolvedValue(emptyPage);
   });
 
@@ -129,11 +136,12 @@ describe("AdminPromotionCenterPage", () => {
     const navigation = screen.getByRole("navigation", {
       name: "Khu vực quản lý khuyến mãi",
     });
-    expect(screen.getAllByRole("button", { name: "Tạo chương trình" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Tạo tùy chỉnh nâng cao" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Tạo chương trình mới" })).not.toBeInTheDocument();
     expect(within(navigation).getByRole("button", { name: "Việc cần làm" })).toBeInTheDocument();
-    expect(within(navigation).getByRole("button", { name: "Chương trình khuyến mãi" })).toBeInTheDocument();
-    expect(within(navigation).getByRole("button", { name: "Phân phối cho khách" })).toBeInTheDocument();
+    expect(within(navigation).getByRole("button", { name: "Luồng tự động" })).toBeInTheDocument();
+    expect(within(navigation).getByRole("button", { name: "Chương trình" })).toBeInTheDocument();
+    expect(within(navigation).getByRole("button", { name: "Phân phối" })).toBeInTheDocument();
     expect(within(navigation).getByRole("button", { name: "Sự cố & đối soát" })).toBeInTheDocument();
 
     await screen.findByText("Landmark tháng 8");
@@ -160,7 +168,7 @@ describe("AdminPromotionCenterPage", () => {
 
   it("keeps distribution focused on private voucher and personal coupon issuance", async () => {
     render(<AdminPromotionCenterPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Phân phối cho khách" }));
+    fireEvent.click(screen.getByRole("button", { name: "Phân phối" }));
 
     await waitFor(() =>
       expect(adminPromotionService.searchPromotions).toHaveBeenCalledWith(
@@ -181,7 +189,7 @@ describe("AdminPromotionCenterPage", () => {
     };
     const { unmount } = render(<AdminPromotionCenterPage />);
     await waitFor(() => expect(adminPromotionService.searchCampaigns).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: /Tạo chương trình/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Tạo tùy chỉnh/ })).not.toBeInTheDocument();
     unmount();
 
     authState.user = {
@@ -196,7 +204,8 @@ describe("AdminPromotionCenterPage", () => {
       ],
     });
     render(<AdminPromotionCenterPage />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Tạo chương trình" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Chương trình" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Tạo tùy chỉnh nâng cao" })).toBeInTheDocument());
 
     await goToScopeStep(/Tự động giảm tại thanh toán/);
 
@@ -220,7 +229,7 @@ describe("AdminPromotionCenterPage", () => {
       fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
       fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
       fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
-      fireEvent.click(screen.getByRole("button", { name: "Tạo và hoàn tất" }));
+      fireEvent.click(screen.getByRole("button", { name: "Tạo và gửi duyệt" }));
 
       await waitFor(() => expect(adminPromotionService.createPromotion).toHaveBeenCalled());
       const promotionPayload = adminPromotionService.createPromotion.mock.calls.at(-1)[0];
@@ -238,7 +247,7 @@ describe("AdminPromotionCenterPage", () => {
       expect(adminPromotionService.transitionCampaign).toHaveBeenCalledWith(
         "campaign-created",
         "SUBMIT",
-        "Hoàn tất cấu hình bởi quản trị viên",
+        "Gửi duyệt từ hướng dẫn tạo chương trình",
         1,
       );
     },

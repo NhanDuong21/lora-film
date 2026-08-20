@@ -37,10 +37,6 @@ public interface CampaignService {
 
     CampaignResponse submitCampaign(String publicId, String comment, String user);
 
-    CampaignResponse submitCampaign(
-            String publicId, String comment, String user,
-            boolean approveImmediately);
-
     CampaignResponse publishCampaign(String publicId, String user);
 
     CampaignResponse activateCampaign(String publicId, String user);
