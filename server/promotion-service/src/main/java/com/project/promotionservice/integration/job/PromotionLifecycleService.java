@@ -1,5 +1,6 @@
 package com.project.promotionservice.integration.job;
 
+import com.project.promotionservice.automation.service.PromotionAutomationBudgetService;
 import com.project.promotionservice.common.time.DatabaseTimeProvider;
 import com.project.promotionservice.integration.outbox.PromotionDomainEventService;
 import com.project.promotionservice.promotion.entity.Promotion;
@@ -33,6 +34,7 @@ public class PromotionLifecycleService {
     private final PromotionDomainEventService events;
     private final DatabaseTimeProvider time;
     private final CacheManager cacheManager;
+    private final PromotionAutomationBudgetService automationBudgetService;
 
     public PromotionLifecycleService(
             PromotionCampaignRepository campaigns,
@@ -40,13 +42,15 @@ public class PromotionLifecycleService {
             UserPromotionRepository wallets,
             PromotionDomainEventService events,
             DatabaseTimeProvider time,
-            CacheManager cacheManager) {
+            CacheManager cacheManager,
+            PromotionAutomationBudgetService automationBudgetService) {
         this.campaigns = campaigns;
         this.promotions = promotions;
         this.wallets = wallets;
         this.events = events;
         this.time = time;
         this.cacheManager = cacheManager;
+        this.automationBudgetService = automationBudgetService;
     }
 
     @Transactional
@@ -174,6 +178,8 @@ public class PromotionLifecycleService {
             wallet.setStatus(UserPromotionStatus.EXPIRED);
             wallet.setUpdatedBy(actor);
             wallets.save(wallet);
+            automationBudgetService.releaseForWallet(
+                    wallet.getAudienceMemberPublicId(), wallet.getAutomationRunPublicId());
             count++;
         }
         invalidateCachesAfterCommit(count > 0);

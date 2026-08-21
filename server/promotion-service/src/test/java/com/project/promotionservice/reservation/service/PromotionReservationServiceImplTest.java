@@ -1,6 +1,7 @@
 package com.project.promotionservice.reservation.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project.promotionservice.automation.service.PromotionAutomationBudgetService;
 import com.project.promotionservice.common.monitoring.PromotionMetricsManager;
 import com.project.promotionservice.common.time.DatabaseTimeProvider;
 import com.project.promotionservice.configuration.domain.ConfigurationService;
@@ -64,6 +65,7 @@ class PromotionReservationServiceImplTest {
     @Mock private PromotionCatalogEventService eventService;
     @Mock private PromotionMetricsManager metricsManager;
     @Mock private PlatformTransactionManager transactionManager;
+    @Mock private PromotionAutomationBudgetService automationBudgetService;
 
     private PromotionReservationServiceImpl service;
 
@@ -74,7 +76,7 @@ class PromotionReservationServiceImplTest {
                 promotionRepository,
                 walletRepository, campaignRepository, engineService, lockManager,
                 configurationService, databaseTimeProvider, eventService,
-                metricsManager, new ObjectMapper(), transactionManager);
+                metricsManager, automationBudgetService, new ObjectMapper(), transactionManager);
     }
 
     @Test

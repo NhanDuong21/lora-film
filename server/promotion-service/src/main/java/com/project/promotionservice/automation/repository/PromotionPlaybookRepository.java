@@ -18,6 +18,8 @@ public interface PromotionPlaybookRepository extends JpaRepository<PromotionPlay
     Optional<PromotionPlaybook> findByCodeAndStatusAndDeletedAtIsNull(
             String code, PlaybookStatus status);
     List<PromotionPlaybook> findAllByDeletedAtIsNullOrderByCodeAsc();
+    List<PromotionPlaybook> findByCampaignPublicIdAndDeletedAtIsNullOrderByCodeAsc(
+            String campaignPublicId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from PromotionPlaybook p where p.publicId = :publicId and p.deletedAt is null")

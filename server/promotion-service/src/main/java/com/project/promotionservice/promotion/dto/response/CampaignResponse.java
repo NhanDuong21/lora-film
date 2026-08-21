@@ -55,6 +55,8 @@ public class CampaignResponse {
     private String complianceVerifiedBy;
     private Instant complianceVerifiedAt;
     private String remarks;
+    private Boolean testData;
+    private String environmentTag;
     private Instant createdAt;
     private String createdBy;
     private Instant updatedAt;
@@ -346,6 +348,11 @@ public class CampaignResponse {
     public void setRemarks(String remarks) {
         this.remarks = remarks;
     }
+
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
 
     public Instant getCreatedAt() {
         return createdAt;

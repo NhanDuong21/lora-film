@@ -3,6 +3,7 @@ package com.project.promotionservice.automation.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.project.promotionservice.automation.client.BirthdayAudienceClient;
+import com.project.promotionservice.automation.client.AutomationActorDirectoryClient;
 import com.project.promotionservice.automation.dto.AutomationDtos.*;
 import com.project.promotionservice.automation.entity.*;
 import com.project.promotionservice.automation.enums.*;
@@ -13,8 +14,11 @@ import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
+import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRepository;
+import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import com.project.promotionservice.promotion.repository.UserPromotionRepository;
 import com.project.promotionservice.promotion.service.PromotionCatalogService;
 import org.springframework.http.HttpStatus;
@@ -37,10 +41,13 @@ public class PromotionAutomationService {
     private final PromotionAudienceSnapshotRepository snapshotRepository;
     private final PromotionAudienceMemberRepository memberRepository;
     private final PromotionIssueJobRepository jobRepository;
+    private final PromotionAutomationSuppressionRepository suppressionRepository;
     private final PromotionCampaignRepository campaignRepository;
     private final PromotionRepository promotionRepository;
     private final UserPromotionRepository walletRepository;
+    private final PromotionRedemptionRepository redemptionRepository;
     private final BirthdayAudienceClient birthdayClient;
+    private final AutomationActorDirectoryClient actorDirectory;
     private final ObjectMapper objectMapper;
     private final PromotionCatalogService catalogService;
     private final PromotionAutomationBudgetService budgetService;
@@ -52,10 +59,13 @@ public class PromotionAutomationService {
             PromotionAudienceSnapshotRepository snapshotRepository,
             PromotionAudienceMemberRepository memberRepository,
             PromotionIssueJobRepository jobRepository,
+            PromotionAutomationSuppressionRepository suppressionRepository,
             PromotionCampaignRepository campaignRepository,
             PromotionRepository promotionRepository,
             UserPromotionRepository walletRepository,
+            PromotionRedemptionRepository redemptionRepository,
             BirthdayAudienceClient birthdayClient,
+            AutomationActorDirectoryClient actorDirectory,
             ObjectMapper objectMapper,
             PromotionCatalogService catalogService,
             PromotionAutomationBudgetService budgetService,
@@ -65,10 +75,13 @@ public class PromotionAutomationService {
         this.snapshotRepository = snapshotRepository;
         this.memberRepository = memberRepository;
         this.jobRepository = jobRepository;
+        this.suppressionRepository = suppressionRepository;
         this.campaignRepository = campaignRepository;
         this.promotionRepository = promotionRepository;
         this.walletRepository = walletRepository;
+        this.redemptionRepository = redemptionRepository;
         this.birthdayClient = birthdayClient;
+        this.actorDirectory = actorDirectory;
         this.objectMapper = objectMapper;
         this.catalogService = catalogService;
         this.budgetService = budgetService;
@@ -212,10 +225,29 @@ public class PromotionAutomationService {
         return view(requireRun(publicId));
     }
 
+    @Transactional(readOnly = true)
+    public CampaignAutomationView campaignAutomation(String campaignPublicId) {
+        List<PromotionPlaybook> playbooks = playbookRepository
+                .findByCampaignPublicIdAndDeletedAtIsNullOrderByCodeAsc(campaignPublicId);
+        List<PromotionAutomationRun> runs = runRepository
+                .findByCampaignPublicIdOrderByCreatedAtDesc(campaignPublicId);
+        List<PlaybookView> playbookViews = playbooks.stream().map(this::view).toList();
+        PromotionCampaign campaign = campaignRepository
+                .findByPublicIdAndDeletedAtIsNull(campaignPublicId).orElse(null);
+        EntitlementSummary entitlements = aggregateEntitlements(
+                playbooks, campaign == null ? null : campaign.getBudgetAmount());
+        return new CampaignAutomationView(
+                playbookViews, runs.isEmpty() ? null : view(runs.getFirst()), entitlements);
+    }
+
     @Transactional
     public PromotionAutomationRun createBirthdayRun(LocalDate date) {
         PromotionPlaybook playbook = activeByCode(BIRTHDAY);
-        int limit = playbook.getQuotaLimit() == null ? 100_000 : playbook.getQuotaLimit();
+        Integer effectiveQuota = quotaView(playbook).effectiveQuota();
+        int limit = effectiveQuota == null ? 100_000 : effectiveQuota;
+        if (limit <= 0) {
+            throw conflict("Không còn hạn mức hiệu lực để tạo lần chạy sinh nhật");
+        }
         List<String> customers = birthdayClient.findEligible(date, limit);
         return createRun(playbook, "SCHEDULE:" + date, customers,
                 BIRTHDAY + ":" + date,
@@ -225,6 +257,10 @@ public class PromotionAutomationService {
     @Transactional
     public PromotionAutomationRun createSecondBookingRun(
             String customerId, String bookingReference) {
+        if (suppressionRepository.existsByPlaybookCodeAndTriggerReference(
+                SECOND_BOOKING, bookingReference)) {
+            return null;
+        }
         PromotionPlaybook playbook = activeByCode(SECOND_BOOKING);
         String key = SECOND_BOOKING + ":" + customerId;
         return createRun(playbook, bookingReference, List.of(customerId), key,
@@ -233,6 +269,16 @@ public class PromotionAutomationService {
 
     @Transactional
     public void revokeSecondBookingForRefund(String bookingReference) {
+        PromotionAutomationSuppression suppression = suppressionRepository
+                .findByPlaybookCodeAndTriggerReference(SECOND_BOOKING, bookingReference)
+                .orElseGet(PromotionAutomationSuppression::new);
+        suppression.setPlaybookCode(SECOND_BOOKING);
+        suppression.setTriggerReference(bookingReference);
+        suppression.setReasonCode("SOURCE_BOOKING_REFUNDED");
+        suppression.setObservedAt(Instant.now());
+        suppression.setCreatedBy("SYSTEM");
+        suppression.setUpdatedBy("SYSTEM");
+        suppressionRepository.save(suppression);
         PromotionAutomationRun run = runRepository
                 .findByPlaybookCodeAndTriggerReference(SECOND_BOOKING, bookingReference)
                 .orElse(null);
@@ -293,6 +339,13 @@ public class PromotionAutomationService {
         return jobView(jobRepository.save(job));
     }
 
+    @Transactional
+    public void ensureIssueJob(String runPublicId, int requestedBatchSize) {
+        if (!jobRepository.existsByRunPublicId(runPublicId)) {
+            createIssueJob(runPublicId, requestedBatchSize);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<OpportunityView> opportunities() {
         List<OpportunityView> result = new ArrayList<>();
@@ -350,7 +403,7 @@ public class PromotionAutomationService {
         run.setConfigSnapshotJson(playbook.getConfigJson());
         run.setScopeSnapshotJson(playbook.getScopeJson());
         run.setBudgetSnapshot(playbook.getBudgetLimit());
-        run.setQuotaSnapshot(playbook.getQuotaLimit());
+        run.setQuotaSnapshot(quotaView(playbook).effectiveQuota());
         run.setEstimatedUnitCost(estimatedUnitCost(references.promotion()));
         run.setTriggerType(playbook.getTriggerType());
         run.setTriggerReference(triggerReference);
@@ -467,6 +520,8 @@ public class PromotionAutomationService {
     }
 
     private PlaybookView view(PromotionPlaybook item) {
+        List<PromotionAutomationRun> runs = runRepository
+                .findByPlaybookPublicIdOrderByCreatedAtDesc(item.getPublicId());
         return new PlaybookView(item.getPublicId(), item.getVersion(), item.getCode(),
                 item.getName(), item.getDescription(), item.getStatus(),
                 item.getPlaybookVersion(), item.getTriggerType(),
@@ -478,6 +533,9 @@ public class PromotionAutomationService {
                 item.getApprovedPlaybookVersion(), item.getApprovedConfigHash(),
                 item.getBudgetPeriodKey(), money(item.getBudgetCommitted()),
                 budgetRemaining(item), value(item.getQuotaCommitted()),
+                actorDirectory.displayName(item.getSubmittedBy()),
+                actorDirectory.displayName(item.getApprovedBy()),
+                quotaView(item), entitlementSummary(item, runs),
                 item.getUpdatedBy(), item.getUpdatedAt());
     }
 
@@ -485,14 +543,171 @@ public class PromotionAutomationService {
         List<IssueJobView> jobs = jobRepository
                 .findByRunPublicIdOrderByCreatedAtDesc(item.getPublicId())
                 .stream().map(this::jobView).toList();
+        PromotionAudienceSnapshot snapshot = snapshotRepository
+                .findByRunPublicId(item.getPublicId()).orElse(null);
+        List<PromotionAudienceMember> members = memberRepository
+                .findByRunPublicIdOrderByIdAsc(item.getPublicId());
+        Map<String, Long> reasons = new LinkedHashMap<>();
+        members.stream().filter(member -> member.getReasonCode() != null)
+                .forEach(member -> reasons.merge(member.getReasonCode(), 1L, Long::sum));
+        int retrying = (int) members.stream()
+                .filter(member -> member.getStatus() == AudienceMemberStatus.FAILED_RETRYABLE)
+                .count();
+        BigDecimal committedCost = members.stream()
+                .map(PromotionAudienceMember::getBudgetReservedAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new RunView(item.getPublicId(), item.getPlaybookCode(),
                 item.getPlaybookVersion(), item.getTriggerType(),
-                item.getTriggerReference(), item.getRunActor(), item.getAuthorizedBy(),
-                item.getIdempotencyKey(), item.getStatus(), item.getAudienceCount(),
+                item.getTriggerReference(), item.getRunActor(),
+                actorDirectory.displayName(item.getRunActor()), item.getAuthorizedBy(),
+                actorDirectory.displayName(item.getAuthorizedBy()), item.getIdempotencyKey(),
+                item.getStatus(), item.getAudienceCount(),
                 item.getIssuedCount(), item.getSkippedCount(), item.getFailedCount(),
                 item.getStartedAt(), item.getCompletedAt(), item.getApprovedConfigHash(),
-                item.getEstimatedUnitCost(),
-                item.getConfigSnapshotJson(), jobs);
+                item.getEstimatedUnitCost(), item.getConfigSnapshotJson(),
+                snapshot == null ? null : snapshot.getPublicId(),
+                snapshot == null ? 0 : snapshot.getEligibleCount(),
+                snapshot == null ? 0 : snapshot.getExcludedCount(), retrying,
+                money(committedCost),
+                reasons.entrySet().stream()
+                        .map(entry -> new ReasonCount(entry.getKey(), entry.getValue()))
+                        .toList(),
+                members.stream().map(member -> new AudienceMemberView(
+                        member.getPublicId(), member.getCustomerPublicId(), member.getStatus(),
+                        member.getReasonCode(), member.getAttemptCount(),
+                        member.getWalletPublicId(), member.getIssuanceKey(),
+                        money(member.getBudgetReservedAmount()))).toList(),
+                jobs);
+    }
+
+    private QuotaView quotaView(PromotionPlaybook playbook) {
+        Integer requested = playbook.getQuotaLimit();
+        int committed = currentPeriod(playbook) ? value(playbook.getQuotaCommitted()) : 0;
+        Integer playbookRemaining = requested == null
+                ? null : Math.max(0, requested - committed);
+        BigDecimal unitCost = null;
+        Integer budgetQuota = null;
+        Integer campaignQuota = null;
+        Integer promotionQuota = null;
+        try {
+            if (playbook.getPromotionPublicId() != null) {
+                Promotion promotion = promotionRepository
+                        .findByPublicIdAndDeletedAtIsNull(playbook.getPromotionPublicId())
+                        .orElse(null);
+                if (promotion != null) {
+                    unitCost = estimatedUnitCost(promotion);
+                    if (playbook.getBudgetLimit() != null) {
+                        budgetQuota = wholeUnits(budgetRemaining(playbook), unitCost);
+                    }
+                    if (promotion.getMaxRedemptions() != null) {
+                        long issued = walletRepository
+                                .countByPromotionPublicIdAndDeletedAtIsNull(promotion.getPublicId());
+                        promotionQuota = remaining(promotion.getMaxRedemptions(), issued);
+                    }
+                }
+            }
+            if (playbook.getCampaignPublicId() != null) {
+                PromotionCampaign campaign = campaignRepository
+                        .findByPublicIdAndDeletedAtIsNull(playbook.getCampaignPublicId())
+                        .orElse(null);
+                if (campaign != null && campaign.getMaxRedemptions() != null) {
+                    long issued = walletRepository.countByCampaignPublicId(campaign.getPublicId());
+                    long consumedOrIssued = Math.max(issued, value(campaign.getRedemptionCount()));
+                    campaignQuota = remaining(campaign.getMaxRedemptions(), consumedOrIssued);
+                }
+            }
+        } catch (BusinessException ignored) {
+            // Drafts can be incomplete. Submission still performs strict validation.
+        }
+
+        LinkedHashMap<String, Integer> limits = new LinkedHashMap<>();
+        if (playbookRemaining != null) limits.put("PLAYBOOK_QUOTA", playbookRemaining);
+        if (budgetQuota != null) limits.put("MONTHLY_BUDGET", budgetQuota);
+        if (campaignQuota != null) limits.put("CAMPAIGN_QUOTA", campaignQuota);
+        if (promotionQuota != null) limits.put("BENEFIT_QUOTA", promotionQuota);
+        Map.Entry<String, Integer> effective = limits.entrySet().stream()
+                .min(Map.Entry.comparingByValue()).orElse(null);
+        return new QuotaView(unitCost, requested, playbookRemaining, budgetQuota,
+                campaignQuota, promotionQuota,
+                effective == null ? null : effective.getValue(),
+                effective == null ? null : effective.getKey());
+    }
+
+    private EntitlementSummary entitlementSummary(
+            PromotionPlaybook playbook, List<PromotionAutomationRun> runs) {
+        return entitlementSummary(runs, budgetRemaining(playbook));
+    }
+
+    private EntitlementSummary aggregateEntitlements(
+            List<PromotionPlaybook> playbooks, BigDecimal campaignBudget) {
+        List<PromotionAutomationRun> runs = playbooks.stream()
+                .flatMap(playbook -> runRepository
+                        .findByPlaybookPublicIdOrderByCreatedAtDesc(playbook.getPublicId())
+                        .stream())
+                .toList();
+        EntitlementSummary summary = entitlementSummary(runs, null);
+        BigDecimal liability = summary.walletIssuedCommitted()
+                .add(summary.orderReserved()).add(summary.usedAmount());
+        BigDecimal remaining = campaignBudget == null ? null
+                : money(campaignBudget.subtract(liability).max(BigDecimal.ZERO));
+        return new EntitlementSummary(summary.issued(), summary.unredeemed(),
+                summary.reserved(), summary.used(), summary.expiredOrRevoked(),
+                summary.walletIssuedCommitted(), summary.orderReserved(),
+                summary.usedAmount(), summary.releasedAmount(), remaining);
+    }
+
+    private EntitlementSummary entitlementSummary(
+            List<PromotionAutomationRun> runs, BigDecimal remainingCapacity) {
+        if (runs.isEmpty()) {
+            return new EntitlementSummary(0, 0, 0, 0, 0,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, remainingCapacity);
+        }
+        List<String> runIds = runs.stream().map(PromotionAutomationRun::getPublicId).toList();
+        List<PromotionAudienceMember> members = memberRepository.findByRunPublicIdIn(runIds);
+        Map<String, BigDecimal> amountByMember = new HashMap<>();
+        members.forEach(member -> amountByMember.put(member.getPublicId(),
+                money(member.getBudgetReservedAmount())));
+        var wallets = walletRepository
+                .findByAutomationRunPublicIdInAndDeletedAtIsNull(runIds);
+        List<String> walletIds = wallets.stream().map(wallet -> wallet.getPublicId()).toList();
+        Set<String> reservedWallets = walletIds.isEmpty() ? Set.of()
+                : redemptionRepository
+                        .findByUserPromotionPublicIdInAndStatusInAndDeletedAtIsNull(
+                                walletIds, EnumSet.of(PromotionRedemptionStatus.RESERVED))
+                        .stream().map(redemption -> redemption.getUserPromotionPublicId())
+                        .collect(java.util.stream.Collectors.toSet());
+        int unredeemed = 0;
+        int reserved = 0;
+        int used = 0;
+        int expiredOrRevoked = 0;
+        BigDecimal walletCommitted = BigDecimal.ZERO;
+        BigDecimal orderReserved = BigDecimal.ZERO;
+        BigDecimal usedAmount = BigDecimal.ZERO;
+        BigDecimal released = BigDecimal.ZERO;
+        for (var wallet : wallets) {
+            BigDecimal amount = amountByMember.getOrDefault(
+                    wallet.getAudienceMemberPublicId(), BigDecimal.ZERO);
+            if (wallet.getStatus() == UserPromotionStatus.EXPIRED
+                    || wallet.getStatus() == UserPromotionStatus.REVOKED) {
+                expiredOrRevoked++;
+                released = released.add(amount);
+            } else if (wallet.getStatus() == UserPromotionStatus.USED
+                    || value(wallet.getUsageCount()) > 0) {
+                used++;
+                usedAmount = usedAmount.add(amount);
+            } else if (reservedWallets.contains(wallet.getPublicId())) {
+                reserved++;
+                orderReserved = orderReserved.add(amount);
+            } else {
+                unredeemed++;
+                walletCommitted = walletCommitted.add(amount);
+            }
+        }
+        return new EntitlementSummary(wallets.size(), unredeemed, reserved, used,
+                expiredOrRevoked, money(walletCommitted), money(orderReserved),
+                money(usedAmount), money(released), remainingCapacity);
     }
 
     private IssueJobView jobView(PromotionIssueJob item) {
@@ -633,13 +848,30 @@ public class PromotionAutomationService {
 
     private BigDecimal budgetRemaining(PromotionPlaybook playbook) {
         if (playbook.getBudgetLimit() == null) return null;
-        String currentPeriod = YearMonth.now(BUSINESS_ZONE).toString();
-        BigDecimal committedThisMonth = currentPeriod.equals(playbook.getBudgetPeriodKey())
+        BigDecimal committedThisMonth = currentPeriod(playbook)
                 ? money(playbook.getBudgetCommitted())
                 : BigDecimal.ZERO;
         return money(playbook.getBudgetLimit()
                 .subtract(committedThisMonth)
                 .max(BigDecimal.ZERO));
+    }
+
+    private boolean currentPeriod(PromotionPlaybook playbook) {
+        return YearMonth.now(BUSINESS_ZONE).toString()
+                .equals(playbook.getBudgetPeriodKey());
+    }
+
+    private int wholeUnits(BigDecimal amount, BigDecimal unitCost) {
+        if (amount == null || unitCost == null || unitCost.signum() <= 0) return 0;
+        BigDecimal units = amount.divideToIntegralValue(unitCost);
+        return units.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0
+                ? Integer.MAX_VALUE : Math.max(0, units.intValue());
+    }
+
+    private int remaining(Integer ceiling, long committed) {
+        if (ceiling == null) return Integer.MAX_VALUE;
+        return (int) Math.max(0L, Math.min(Integer.MAX_VALUE,
+                ceiling.longValue() - committed));
     }
 
     private Map<String, Object> playbookAudit(PromotionPlaybook playbook) {

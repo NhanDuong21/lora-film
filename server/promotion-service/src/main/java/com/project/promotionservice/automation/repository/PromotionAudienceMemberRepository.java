@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface PromotionAudienceMemberRepository
@@ -22,6 +23,8 @@ public interface PromotionAudienceMemberRepository
     long countByRunPublicIdAndStatus(String runPublicId, AudienceMemberStatus status);
     java.util.Optional<PromotionAudienceMember> findFirstByRunPublicIdOrderByIdAsc(
             String runPublicId);
+    List<PromotionAudienceMember> findByRunPublicIdOrderByIdAsc(String runPublicId);
+    List<PromotionAudienceMember> findByRunPublicIdIn(Collection<String> runPublicIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select m from PromotionAudienceMember m where m.publicId = :publicId and m.deletedAt is null")

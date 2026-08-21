@@ -168,6 +168,8 @@ CREATE TABLE `promotion_campaigns` (
   `compliance_verified_by` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `compliance_verified_at` datetime(6) DEFAULT NULL,
   `remarks` text COLLATE utf8mb4_unicode_ci,
+  `test_data` tinyint(1) NOT NULL DEFAULT '0',
+  `environment_tag` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'BUSINESS',
   `version` int NOT NULL DEFAULT '1',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `created_by` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -627,6 +629,24 @@ CREATE TABLE `promotion_audience_snapshots` (
   `deleted_by` varchar(36) DEFAULT NULL,
   PRIMARY KEY (`id`), UNIQUE KEY `uk_audience_snapshot_public` (`public_id`),
   UNIQUE KEY `uk_audience_snapshot_run` (`run_public_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `promotion_automation_suppressions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `public_id` varchar(36) NOT NULL,
+  `playbook_code` varchar(80) NOT NULL,
+  `trigger_reference` varchar(180) NOT NULL,
+  `reason_code` varchar(100) NOT NULL,
+  `observed_at` datetime(6) NOT NULL,
+  `version` int NOT NULL DEFAULT '0',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `created_by` varchar(36) DEFAULT NULL,
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `updated_by` varchar(36) DEFAULT NULL,
+  `deleted_at` datetime(6) DEFAULT NULL,
+  `deleted_by` varchar(36) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_automation_suppression_public` (`public_id`),
+  UNIQUE KEY `uq_automation_suppression_trigger` (`playbook_code`,`trigger_reference`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE `promotion_audience_members` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,

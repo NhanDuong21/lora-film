@@ -95,6 +95,12 @@ const labels = {
   PERCENTAGE: "Giảm phần trăm",
   FIXED_AMOUNT: "Giảm số tiền",
   FULL_DISCOUNT: "Miễn phí toàn bộ",
+  SUBMIT: "Gửi phê duyệt",
+  APPROVE: "Phê duyệt",
+  ACTIVATE: "Kích hoạt",
+  AUTOMATION_RUN_STARTED: "Hệ thống bắt đầu chạy",
+  ISSUE_COMPLETED: "Hoàn tất cấp quyền lợi",
+  COMPLIANCE_VERIFIED: "Đã xác minh tuân thủ",
 };
 
 const promotionTabs = [
@@ -463,9 +469,16 @@ export default function AdminPromotionCenterPage() {
   const [message, setMessage] = useState(null);
   const [modal, setModal] = useState(null);
   const [highlightedPromotionId, setHighlightedPromotionId] = useState(null);
+  const [showTestData, setShowTestData] = useState(false);
 
   const selectedTab =
     promotionTabs.find((item) => item.key === tab) || promotionTabs[0];
+  const visibleCampaigns = {
+    ...campaigns,
+    content: showTestData
+      ? campaigns.content
+      : (campaigns.content || []).filter((item) => !item.testData),
+  };
 
   const loadCampaignOptions = useCallback(async () => {
     const result = pageData(
@@ -878,6 +891,18 @@ export default function AdminPromotionCenterPage() {
           </div>
         )}
 
+        {["tasks", "campaigns"].includes(view) && (
+          <label className="mb-4 inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-400">
+            <input
+              type="checkbox"
+              checked={showTestData}
+              onChange={(event) => setShowTestData(event.target.checked)}
+              className="accent-orange-500"
+            />
+            Hiển thị dữ liệu UAT/kiểm thử
+          </label>
+        )}
+
         {view === "promotions" && (
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {promotionTabs.map(
@@ -982,7 +1007,7 @@ export default function AdminPromotionCenterPage() {
 
         {view === "tasks" ? (
           <TaskBoard
-            campaigns={campaigns.content}
+            campaigns={visibleCampaigns.content}
             opportunities={opportunities}
             playbooks={automationPlaybooks}
             automationRuns={automationRuns}
@@ -1007,6 +1032,7 @@ export default function AdminPromotionCenterPage() {
             runs={automationRuns}
             loading={loading}
             onOpen={(playbook) => setModal({ type: "playbook", record: playbook })}
+            onOpenRun={(runItem) => setModal({ type: "automation-run", record: runItem })}
           />
         ) : view === "operations" ? (
           <OperationsDashboard data={operations} loading={loading} />
@@ -1019,7 +1045,8 @@ export default function AdminPromotionCenterPage() {
             </div>
           ) : view === "campaigns" ? (
             <CampaignTable
-              rows={campaigns.content}
+              rows={visibleCampaigns.content}
+              playbooks={automationPlaybooks}
               busy={busy}
               isAdmin={isAdmin}
               onAction={openCampaignAction}
@@ -1134,6 +1161,12 @@ export default function AdminPromotionCenterPage() {
             },
             "Đã chốt danh sách người nhận và đưa việc cấp ưu đãi vào hàng đợi.",
           )}
+        />
+      )}
+      {modal?.type === "automation-run" && (
+        <AutomationRunModal
+          record={modal.record}
+          onClose={() => setModal(null)}
         />
       )}
       {modal?.type === "benefit-choice" && (
@@ -1347,36 +1380,35 @@ function TaskBoard({
   }
 
   const rows = Array.isArray(campaigns) ? campaigns : [];
-  const drafting = rows.filter(
-    (item) => item.status === "DRAFT" && item.approvalStatus !== "PENDING",
-  ).length;
-  const pending = rows.filter(
-    (item) =>
-      item.approvalStatus === "PENDING" ||
-      (item.approvalStatus === "APPROVED" && item.legalStatus !== "PASSED"),
-  ).length;
-  const ready = rows.filter((item) =>
-    (item.allowedActions || []).includes("PUBLISH"),
-  ).length;
-  const warnings = rows.filter((item) => {
+  const campaignBucket = (item) => {
     const budget = Number(item.budgetAmount || 0);
     const exposure = Number(item.budgetUsed || 0) + Number(item.budgetReserved || 0);
-    return item.status === "KILLED" || (budget > 0 && exposure / budget >= 0.8);
-  }).length;
-  const workItems = rows.filter((item) => {
-    const journey = campaignJourney(item, isAdmin);
-    return (
-      item.status === "DRAFT" ||
-      item.status === "PAUSED" ||
-      item.status === "KILLED" ||
-      journey.actionCode === "PUBLISH" ||
-      journey.actionCode === "APPROVE" ||
-      journey.actionCode === "LEGAL_REVIEW"
-    );
-  });
+    if (["PAUSED", "KILLED"].includes(item.status)
+        || (budget > 0 && exposure / budget >= 0.8)) return "WARNING";
+    if ((item.allowedActions || []).includes("PUBLISH")) return "READY";
+    if (item.approvalStatus === "PENDING"
+        || (item.approvalStatus === "APPROVED" && item.legalStatus !== "PASSED")) return "PENDING";
+    if (item.status === "DRAFT") return "DRAFT";
+    return null;
+  };
+  const campaignBuckets = rows.map((item) => ({ item, bucket: campaignBucket(item) }));
+  const drafting = campaignBuckets.filter(({ bucket }) => bucket === "DRAFT").length;
+  const pending = campaignBuckets.filter(({ bucket }) => bucket === "PENDING").length;
+  const ready = campaignBuckets.filter(({ bucket }) => bucket === "READY").length;
+  const warnings = campaignBuckets.filter(({ bucket }) => bucket === "WARNING").length;
+  const workItems = campaignBuckets.filter(({ bucket }) => bucket).map(({ item }) => item);
   const pendingPlaybooks = playbooks.filter((item) =>
     ["PENDING_APPROVAL", "DRAFT", "REJECTED", "PAUSED"].includes(item.status),
   );
+  const draftPlaybookCount = pendingPlaybooks.filter((item) =>
+    ["DRAFT", "REJECTED"].includes(item.status),
+  ).length;
+  const pendingPlaybookCount = pendingPlaybooks.filter(
+    (item) => item.status === "PENDING_APPROVAL",
+  ).length;
+  const warningPlaybookCount = pendingPlaybooks.filter(
+    (item) => item.status === "PAUSED",
+  ).length;
   const reviewRuns = automationRuns.filter((item) =>
     ["FAILED", "PARTIAL_SUCCESS", "REVIEW_REQUIRED"].includes(item.status),
   );
@@ -1462,7 +1494,7 @@ function TaskBoard({
         )}
         {totalWork > 0 && (
           <p className="mt-3 text-xs text-zinc-600">
-            Tổng cộng {totalWork} việc cần xử lý: {drafting} bản nháp, {pending + pendingPlaybooks.length} chờ kiểm tra, {ready} sẵn sàng phát hành và {warnings + reviewRuns.length} cảnh báo.
+            Tổng cộng {totalWork} việc cần xử lý: {drafting + draftPlaybookCount} bản nháp, {pending + pendingPlaybookCount} chờ kiểm tra, {ready} sẵn sàng phát hành và {warnings + warningPlaybookCount + reviewRuns.length} cảnh báo.
           </p>
         )}
       </section>
@@ -1508,7 +1540,7 @@ function TaskBoard({
   );
 }
 
-function AutomationHub({ playbooks = [], runs = [], loading, onOpen }) {
+function AutomationHub({ playbooks = [], runs = [], loading, onOpen, onOpenRun }) {
   if (loading) {
     return <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải các luồng tự động</div>;
   }
@@ -1561,8 +1593,15 @@ function AutomationHub({ playbooks = [], runs = [], loading, onOpen }) {
           <div className="mt-3 overflow-hidden rounded-xl border border-zinc-800">
             {runs.slice(0, 8).map((runItem) => (
               <article key={runItem.publicId} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4 last:border-b-0">
-                <div><p className="font-bold text-white">{runItem.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p><p className="mt-1 text-xs text-zinc-500">Phiên bản {runItem.playbookVersion} · phê duyệt bởi {runItem.authorizedBy || "—"}</p></div>
-                <div className="text-right"><StatusBadge value={runItem.status} /><p className="mt-2 text-xs text-zinc-400">{runItem.issuedCount || 0} đã cấp · {runItem.skippedCount || 0} không cấp · {runItem.failedCount || 0} lỗi</p></div>
+                <div>
+                  <p className="font-bold text-white">{runItem.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{dateTime(runItem.completedAt || runItem.startedAt)} · phiên bản {runItem.playbookVersion} · phê duyệt bởi {runItem.authorizedByDisplayName || "Chưa xác định"}</p>
+                  <p className="mt-1 text-xs text-zinc-400">{runItem.audienceCount || 0} khách được xét · {runItem.issuedCount || 0} đã cấp · {runItem.excludedCount ?? runItem.skippedCount ?? 0} bị loại · {runItem.failedCount || 0} lỗi</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <StatusBadge value={runItem.status} />
+                  <button type="button" onClick={() => onOpenRun?.(runItem)} className={`${buttonClass} border border-zinc-700 text-zinc-300 hover:bg-zinc-800`}>Xem danh sách người nhận</button>
+                </div>
               </article>
             ))}
           </div>
@@ -1778,7 +1817,7 @@ const campaignActionLabel = {
   DELETE: "Xóa bản nháp",
 };
 
-function CampaignTable({ rows, busy, isAdmin, onAction }) {
+function CampaignTable({ rows, playbooks = [], busy, isAdmin, onAction }) {
   return (
     <table className="w-full min-w-[900px] text-left text-sm">
       <thead className="bg-zinc-950 text-[10px] font-bold uppercase text-zinc-500">
@@ -1801,10 +1840,23 @@ function CampaignTable({ rows, busy, isAdmin, onAction }) {
           const journey = campaignJourney(row, isAdmin);
           const budgetAmount = Number(row.budgetAmount || 0);
           const budgetExposure = Number(row.budgetUsed || 0) + Number(row.budgetReserved || 0);
+          const linkedPlaybooks = playbooks.filter(
+            (playbook) => playbook.campaignPublicId === row.publicId,
+          );
+          const automatedIssued = linkedPlaybooks.reduce(
+            (total, playbook) => total + Number(playbook.entitlements?.issued || 0), 0,
+          );
+          const automatedLiability = linkedPlaybooks.reduce(
+            (total, playbook) => total + Number(playbook.entitlements?.walletIssuedCommitted || 0), 0,
+          );
+          const automated = linkedPlaybooks.length > 0;
           return (
           <tr key={row.publicId} className="hover:bg-zinc-900/70">
             <td className="px-4 py-4">
-              <p className="font-bold text-white">{row.name}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-bold text-white">{row.name}</p>
+                {row.testData && <span className="rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-black text-violet-300">Dữ liệu {row.environmentTag || "UAT"}</span>}
+              </div>
               <p className="mt-1 text-xs text-zinc-500">Bước {journey.step}/6</p>
             </td>
             <td className="px-4 py-4">
@@ -1818,11 +1870,14 @@ function CampaignTable({ rows, busy, isAdmin, onAction }) {
             </td>
             <td className="px-4 py-4 text-xs text-zinc-300">
               <p className="font-bold text-white">
-                {row.redemptionCount || 0}
-                {row.maxRedemptions ? ` / ${row.maxRedemptions} đơn` : " đơn"}
+                {automated ? automatedIssued : row.redemptionCount || 0}
+                {row.maxRedemptions
+                  ? ` / ${row.maxRedemptions} ${automated ? "lượt cấp" : "đơn"}`
+                  : automated ? " lượt cấp" : " đơn"}
               </p>
               <p className="mt-1 text-zinc-500">
-                Đã dùng và đang giữ {money(budgetExposure)}
+                {automated ? "Đã cam kết trong ví " : "Đã dùng và đang giữ "}
+                {money(automated ? automatedLiability : budgetExposure)}
                 {budgetAmount > 0 ? ` / ${money(budgetAmount)}` : ""}
               </p>
             </td>
@@ -2494,6 +2549,38 @@ function PlaybookModal({
   });
   const [benefits, setBenefits] = useState([]);
   const editable = ["DRAFT", "REJECTED", "PAUSED"].includes(record.status);
+  const selectedCampaign = campaigns.find((item) => item.value === form.campaignPublicId)?.item;
+  const selectedBenefit = benefits.find((item) => item.publicId === form.promotionPublicId);
+  const rawAction = parseJsonObject(selectedBenefit?.actionsJson);
+  const selectedAction = Array.isArray(rawAction) ? rawAction[0] : rawAction;
+  const unitCost = Number(
+    selectedAction?.discountType === "PERCENTAGE"
+      ? selectedAction?.maxDiscountAmount
+      : selectedAction?.discountValue ?? selectedAction?.value ?? selectedAction?.amount,
+  ) || Number(record.effectiveQuota?.estimatedUnitCost || 0);
+  const quotaCandidates = [
+    { value: Number(form.quotaLimit || 0), reason: "hạn mức của luồng" },
+    ...(unitCost > 0 ? [{ value: Math.floor(Number(form.budgetLimit || 0) / unitCost), reason: "ngân sách tháng" }] : []),
+    ...(selectedCampaign?.maxRedemptions ? [{ value: Math.max(0, Number(selectedCampaign.maxRedemptions) - Number(selectedCampaign.redemptionCount || 0)), reason: "hạn mức chương trình" }] : []),
+    ...(selectedBenefit?.maxRedemptions ? [{ value: Math.max(0, Number(selectedBenefit.maxRedemptions) - Number(selectedBenefit.redemptionCount || 0)), reason: "hạn mức quyền lợi" }] : []),
+  ].filter((item) => Number.isFinite(item.value) && item.value >= 0);
+  const previewQuota = quotaCandidates.reduce(
+    (lowest, item) => !lowest || item.value < lowest.value ? item : lowest,
+    null,
+  );
+  const effectiveQuota = editable && previewQuota
+    ? previewQuota
+    : record.effectiveQuota?.effectiveQuota == null
+      ? null
+      : {
+          value: record.effectiveQuota.effectiveQuota,
+          reason: ({
+            PLAYBOOK_QUOTA: "hạn mức của luồng",
+            MONTHLY_BUDGET: "ngân sách tháng",
+            CAMPAIGN_QUOTA: "hạn mức chương trình",
+            BENEFIT_QUOTA: "hạn mức quyền lợi",
+          })[record.effectiveQuota.limitingFactor] || "giới hạn hiệu lực",
+        };
 
   useEffect(() => {
     let active = true;
@@ -2573,20 +2660,32 @@ function PlaybookModal({
               </select>
             </Field>
             <Field label="Ngân sách tối đa">
-              <input type="number" min="1" value={form.budgetLimit} onChange={(event) => setForm((current) => ({ ...current, budgetLimit: event.target.value }))} className={fieldClass} />
+              <input type="text" inputMode="numeric" value={Number(form.budgetLimit || 0).toLocaleString("vi-VN")} onChange={(event) => setForm((current) => ({ ...current, budgetLimit: event.target.value.replace(/\D/g, "") }))} className={fieldClass} />
             </Field>
             <Field label="Số lượt tối đa mỗi tháng">
-              <input type="number" min="1" value={form.quotaLimit} onChange={(event) => setForm((current) => ({ ...current, quotaLimit: event.target.value }))} className={fieldClass} />
+              <input type="text" inputMode="numeric" value={Number(form.quotaLimit || 0).toLocaleString("vi-VN")} onChange={(event) => setForm((current) => ({ ...current, quotaLimit: event.target.value.replace(/\D/g, "") }))} className={fieldClass} />
             </Field>
+          </div>
+        )}
+
+        {effectiveQuota && (
+          <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-4 text-sm text-sky-100">
+            Giới hạn hiệu lực dự kiến: <b>tối đa {Number(effectiveQuota.value).toLocaleString("vi-VN")} lượt/tháng</b> · bị giới hạn bởi {effectiveQuota.reason}.
+            {unitCost > 0 && <span className="mt-1 block text-xs text-sky-300">Chi phí tối đa mỗi lượt: {money(unitCost)}.</span>}
           </div>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <DetailCard label="Người thực hiện" value="Hệ thống tự động" />
-          <DetailCard label="Người phê duyệt" value={record.approvedBy || "Chưa được phê duyệt"} />
+          <DetailCard label="Người phê duyệt" value={record.approvedByDisplayName || "Chưa được phê duyệt"} />
           <DetailCard label="Ngân sách tháng" value={money(record.budgetLimit)} />
           <DetailCard label="Còn lại trong tháng" value={money(record.budgetRemaining ?? record.budgetLimit)} />
-          <DetailCard label="Số lượt đã giữ" value={record.quotaCommitted || 0} />
+          <DetailCard label="Đã cấp vào ví" value={record.entitlements?.issued || 0} />
+          <DetailCard label="Chưa sử dụng" value={record.entitlements?.unredeemed || 0} />
+          <DetailCard label="Đang giữ trong đơn" value={record.entitlements?.reserved || 0} />
+          <DetailCard label="Đã sử dụng" value={record.entitlements?.used || 0} />
+          <DetailCard label="Đã hết hạn/thu hồi" value={record.entitlements?.expiredOrRevoked || 0} />
+          <DetailCard label="Đã cam kết trong ví" value={money(record.entitlements?.walletIssuedCommitted)} />
           <DetailCard label="Số lượt tối đa" value={record.quotaLimit || "Chưa đặt"} />
         </div>
         <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">
@@ -2620,6 +2719,103 @@ function PlaybookModal({
             </button>
           )}
         </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+const automationReasonLabels = {
+  IDEMPOTENCY_KEY_ALREADY_GRANTED: "Đã nhận quyền lợi trong kỳ này",
+  PLAYBOOK_MONTHLY_BUDGET_EXHAUSTED: "Hết ngân sách tháng của luồng",
+  PLAYBOOK_MONTHLY_QUOTA_EXHAUSTED: "Hết số lượt tháng của luồng",
+  PLAYBOOK_QUOTA_EXHAUSTED: "Hết hạn mức của lần chạy",
+  BUDGET_EXHAUSTED: "Hết ngân sách chương trình",
+  ISSUANCE_RETRY: "Đang chờ thử cấp lại",
+  ISSUANCE_FAILED_FINAL: "Cấp quyền lợi thất bại",
+  SOURCE_BOOKING_REFUNDED_REVOKED: "Đã thu hồi vì booking nguồn được hoàn",
+};
+
+function AutomationRunModal({ record, onClose }) {
+  const [detail, setDetail] = useState(record);
+  const [state, setState] = useState({ loading: true, error: "" });
+
+  useEffect(() => {
+    let active = true;
+    adminPromotionService.getPromotionRun(record.publicId)
+      .then((result) => {
+        if (active) {
+          setDetail(result);
+          setState({ loading: false, error: "" });
+        }
+      })
+      .catch((error) => {
+        if (active) setState({ loading: false, error: errorText(error) });
+      });
+    return () => { active = false; };
+  }, [record.publicId]);
+
+  return (
+    <ModalShell title="Chi tiết lần cấp quyền lợi" icon={Workflow} onClose={onClose}>
+      <div className="space-y-4 p-5">
+        {state.loading ? (
+          <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải danh sách người nhận</div>
+        ) : state.error ? (
+          <p className="text-sm text-red-300">{state.error}</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.05] p-4">
+              <div>
+                <p className="font-black text-white">{detail.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p>
+                <p className="mt-1 text-xs text-zinc-400">{dateTime(detail.completedAt || detail.startedAt)} · thực hiện bởi {detail.runActorDisplayName || "Hệ thống tự động"}</p>
+                <p className="mt-1 text-xs text-zinc-500">Phê duyệt bởi {detail.authorizedByDisplayName || "Chưa xác định"}</p>
+              </div>
+              <StatusBadge value={detail.status} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <DetailCard label="Khách được xét" value={detail.audienceCount || 0} />
+              <DetailCard label="Đã cấp" value={detail.issuedCount || 0} />
+              <DetailCard label="Bị loại" value={detail.excludedCount ?? detail.skippedCount ?? 0} />
+              <DetailCard label="Đang thử lại" value={detail.retryingCount || 0} />
+              <DetailCard label="Lỗi cuối" value={detail.failedCount || 0} />
+              <DetailCard label="Chi phí đã cam kết" value={money(detail.committedCost)} />
+            </div>
+            {!!detail.exclusionReasons?.length && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-zinc-500">Lý do không cấp</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {detail.exclusionReasons.map((item) => (
+                    <span key={item.reasonCode} className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">{automationReasonLabels[item.reasonCode] || item.reasonCode}: {item.count}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="overflow-x-auto rounded-lg border border-zinc-800">
+              <table className="min-w-[760px] w-full text-left text-xs">
+                <thead className="bg-zinc-900/80 text-zinc-500"><tr><th className="px-3 py-2">Khách hàng</th><th className="px-3 py-2">Kết quả</th><th className="px-3 py-2">Lý do</th><th className="px-3 py-2">Quyền lợi trong ví</th><th className="px-3 py-2 text-right">Cam kết</th></tr></thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {(detail.members || []).map((member) => (
+                    <tr key={member.publicId}>
+                      <td className="px-3 py-3 font-bold text-white">Khách #{member.customerPublicId}</td>
+                      <td className="px-3 py-3 text-zinc-300">{member.status === "ISSUED" ? "Đã cấp" : member.status === "FAILED_RETRYABLE" ? "Đang thử lại" : member.status?.startsWith("SKIPPED") ? "Không cấp" : labels[member.status] || member.status}</td>
+                      <td className="px-3 py-3 text-zinc-400">{automationReasonLabels[member.reasonCode] || member.reasonCode || "—"}</td>
+                      <td className="px-3 py-3 text-sky-300">{member.walletPublicId || "Không phát sinh"}</td>
+                      <td className="px-3 py-3 text-right text-zinc-300">{money(member.committedAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <details className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
+              <summary className="cursor-pointer text-xs font-black text-zinc-400">Xem trạng thái kỹ thuật</summary>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <DetailCard label="Snapshot ID" value={detail.snapshotPublicId || "—"} />
+                <DetailCard label="Playbook version" value={detail.playbookVersion} />
+                <DetailCard label="Config hash" value={detail.approvedConfigHash || "—"} />
+                <DetailCard label="Run ID" value={detail.publicId} />
+              </div>
+            </details>
+          </>
+        )}
       </div>
     </ModalShell>
   );
@@ -2936,6 +3132,11 @@ function CampaignDetailModal({
 
   const journey = campaignJourney(detail, isAdmin);
   const customerOutcome = campaignCustomerOutcome(detail);
+  const automationPlaybooks = detail.automation?.playbooks || [];
+  const primaryPlaybook = automationPlaybooks[0];
+  const automationRun = detail.automation?.latestRun;
+  const entitlements = detail.automation?.entitlements;
+  const automatedDistribution = automationPlaybooks.length > 0;
 
   return (
     <ModalShell title={"Chiến dịch · " + detail.name} icon={CalendarClock} onClose={onClose}>
@@ -2970,6 +3171,7 @@ function CampaignDetailModal({
                   <p className="text-xs font-black uppercase tracking-wide text-orange-300">
                     Bước {journey.step}/6
                   </p>
+                  {detail.testData && <span className="mt-2 inline-flex rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-black text-violet-300">Dữ liệu {detail.environmentTag || "UAT"}</span>}
                   <h3 className="mt-2 text-xl font-black text-white">{journey.headline}</h3>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">{journey.description}</p>
                   <p className="mt-3 text-xs text-zinc-500">
@@ -3003,14 +3205,27 @@ function CampaignDetailModal({
               <p className="text-xs font-black uppercase tracking-wide text-sky-300">Khách hàng sẽ thấy gì?</p>
               <p className="mt-2 text-sm leading-6 text-zinc-200">{customerOutcome}</p>
             </div>
+            {automatedDistribution && (
+              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wide text-emerald-300">Đang được sử dụng bởi luồng tự động</p>
+                    <p className="mt-2 font-black text-white">{primaryPlaybook.name} · {labels[primaryPlaybook.status] || primaryPlaybook.status}</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-300">Hệ thống tự tìm thành viên đủ điều kiện và cấp quyền lợi vào ví.</p>
+                    <p className="mt-2 text-xs text-zinc-400">Lần gần nhất: {automationRun ? `${automationRun.issuedCount || 0} khách được cấp · ${automationRun.excludedCount ?? automationRun.skippedCount ?? 0} khách bị loại` : "chưa chạy"}.</p>
+                  </div>
+                  <StatusBadge value={primaryPlaybook.status} />
+                </div>
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <DetailCard label="Cơ chế chạy" value={(detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Tự áp dụng tại checkout" : "Thủ công"} />
-              <DetailCard label="Đối tượng" value={(detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Khách đủ điều kiện checkout" : "Chưa xác định"} />
-              <DetailCard label="Trigger" value="Không có" />
-              <DetailCard label="Cấp vào ví" value={(detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Không dùng ví" : "Nhân viên thực hiện"} />
-              <DetailCard label="Điều kiện sinh nhật" value="Không được cấu hình" />
+              <DetailCard label="Nguồn phát hành" value={automatedDistribution ? `Luồng tự động ${primaryPlaybook.name}` : (detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Tự áp dụng tại checkout" : "Cấp thủ công có kiểm soát"} />
+              <DetailCard label="Đối tượng" value={automatedDistribution ? "Xác định tại mỗi lần chạy" : (detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Khách đủ điều kiện checkout" : "Do nhân viên lựa chọn"} />
+              <DetailCard label="Trigger" value={automatedDistribution ? (primaryPlaybook.triggerType === "DAILY_SCHEDULE" ? "Hằng ngày lúc 00:05" : "Sau booking đầu tiên hợp lệ") : "Không có luồng tự động"} />
+              <DetailCard label="Cấp vào ví" value={automatedDistribution ? "Hệ thống tự động" : (detail.promotions || []).some((item) => item.promotionType === "AUTO") ? "Không dùng ví" : "Nhân viên thực hiện"} />
+              <DetailCard label="Điều kiện sinh nhật" value={primaryPlaybook?.code === "BIRTHDAY_REWARD" ? "Theo hồ sơ thành viên · mỗi năm một lần" : "Không áp dụng"} />
             </div>
-            {/sinh nhật/i.test(detail.name || "") && (
+            {/sinh nhật/i.test(detail.name || "") && !automatedDistribution && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] p-4 text-xs leading-5 text-amber-100">
                 Tên chương trình có nhắc sinh nhật nhưng campaign này không có birthday trigger. Hãy đổi tên thành voucher cấp thủ công hoặc liên kết với Birthday Playbook thật.
               </div>
@@ -3073,8 +3288,10 @@ function CampaignDetailModal({
                         : "Cần cấp voucher vào ví của khách hàng được chọn."}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
-                  <span>Đã sử dụng: <b className="text-white">{promotion.redemptionCount || 0}</b></span>
-                  {["VOUCHER", "COUPON"].includes(promotion.promotionType) && !promotion.publicVisible && ["ACTIVE", "SCHEDULED"].includes(detail.status) && (
+                  <span>{automatedDistribution ? <>Đã cấp vào ví: <b className="text-white">{entitlements?.issued || 0}</b> · Chưa dùng: <b className="text-white">{entitlements?.unredeemed || 0}</b> · Đang giữ: <b className="text-white">{entitlements?.reserved || 0}</b> · Đã dùng: <b className="text-white">{entitlements?.used || 0}</b></> : <>Đã sử dụng: <b className="text-white">{promotion.redemptionCount || 0}</b></>}</span>
+                  {automatedDistribution ? (
+                    <button type="button" onClick={() => setActiveTab("Ngân sách & hạn mức")} className={`${buttonClass} border border-zinc-700 text-zinc-300`}>Xem các lượt đã cấp</button>
+                  ) : ["VOUCHER", "COUPON"].includes(promotion.promotionType) && !promotion.publicVisible && ["ACTIVE", "SCHEDULED"].includes(detail.status) && (
                     <button
                       type="button"
                       onClick={() => onIssue(promotion)}
@@ -3113,21 +3330,22 @@ function CampaignDetailModal({
           </div>
         ) : activeTab === "Ngân sách & hạn mức" ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <DetailCard label="Ngân sách đã dùng" value={money(detail.budgetUsed)} />
-            <DetailCard label="Ngân sách đang giữ" value={money(detail.budgetReserved)} />
-            <DetailCard label="Ngân sách còn lại" value={money(detail.budgetRemaining)} />
+            {automatedDistribution && <DetailCard label="Đã cấp vào ví, chưa sử dụng" value={money(entitlements?.walletIssuedCommitted)} />}
+            <DetailCard label="Đang giữ trong đơn hàng" value={money(automatedDistribution ? entitlements?.orderReserved : detail.budgetReserved)} />
+            <DetailCard label="Đã sử dụng" value={money(automatedDistribution ? entitlements?.usedAmount : detail.budgetUsed)} />
+            <DetailCard label="Còn có thể cấp" value={money(automatedDistribution ? entitlements?.remainingCapacity : detail.budgetRemaining)} />
             <DetailCard label="Tổng ngân sách" value={money(detail.budgetAmount)} />
-            <DetailCard label="Số đơn đã áp dụng" value={(detail.redemptionCount || 0) + (detail.maxRedemptions ? " / " + detail.maxRedemptions : "")} />
+            <DetailCard label={automatedDistribution ? "Số quyền lợi đã cấp" : "Số đơn đã áp dụng"} value={(automatedDistribution ? entitlements?.issued || 0 : detail.redemptionCount || 0) + (detail.maxRedemptions ? " / " + detail.maxRedemptions : "")} />
             <DetailCard label="Tối đa mỗi khách" value={detail.maxRedemptionsPerUser || 1} />
           </div>
         ) : activeTab === "Duyệt & pháp lý" ? (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2"><StatusBadge value={detail.approvalStatus} /><StatusBadge value={detail.legalStatus} text={legalStatusText(detail)} /></div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <DetailCard label="Compliance" value={labels[detail.complianceStatus] || detail.complianceStatus} />
+              <DetailCard label="Tuân thủ" value={labels[detail.complianceStatus] || detail.complianceStatus} />
               <DetailCard label="Yêu cầu thông báo pháp lý" value={detail.legalNotificationRequired ? "Có" : "Không"} />
-              <DetailCard label="Tham chiếu pháp lý" value={detail.legalNotificationRef || "Chưa có"} />
-              <DetailCard label="Policy" value={detail.compliancePolicyVersion || "Chưa đánh giá"} />
+              <DetailCard label={detail.legalNotificationRequired ? "Tham chiếu pháp lý" : "Mã hồ sơ kiểm tra"} value={detail.legalNotificationRef || "Chưa có"} />
+              <DetailCard label="Chính sách áp dụng" value={detail.compliancePolicyVersion || "Chưa đánh giá"} />
             </div>
             {detail.complianceReason && <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">{detail.complianceReason}</p>}
             <HistoryList history={history} />

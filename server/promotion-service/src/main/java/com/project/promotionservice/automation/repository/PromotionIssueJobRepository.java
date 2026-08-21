@@ -11,5 +11,6 @@ public interface PromotionIssueJobRepository extends JpaRepository<PromotionIssu
     Optional<PromotionIssueJob> findByPublicId(String publicId);
     Optional<PromotionIssueJob> findFirstByStatusOrderByCreatedAtAsc(IssueJobStatus status);
     List<PromotionIssueJob> findByRunPublicIdOrderByCreatedAtDesc(String runPublicId);
+    boolean existsByRunPublicId(String runPublicId);
     boolean existsByRunPublicIdAndStatusIn(String runPublicId, List<IssueJobStatus> statuses);
 }

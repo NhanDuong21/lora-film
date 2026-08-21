@@ -24,6 +24,7 @@ import com.project.promotionservice.promotion.repository.UserPromotionRepository
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.promotion.service.CampaignCompliancePolicy;
 import com.project.promotionservice.promotion.enums.ComplianceStatus;
+import com.project.promotionservice.automation.service.PromotionAutomationService;
 import com.project.promotionservice.reservation.repository.PromotionReservationRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +70,8 @@ class CampaignServiceImplTest {
             new CampaignConfigurationPolicy();
     @Mock
     private CampaignCompliancePolicy compliancePolicy;
+    @Mock
+    private PromotionAutomationService automationService;
 
     @InjectMocks
     private CampaignServiceImpl campaignService;

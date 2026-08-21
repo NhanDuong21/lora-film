@@ -33,7 +33,22 @@ public final class AutomationDtos {
             Integer approvedPlaybookVersion, String approvedConfigHash,
             String budgetPeriodKey, BigDecimal budgetCommitted,
             BigDecimal budgetRemaining, Integer quotaCommitted,
+            String submittedByDisplayName, String approvedByDisplayName,
+            QuotaView effectiveQuota, EntitlementSummary entitlements,
             String updatedBy, Instant updatedAt) { }
+
+    public record QuotaView(
+            BigDecimal estimatedUnitCost, Integer requestedQuota,
+            Integer playbookQuotaRemaining, Integer budgetQuotaRemaining,
+            Integer campaignQuotaRemaining, Integer promotionQuotaRemaining,
+            Integer effectiveQuota, String limitingFactor) { }
+
+    public record EntitlementSummary(
+            Integer issued, Integer unredeemed, Integer reserved,
+            Integer used, Integer expiredOrRevoked,
+            BigDecimal walletIssuedCommitted, BigDecimal orderReserved,
+            BigDecimal usedAmount, BigDecimal releasedAmount,
+            BigDecimal remainingCapacity) { }
 
     public record IssueJobView(
             String publicId, IssueJobStatus status, Integer batchSize,
@@ -44,11 +59,27 @@ public final class AutomationDtos {
     public record RunView(
             String publicId, String playbookCode, Integer playbookVersion,
             String triggerType, String triggerReference, String runActor,
-            String authorizedBy, String idempotencyKey, AutomationRunStatus status,
+            String runActorDisplayName, String authorizedBy,
+            String authorizedByDisplayName, String idempotencyKey,
+            AutomationRunStatus status,
             Integer audienceCount, Integer issuedCount, Integer skippedCount,
             Integer failedCount, Instant startedAt, Instant completedAt,
             String approvedConfigHash, BigDecimal estimatedUnitCost,
-            String configSnapshotJson, List<IssueJobView> jobs) { }
+            String configSnapshotJson, String snapshotPublicId,
+            Integer eligibleCount, Integer excludedCount, Integer retryingCount,
+            BigDecimal committedCost, List<ReasonCount> exclusionReasons,
+            List<AudienceMemberView> members, List<IssueJobView> jobs) { }
+
+    public record ReasonCount(String reasonCode, Long count) { }
+
+    public record AudienceMemberView(
+            String publicId, String customerPublicId, AudienceMemberStatus status,
+            String reasonCode, Integer attemptCount, String walletPublicId,
+            String issuanceKey, BigDecimal committedAmount) { }
+
+    public record CampaignAutomationView(
+            List<PlaybookView> playbooks, RunView latestRun,
+            EntitlementSummary entitlements) { }
 
     public record OpportunityView(
             String code, String title, String insight, String reason,

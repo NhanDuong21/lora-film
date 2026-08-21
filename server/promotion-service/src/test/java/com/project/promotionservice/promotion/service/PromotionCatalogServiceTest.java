@@ -1,6 +1,7 @@
 package com.project.promotionservice.promotion.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project.promotionservice.automation.service.PromotionAutomationBudgetService;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.integration.client.UserRecipientValidationClient;
 import com.project.promotionservice.promotion.dto.request.PromotionUpsertRequest;
@@ -61,6 +62,8 @@ class PromotionCatalogServiceTest {
     private PromotionCatalogEventService eventService;
     @Mock
     private UserRecipientValidationClient recipientValidationClient;
+    @Mock
+    private PromotionAutomationBudgetService automationBudgetService;
 
     private PromotionCatalogService service;
     private ObjectMapper objectMapper;
@@ -80,7 +83,8 @@ class PromotionCatalogServiceTest {
                 policyValidator,
                 campaignPolicy,
                 eventService,
-                recipientValidationClient);
+                recipientValidationClient,
+                automationBudgetService);
     }
 
     @Test
@@ -332,6 +336,8 @@ class PromotionCatalogServiceTest {
         wallet.setPublicId("wallet-available");
         wallet.setStatus(UserPromotionStatus.AVAILABLE);
         wallet.setUsageCount(0);
+        wallet.setAudienceMemberPublicId("member-44");
+        wallet.setAutomationRunPublicId("run-44");
         when(walletRepository.findByIssuanceKeyForUpdate("SECOND_BOOKING:44"))
                 .thenReturn(Optional.of(wallet));
         when(redemptionRepository
@@ -349,6 +355,7 @@ class PromotionCatalogServiceTest {
         assertThat(wallet.getRevocationPending()).isFalse();
         verify(eventService).record(eq("USER_PROMOTION"), eq("wallet-available"),
                 eq("PROMOTION_AUTOMATION_REVOKED"), any(), eq("SYSTEM"));
+        verify(automationBudgetService).releaseForWallet("member-44", "run-44");
     }
 
     private Promotion couponPromotion() {

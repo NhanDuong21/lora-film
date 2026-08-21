@@ -2,6 +2,7 @@ package com.project.promotionservice.automation.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.automation.client.BirthdayAudienceClient;
+import com.project.promotionservice.automation.client.AutomationActorDirectoryClient;
 import com.project.promotionservice.automation.entity.*;
 import com.project.promotionservice.automation.enums.PlaybookStatus;
 import com.project.promotionservice.automation.repository.*;
@@ -13,6 +14,7 @@ import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
 import com.project.promotionservice.promotion.repository.PromotionRepository;
+import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import com.project.promotionservice.promotion.repository.UserPromotionRepository;
 import com.project.promotionservice.promotion.service.PromotionCatalogService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,10 +38,13 @@ class PromotionAutomationServiceTest {
     @Mock PromotionAudienceSnapshotRepository snapshots;
     @Mock PromotionAudienceMemberRepository members;
     @Mock PromotionIssueJobRepository jobs;
+    @Mock PromotionAutomationSuppressionRepository suppressions;
     @Mock PromotionCampaignRepository campaigns;
     @Mock PromotionRepository promotions;
     @Mock UserPromotionRepository wallets;
+    @Mock PromotionRedemptionRepository redemptions;
     @Mock BirthdayAudienceClient birthdayClient;
+    @Mock AutomationActorDirectoryClient actorDirectory;
     @Mock PromotionCatalogService catalogService;
     @Mock PromotionAutomationBudgetService budgetService;
     @Mock AuditTrailService auditTrailService;
@@ -48,8 +53,9 @@ class PromotionAutomationServiceTest {
     @BeforeEach
     void setUp() {
         service = new PromotionAutomationService(
-                playbooks, runs, snapshots, members, jobs, campaigns,
-                promotions, wallets, birthdayClient, new ObjectMapper(), catalogService,
+                playbooks, runs, snapshots, members, jobs, suppressions, campaigns,
+                promotions, wallets, redemptions, birthdayClient, actorDirectory,
+                new ObjectMapper(), catalogService,
                 budgetService, auditTrailService);
     }
 
@@ -137,6 +143,28 @@ class PromotionAutomationServiceTest {
         verify(members).saveAll(captor.capture());
         assertEquals("SECOND_BOOKING_INCENTIVE:42",
                 captor.getValue().getFirst().getIssuanceKey());
+    }
+
+    @Test
+    void refundTombstonePreventsOutOfOrderConfirmationFromGrantingBenefit() {
+        when(suppressions.existsByPlaybookCodeAndTriggerReference(
+                PromotionAutomationService.SECOND_BOOKING, "booking-refunded"))
+                .thenReturn(true);
+
+        PromotionAutomationRun run = service.createSecondBookingRun(
+                "42", "booking-refunded");
+
+        assertNull(run);
+        verifyNoInteractions(playbooks);
+    }
+
+    @Test
+    void repeatedConfirmationCannotCreateASecondIssueJob() {
+        when(jobs.existsByRunPublicId("run-1")).thenReturn(true);
+
+        service.ensureIssueJob("run-1", 200);
+
+        verify(jobs, never()).save(any());
     }
 
     private PromotionPlaybook configuredPlaybook() {

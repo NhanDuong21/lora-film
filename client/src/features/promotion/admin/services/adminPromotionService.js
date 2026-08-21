@@ -66,6 +66,9 @@ const adminPromotionService = {
   getPromotionRuns: async () => unwrap(await apiClient.get(
     '/api/admin/promotion-runs'
   )),
+  getPromotionRun: async id => unwrap(await apiClient.get(
+    `/api/admin/promotion-runs/${id}`
+  )),
   createPromotionIssueJob: async (id, batchSize = 200) => unwrap(await apiClient.post(
     `/api/admin/promotion-runs/${id}/issue-jobs`, { batchSize }
   )),

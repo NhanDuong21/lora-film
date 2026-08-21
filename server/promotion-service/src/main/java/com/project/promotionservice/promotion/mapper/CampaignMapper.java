@@ -48,6 +48,10 @@ public class CampaignMapper {
         entity.setMaxRedemptionsPerUser(request.getMaxRedemptionsPerUser());
         entity.setLegalNotificationRef(request.getLegalNotificationRef());
         entity.setRemarks(request.getRemarks());
+        entity.setTestData(Boolean.TRUE.equals(request.getTestData()));
+        entity.setEnvironmentTag(request.getEnvironmentTag() == null
+                || request.getEnvironmentTag().isBlank()
+                ? "BUSINESS" : request.getEnvironmentTag().trim().toUpperCase());
 
         return entity;
     }
@@ -125,6 +129,8 @@ public class CampaignMapper {
         response.setComplianceVerifiedBy(entity.getComplianceVerifiedBy());
         response.setComplianceVerifiedAt(entity.getComplianceVerifiedAt());
         response.setRemarks(entity.getRemarks());
+        response.setTestData(entity.getTestData());
+        response.setEnvironmentTag(entity.getEnvironmentTag());
         response.setCreatedAt(entity.getCreatedAt());
         response.setCreatedBy(entity.getCreatedBy());
         response.setUpdatedAt(entity.getUpdatedAt());

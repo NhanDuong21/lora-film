@@ -4,6 +4,7 @@ import com.project.promotionservice.automation.entity.PromotionAudienceMember;
 import com.project.promotionservice.automation.entity.PromotionPlaybook;
 import com.project.promotionservice.automation.enums.PlaybookStatus;
 import com.project.promotionservice.automation.repository.PromotionAudienceMemberRepository;
+import com.project.promotionservice.automation.repository.PromotionAutomationRunRepository;
 import com.project.promotionservice.automation.repository.PromotionPlaybookRepository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,12 +21,15 @@ public class PromotionAutomationBudgetService {
 
     private final PromotionPlaybookRepository playbookRepository;
     private final PromotionAudienceMemberRepository memberRepository;
+    private final PromotionAutomationRunRepository runRepository;
 
     public PromotionAutomationBudgetService(
             PromotionPlaybookRepository playbookRepository,
-            PromotionAudienceMemberRepository memberRepository) {
+            PromotionAudienceMemberRepository memberRepository,
+            PromotionAutomationRunRepository runRepository) {
         this.playbookRepository = playbookRepository;
         this.memberRepository = memberRepository;
+        this.runRepository = runRepository;
     }
 
     /**
@@ -78,6 +82,23 @@ public class PromotionAutomationBudgetService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void releaseForMember(String memberPublicId, String playbookPublicId) {
+        release(memberPublicId, playbookPublicId);
+    }
+
+    /**
+     * Releases issuance liability when an assigned wallet entitlement expires
+     * or is revoked. Both identifiers are stored on the wallet so every status
+     * transition can use the same idempotent accounting path.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void releaseForWallet(String memberPublicId, String runPublicId) {
+        if (memberPublicId == null || memberPublicId.isBlank()
+                || runPublicId == null || runPublicId.isBlank()) return;
+        runRepository.findByPublicId(runPublicId)
+                .ifPresent(run -> release(memberPublicId, run.getPlaybookPublicId()));
+    }
+
+    private void release(String memberPublicId, String playbookPublicId) {
         PromotionAudienceMember member = memberRepository
                 .findByPublicIdForUpdate(memberPublicId).orElse(null);
         if (member == null || !positive(member.getBudgetReservedAmount())) return;

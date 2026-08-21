@@ -13,4 +13,8 @@ public interface PromotionAutomationRunRepository
     Optional<PromotionAutomationRun> findByPlaybookCodeAndTriggerReference(
             String playbookCode, String triggerReference);
     List<PromotionAutomationRun> findTop20ByOrderByCreatedAtDesc();
+    List<PromotionAutomationRun> findByPlaybookPublicIdOrderByCreatedAtDesc(
+            String playbookPublicId);
+    List<PromotionAutomationRun> findByCampaignPublicIdOrderByCreatedAtDesc(
+            String campaignPublicId);
 }

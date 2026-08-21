@@ -114,10 +114,13 @@ public interface PromotionRepository
             @Param("campaignEnd") Instant campaignEnd);
 
     @Query("""
-            select p from Promotion p
+            select p from Promotion p, PromotionCampaign c
             where p.promotionType = :type
               and p.status = :status
+              and p.campaignPublicId = c.publicId
+              and c.testData = false
               and p.deletedAt is null
+              and c.deletedAt is null
               and p.validFrom <= :now
               and p.validTo > :now
             order by p.priority asc, p.createdAt asc
@@ -134,6 +137,7 @@ public interface PromotionRepository
               and p.status = :status
               and c.status = :campaignStatus
               and c.legalStatus = :legalStatus
+              and c.testData = false
               and p.publicVisible = true
               and p.deletedAt is null
               and c.deletedAt is null
@@ -158,6 +162,7 @@ public interface PromotionRepository
               and p.status = :status
               and c.status = :campaignStatus
               and c.legalStatus = :legalStatus
+              and c.testData = false
               and p.deletedAt is null
               and c.deletedAt is null
               and c.killSwitch = false

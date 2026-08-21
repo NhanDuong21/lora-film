@@ -39,6 +39,7 @@ vi.mock("../services/adminPromotionService", () => ({
     getPromotionOpportunities: vi.fn(),
     getPromotionPlaybooks: vi.fn(),
     getPromotionRuns: vi.fn(),
+    getPromotionRun: vi.fn(),
   },
 }));
 
@@ -106,6 +107,7 @@ describe("AdminPromotionCenterPage", () => {
     adminPromotionService.getPromotionOpportunities.mockResolvedValue([]);
     adminPromotionService.getPromotionPlaybooks.mockResolvedValue([]);
     adminPromotionService.getPromotionRuns.mockResolvedValue([]);
+    adminPromotionService.getPromotionRun.mockResolvedValue({});
     adminCinemaService.getCinemas.mockResolvedValue(emptyPage);
   });
 
@@ -149,6 +151,114 @@ describe("AdminPromotionCenterPage", () => {
     expect(screen.getByText("Bước 4/6")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Tiếp tục thiết lập/ })).toHaveLength(1);
     expect(screen.queryByText("SUMMER-2026")).not.toBeInTheDocument();
+  });
+
+  it("counts an unsubmitted automation playbook as draft instead of pending review", async () => {
+    adminPromotionService.getPromotionPlaybooks.mockResolvedValue([
+      {
+        publicId: "playbook-draft",
+        code: "SECOND_BOOKING_INCENTIVE",
+        name: "Khuyến khích booking lần hai",
+        status: "DRAFT",
+      },
+    ]);
+
+    render(<AdminPromotionCenterPage />);
+
+    expect(await screen.findByText("Khuyến khích booking lần hai")).toBeInTheDocument();
+    expect(screen.getByText(/1 bản nháp, 0 chờ kiểm tra, 0 sẵn sàng phát hành và 0 cảnh báo/)).toBeInTheDocument();
+  });
+
+  it("uses entitlement issuance instead of order redemption for automated campaign KPIs", async () => {
+    adminPromotionService.searchCampaigns.mockResolvedValue({
+      ...emptyPage,
+      content: [
+        {
+          publicId: "campaign-birthday",
+          code: "BIRTHDAY-UAT",
+          name: "Quà sinh nhật",
+          status: "ACTIVE",
+          approvalStatus: "APPROVED",
+          legalStatus: "PASSED",
+          maxRedemptions: 100,
+          redemptionCount: 0,
+          budgetAmount: 5000000,
+          budgetUsed: 0,
+          budgetReserved: 0,
+          allowedActions: ["VIEW", "PAUSE"],
+        },
+      ],
+      totalElements: 1,
+      totalPages: 1,
+    });
+    adminPromotionService.getPromotionPlaybooks.mockResolvedValue([
+      {
+        publicId: "birthday-playbook",
+        campaignPublicId: "campaign-birthday",
+        code: "BIRTHDAY_REWARD",
+        name: "Quà sinh nhật",
+        status: "ACTIVE",
+        entitlements: { issued: 2, walletIssuedCommitted: 100000 },
+      },
+    ]);
+
+    render(<AdminPromotionCenterPage />);
+    await screen.findByText("Không có việc khẩn cấp cần xử lý");
+    fireEvent.click(screen.getByRole("button", { name: "Chương trình" }));
+
+    expect(await screen.findByText("2 / 100 lượt cấp")).toBeInTheDocument();
+    expect(screen.getByText(/Đã cam kết trong ví 100\.000đ \/ 5\.000\.000đ/)).toBeInTheDocument();
+  });
+
+  it("opens a traceable automation run with audience, liability and technical snapshot", async () => {
+    const run = {
+      publicId: "run-uat",
+      playbookCode: "BIRTHDAY_REWARD",
+      playbookVersion: 3,
+      status: "SUCCESS",
+      audienceCount: 3,
+      issuedCount: 2,
+      excludedCount: 1,
+      failedCount: 0,
+      completedAt: "2026-08-21T00:09:00Z",
+      authorizedByDisplayName: "Admin Checker",
+    };
+    adminPromotionService.getPromotionPlaybooks.mockResolvedValue([
+      {
+        publicId: "birthday-playbook",
+        code: "BIRTHDAY_REWARD",
+        name: "Quà sinh nhật",
+        status: "ACTIVE",
+      },
+    ]);
+    adminPromotionService.getPromotionRuns.mockResolvedValue([run]);
+    adminPromotionService.getPromotionRun.mockResolvedValue({
+      ...run,
+      runActorDisplayName: "Hệ thống tự động",
+      snapshotPublicId: "snapshot-uat",
+      approvedConfigHash: "hash-uat",
+      committedCost: 100000,
+      retryingCount: 0,
+      exclusionReasons: [{ reasonCode: "IDEMPOTENCY_KEY_ALREADY_GRANTED", count: 1 }],
+      members: [
+        {
+          publicId: "member-issued",
+          customerPublicId: "customer-1",
+          status: "ISSUED",
+          walletPublicId: "wallet-1",
+          committedAmount: 50000,
+        },
+      ],
+    });
+
+    render(<AdminPromotionCenterPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Luồng tự động" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Xem danh sách người nhận" }));
+    expect(await screen.findByText("snapshot-uat")).toBeInTheDocument();
+    expect(screen.getByText("100.000đ")).toBeInTheDocument();
+    expect(screen.getByText("wallet-1")).toBeInTheDocument();
+    expect(screen.getByText(/Đã nhận quyền lợi trong kỳ/)).toBeInTheDocument();
   });
 
   it("starts authoring from four customer delivery choices without technical fields", async () => {

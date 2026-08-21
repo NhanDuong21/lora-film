@@ -43,6 +43,10 @@ public interface PromotionRedemptionRepository
     long countByUserPromotionPublicIdAndStatusInAndDeletedAtIsNull(
             String userPromotionPublicId, Collection<PromotionRedemptionStatus> statuses);
 
+    List<PromotionRedemption> findByUserPromotionPublicIdInAndStatusInAndDeletedAtIsNull(
+            Collection<String> userPromotionPublicIds,
+            Collection<PromotionRedemptionStatus> statuses);
+
     boolean existsByPromotionPublicIdAndDeletedAtIsNull(String promotionPublicId);
 
     boolean existsByCampaignPublicIdAndDeletedAtIsNull(String campaignPublicId);

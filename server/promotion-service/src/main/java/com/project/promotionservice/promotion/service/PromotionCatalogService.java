@@ -1,6 +1,7 @@
 package com.project.promotionservice.promotion.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.project.promotionservice.automation.service.PromotionAutomationBudgetService;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.integration.client.UserRecipientValidationClient;
@@ -66,6 +67,7 @@ public class PromotionCatalogService {
     private final CampaignConfigurationPolicy campaignPolicy;
     private final PromotionCatalogEventService eventService;
     private final UserRecipientValidationClient recipientValidationClient;
+    private final PromotionAutomationBudgetService automationBudgetService;
 
     public PromotionCatalogService(
             PromotionRepository promotionRepository,
@@ -77,7 +79,8 @@ public class PromotionCatalogService {
             PromotionPolicyValidator policyValidator,
             CampaignConfigurationPolicy campaignPolicy,
             PromotionCatalogEventService eventService,
-            UserRecipientValidationClient recipientValidationClient) {
+            UserRecipientValidationClient recipientValidationClient,
+            PromotionAutomationBudgetService automationBudgetService) {
         this.promotionRepository = promotionRepository;
         this.walletRepository = walletRepository;
         this.campaignRepository = campaignRepository;
@@ -88,6 +91,7 @@ public class PromotionCatalogService {
         this.campaignPolicy = campaignPolicy;
         this.eventService = eventService;
         this.recipientValidationClient = recipientValidationClient;
+        this.automationBudgetService = automationBudgetService;
     }
 
     @Transactional
@@ -454,6 +458,7 @@ public class PromotionCatalogService {
         wallet.setRevocationReason(reason);
         wallet.setUpdatedBy("SYSTEM");
         walletRepository.save(wallet);
+        releaseAutomationLiability(wallet);
         eventService.record("USER_PROMOTION", wallet.getPublicId(),
                 "PROMOTION_AUTOMATION_REVOKED",
                 java.util.Map.of("issuanceKey", issuanceKey, "reason", reason), "SYSTEM");
@@ -817,9 +822,15 @@ public class PromotionCatalogService {
         }
         if (!now.isBefore(item.getValidTo())) {
             item.setStatus(UserPromotionStatus.EXPIRED);
+            releaseAutomationLiability(item);
             return true;
         }
         return false;
+    }
+
+    private void releaseAutomationLiability(UserPromotion wallet) {
+        automationBudgetService.releaseForWallet(
+                wallet.getAudienceMemberPublicId(), wallet.getAutomationRunPublicId());
     }
 
     private boolean isUsableWalletItem(UserPromotion item, Instant now) {

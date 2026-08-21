@@ -75,8 +75,8 @@ public class IntegrationEventProcessor {
         require(bookingReference, "bookingPublicId");
         PromotionAutomationRun run = automationService.createSecondBookingRun(
                 customerId, bookingReference);
-        if (run.getStatus() == AutomationRunStatus.AUDIENCE_READY) {
-            automationService.createIssueJob(run.getPublicId(), 200);
+        if (run != null && run.getStatus() == AutomationRunStatus.AUDIENCE_READY) {
+            automationService.ensureIssueJob(run.getPublicId(), 200);
         }
     }
 

@@ -64,6 +64,11 @@ public class CampaignUpdateRequest {
 
     private String remarks;
 
+    private Boolean testData;
+
+    @Size(max = 30, message = "environmentTag must be <= 30 characters")
+    private String environmentTag;
+
     public CampaignUpdateRequest() {
     }
 
@@ -194,4 +199,9 @@ public class CampaignUpdateRequest {
     public void setRemarks(String remarks) {
         this.remarks = remarks;
     }
+
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
 }

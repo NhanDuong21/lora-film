@@ -37,6 +37,7 @@ import com.project.promotionservice.promotion.service.CampaignService;
 import com.project.promotionservice.promotion.service.CampaignConfigurationPolicy;
 import com.project.promotionservice.promotion.service.CampaignCompliancePolicy;
 import com.project.promotionservice.promotion.enums.ComplianceStatus;
+import com.project.promotionservice.automation.service.PromotionAutomationService;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -76,6 +77,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final PromotionOutboxEnvelopeFactory envelopeFactory;
     private final CampaignConfigurationPolicy configurationPolicy;
     private final CampaignCompliancePolicy compliancePolicy;
+    private final PromotionAutomationService automationService;
 
     public CampaignServiceImpl(PromotionCampaignRepository campaignRepository,
                                PromotionRepository promotionRepository,
@@ -88,7 +90,8 @@ public class CampaignServiceImpl implements CampaignService {
                                UserPromotionRepository walletRepository,
                                PromotionOutboxEnvelopeFactory envelopeFactory,
                                CampaignConfigurationPolicy configurationPolicy,
-                               CampaignCompliancePolicy compliancePolicy) {
+                               CampaignCompliancePolicy compliancePolicy,
+                               PromotionAutomationService automationService) {
         this.campaignRepository = campaignRepository;
         this.promotionRepository = promotionRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
@@ -101,6 +104,7 @@ public class CampaignServiceImpl implements CampaignService {
         this.envelopeFactory = envelopeFactory;
         this.configurationPolicy = configurationPolicy;
         this.compliancePolicy = compliancePolicy;
+        this.automationService = automationService;
     }
 
     @Override
@@ -187,6 +191,13 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setMaxRedemptionsPerUser(request.getMaxRedemptionsPerUser());
         campaign.setLegalNotificationRef(request.getLegalNotificationRef());
         campaign.setRemarks(request.getRemarks());
+        if (request.getTestData() != null) {
+            campaign.setTestData(request.getTestData());
+        }
+        if (request.getEnvironmentTag() != null
+                && !request.getEnvironmentTag().isBlank()) {
+            campaign.setEnvironmentTag(request.getEnvironmentTag().trim().toUpperCase());
+        }
         configurationPolicy.markConfigurationChanged(campaign, updater);
 
         PromotionCampaign saved = campaignRepository.save(campaign);
@@ -243,7 +254,9 @@ public class CampaignServiceImpl implements CampaignService {
         List<Promotion> promotions = promotionRepository
                 .findByCampaignPublicIdAndDeletedAtIsNullOrderByPriorityAsc(publicId);
 
-        return campaignMapper.toDetailResponse(campaign, promotions);
+        CampaignDetailResponse response = campaignMapper.toDetailResponse(campaign, promotions);
+        response.setAutomation(automationService.campaignAutomation(publicId));
+        return response;
     }
 
     @Override

@@ -145,6 +145,12 @@ public class PromotionCampaign extends BaseAuditableEntity {
     @Column(name = "remarks", columnDefinition = "TEXT")
     private String remarks;
 
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
+
     public PromotionCampaign() {
     }
 
@@ -460,4 +466,9 @@ public class PromotionCampaign extends BaseAuditableEntity {
     public void setRemarks(String remarks) {
         this.remarks = remarks;
     }
+
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
 }

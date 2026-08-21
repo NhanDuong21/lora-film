@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.promotionservice.promotion.service.PromotionCatalogEventService;
+import com.project.promotionservice.automation.service.PromotionAutomationBudgetService;
 import com.project.promotionservice.common.audit.Auditable;
 import com.project.promotionservice.common.exception.BusinessException;
 import com.project.promotionservice.common.monitoring.PromotionMetricsManager;
@@ -92,6 +93,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
     private final DatabaseTimeProvider databaseTimeProvider;
     private final PromotionCatalogEventService eventService;
     private final PromotionMetricsManager metricsManager;
+    private final PromotionAutomationBudgetService automationBudgetService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate requiresNewTransaction;
 
@@ -108,6 +110,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             DatabaseTimeProvider databaseTimeProvider,
             PromotionCatalogEventService eventService,
             PromotionMetricsManager metricsManager,
+            PromotionAutomationBudgetService automationBudgetService,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager) {
         this.reservationRepository = reservationRepository;
@@ -122,6 +125,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         this.databaseTimeProvider = databaseTimeProvider;
         this.eventService = eventService;
         this.metricsManager = metricsManager;
+        this.automationBudgetService = automationBudgetService;
         this.objectMapper = objectMapper;
         this.requiresNewTransaction = new TransactionTemplate(transactionManager);
         this.requiresNewTransaction.setPropagationBehaviorName("PROPAGATION_REQUIRES_NEW");
@@ -704,6 +708,9 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         if (wallet.getStatus() == UserPromotionStatus.USED) {
             wallet.setStatus(!now.isBefore(wallet.getValidTo())
                     ? UserPromotionStatus.EXPIRED : UserPromotionStatus.AVAILABLE);
+            if (wallet.getStatus() == UserPromotionStatus.EXPIRED) {
+                releaseAutomationLiability(wallet);
+            }
         }
         wallet.setUpdatedBy(actor);
         walletRepository.save(wallet);
@@ -776,12 +783,18 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             wallet.setRevocationPending(false);
             wallet.setUpdatedBy("SYSTEM");
             walletRepository.save(wallet);
+            releaseAutomationLiability(wallet);
             eventService.record("USER_PROMOTION", wallet.getPublicId(),
                     "PROMOTION_AUTOMATION_REVOKED_AFTER_RESERVATION_RELEASE",
                     Map.of("reason", Objects.toString(
                             wallet.getRevocationReason(), "SOURCE_BOOKING_REFUNDED")),
                     "SYSTEM");
         }
+    }
+
+    private void releaseAutomationLiability(UserPromotion wallet) {
+        automationBudgetService.releaseForWallet(
+                wallet.getAudienceMemberPublicId(), wallet.getAutomationRunPublicId());
     }
 
     private List<PromotionRedemption> lockRedemptionResources(String reservationPublicId) {

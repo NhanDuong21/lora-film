@@ -73,6 +73,11 @@ public class CampaignCreateRequest {
 
     private String remarks;
 
+    private Boolean testData = false;
+
+    @Size(max = 30, message = "environmentTag must be <= 30 characters")
+    private String environmentTag = "BUSINESS";
+
     private CampaignScopeType scopeType = CampaignScopeType.GLOBAL;
 
     private Set<@Size(max = 36) String> cinemaPublicIds = new LinkedHashSet<>();
@@ -215,6 +220,11 @@ public class CampaignCreateRequest {
     public void setRemarks(String remarks) {
         this.remarks = remarks;
     }
+
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
 
     public CampaignScopeType getScopeType() {
         return scopeType;

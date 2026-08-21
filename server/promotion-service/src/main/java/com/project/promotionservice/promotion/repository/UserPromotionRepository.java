@@ -38,6 +38,9 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Lo
     List<UserPromotion> findTop100ByUserPublicIdAndDeletedAtIsNullOrderByUpdatedAtDesc(
             String userPublicId);
 
+    List<UserPromotion> findByAutomationRunPublicIdInAndDeletedAtIsNull(
+            Collection<String> automationRunPublicIds);
+
     @Query("""
             select (count(up) > 0) from UserPromotion up, Promotion p
             where up.promotionPublicId = p.publicId
@@ -45,6 +48,16 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Lo
               and up.deletedAt is null
             """)
     boolean existsByCampaignPublicId(
+            @Param("campaignPublicId") String campaignPublicId);
+
+    @Query("""
+            select count(up) from UserPromotion up, Promotion p
+            where up.promotionPublicId = p.publicId
+              and p.campaignPublicId = :campaignPublicId
+              and up.deletedAt is null
+              and p.deletedAt is null
+            """)
+    long countByCampaignPublicId(
             @Param("campaignPublicId") String campaignPublicId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
