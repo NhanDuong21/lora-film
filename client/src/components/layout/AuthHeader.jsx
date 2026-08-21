@@ -28,6 +28,7 @@ export default function AuthHeader() {
             <Link
               to={destination}
               state={{ from: location.state?.from }}
+              viewTransition
               className="rounded-full border border-brand-orange/50 px-4 py-2 font-black text-brand-orange transition hover:border-brand-orange hover:bg-brand-orange/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
             >
               {action}

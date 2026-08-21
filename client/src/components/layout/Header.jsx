@@ -213,9 +213,9 @@ export default function Header() {
     setMobileMenuOpen(false);
   };
 
-  const navigateFromHeader = path => {
+  const navigateFromHeader = (path, options) => {
     closeNavigation();
-    navigate(path);
+    navigate(path, options);
   };
 
   const handleLogoutClick = async () => {
@@ -558,7 +558,7 @@ export default function Header() {
             ) : (
               <button
                 type="button"
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/login', { viewTransition: true })}
                 className={`hidden min-h-11 rounded-full bg-brand-orange px-5 text-xs font-black uppercase tracking-wide text-white shadow-lg shadow-brand-orange/10 transition hover:bg-orange-600 sm:block ${focusRingClass}`}
               >
                 Đăng nhập
@@ -625,7 +625,7 @@ export default function Header() {
               {!isAuthenticated && (
                 <button
                   type="button"
-                  onClick={() => navigateFromHeader('/login')}
+                  onClick={() => navigateFromHeader('/login', { viewTransition: true })}
                   className={`min-h-12 w-full rounded-xl border border-brand-orange/60 text-sm font-black uppercase tracking-wide text-brand-orange sm:hidden ${focusRingClass}`}
                 >
                   Đăng nhập
