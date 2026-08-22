@@ -14,6 +14,7 @@ import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
@@ -99,6 +100,7 @@ public class PromotionAutomationService {
         validateJson(request.configJson(), "configJson");
         validateJson(request.scopeJson(), "scopeJson");
         PromotionPlaybook playbook;
+        String previousPromotionPublicId = null;
         Map<String, Object> before = null;
         if (publicId == null) {
             if (playbookRepository.findByCodeAndDeletedAtIsNull(request.code()).isPresent()) {
@@ -109,6 +111,7 @@ public class PromotionAutomationService {
             playbook.setCreatedBy(actor);
         } else {
             playbook = requirePlaybook(publicId);
+            previousPromotionPublicId = playbook.getPromotionPublicId();
             before = playbookAudit(playbook);
             if (!playbook.getCode().equals(request.code())) {
                 throw conflict("Playbook code is immutable");
@@ -136,10 +139,51 @@ public class PromotionAutomationService {
         playbook.setApprovedConfigHash(null);
         playbook.setUpdatedBy(actor);
         PromotionPlaybook saved = playbookRepository.save(playbook);
+        synchronizeDistributionMode(
+                previousPromotionPublicId, saved.getPromotionPublicId(), actor);
         auditTrailService.record("PROMOTION_PLAYBOOK", saved.getPublicId(),
                 publicId == null ? "PLAYBOOK_CREATE" : "PLAYBOOK_UPDATE",
                 before, playbookAudit(saved), actor);
         return view(saved);
+    }
+
+    private void synchronizeDistributionMode(
+            String previousPromotionPublicId,
+            String selectedPromotionPublicId,
+            String actor) {
+        if (selectedPromotionPublicId != null) {
+            promotionRepository.findByPublicIdAndDeletedAtIsNull(selectedPromotionPublicId)
+                    .ifPresent(promotion -> {
+                        promotion.setDistributionMode(
+                                PromotionDistributionMode.AUTOMATION_ONLY);
+                        promotion.setUpdatedBy(actor);
+                        promotionRepository.save(promotion);
+                    });
+        }
+        if (previousPromotionPublicId == null
+                || Objects.equals(previousPromotionPublicId, selectedPromotionPublicId)
+                || playbookRepository.existsByPromotionPublicIdAndDeletedAtIsNull(
+                        previousPromotionPublicId)) {
+            return;
+        }
+        promotionRepository.findByPublicIdAndDeletedAtIsNull(previousPromotionPublicId)
+                .ifPresent(promotion -> {
+                    promotion.setDistributionMode(defaultDistributionMode(promotion));
+                    promotion.setUpdatedBy(actor);
+                    promotionRepository.save(promotion);
+                });
+    }
+
+    private PromotionDistributionMode defaultDistributionMode(Promotion promotion) {
+        if (promotion.getPromotionType() == PromotionType.AUTO) {
+            return PromotionDistributionMode.AUTO_APPLY;
+        }
+        if (promotion.getPromotionType() == PromotionType.COUPON) {
+            return PromotionDistributionMode.PERSONAL_CODE;
+        }
+        return Boolean.TRUE.equals(promotion.getPublicVisible())
+                ? PromotionDistributionMode.CLAIMABLE_WALLET
+                : PromotionDistributionMode.ASSIGNED_WALLET;
     }
 
     @Transactional
@@ -242,16 +286,27 @@ public class PromotionAutomationService {
 
     @Transactional
     public PromotionAutomationRun createBirthdayRun(LocalDate date) {
+        return createBirthdayRun(date, "SYSTEM", "SCHEDULE");
+    }
+
+    @Transactional
+    public PromotionAutomationRun createBirthdayRun(
+            LocalDate date, String actor, String triggerSource) {
         PromotionPlaybook playbook = activeByCode(BIRTHDAY);
         Integer effectiveQuota = quotaView(playbook).effectiveQuota();
         int limit = effectiveQuota == null ? 100_000 : effectiveQuota;
         if (limit <= 0) {
             throw conflict("Không còn hạn mức hiệu lực để tạo lần chạy sinh nhật");
         }
-        List<String> customers = birthdayClient.findEligible(date, limit);
+        PromotionCampaign campaign = campaignRepository
+                .findByPublicIdAndDeletedAtIsNull(playbook.getCampaignPublicId())
+                .orElseThrow(() -> conflict("Configured campaign was not found"));
+        List<String> customers = birthdayClient.findEligible(
+                date, limit, Boolean.TRUE.equals(campaign.getTestData()));
         return createRun(playbook, "SCHEDULE:" + date, customers,
                 BIRTHDAY + ":" + date,
-                customer -> BIRTHDAY + ":" + customer + ":" + date.getYear());
+                customer -> BIRTHDAY + ":" + customer + ":" + date.getYear(),
+                actor, triggerSource);
     }
 
     @Transactional
@@ -264,7 +319,7 @@ public class PromotionAutomationService {
         PromotionPlaybook playbook = activeByCode(SECOND_BOOKING);
         String key = SECOND_BOOKING + ":" + customerId;
         return createRun(playbook, bookingReference, List.of(customerId), key,
-                customer -> key);
+                customer -> key, "SYSTEM", "BOOKING_EVENT");
     }
 
     @Transactional
@@ -387,7 +442,8 @@ public class PromotionAutomationService {
     private PromotionAutomationRun createRun(
             PromotionPlaybook playbook, String triggerReference,
             List<String> customerIds, String idempotencyKey,
-            java.util.function.Function<String, String> issuanceKeyFactory) {
+            java.util.function.Function<String, String> issuanceKeyFactory,
+            String actor, String triggerSource) {
         PromotionAutomationRun existing = runRepository.findByIdempotencyKey(idempotencyKey)
                 .orElse(null);
         if (existing != null) return existing;
@@ -407,12 +463,13 @@ public class PromotionAutomationService {
         run.setEstimatedUnitCost(estimatedUnitCost(references.promotion()));
         run.setTriggerType(playbook.getTriggerType());
         run.setTriggerReference(triggerReference);
-        run.setRunActor("SYSTEM");
+        run.setTriggerSource(triggerSource);
+        run.setRunActor(actor);
         run.setAuthorizedBy(playbook.getApprovedBy());
         run.setIdempotencyKey(idempotencyKey);
         run.setStartedAt(Instant.now());
-        run.setCreatedBy("SYSTEM");
-        run.setUpdatedBy("SYSTEM");
+        run.setCreatedBy(actor);
+        run.setUpdatedBy(actor);
         run = runRepository.save(run);
 
         LinkedHashSet<String> uniqueCustomers = new LinkedHashSet<>(customerIds);
@@ -452,7 +509,13 @@ public class PromotionAutomationService {
         snapshotRepository.save(snapshot);
         run.setAudienceCount(uniqueCustomers.size());
         run.setSkippedCount(excluded);
-        run.setStatus(AutomationRunStatus.AUDIENCE_READY);
+        boolean noAudience = uniqueCustomers.isEmpty();
+        run.setStatus(noAudience
+                ? AutomationRunStatus.COMPLETED_NO_AUDIENCE
+                : AutomationRunStatus.AUDIENCE_READY);
+        if (noAudience) {
+            run.setCompletedAt(Instant.now());
+        }
         run = runRepository.save(run);
         auditTrailService.record("PROMOTION_AUTOMATION_RUN", run.getPublicId(),
                 "AUTOMATION_RUN_CREATE", null,
@@ -462,10 +525,11 @@ public class PromotionAutomationService {
                         "approvedConfigHash", run.getApprovedConfigHash(),
                         "authorizedBy", run.getAuthorizedBy(),
                         "runActor", run.getRunActor(),
+                        "triggerSource", run.getTriggerSource(),
                         "audienceCount", run.getAudienceCount(),
                         "eligibleCount", eligible,
                         "excludedCount", excluded),
-                "SYSTEM");
+                actor);
         return run;
     }
 
@@ -559,7 +623,7 @@ public class PromotionAutomationService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new RunView(item.getPublicId(), item.getPlaybookCode(),
                 item.getPlaybookVersion(), item.getTriggerType(),
-                item.getTriggerReference(), item.getRunActor(),
+                item.getTriggerReference(), item.getTriggerSource(), item.getRunActor(),
                 actorDirectory.displayName(item.getRunActor()), item.getAuthorizedBy(),
                 actorDirectory.displayName(item.getAuthorizedBy()), item.getIdempotencyKey(),
                 item.getStatus(), item.getAudienceCount(),
@@ -588,6 +652,7 @@ public class PromotionAutomationService {
                 ? null : Math.max(0, requested - committed);
         BigDecimal unitCost = null;
         Integer budgetQuota = null;
+        Integer campaignIssued = null;
         Integer campaignQuota = null;
         Integer promotionQuota = null;
         try {
@@ -614,6 +679,8 @@ public class PromotionAutomationService {
                 if (campaign != null && campaign.getMaxRedemptions() != null) {
                     long issued = walletRepository.countByCampaignPublicId(campaign.getPublicId());
                     long consumedOrIssued = Math.max(issued, value(campaign.getRedemptionCount()));
+                    campaignIssued = Math.toIntExact(Math.min(
+                            consumedOrIssued, Integer.MAX_VALUE));
                     campaignQuota = remaining(campaign.getMaxRedemptions(), consumedOrIssued);
                 }
             }
@@ -628,8 +695,8 @@ public class PromotionAutomationService {
         if (promotionQuota != null) limits.put("BENEFIT_QUOTA", promotionQuota);
         Map.Entry<String, Integer> effective = limits.entrySet().stream()
                 .min(Map.Entry.comparingByValue()).orElse(null);
-        return new QuotaView(unitCost, requested, playbookRemaining, budgetQuota,
-                campaignQuota, promotionQuota,
+        return new QuotaView(unitCost, requested, committed, playbookRemaining,
+                budgetQuota, campaignIssued, campaignQuota, promotionQuota,
                 effective == null ? null : effective.getValue(),
                 effective == null ? null : effective.getKey());
     }

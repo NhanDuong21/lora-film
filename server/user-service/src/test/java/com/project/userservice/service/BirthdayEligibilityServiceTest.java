@@ -38,4 +38,24 @@ class BirthdayEligibilityServiceTest {
         assertEquals(29, result.getFirst().birthdayDay());
         verify(repository).findBirthdayEligible(eq(2), eq(28), eq(true), any(Pageable.class));
     }
+
+    @Test
+    void uatAudienceUsesOnlyExplicitlyMarkedTestAccounts() {
+        User user = new User();
+        user.setAccountId(99L);
+        user.setBirthday(LocalDate.of(2000, 8, 22));
+        user.setTestAccount(true);
+        when(repository.findTestBirthdayEligible(
+                eq(8), eq(22), eq(false), any(Pageable.class)))
+                .thenReturn(List.of(user));
+
+        var result = new BirthdayEligibilityService(repository)
+                .findEligible(LocalDate.of(2026, 8, 22), 0, 500, true);
+
+        assertEquals(1, result.size());
+        assertEquals(99L, result.getFirst().customerId());
+        assertEquals(true, result.getFirst().testAccount());
+        verify(repository).findTestBirthdayEligible(
+                eq(8), eq(22), eq(false), any(Pageable.class));
+    }
 }

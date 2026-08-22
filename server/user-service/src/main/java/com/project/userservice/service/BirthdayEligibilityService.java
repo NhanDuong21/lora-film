@@ -19,16 +19,27 @@ public class BirthdayEligibilityService {
 
     public List<BirthdayEligibleUser> findEligible(
             LocalDate executionDate, int page, int size) {
+        return findEligible(executionDate, page, size, false);
+    }
+
+    public List<BirthdayEligibleUser> findEligible(
+            LocalDate executionDate, int page, int size, boolean testAccountsOnly) {
         boolean includeLeapDay = executionDate.getMonthValue() == 2
                 && executionDate.getDayOfMonth() == 28
                 && !Year.isLeap(executionDate.getYear());
-        return userRepository.findBirthdayEligible(
-                        executionDate.getMonthValue(), executionDate.getDayOfMonth(),
-                        includeLeapDay, PageRequest.of(page, size))
+        List<User> users = testAccountsOnly
+                ? userRepository.findTestBirthdayEligible(
+                    executionDate.getMonthValue(), executionDate.getDayOfMonth(),
+                    includeLeapDay, PageRequest.of(page, size))
+                : userRepository.findBirthdayEligible(
+                    executionDate.getMonthValue(), executionDate.getDayOfMonth(),
+                    includeLeapDay, PageRequest.of(page, size));
+        return users
                 .stream()
                 .map(user -> new BirthdayEligibleUser(
                         user.getAccountId(), user.getBirthday().getMonthValue(),
-                        user.getBirthday().getDayOfMonth(), "ACTIVE", "ELIGIBLE"))
+                        user.getBirthday().getDayOfMonth(), "ACTIVE", "ELIGIBLE",
+                        Boolean.TRUE.equals(user.getTestAccount())))
                 .toList();
     }
 
@@ -37,6 +48,7 @@ public class BirthdayEligibilityService {
             int birthdayMonth,
             int birthdayDay,
             String accountStatus,
-            String memberStatus) {
+            String memberStatus,
+            boolean testAccount) {
     }
 }

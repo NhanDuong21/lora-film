@@ -20,6 +20,7 @@ public interface PromotionPlaybookRepository extends JpaRepository<PromotionPlay
     List<PromotionPlaybook> findAllByDeletedAtIsNullOrderByCodeAsc();
     List<PromotionPlaybook> findByCampaignPublicIdAndDeletedAtIsNullOrderByCodeAsc(
             String campaignPublicId);
+    boolean existsByPromotionPublicIdAndDeletedAtIsNull(String promotionPublicId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from PromotionPlaybook p where p.publicId = :publicId and p.deletedAt is null")

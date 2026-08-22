@@ -36,6 +36,8 @@ public class PromotionAutomationRun extends BaseAuditableEntity {
     private String triggerType;
     @Column(name = "trigger_reference", length = 180)
     private String triggerReference;
+    @Column(name = "trigger_source", nullable = false, length = 30)
+    private String triggerSource = "SCHEDULE";
     @Column(name = "run_actor", nullable = false, length = 36)
     private String runActor = "SYSTEM";
     @Column(name = "authorized_by", nullable = false, length = 36)
@@ -84,6 +86,8 @@ public class PromotionAutomationRun extends BaseAuditableEntity {
     public void setTriggerType(String value) { triggerType = value; }
     public String getTriggerReference() { return triggerReference; }
     public void setTriggerReference(String value) { triggerReference = value; }
+    public String getTriggerSource() { return triggerSource; }
+    public void setTriggerSource(String value) { triggerSource = value; }
     public String getRunActor() { return runActor; }
     public void setRunActor(String value) { runActor = value; }
     public String getAuthorizedBy() { return authorizedBy; }

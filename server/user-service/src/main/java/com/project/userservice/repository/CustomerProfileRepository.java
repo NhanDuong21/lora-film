@@ -40,8 +40,40 @@ public interface CustomerProfileRepository extends JpaRepository<CustomerProfile
                                        @Param("status") UserStatus status,
                                        Pageable pageable);
 
+    @Query("""
+            select c from CustomerProfile c, User u
+            where c.accountId = u.accountId
+              and u.isDeleted = false
+              and u.accountType = com.project.userservice.enumtype.AccountType.CUSTOMER
+              and u.testAccount = :testAccount
+              and not exists (
+                  select 1 from Employee e
+                  where e.accountId = c.accountId and e.isDeleted = false
+              )
+              and (:status is null or u.status = :status)
+              and (:keyword is null or :keyword = ''
+                   or lower(c.customerCode) like lower(concat('%', :keyword, '%'))
+                   or lower(u.fullName) like lower(concat('%', :keyword, '%'))
+                   or lower(coalesce(u.email, '')) like lower(concat('%', :keyword, '%'))
+                   or (:keywordHash is not null and (u.phoneHash = :keywordHash or u.cccdHash = :keywordHash)))
+            """)
+    Page<CustomerProfile> searchByTestAccountSecure(
+            @Param("keyword") String keyword,
+            @Param("keywordHash") String keywordHash,
+            @Param("status") UserStatus status,
+            @Param("testAccount") boolean testAccount,
+            Pageable pageable);
+
     default Page<CustomerProfile> search(String keyword, UserStatus status, Pageable pageable) {
         return searchSecure(keyword, PiiCrypto.searchHash(keyword), status, pageable);
+    }
+
+    default Page<CustomerProfile> search(
+            String keyword, UserStatus status, Boolean testAccount, Pageable pageable) {
+        return testAccount == null
+                ? search(keyword, status, pageable)
+                : searchByTestAccountSecure(keyword, PiiCrypto.searchHash(keyword),
+                    status, testAccount, pageable);
     }
 
     @Query("""

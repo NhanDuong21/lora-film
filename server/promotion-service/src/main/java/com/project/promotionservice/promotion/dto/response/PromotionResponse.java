@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionStackingBlockedReason;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 
 import java.time.Instant;
 
@@ -17,6 +18,9 @@ public record PromotionResponse(
         String description,
         PromotionStatus status,
         boolean publicVisible,
+        PromotionDistributionMode distributionMode,
+        boolean testData,
+        String environmentTag,
         int priority,
         boolean stackable,
         boolean campaignStackable,

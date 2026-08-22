@@ -11,6 +11,8 @@ import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.entity.UserPromotion;
 import com.project.promotionservice.promotion.enums.PromotionStackingBlockedReason;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
+import com.project.promotionservice.promotion.enums.PromotionType;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -36,6 +38,7 @@ public class PromotionMapper {
         promotion.setName(request.name().trim());
         promotion.setDescription(blankToNull(request.description()));
         promotion.setPublicVisible(request.publicVisible());
+        promotion.setDistributionMode(distributionMode(request));
         promotion.setPriority(request.priority());
         promotion.setStackable(request.stackable());
         promotion.setConditionsJson(write(request.conditionsJson()));
@@ -65,7 +68,11 @@ public class PromotionMapper {
                 promotion.getClonedFromPublicId(),
                 promotion.getPromotionType(), promotion.getCode(), promotion.getName(),
                 promotion.getDescription(), promotion.getStatus(),
-                Boolean.TRUE.equals(promotion.getPublicVisible()), promotion.getPriority(),
+                Boolean.TRUE.equals(promotion.getPublicVisible()),
+                effectiveDistributionMode(promotion),
+                campaign != null && Boolean.TRUE.equals(campaign.getTestData()),
+                campaign == null ? null : campaign.getEnvironmentTag(),
+                promotion.getPriority(),
                 promotionStackable, campaignStackable,
                 promotionStackable && campaignStackable, blockedReason,
                 read(promotion.getConditionsJson()),
@@ -87,6 +94,54 @@ public class PromotionMapper {
     private String normalizeCode(String code) {
         String normalized = blankToNull(code);
         return normalized == null ? null : normalized.toUpperCase();
+    }
+
+    private PromotionDistributionMode distributionMode(PromotionUpsertRequest request) {
+        JsonNode metadata = request.metadataJson();
+        String configured = metadata == null ? null
+                : metadata.path("distributionMode").asText(null);
+        if (configured == null || configured.isBlank()) {
+            configured = metadata == null ? null
+                    : metadata.path("distributionModel").asText(null);
+        }
+        if (configured != null) {
+            try {
+                return switch (configured.trim().toUpperCase()) {
+                    case "AUTO" -> PromotionDistributionMode.AUTO_APPLY;
+                    case "VOUCHER_PUBLIC" -> PromotionDistributionMode.CLAIMABLE_WALLET;
+                    case "VOUCHER_PRIVATE" -> PromotionDistributionMode.ASSIGNED_WALLET;
+                    case "COUPON_PRIVATE" -> PromotionDistributionMode.PERSONAL_CODE;
+                    default -> PromotionDistributionMode.valueOf(
+                            configured.trim().toUpperCase());
+                };
+            } catch (IllegalArgumentException ignored) {
+                // Fall through to the backwards-compatible semantic default.
+            }
+        }
+        if (request.promotionType() == PromotionType.AUTO) {
+            return PromotionDistributionMode.AUTO_APPLY;
+        }
+        if (request.promotionType() == PromotionType.COUPON) {
+            return PromotionDistributionMode.PERSONAL_CODE;
+        }
+        return Boolean.TRUE.equals(request.publicVisible())
+                ? PromotionDistributionMode.CLAIMABLE_WALLET
+                : PromotionDistributionMode.ASSIGNED_WALLET;
+    }
+
+    public PromotionDistributionMode effectiveDistributionMode(Promotion promotion) {
+        if (promotion.getDistributionMode() != null) {
+            return promotion.getDistributionMode();
+        }
+        if (promotion.getPromotionType() == PromotionType.AUTO) {
+            return PromotionDistributionMode.AUTO_APPLY;
+        }
+        if (promotion.getPromotionType() == PromotionType.COUPON) {
+            return PromotionDistributionMode.PERSONAL_CODE;
+        }
+        return Boolean.TRUE.equals(promotion.getPublicVisible())
+                ? PromotionDistributionMode.CLAIMABLE_WALLET
+                : PromotionDistributionMode.ASSIGNED_WALLET;
     }
 
     private String blankToNull(String value) {

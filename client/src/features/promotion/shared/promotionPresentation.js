@@ -464,5 +464,5 @@ export const conditionSummary = (conditionsJson) => {
   if (conditions.requiredTierCode)
     parts.push(`Yêu cầu hạng ${conditions.requiredTierCode}`);
   if (conditions.requiresVerification) parts.push("Cần xác thực khách hàng");
-  return parts.length ? parts.join(" · ") : "Có điều kiện nâng cao trong JSON.";
+  return parts.length ? parts.join(" · ") : "Có một số điều kiện áp dụng bổ sung.";
 };

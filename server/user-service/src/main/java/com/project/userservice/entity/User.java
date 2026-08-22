@@ -87,6 +87,9 @@ public class User {
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted = false;
 
+    @Column(name = "is_test_account", nullable = false)
+    private Boolean testAccount = false;
+
     @org.springframework.data.annotation.CreatedBy
     @Column(name = "created_by", updatable = false)
     private Long createdBy;
@@ -281,6 +284,14 @@ public class User {
 
     public void setIsDeleted(Boolean isDeleted) {
         this.isDeleted = isDeleted;
+    }
+
+    public Boolean getTestAccount() {
+        return testAccount;
+    }
+
+    public void setTestAccount(Boolean testAccount) {
+        this.testAccount = testAccount;
     }
 
     public Long getCreatedBy() {

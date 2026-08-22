@@ -91,7 +91,8 @@ public class AdminPromotionAutomationController {
                             "This event-driven playbook cannot be run manually", null));
         }
         PromotionAutomationRun created = service.createBirthdayRun(
-                date == null ? LocalDate.now() : date);
+                date == null ? LocalDate.now() : date,
+                SecurityActor.current(), "ADMIN_RUN_NOW");
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.success("Automation run created", service.run(created.getPublicId())));
     }

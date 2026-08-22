@@ -11,6 +11,7 @@ import com.project.promotionservice.promotion.dto.response.PromotionIssueRespons
 import com.project.promotionservice.promotion.dto.response.PromotionResponse;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 import com.project.promotionservice.promotion.service.PromotionCatalogService;
 import com.project.promotionservice.promotion.service.PromotionResourceScopeService;
 import jakarta.validation.Valid;
@@ -98,6 +99,8 @@ public class AdminPromotionController {
             @RequestParam(required = false) PromotionType type,
             @RequestParam(required = false) PromotionStatus status,
             @RequestParam(required = false) Boolean publicVisible,
+            @RequestParam(required = false) Set<PromotionDistributionMode> distributionMode,
+            @RequestParam(required = false) Boolean testData,
             @RequestParam(required = false) @Size(max = 100) String keyword,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
@@ -110,8 +113,8 @@ public class AdminPromotionController {
                 ? resourceScope.accessibleCampaignIds(principal)
                 : null;
         return ResponseEntity.ok(ApiResponse.success(service.search(
-                campaignPublicId, type, status, publicVisible, keyword,
-                pageable(page, size, sort, SORT_FIELDS, "createdAt"),
+                campaignPublicId, type, status, publicVisible, keyword, distributionMode,
+                testData, pageable(page, size, sort, SORT_FIELDS, "createdAt"),
                 accessibleCampaignIds)));
     }
 

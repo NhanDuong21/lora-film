@@ -28,6 +28,11 @@ public class BirthdayAudienceClient {
     }
 
     public List<String> findEligible(LocalDate date, int limit) {
+        return findEligible(date, limit, false);
+    }
+
+    public List<String> findEligible(
+            LocalDate date, int limit, boolean testAccountsOnly) {
         List<String> result = new ArrayList<>();
         try {
             for (int page = 0; result.size() < limit; page++) {
@@ -37,6 +42,7 @@ public class BirthdayAudienceClient {
                                 .queryParam("date", date)
                                 .queryParam("page", pageNumber)
                                 .queryParam("size", PAGE_SIZE)
+                                .queryParam("testAccountsOnly", testAccountsOnly)
                                 .build())
                         .retrieve().body(JsonNode.class);
                 JsonNode data = response == null ? null : response.path("data");

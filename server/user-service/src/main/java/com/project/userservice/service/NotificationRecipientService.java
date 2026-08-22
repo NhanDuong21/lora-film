@@ -35,4 +35,12 @@ public class NotificationRecipientService {
     public List<Long> findActiveAccountIds(Collection<Long> accountIds) {
         return userRepository.findActiveAccountIds(accountIds);
     }
+
+    @Transactional(readOnly = true)
+    public List<Long> findActiveAccountIds(
+            Collection<Long> accountIds, boolean testAccountsOnly) {
+        return testAccountsOnly
+                ? userRepository.findActiveTestAccountIds(accountIds)
+                : findActiveAccountIds(accountIds);
+    }
 }

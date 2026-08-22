@@ -17,6 +17,7 @@ public record CustomerResponse(
         String avatarUrl,
         UserStatus status,
         LocalDate joinedAt,
-        String note
+        String note,
+        boolean testAccount
 ) {
 }

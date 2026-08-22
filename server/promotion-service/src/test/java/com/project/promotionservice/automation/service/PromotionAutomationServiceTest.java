@@ -5,6 +5,7 @@ import com.project.promotionservice.automation.client.BirthdayAudienceClient;
 import com.project.promotionservice.automation.client.AutomationActorDirectoryClient;
 import com.project.promotionservice.automation.entity.*;
 import com.project.promotionservice.automation.enums.PlaybookStatus;
+import com.project.promotionservice.automation.enums.AutomationRunStatus;
 import com.project.promotionservice.automation.repository.*;
 import com.project.promotionservice.common.audit.AuditTrailService;
 import com.project.promotionservice.common.exception.BusinessException;
@@ -26,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -165,6 +167,54 @@ class PromotionAutomationServiceTest {
         service.ensureIssueJob("run-1", 200);
 
         verify(jobs, never()).save(any());
+    }
+
+    @Test
+    void emptyBirthdayAudienceFinishesWithoutCreatingAnIssuanceReadyRun() {
+        PromotionPlaybook playbook = configuredPlaybook();
+        playbook.setCode(PromotionAutomationService.BIRTHDAY);
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId(playbook.getCampaignPublicId());
+        campaign.setApprovalStatus(CampaignApprovalStatus.APPROVED);
+        campaign.setTestData(true);
+        Promotion promotion = new Promotion();
+        promotion.setPublicId(playbook.getPromotionPublicId());
+        promotion.setCampaignPublicId(playbook.getCampaignPublicId());
+        promotion.setPromotionType(PromotionType.VOUCHER);
+        promotion.setConditionsJson("{}");
+        promotion.setActionsJson(
+                "{\"discountType\":\"FIXED_AMOUNT\",\"discountValue\":50000}");
+        promotion.setMetadataJson("{}");
+        when(playbooks.findByPublicIdAndDeletedAtIsNull(playbook.getPublicId()))
+                .thenReturn(Optional.of(playbook));
+        when(campaigns.findByPublicId(playbook.getCampaignPublicId()))
+                .thenReturn(Optional.of(campaign));
+        when(campaigns.findByPublicIdAndDeletedAtIsNull(playbook.getCampaignPublicId()))
+                .thenReturn(Optional.of(campaign));
+        when(promotions.findByPublicIdAndDeletedAtIsNull(playbook.getPromotionPublicId()))
+                .thenReturn(Optional.of(promotion));
+        when(playbooks.save(playbook)).thenReturn(playbook);
+        service.submit(playbook.getPublicId(), "maker-1");
+        service.approve(playbook.getPublicId(), "checker-2");
+        when(playbooks.findByCodeAndStatusAndDeletedAtIsNull(
+                PromotionAutomationService.BIRTHDAY, PlaybookStatus.ACTIVE))
+                .thenReturn(Optional.of(playbook));
+        LocalDate date = LocalDate.of(2026, 8, 22);
+        when(birthdayClient.findEligible(date, 100_000, true)).thenReturn(List.of());
+        when(runs.findByIdempotencyKey("BIRTHDAY_REWARD:2026-08-22"))
+                .thenReturn(Optional.empty());
+        when(runs.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(snapshots.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(members.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PromotionAutomationRun run = service.createBirthdayRun(
+                date, "admin-1", "ADMIN_RUN_NOW");
+
+        assertEquals(AutomationRunStatus.COMPLETED_NO_AUDIENCE, run.getStatus());
+        assertNotNull(run.getCompletedAt());
+        assertEquals("ADMIN_RUN_NOW", run.getTriggerSource());
+        assertEquals("admin-1", run.getRunActor());
+        verifyNoInteractions(jobs);
     }
 
     private PromotionPlaybook configuredPlaybook() {

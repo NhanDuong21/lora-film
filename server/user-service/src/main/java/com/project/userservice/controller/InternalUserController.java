@@ -47,7 +47,8 @@ public class InternalUserController {
             @Valid @RequestBody ActiveUserValidationRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Active users validated",
-                recipientService.findActiveAccountIds(request.accountIds())));
+                recipientService.findActiveAccountIds(
+                        request.accountIds(), Boolean.TRUE.equals(request.testAccountsOnly()))));
     }
 
     @GetMapping("/birthday-eligible")
@@ -55,16 +56,18 @@ public class InternalUserController {
             birthdayEligible(
                     @RequestParam LocalDate date,
                     @RequestParam(defaultValue = "0") int page,
-                    @RequestParam(defaultValue = "500") int size) {
+                    @RequestParam(defaultValue = "500") int size,
+                    @RequestParam(defaultValue = "false") boolean testAccountsOnly) {
         int safeSize = Math.max(1, Math.min(size, 500));
         return ResponseEntity.ok(ApiResponse.success(
                 "Birthday eligible users retrieved",
                 birthdayEligibilityService.findEligible(
-                        date, Math.max(page, 0), safeSize)));
+                        date, Math.max(page, 0), safeSize, testAccountsOnly)));
     }
 
     public record ActiveUserValidationRequest(
             @NotEmpty @Size(max = 1000)
-            List<@Positive Long> accountIds) {
+            List<@Positive Long> accountIds,
+            Boolean testAccountsOnly) {
     }
 }

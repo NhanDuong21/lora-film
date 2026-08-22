@@ -45,7 +45,13 @@ public class CustomerService {
 
     @Transactional(readOnly = true)
     public Page<CustomerResponse> search(String keyword, UserStatus status, Pageable pageable) {
-        Page<CustomerProfile> page = customerRepository.search(keyword, status,
+        return search(keyword, status, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CustomerResponse> search(
+            String keyword, UserStatus status, Boolean testAccount, Pageable pageable) {
+        Page<CustomerProfile> page = customerRepository.search(keyword, status, testAccount,
                 com.project.userservice.util.PageableUtils.sanitize(pageable,
                         java.util.Set.of("id", "customerCode", "joinedAt", "createdAt", "updatedAt"),
                         "createdAt", org.springframework.data.domain.Sort.Direction.DESC));

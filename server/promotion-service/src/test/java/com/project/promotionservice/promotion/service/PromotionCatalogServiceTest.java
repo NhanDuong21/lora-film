@@ -14,6 +14,7 @@ import com.project.promotionservice.promotion.enums.CampaignApprovalStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.mapper.PromotionMapper;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
@@ -39,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -199,6 +201,30 @@ class PromotionCatalogServiceTest {
     }
 
     @Test
+    void updatePreservesAutomationOnlyOwnership() {
+        Instant now = Instant.now();
+        Promotion existing = promotion(
+                PromotionType.VOUCHER, "Automation benefit", "AUTOMATION",
+                now.minusSeconds(3600), now.plusSeconds(86400));
+        existing.setPublicVisible(false);
+        existing.setDistributionMode(PromotionDistributionMode.AUTOMATION_ONLY);
+        PromotionCampaign campaign = campaign(
+                CampaignStatus.DRAFT, CampaignApprovalStatus.DRAFT,
+                now.minusSeconds(7200), now.plusSeconds(172800));
+        when(promotionRepository.findByPublicIdForUpdate("promotion-1"))
+                .thenReturn(Optional.of(existing));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-1"))
+                .thenReturn(Optional.of(campaign));
+        when(promotionRepository.save(any(Promotion.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.update("promotion-1", upsert("AUTOMATION", now, null), "admin");
+
+        assertThat(existing.getDistributionMode())
+                .isEqualTo(PromotionDistributionMode.AUTOMATION_ONLY);
+    }
+
+    @Test
     void createCloneIsBlockedWhenTargetCampaignIsNotEditable() {
         Instant now = Instant.now();
         PromotionCampaign campaign = campaign(
@@ -279,6 +305,55 @@ class PromotionCatalogServiceTest {
                             .isEqualTo("50000");
                     assertThat(payload).containsEntry("deepLink", "/booking");
                 });
+    }
+
+    @Test
+    void automationOwnedBenefitCannotBeIssuedFromAdminEndpoint() {
+        Promotion coupon = couponPromotion();
+        coupon.setDistributionMode(PromotionDistributionMode.AUTOMATION_ONLY);
+        when(promotionRepository.findByPublicIdForUpdate("coupon-1"))
+                .thenReturn(Optional.of(coupon));
+
+        assertThatThrownBy(() -> service.issue(
+                "coupon-1", List.of("user-1"), "admin"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("automation playbook");
+        verifyNoInteractions(recipientValidationClient);
+        verify(walletRepository, never()).save(any(UserPromotion.class));
+    }
+
+    @Test
+    void uatAutomationRequiresTestAccountAndDoesNotPublishCustomerNotification() {
+        Promotion coupon = couponPromotion();
+        coupon.setDistributionMode(PromotionDistributionMode.AUTOMATION_ONLY);
+        PromotionCampaign campaign = campaign(
+                CampaignStatus.ACTIVE, CampaignApprovalStatus.APPROVED,
+                Instant.parse("2026-07-01T00:00:00Z"),
+                Instant.parse("2026-09-01T00:00:00Z"));
+        campaign.setLegalStatus(com.project.promotionservice.promotion.enums.LegalStatus.PASSED);
+        campaign.setKillSwitch(false);
+        campaign.setTestData(true);
+        when(walletRepository.findByIssuanceKey("uat-key")).thenReturn(Optional.empty());
+        when(promotionRepository.findByPublicIdForUpdate("coupon-1"))
+                .thenReturn(Optional.of(coupon));
+        when(campaignRepository.findByPublicIdAndDeletedAtIsNull("campaign-1"))
+                .thenReturn(Optional.of(campaign));
+        when(walletRepository.findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
+                "42", "coupon-1")).thenReturn(Optional.empty());
+        when(walletRepository.save(any(UserPromotion.class))).thenAnswer(invocation -> {
+            UserPromotion grant = invocation.getArgument(0);
+            grant.setPublicId("uat-wallet");
+            return grant;
+        });
+
+        var result = service.issueFromAutomation(
+                "coupon-1", "42", "uat-key", "run-1", "member-1", 14);
+
+        assertThat(result.issued()).isTrue();
+        verify(recipientValidationClient).requireAllActive(List.of("42"), true);
+        verify(eventService, never()).record(
+                eq("USER_PROMOTION"), eq("uat-wallet"),
+                eq("VOUCHER_GRANTED"), any(), eq("SYSTEM"));
     }
 
     @Test

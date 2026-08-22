@@ -101,6 +101,8 @@ CREATE TABLE users
     -- ==========================
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
+    is_test_account BOOLEAN NOT NULL DEFAULT FALSE,
+
     created_at TIMESTAMP NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
 

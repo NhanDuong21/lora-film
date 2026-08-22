@@ -82,6 +82,7 @@ const labels = {
   ROLLBACKED: "Đã thu hồi",
   PENDING_APPROVAL: "Chờ người khác phê duyệt",
   AUDIENCE_READY: "Đã chọn danh sách người nhận",
+  COMPLETED_NO_AUDIENCE: "Hoàn tất · Không có khách phù hợp",
   ISSUING: "Đang cấp ưu đãi",
   PARTIAL_SUCCESS: "Hoàn tất một phần",
   REVIEW_REQUIRED: "Cần kiểm tra bất thường",
@@ -107,14 +108,16 @@ const promotionTabs = [
   {
     key: "private-voucher",
     type: "VOUCHER",
+    distributionModes: ["ASSIGNED_WALLET", "AUTOMATION_ONLY"],
     label: "Voucher cấp vào ví",
-    description: "Chọn khách hàng và cấp voucher trực tiếp vào ví.",
+    description: "Voucher do nhân viên hoặc luồng tự động cấp trực tiếp vào ví.",
     icon: Gift,
     privateOnly: true,
   },
   {
     key: "coupon",
     type: "COUPON",
+    distributionModes: ["PERSONAL_CODE"],
     label: "Mã ưu đãi cá nhân",
     description: "Chọn khách hàng và gửi mã riêng để dùng khi thanh toán.",
     icon: Tag,
@@ -560,7 +563,8 @@ export default function AdminPromotionCenterPage() {
           adminPromotionService.searchPromotions({
             keyword: query || undefined,
             status: status || undefined,
-            type: selectedTab.type,
+            distributionMode: selectedTab.distributionModes.join(","),
+            testData: showTestData ? undefined : false,
             campaignPublicId: campaignFilter || undefined,
             page,
             size: 12,
@@ -569,16 +573,7 @@ export default function AdminPromotionCenterPage() {
           campaignOptions.length ? Promise.resolve() : loadCampaignOptions(),
         ]);
         const result = pageData(promotionResult);
-        setPromotions(
-          selectedTab.privateOnly
-            ? {
-                ...result,
-                content: (result.content || []).filter(
-                  (promotion) => !promotion.publicVisible,
-                ),
-              }
-            : result,
-        );
+        setPromotions(result);
       }
     } catch (error) {
       setMessage({ kind: "error", text: errorText(error) });
@@ -591,8 +586,8 @@ export default function AdminPromotionCenterPage() {
     loadCampaignOptions,
     page,
     query,
-    selectedTab.type,
-    selectedTab.privateOnly,
+    selectedTab.distributionModes,
+    showTestData,
     sort,
     status,
     view,
@@ -891,7 +886,7 @@ export default function AdminPromotionCenterPage() {
           </div>
         )}
 
-        {["tasks", "campaigns"].includes(view) && (
+        {["tasks", "campaigns", "promotions"].includes(view) && (
           <label className="mb-4 inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-400">
             <input
               type="checkbox"
@@ -1595,7 +1590,7 @@ function AutomationHub({ playbooks = [], runs = [], loading, onOpen, onOpenRun }
               <article key={runItem.publicId} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4 last:border-b-0">
                 <div>
                   <p className="font-bold text-white">{runItem.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p>
-                  <p className="mt-1 text-xs text-zinc-500">{dateTime(runItem.completedAt || runItem.startedAt)} · phiên bản {runItem.playbookVersion} · phê duyệt bởi {runItem.authorizedByDisplayName || "Chưa xác định"}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{dateTime(runItem.completedAt || runItem.startedAt)} · {automationTriggerSourceLabels[runItem.triggerSource] || runItem.triggerSource || "Chưa rõ nguồn"} · phiên bản {runItem.playbookVersion} · phê duyệt bởi {runItem.authorizedByDisplayName || "Chưa xác định"}</p>
                   <p className="mt-1 text-xs text-zinc-400">{runItem.audienceCount || 0} khách được xét · {runItem.issuedCount || 0} đã cấp · {runItem.excludedCount ?? runItem.skippedCount ?? 0} bị loại · {runItem.failedCount || 0} lỗi</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -2017,6 +2012,11 @@ function PromotionTable({
           >
             <td className="max-w-xs px-4 py-4">
               <p className="font-bold text-white">{row.name}</p>
+              {row.testData && (
+                <span className="mt-2 inline-flex rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-black text-violet-300">
+                  UAT · Không gửi khách thật
+                </span>
+              )}
               <p className="mt-2 text-xs font-black text-emerald-400">
                 {voucherDiscountSummary(row)}
               </p>
@@ -2032,14 +2032,18 @@ function PromotionTable({
             </td>
             <td className="px-4 py-4">
               <p className="text-xs font-bold text-white">
-                {row.promotionType === "COUPON"
-                  ? "Gửi mã riêng"
-                  : "Cấp vào ví khách hàng"}
+                {row.distributionMode === "AUTOMATION_ONLY"
+                  ? "Được cấp tự động vào ví"
+                  : row.distributionMode === "PERSONAL_CODE"
+                    ? "Gửi mã riêng"
+                    : "Cấp vào ví khách hàng"}
               </p>
               <p className="mt-1 max-w-xs text-[11px] leading-5 text-zinc-500">
-                {row.promotionType === "COUPON"
-                  ? "Khách nhận mã trong thông báo và nhập khi thanh toán."
-                  : "Chỉ khách được chọn mới thấy voucher trong ví."}
+                {row.distributionMode === "AUTOMATION_ONLY"
+                  ? "Nguồn: luồng tự động. Không hỗ trợ cấp thủ công."
+                  : row.distributionMode === "PERSONAL_CODE"
+                    ? "Khách nhận mã trong thông báo và nhập khi thanh toán."
+                    : "Chỉ khách được chọn mới thấy voucher trong ví."}
               </p>
             </td>
             <td className="px-4 py-4 text-xs leading-5 text-zinc-400">
@@ -2056,7 +2060,7 @@ function PromotionTable({
                 <button
                   type="button"
                   onClick={() => onIssue(row)}
-                  disabled={busy || !["ACTIVE", "SCHEDULED"].includes(campaignDetails.get(row.campaignPublicId)?.status)}
+                  disabled={busy || row.distributionMode === "AUTOMATION_ONLY" || !["ACTIVE", "SCHEDULED"].includes(campaignDetails.get(row.campaignPublicId)?.status)}
                   className={`${buttonClass} h-10 bg-orange-500 text-white hover:bg-orange-600`}
                 >
                   {row.promotionType === "COUPON" ? (
@@ -2064,9 +2068,13 @@ function PromotionTable({
                   ) : (
                     <Users className="h-4 w-4" />
                   )}
-                  {row.promotionType === "COUPON"
-                    ? "Gửi mã cho khách hàng"
-                    : "Cấp cho khách hàng"}
+                  {row.distributionMode === "AUTOMATION_ONLY"
+                    ? "Chỉ cấp qua luồng tự động"
+                    : row.testData
+                      ? "Gửi cho tài khoản kiểm thử"
+                      : row.distributionMode === "PERSONAL_CODE"
+                        ? "Gửi mã cho khách hàng"
+                        : "Cấp cho khách hàng"}
                 </button>
                 <div className="flex gap-3 text-[11px] font-bold">
                   <button type="button" onClick={() => onDetail(row)} className="text-zinc-500 hover:text-white">
@@ -2248,7 +2256,9 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
     : "Chưa tải";
   const actualStatus = effectivePromotionStatus(promotion, campaign);
   const customerDelivery =
-    promotion.promotionType === "AUTO"
+    promotion.distributionMode === "AUTOMATION_ONLY"
+      ? "Luồng tự động cấp trực tiếp vào ví; không hỗ trợ cấp thủ công"
+      : promotion.promotionType === "AUTO"
       ? "Hệ thống tự giảm khi khách thanh toán"
       : promotion.promotionType === "COUPON"
         ? "Nhân viên gửi mã riêng cho khách được chọn"
@@ -2257,6 +2267,7 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
           : "Nhân viên cấp voucher vào ví khách được chọn";
   const canIssue =
     promotion.promotionType !== "AUTO" &&
+    promotion.distributionMode !== "AUTOMATION_ONLY" &&
     !promotion.publicVisible &&
     ["ACTIVE", "SCHEDULED"].includes(campaign?.status);
 
@@ -2494,9 +2505,11 @@ function PromotionDetailModal({ record, campaigns, onClose, onEdit, onIssue }) {
               className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-600`}
             >
               <Users className="h-4 w-4" />{" "}
-              {promotion.promotionType === "COUPON"
-                ? "Gửi mã cho khách hàng"
-                : "Cấp cho khách hàng"}
+              {promotion.testData
+                ? "Gửi cho tài khoản kiểm thử"
+                : promotion.promotionType === "COUPON"
+                  ? "Gửi mã cho khách hàng"
+                  : "Cấp cho khách hàng"}
             </button>
           )}
         </div>
@@ -2581,6 +2594,13 @@ function PlaybookModal({
             BENEFIT_QUOTA: "hạn mức quyền lợi",
           })[record.effectiveQuota.limitingFactor] || "giới hạn hiệu lực",
         };
+  const playbookIssued = Number(record.effectiveQuota?.playbookIssued ?? record.entitlements?.issued ?? 0);
+  const campaignIssued = record.effectiveQuota?.campaignIssued == null
+    ? null
+    : Number(record.effectiveQuota.campaignIssued);
+  const issuedBeforeThisPlaybook = campaignIssued == null
+    ? null
+    : Math.max(0, campaignIssued - playbookIssued);
 
   useEffect(() => {
     let active = true;
@@ -2670,8 +2690,14 @@ function PlaybookModal({
 
         {effectiveQuota && (
           <div className="rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-4 text-sm text-sky-100">
-            Giới hạn hiệu lực dự kiến: <b>tối đa {Number(effectiveQuota.value).toLocaleString("vi-VN")} lượt/tháng</b> · bị giới hạn bởi {effectiveQuota.reason}.
+            <b>Còn có thể cấp {Number(effectiveQuota.value).toLocaleString("vi-VN")} lượt trong tháng này</b> · bị giới hạn bởi {effectiveQuota.reason}.
             {unitCost > 0 && <span className="mt-1 block text-xs text-sky-300">Chi phí tối đa mỗi lượt: {money(unitCost)}.</span>}
+            {campaignIssued != null && (
+              <span className="mt-1 block text-xs text-sky-300">
+                Luồng này đã cấp {playbookIssued.toLocaleString("vi-VN")} lượt · toàn chương trình đã ghi nhận {campaignIssued.toLocaleString("vi-VN")} lượt
+                {issuedBeforeThisPlaybook > 0 ? ` (${issuedBeforeThisPlaybook.toLocaleString("vi-VN")} lượt đã được cấp trước đó)` : ""}.
+              </span>
+            )}
           </div>
         )}
 
@@ -2681,12 +2707,14 @@ function PlaybookModal({
           <DetailCard label="Ngân sách tháng" value={money(record.budgetLimit)} />
           <DetailCard label="Còn lại trong tháng" value={money(record.budgetRemaining ?? record.budgetLimit)} />
           <DetailCard label="Đã cấp vào ví" value={record.entitlements?.issued || 0} />
+          <DetailCard label="Toàn chương trình đã ghi nhận" value={campaignIssued ?? "Chưa xác định"} />
           <DetailCard label="Chưa sử dụng" value={record.entitlements?.unredeemed || 0} />
           <DetailCard label="Đang giữ trong đơn" value={record.entitlements?.reserved || 0} />
           <DetailCard label="Đã sử dụng" value={record.entitlements?.used || 0} />
           <DetailCard label="Đã hết hạn/thu hồi" value={record.entitlements?.expiredOrRevoked || 0} />
           <DetailCard label="Đã cam kết trong ví" value={money(record.entitlements?.walletIssuedCommitted)} />
           <DetailCard label="Số lượt tối đa" value={record.quotaLimit || "Chưa đặt"} />
+          <DetailCard label="Còn có thể cấp trong tháng" value={effectiveQuota?.value ?? "Chưa xác định"} />
         </div>
         <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">
           Nếu thay chương trình, quyền lợi, phạm vi, ngân sách hoặc số lượt tối đa, bản phê duyệt hiện tại sẽ hết hiệu lực và phải gửi lại cho một người khác duyệt.
@@ -2735,6 +2763,15 @@ const automationReasonLabels = {
   SOURCE_BOOKING_REFUNDED_REVOKED: "Đã thu hồi vì booking nguồn được hoàn",
 };
 
+const automationTriggerSourceLabels = {
+  SCHEDULE: "Theo lịch",
+  ADMIN_RUN_NOW: "Admin chạy ngay",
+  BOOKING_EVENT: "Sự kiện booking",
+  RETRY: "Thử lại",
+  IDEMPOTENT_REPLAY: "Phát lại an toàn",
+  LEGACY_UNKNOWN: "Nguồn cũ chưa ghi nhận",
+};
+
 function AutomationRunModal({ record, onClose }) {
   const [detail, setDetail] = useState(record);
   const [state, setState] = useState({ loading: true, error: "" });
@@ -2767,6 +2804,7 @@ function AutomationRunModal({ record, onClose }) {
               <div>
                 <p className="font-black text-white">{detail.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p>
                 <p className="mt-1 text-xs text-zinc-400">{dateTime(detail.completedAt || detail.startedAt)} · thực hiện bởi {detail.runActorDisplayName || "Hệ thống tự động"}</p>
+                <p className="mt-1 text-xs text-zinc-500">Nguồn khởi chạy: {automationTriggerSourceLabels[detail.triggerSource] || detail.triggerSource || "Chưa rõ"}</p>
                 <p className="mt-1 text-xs text-zinc-500">Phê duyệt bởi {detail.authorizedByDisplayName || "Chưa xác định"}</p>
               </div>
               <StatusBadge value={detail.status} />
@@ -2789,7 +2827,12 @@ function AutomationRunModal({ record, onClose }) {
                 </div>
               </div>
             )}
-            <div className="overflow-x-auto rounded-lg border border-zinc-800">
+            {(detail.members || []).length === 0 ? (
+              <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/30 p-8 text-center">
+                <p className="text-sm font-black text-zinc-300">Không có thành viên nào đủ điều kiện trong lần chạy này.</p>
+                <p className="mt-2 text-xs leading-5 text-zinc-500">Không phát sinh quyền lợi hoặc chi phí.</p>
+              </div>
+            ) : <div className="overflow-x-auto rounded-lg border border-zinc-800">
               <table className="min-w-[760px] w-full text-left text-xs">
                 <thead className="bg-zinc-900/80 text-zinc-500"><tr><th className="px-3 py-2">Khách hàng</th><th className="px-3 py-2">Kết quả</th><th className="px-3 py-2">Lý do</th><th className="px-3 py-2">Quyền lợi trong ví</th><th className="px-3 py-2 text-right">Cam kết</th></tr></thead>
                 <tbody className="divide-y divide-zinc-800">
@@ -2804,7 +2847,7 @@ function AutomationRunModal({ record, onClose }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
             <details className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
               <summary className="cursor-pointer text-xs font-black text-zinc-400">Xem trạng thái kỹ thuật</summary>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -3137,6 +3180,8 @@ function CampaignDetailModal({
   const automationRun = detail.automation?.latestRun;
   const entitlements = detail.automation?.entitlements;
   const automatedDistribution = automationPlaybooks.length > 0;
+  const legacyApproval = detail.compliancePolicyVersion === "legacy-pre-2026-08"
+    || String(detail.complianceReason || "").includes("ADMIN_DIRECT_APPROVAL");
 
   return (
     <ModalShell title={"Chiến dịch · " + detail.name} icon={CalendarClock} onClose={onClose}>
@@ -3231,7 +3276,9 @@ function CampaignDetailModal({
               </div>
             )}
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-zinc-500">Vì sao chương trình chưa thể phát hành?</p>
+              <p className="text-xs font-black uppercase tracking-wide text-zinc-500">
+                {detail.blockedReasons?.length ? "Vì sao chương trình chưa thể phát hành?" : "Trạng thái vận hành"}
+              </p>
               {detail.blockedReasons?.length ? (
                 <ul className="mt-3 space-y-2 text-sm text-amber-200">
                   {detail.blockedReasons.map((reason) => (
@@ -3239,7 +3286,7 @@ function CampaignDetailModal({
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-sm text-emerald-300">Không còn điều kiện nào đang ngăn chương trình hoạt động.</p>
+                <p className="mt-3 text-sm text-emerald-300">Chương trình đang hoạt động bình thường.</p>
               )}
             </div>
             <div className="rounded-lg border border-red-500/20 bg-red-500/[0.05] p-4 text-xs leading-5 text-zinc-300">
@@ -3279,7 +3326,9 @@ function CampaignDetailModal({
                   <StatusBadge value={promotion.status} />
                 </div>
                 <p className="mt-3 text-xs leading-5 text-zinc-400">
-                  {promotion.promotionType === "AUTO"
+                  {promotion.distributionMode === "AUTOMATION_ONLY"
+                    ? "Luồng tự động xét điều kiện và cấp trực tiếp quyền lợi vào ví; nhân viên không thể cấp thủ công."
+                    : promotion.promotionType === "AUTO"
                     ? "Hệ thống tự áp dụng khi khách thanh toán."
                     : promotion.promotionType === "COUPON"
                       ? "Cần gửi mã riêng cho khách hàng sau khi chương trình phát hành."
@@ -3291,13 +3340,13 @@ function CampaignDetailModal({
                   <span>{automatedDistribution ? <>Đã cấp vào ví: <b className="text-white">{entitlements?.issued || 0}</b> · Chưa dùng: <b className="text-white">{entitlements?.unredeemed || 0}</b> · Đang giữ: <b className="text-white">{entitlements?.reserved || 0}</b> · Đã dùng: <b className="text-white">{entitlements?.used || 0}</b></> : <>Đã sử dụng: <b className="text-white">{promotion.redemptionCount || 0}</b></>}</span>
                   {automatedDistribution ? (
                     <button type="button" onClick={() => setActiveTab("Ngân sách & hạn mức")} className={`${buttonClass} border border-zinc-700 text-zinc-300`}>Xem các lượt đã cấp</button>
-                  ) : ["VOUCHER", "COUPON"].includes(promotion.promotionType) && !promotion.publicVisible && ["ACTIVE", "SCHEDULED"].includes(detail.status) && (
+                  ) : promotion.distributionMode !== "AUTOMATION_ONLY" && ["VOUCHER", "COUPON"].includes(promotion.promotionType) && !promotion.publicVisible && ["ACTIVE", "SCHEDULED"].includes(detail.status) && (
                     <button
                       type="button"
                       onClick={() => onIssue(promotion)}
                       className={`${buttonClass} bg-orange-500 text-white`}
                     >
-                      {promotion.promotionType === "COUPON" ? "Gửi mã cho khách hàng" : "Cấp cho khách hàng"}
+                      {promotion.testData ? "Gửi cho tài khoản kiểm thử" : promotion.promotionType === "COUPON" ? "Gửi mã cho khách hàng" : "Cấp cho khách hàng"}
                     </button>
                   )}
                 </div>
@@ -3318,7 +3367,9 @@ function CampaignDetailModal({
               <article key={promotion.publicId} className="rounded-lg border border-zinc-800 p-4">
                 <p className="font-bold text-white">{promotion.name}</p>
                 <p className="mt-2">
-                  {promotion.promotionType === "AUTO"
+                  {promotion.distributionMode === "AUTOMATION_ONLY"
+                    ? "Luồng tự động xác định người nhận và cấp quyền lợi vào ví."
+                    : promotion.promotionType === "AUTO"
                     ? "Hệ thống tự xét cho mọi khách đủ điều kiện; khách không cần nhận hoặc nhập mã."
                     : promotion.promotionType === "COUPON"
                       ? "Chỉ khách đã được cấp coupon mới có thể sử dụng mã."
@@ -3345,9 +3396,20 @@ function CampaignDetailModal({
               <DetailCard label="Tuân thủ" value={labels[detail.complianceStatus] || detail.complianceStatus} />
               <DetailCard label="Yêu cầu thông báo pháp lý" value={detail.legalNotificationRequired ? "Có" : "Không"} />
               <DetailCard label={detail.legalNotificationRequired ? "Tham chiếu pháp lý" : "Mã hồ sơ kiểm tra"} value={detail.legalNotificationRef || "Chưa có"} />
-              <DetailCard label="Chính sách áp dụng" value={detail.compliancePolicyVersion || "Chưa đánh giá"} />
+              <DetailCard label="Chính sách áp dụng" value={legacyApproval ? "Quy trình quản trị cũ" : detail.compliancePolicyVersion || "Chưa đánh giá"} />
             </div>
-            {detail.complianceReason && <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">{detail.complianceReason}</p>}
+            {legacyApproval ? (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">
+                <b className="text-zinc-200">Được phê duyệt theo quy trình quản trị cũ.</b> Chương trình được phát hành trước khi chính sách maker–checker có hiệu lực. Mọi thay đổi mới sẽ yêu cầu gửi phê duyệt lại.
+              </div>
+            ) : detail.complianceReason && <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs leading-5 text-zinc-400">{detail.complianceReason}</p>}
+            {legacyApproval && (
+              <details className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-3 text-xs text-zinc-500">
+                <summary className="cursor-pointer font-black">Xem trạng thái kỹ thuật</summary>
+                <p className="mt-2 font-mono">Policy: {detail.compliancePolicyVersion}</p>
+                {String(detail.complianceReason || "").includes("ADMIN_DIRECT_APPROVAL") && <p className="mt-1 font-mono">Approval mode: ADMIN_DIRECT_APPROVAL</p>}
+              </details>
+            )}
             <HistoryList history={history} />
           </div>
         ) : (
@@ -3380,11 +3442,19 @@ function HistoryList({ history }) {
       {history.map((item) => (
         <div key={item.publicId || item.approvedAt} className="p-3 text-xs">
           <div className="flex justify-between gap-3"><b className="text-white">{labels[item.action] || item.action}</b><span className="text-zinc-600">{dateTime(item.approvedAt)}</span></div>
-          <p className="mt-1 text-zinc-400">{item.comment || "Không có ghi chú"}</p>
+          <p className="mt-1 text-zinc-400">{legacyHistoryComment(item.comment)}</p>
         </div>
       ))}
     </div>
   );
+}
+
+function legacyHistoryComment(comment) {
+  if (!comment) return "Không có ghi chú";
+  if (comment.includes("ADMIN_DIRECT_APPROVAL") || comment.includes("legacy-pre-2026-08")) {
+    return "Được phê duyệt theo quy trình quản trị cũ. Mọi thay đổi mới sẽ yêu cầu gửi phê duyệt lại.";
+  }
+  return comment;
 }
 
 function Field({ label, children, wide = false, required = false, hint = "" }) {
@@ -5317,7 +5387,10 @@ function IssueModal({ promotion, busy, onClose, onIssue }) {
   const [step, setStep] = useState("select");
   const [result, setResult] = useState(null);
   const isCoupon = promotion.promotionType === "COUPON";
-  const issueVerb = isCoupon ? "Gửi mã" : "Cấp voucher";
+  const testOnly = Boolean(promotion.testData);
+  const issueVerb = testOnly
+    ? "Gửi cho tài khoản kiểm thử"
+    : isCoupon ? "Gửi mã" : "Cấp voucher";
 
   useEffect(() => {
     let active = true;
@@ -5328,6 +5401,7 @@ function IssueModal({ promotion, busy, onClose, onIssue }) {
         const response = await getCustomers({
           keyword: query || undefined,
           status: "ACTIVE",
+          testAccount: testOnly || undefined,
           page: 0,
           size: 20,
           sort: "joinedAt,desc",
@@ -5349,7 +5423,7 @@ function IssueModal({ promotion, busy, onClose, onIssue }) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, testOnly]);
 
   const toggleCustomer = (customer) => {
     const id = customerRecipientId(customer);
@@ -5412,9 +5486,11 @@ function IssueModal({ promotion, busy, onClose, onIssue }) {
           <div className="mb-4 flex items-start gap-2 border-l-2 border-amber-500 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-5 text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              Mỗi đợt có thể chọn tối đa 1.000 khách hàng. {isCoupon
-                ? "Mỗi khách sẽ nhận một mã riêng qua thông báo trong tài khoản."
-                : "Voucher sẽ được thêm trực tiếp vào ví ưu đãi của từng khách."}
+              {testOnly
+                ? "Dữ liệu UAT chỉ được cấp cho tài khoản đã đánh dấu kiểm thử và không phát thông báo production."
+                : <>Mỗi đợt có thể chọn tối đa 1.000 khách hàng. {isCoupon
+                    ? "Mỗi khách sẽ nhận một mã riêng qua thông báo trong tài khoản."
+                    : "Voucher sẽ được thêm trực tiếp vào ví ưu đãi của từng khách."}</>}
             </span>
           </div>
           {step === "confirm" ? (
@@ -5546,7 +5622,9 @@ function IssueModal({ promotion, busy, onClose, onIssue }) {
                   </div>
                 ) : customers.length === 0 ? (
                   <div className="flex h-56 items-center justify-center text-xs text-zinc-600">
-                    Không tìm thấy khách hàng hoạt động.
+                    {testOnly
+                      ? "Không có tài khoản kiểm thử hoạt động phù hợp. Không thể phát hành benefit UAT."
+                      : "Không tìm thấy khách hàng hoạt động."}
                   </div>
                 ) : (
                   customers.map((customer) => {

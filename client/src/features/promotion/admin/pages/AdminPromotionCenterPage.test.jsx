@@ -282,7 +282,10 @@ describe("AdminPromotionCenterPage", () => {
 
     await waitFor(() =>
       expect(adminPromotionService.searchPromotions).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "VOUCHER" }),
+        expect.objectContaining({
+          distributionMode: "ASSIGNED_WALLET,AUTOMATION_ONLY",
+          testData: false,
+        }),
       ),
     );
     expect(screen.getByRole("button", { name: /Voucher cấp vào ví/ })).toBeInTheDocument();

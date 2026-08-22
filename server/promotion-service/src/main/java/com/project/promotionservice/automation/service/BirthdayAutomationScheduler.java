@@ -25,7 +25,8 @@ public class BirthdayAutomationScheduler {
     public void runDaily() {
         try {
             PromotionAutomationRun run = service.createBirthdayRun(
-                    LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")));
+                    LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")),
+                    "SYSTEM", "SCHEDULE");
             if (run.getStatus() == AutomationRunStatus.AUDIENCE_READY) {
                 service.createIssueJob(run.getPublicId(), 200);
             }

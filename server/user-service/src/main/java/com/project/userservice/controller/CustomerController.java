@@ -30,8 +30,10 @@ public class CustomerController {
     public ResponseEntity<ApiResponse<Page<CustomerResponse>>> search(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) UserStatus status,
+            @RequestParam(required = false) Boolean testAccount,
             Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success("Customers retrieved", service.search(keyword, status, pageable)));
+        return ResponseEntity.ok(ApiResponse.success("Customers retrieved",
+                service.search(keyword, status, testAccount, pageable)));
     }
 
     @GetMapping("/counter-search")

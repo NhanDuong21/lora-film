@@ -17,6 +17,6 @@ public class CustomerMapper {
         return new CustomerResponse(profile.getId(), user.getAccountId(), profile.getCustomerCode(),
                 user.getFullName(), user.getEmail(), PiiAccess.maskPhone(user.getPhoneNumber()), user.getGender(),
                 user.getBirthday(), user.getAvatarUrl(), user.getStatus(), profile.getJoinedAt(),
-                profile.getNote());
+                profile.getNote(), Boolean.TRUE.equals(user.getTestAccount()));
     }
 }

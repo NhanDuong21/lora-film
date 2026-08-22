@@ -3,6 +3,7 @@ package com.project.promotionservice.promotion.entity;
 import com.project.promotionservice.common.entity.BaseAuditableEntity;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -40,6 +41,10 @@ public class Promotion extends BaseAuditableEntity {
 
     @Column(name = "is_public", nullable = false)
     private Boolean publicVisible = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "distribution_mode", length = 30, nullable = false)
+    private PromotionDistributionMode distributionMode = PromotionDistributionMode.ASSIGNED_WALLET;
 
     @Column(name = "priority", nullable = false)
     private Integer priority = 100;
@@ -133,6 +138,14 @@ public class Promotion extends BaseAuditableEntity {
 
     public void setPublicVisible(Boolean publicVisible) {
         this.publicVisible = publicVisible;
+    }
+
+    public PromotionDistributionMode getDistributionMode() {
+        return distributionMode;
+    }
+
+    public void setDistributionMode(PromotionDistributionMode distributionMode) {
+        this.distributionMode = distributionMode;
     }
 
     public Integer getPriority() {

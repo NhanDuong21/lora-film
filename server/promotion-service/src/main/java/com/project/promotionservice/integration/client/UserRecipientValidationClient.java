@@ -28,6 +28,11 @@ public class UserRecipientValidationClient {
     }
 
     public void requireAllActive(List<String> userPublicIds) {
+        requireAllActive(userPublicIds, false);
+    }
+
+    public void requireAllActive(
+            List<String> userPublicIds, boolean testAccountsOnly) {
         List<Long> requested;
         try {
             requested = userPublicIds.stream().map(Long::valueOf).toList();
@@ -40,7 +45,9 @@ public class UserRecipientValidationClient {
         try {
             JsonNode response = restClient.post()
                     .uri("/api/v1/internal/users/validate-active")
-                    .body(java.util.Map.of("accountIds", requested))
+                    .body(java.util.Map.of(
+                            "accountIds", requested,
+                            "testAccountsOnly", testAccountsOnly))
                     .retrieve()
                     .body(JsonNode.class);
             JsonNode data = response == null ? null : response.path("data");
@@ -54,8 +61,12 @@ public class UserRecipientValidationClient {
                     .toList();
             if (!missing.isEmpty()) {
                 throw new BusinessException(
-                        "PROMOTION_RECIPIENT_NOT_FOUND",
-                        "Promotion recipients are missing or inactive: " + missing,
+                        testAccountsOnly
+                                ? "PROMOTION_TEST_RECIPIENT_REQUIRED"
+                                : "PROMOTION_RECIPIENT_NOT_FOUND",
+                        testAccountsOnly
+                                ? "UAT benefits can only be issued to active test accounts: " + missing
+                                : "Promotion recipients are missing or inactive: " + missing,
                         HttpStatus.BAD_REQUEST);
             }
         } catch (BusinessException exception) {

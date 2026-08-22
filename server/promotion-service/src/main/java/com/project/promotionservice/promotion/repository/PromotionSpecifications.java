@@ -1,8 +1,10 @@
 package com.project.promotionservice.promotion.repository;
 
 import com.project.promotionservice.promotion.entity.Promotion;
+import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.Collection;
@@ -28,6 +30,19 @@ public final class PromotionSpecifications {
             Boolean publicVisible,
             String keyword,
             Collection<String> accessibleCampaignIds) {
+        return filter(campaignPublicId, type, status, publicVisible, keyword,
+                null, null, accessibleCampaignIds);
+    }
+
+    public static Specification<Promotion> filter(
+            String campaignPublicId,
+            PromotionType type,
+            PromotionStatus status,
+            Boolean publicVisible,
+            String keyword,
+            Collection<PromotionDistributionMode> distributionModes,
+            Boolean testData,
+            Collection<String> accessibleCampaignIds) {
         return (root, query, cb) -> {
             var predicate = cb.isNull(root.get("deletedAt"));
             if (accessibleCampaignIds != null) {
@@ -49,6 +64,22 @@ public final class PromotionSpecifications {
             if (publicVisible != null) {
                 predicate = cb.and(predicate,
                         cb.equal(root.get("publicVisible"), publicVisible));
+            }
+            if (distributionModes != null && !distributionModes.isEmpty()) {
+                predicate = cb.and(predicate,
+                        root.get("distributionMode").in(distributionModes));
+            }
+            if (testData != null) {
+                var campaign = query.subquery(String.class);
+                var campaignRoot = campaign.from(PromotionCampaign.class);
+                campaign.select(campaignRoot.get("publicId"))
+                        .where(cb.and(
+                                cb.equal(campaignRoot.get("publicId"),
+                                        root.get("campaignPublicId")),
+                                cb.equal(campaignRoot.get("testData"), testData),
+                                cb.isNull(campaignRoot.get("deletedAt"))));
+                predicate = cb.and(predicate,
+                        root.get("campaignPublicId").in(campaign));
             }
             if (keyword != null && !keyword.isBlank()) {
                 String pattern = "%" + keyword.trim().toLowerCase() + "%";

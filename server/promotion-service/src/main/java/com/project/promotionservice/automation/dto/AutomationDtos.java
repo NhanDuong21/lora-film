@@ -39,7 +39,8 @@ public final class AutomationDtos {
 
     public record QuotaView(
             BigDecimal estimatedUnitCost, Integer requestedQuota,
-            Integer playbookQuotaRemaining, Integer budgetQuotaRemaining,
+            Integer playbookIssued, Integer playbookQuotaRemaining,
+            Integer budgetQuotaRemaining, Integer campaignIssued,
             Integer campaignQuotaRemaining, Integer promotionQuotaRemaining,
             Integer effectiveQuota, String limitingFactor) { }
 
@@ -58,7 +59,8 @@ public final class AutomationDtos {
 
     public record RunView(
             String publicId, String playbookCode, Integer playbookVersion,
-            String triggerType, String triggerReference, String runActor,
+            String triggerType, String triggerReference, String triggerSource,
+            String runActor,
             String runActorDisplayName, String authorizedBy,
             String authorizedByDisplayName, String idempotencyKey,
             AutomationRunStatus status,

@@ -20,6 +20,7 @@ import com.project.promotionservice.promotion.enums.LegalStatus;
 import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 import com.project.promotionservice.promotion.enums.UserPromotionStatus;
 import com.project.promotionservice.promotion.mapper.PromotionMapper;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
@@ -129,7 +130,12 @@ public class PromotionCatalogService {
         PromotionCampaign campaign = requireCampaign(request.campaignPublicId());
         campaignPolicy.requireEditable(campaign);
         validate(request, campaign, promotion);
+        boolean automationOwned = mapper.effectiveDistributionMode(promotion)
+                == PromotionDistributionMode.AUTOMATION_ONLY;
         mapper.apply(promotion, request);
+        if (automationOwned) {
+            promotion.setDistributionMode(PromotionDistributionMode.AUTOMATION_ONLY);
+        }
         promotion.setUpdatedBy(actor);
         Promotion saved = promotionRepository.save(promotion);
         PromotionResponse response = mapper.response(saved, campaign);
@@ -154,7 +160,7 @@ public class PromotionCatalogService {
             String keyword,
             Pageable pageable) {
         return search(campaignPublicId, type, status, publicVisible, keyword,
-                pageable, null);
+                null, null, pageable, null);
     }
 
     @Transactional(readOnly = true)
@@ -164,12 +170,14 @@ public class PromotionCatalogService {
             PromotionStatus status,
             Boolean publicVisible,
             String keyword,
+            Collection<PromotionDistributionMode> distributionModes,
+            Boolean testData,
             Pageable pageable,
             Collection<String> accessibleCampaignIds) {
         Page<Promotion> result = promotionRepository.findAll(
                 PromotionSpecifications.filter(
                         campaignPublicId, type, status, publicVisible, keyword,
-                        accessibleCampaignIds),
+                        distributionModes, testData, accessibleCampaignIds),
                 pageable);
         return promotionPage(result);
     }
@@ -275,6 +283,8 @@ public class PromotionCatalogService {
                     HttpStatus.BAD_REQUEST);
         }
         PromotionCampaign campaign = requireRuntimeActive(promotion, Instant.now());
+        recipientValidationClient.requireAllActive(
+                List.of(userPublicId), Boolean.TRUE.equals(campaign.getTestData()));
         UserPromotion existing = walletRepository
                 .findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
                         userPublicId, promotionPublicId)
@@ -302,6 +312,13 @@ public class PromotionCatalogService {
                     "PROMOTION_NOT_ISSUABLE", "AUTO promotion does not use the customer wallet",
                     HttpStatus.BAD_REQUEST);
         }
+        if (mapper.effectiveDistributionMode(promotion)
+                == PromotionDistributionMode.AUTOMATION_ONLY) {
+            throw new BusinessException(
+                    "PROMOTION_AUTOMATION_ONLY",
+                    "This benefit is owned by an automation playbook and cannot be issued manually",
+                    HttpStatus.CONFLICT);
+        }
         PromotionCampaign campaign = requireRuntimeActive(promotion, Instant.now());
         LinkedHashSet<String> uniqueUsers = new LinkedHashSet<>();
         for (String user : users) {
@@ -314,7 +331,8 @@ public class PromotionCatalogService {
                     "PROMOTION_ISSUE_EMPTY", "At least one customer is required",
                     HttpStatus.BAD_REQUEST);
         }
-        recipientValidationClient.requireAllActive(List.copyOf(uniqueUsers));
+        recipientValidationClient.requireAllActive(
+                List.copyOf(uniqueUsers), Boolean.TRUE.equals(campaign.getTestData()));
         List<WalletPromotionResponse> issued = new ArrayList<>();
         int alreadyOwned = 0;
         int issuedCount = 0;
@@ -332,7 +350,9 @@ public class PromotionCatalogService {
             }
             UserPromotion grant = createGrant(promotion, campaign, user, actor);
             issuedCount++;
-            recordVoucherGranted(grant, promotion, campaign, user, actor);
+            if (!Boolean.TRUE.equals(campaign.getTestData())) {
+                recordVoucherGranted(grant, promotion, campaign, user, actor);
+            }
             if (promotion.getPromotionType() != PromotionType.COUPON) {
                 issued.add(mapper.wallet(grant, promotion, campaign));
             }
@@ -365,6 +385,8 @@ public class PromotionCatalogService {
                     HttpStatus.BAD_REQUEST);
         }
         PromotionCampaign campaign = requireRuntimeActive(promotion, Instant.now());
+        recipientValidationClient.requireAllActive(
+                List.of(userPublicId), Boolean.TRUE.equals(campaign.getTestData()));
         if (promotion.getMaxRedemptions() != null
                 && walletRepository.countByPromotionPublicIdAndDeletedAtIsNull(
                         promotionPublicId) >= promotion.getMaxRedemptions()) {
@@ -402,7 +424,9 @@ public class PromotionCatalogService {
             eventService.record("USER_PROMOTION", saved.getPublicId(),
                     "PROMOTION_ADDED_TO_WALLET", mapper.wallet(saved, promotion, campaign), "SYSTEM");
         }
-        recordVoucherGranted(saved, promotion, campaign, userPublicId, "SYSTEM");
+        if (!Boolean.TRUE.equals(campaign.getTestData())) {
+            recordVoucherGranted(saved, promotion, campaign, userPublicId, "SYSTEM");
+        }
         return new AutomationIssueOutcome(true, false, saved.getPublicId(), true);
     }
 
