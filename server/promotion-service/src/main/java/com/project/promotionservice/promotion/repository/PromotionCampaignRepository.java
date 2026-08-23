@@ -64,12 +64,32 @@ public interface PromotionCampaignRepository extends JpaRepository<PromotionCamp
             @Param("status") com.project.promotionservice.promotion.enums.CampaignStatus status);
 
     @Query("""
+            select coalesce(sum(c.budgetReserved), 0)
+            from PromotionCampaign c
+            where c.status = :status and c.testData = :testData
+              and c.deletedAt is null
+            """)
+    BigDecimal sumBudgetReservedByStatusAndTestData(
+            @Param("status") com.project.promotionservice.promotion.enums.CampaignStatus status,
+            @Param("testData") Boolean testData);
+
+    @Query("""
             select coalesce(sum(c.budgetUsed + c.budgetReserved), 0)
             from PromotionCampaign c
             where c.status = :status and c.deletedAt is null
             """)
     BigDecimal sumBudgetExposureByStatus(
             @Param("status") com.project.promotionservice.promotion.enums.CampaignStatus status);
+
+    @Query("""
+            select coalesce(sum(c.budgetUsed + c.budgetReserved), 0)
+            from PromotionCampaign c
+            where c.status = :status and c.testData = :testData
+              and c.deletedAt is null
+            """)
+    BigDecimal sumBudgetExposureByStatusAndTestData(
+            @Param("status") com.project.promotionservice.promotion.enums.CampaignStatus status,
+            @Param("testData") Boolean testData);
 
     @Query("""
             select count(c)
@@ -82,4 +102,18 @@ public interface PromotionCampaignRepository extends JpaRepository<PromotionCamp
     long countCampaignsAtExposureThreshold(
             @Param("status") com.project.promotionservice.promotion.enums.CampaignStatus status,
             @Param("threshold") BigDecimal threshold);
+
+    @Query("""
+            select count(c)
+            from PromotionCampaign c
+            where c.status = :status
+              and c.testData = :testData
+              and c.deletedAt is null
+              and c.budgetAmount > 0
+              and (c.budgetUsed + c.budgetReserved) >= (c.budgetAmount * :threshold)
+            """)
+    long countCampaignsAtExposureThresholdAndTestData(
+            @Param("status") com.project.promotionservice.promotion.enums.CampaignStatus status,
+            @Param("threshold") BigDecimal threshold,
+            @Param("testData") Boolean testData);
 }

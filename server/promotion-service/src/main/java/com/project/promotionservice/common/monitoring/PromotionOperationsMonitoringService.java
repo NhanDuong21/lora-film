@@ -71,12 +71,17 @@ public class PromotionOperationsMonitoringService {
 
     @Transactional(readOnly = true)
     public PromotionOperationsSummary getSummary() {
-        return collect();
+        return getSummary(false);
+    }
+
+    @Transactional(readOnly = true)
+    public PromotionOperationsSummary getSummary(boolean includeTestData) {
+        return collect(includeTestData);
     }
 
     @Transactional(readOnly = true)
     public void refreshMetricsAndAlerts() {
-        PromotionOperationsSummary summary = collect();
+        PromotionOperationsSummary summary = collect(false);
         Set<String> currentAlerts = Set.copyOf(summary.activeAlerts());
         Set<String> activated = new HashSet<>(currentAlerts);
         activated.removeAll(previousAlerts);
@@ -91,26 +96,42 @@ public class PromotionOperationsMonitoringService {
         previousAlerts = currentAlerts;
     }
 
-    private PromotionOperationsSummary collect() {
+    private PromotionOperationsSummary collect(boolean includeTestData) {
         Instant now = databaseTimeProvider.now();
-        long expirationBacklog = reservationRepository.countExpirationBacklog(
-                ReservationStatus.ACTIVE, now);
-        long oldestExpiredAgeSeconds = reservationRepository
-                .findOldestExpiredAt(ReservationStatus.ACTIVE, now)
+        long expirationBacklog = includeTestData
+                ? reservationRepository.countExpirationBacklog(
+                        ReservationStatus.ACTIVE, now)
+                : reservationRepository.countExpirationBacklogByTestData(
+                        ReservationStatus.ACTIVE, now, false);
+        long oldestExpiredAgeSeconds = (includeTestData
+                ? reservationRepository.findOldestExpiredAt(
+                        ReservationStatus.ACTIVE, now)
+                : reservationRepository.findOldestExpiredAtByTestData(
+                        ReservationStatus.ACTIVE, now, false))
                 .map(oldest -> Math.max(0, Duration.between(oldest, now).getSeconds()))
                 .orElse(0L);
-        long reversalCount = adjustmentRepository
-                .countDistinctReservationsByType(REVERSE_ADJUSTMENT);
-        long reversalsLastHour = adjustmentRepository
-                .countDistinctReservationsByTypeSince(
-                        REVERSE_ADJUSTMENT, now.minus(Duration.ofHours(1)));
-        BigDecimal budgetReserved = nonNull(campaignRepository
-                .sumBudgetReservedByStatus(CampaignStatus.ACTIVE));
-        BigDecimal budgetExposure = nonNull(campaignRepository
-                .sumBudgetExposureByStatus(CampaignStatus.ACTIVE));
-        long campaignsAtThreshold = campaignRepository
-                .countCampaignsAtExposureThreshold(
-                        CampaignStatus.ACTIVE, budgetExposureAlertRatio);
+        long reversalCount = includeTestData
+                ? adjustmentRepository.countDistinctReservationsByType(REVERSE_ADJUSTMENT)
+                : adjustmentRepository.countDistinctReservationsByTypeAndTestData(
+                        REVERSE_ADJUSTMENT, false);
+        long reversalsLastHour = includeTestData
+                ? adjustmentRepository.countDistinctReservationsByTypeSince(
+                        REVERSE_ADJUSTMENT, now.minus(Duration.ofHours(1)))
+                : adjustmentRepository.countDistinctReservationsByTypeSinceAndTestData(
+                        REVERSE_ADJUSTMENT, now.minus(Duration.ofHours(1)), false);
+        BigDecimal budgetReserved = nonNull(includeTestData
+                ? campaignRepository.sumBudgetReservedByStatus(CampaignStatus.ACTIVE)
+                : campaignRepository.sumBudgetReservedByStatusAndTestData(
+                        CampaignStatus.ACTIVE, false));
+        BigDecimal budgetExposure = nonNull(includeTestData
+                ? campaignRepository.sumBudgetExposureByStatus(CampaignStatus.ACTIVE)
+                : campaignRepository.sumBudgetExposureByStatusAndTestData(
+                        CampaignStatus.ACTIVE, false));
+        long campaignsAtThreshold = includeTestData
+                ? campaignRepository.countCampaignsAtExposureThreshold(
+                        CampaignStatus.ACTIVE, budgetExposureAlertRatio)
+                : campaignRepository.countCampaignsAtExposureThresholdAndTestData(
+                        CampaignStatus.ACTIVE, budgetExposureAlertRatio, false);
 
         List<String> alerts = new ArrayList<>();
         if (expirationBacklog >= expirationBacklogAlertThreshold) {
@@ -135,7 +156,7 @@ public class PromotionOperationsMonitoringService {
                 campaignsAtThreshold,
                 List.copyOf(alerts),
                 now);
-        metricsManager.updateOperations(summary);
+        if (!includeTestData) metricsManager.updateOperations(summary);
         return summary;
     }
 

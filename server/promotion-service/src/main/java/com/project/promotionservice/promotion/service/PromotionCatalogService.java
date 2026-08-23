@@ -350,7 +350,7 @@ public class PromotionCatalogService {
             }
             UserPromotion grant = createGrant(promotion, campaign, user, actor);
             issuedCount++;
-            if (!Boolean.TRUE.equals(campaign.getTestData())) {
+            if (!Boolean.TRUE.equals(grant.getTestData())) {
                 recordVoucherGranted(grant, promotion, campaign, user, actor);
             }
             if (promotion.getPromotionType() != PromotionType.COUPON) {
@@ -417,6 +417,9 @@ public class PromotionCatalogService {
         grant.setAutomationRunPublicId(runPublicId);
         grant.setAudienceMemberPublicId(audienceMemberPublicId);
         grant.setIssuanceKey(issuanceKey);
+        boolean testData = isTestData(campaign, userPublicId);
+        grant.setTestData(testData);
+        grant.setEnvironmentTag(environmentTag(campaign, testData));
         grant.setCreatedBy("SYSTEM");
         grant.setUpdatedBy("SYSTEM");
         UserPromotion saved = walletRepository.save(grant);
@@ -424,7 +427,7 @@ public class PromotionCatalogService {
             eventService.record("USER_PROMOTION", saved.getPublicId(),
                     "PROMOTION_ADDED_TO_WALLET", mapper.wallet(saved, promotion, campaign), "SYSTEM");
         }
-        if (!Boolean.TRUE.equals(campaign.getTestData())) {
+        if (!Boolean.TRUE.equals(saved.getTestData())) {
             recordVoucherGranted(saved, promotion, campaign, userPublicId, "SYSTEM");
         }
         return new AutomationIssueOutcome(true, false, saved.getPublicId(), true);
@@ -698,6 +701,9 @@ public class PromotionCatalogService {
         wallet.setValidFrom(promotion.getValidFrom());
         wallet.setValidTo(promotion.getValidTo());
         wallet.setMaxUsage(promotion.getMaxRedemptionsPerUser());
+        boolean testData = isTestData(campaign, userPublicId);
+        wallet.setTestData(testData);
+        wallet.setEnvironmentTag(environmentTag(campaign, testData));
         wallet.setCreatedBy(actor);
         wallet.setUpdatedBy(actor);
         UserPromotion saved = walletRepository.save(wallet);
@@ -707,6 +713,24 @@ public class PromotionCatalogService {
                     mapper.wallet(saved, promotion, campaign), actor);
         }
         return saved;
+    }
+
+    private String environmentTag(PromotionCampaign campaign) {
+        if (campaign.getEnvironmentTag() != null
+                && !campaign.getEnvironmentTag().isBlank()) {
+            return campaign.getEnvironmentTag().trim().toUpperCase(Locale.ROOT);
+        }
+        return Boolean.TRUE.equals(campaign.getTestData()) ? "UAT" : "BUSINESS";
+    }
+
+    private String environmentTag(PromotionCampaign campaign, boolean testData) {
+        return testData ? "UAT" : environmentTag(campaign);
+    }
+
+    private boolean isTestData(
+            PromotionCampaign campaign, String userPublicId) {
+        return Boolean.TRUE.equals(campaign.getTestData())
+                || recipientValidationClient.isActiveTestAccount(userPublicId);
     }
 
     private void recordVoucherGranted(

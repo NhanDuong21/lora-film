@@ -30,6 +30,10 @@ public class PromotionRedemption extends BaseAuditableEntity {
 
     @Column(name = "campaign_public_id", length = 36, nullable = false)
     private String campaignPublicId;
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "promotion_type", length = 30, nullable = false)
@@ -127,6 +131,10 @@ public class PromotionRedemption extends BaseAuditableEntity {
 
     public String getCampaignPublicId() { return campaignPublicId; }
     public void setCampaignPublicId(String value) { this.campaignPublicId = value; }
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
     public PromotionType getPromotionType() { return promotionType; }
     public void setPromotionType(PromotionType value) { this.promotionType = value; }
     public String getPromotionCode() { return promotionCode; }

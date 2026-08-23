@@ -27,6 +27,10 @@ public class PromotionPlaybook extends BaseAuditableEntity {
     private String campaignPublicId;
     @Column(name = "promotion_public_id", length = 36)
     private String promotionPublicId;
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
     @Column(name = "config_json", nullable = false, columnDefinition = "json")
     private String configJson = "{}";
     @Column(name = "scope_json", nullable = false, columnDefinition = "json")
@@ -76,6 +80,10 @@ public class PromotionPlaybook extends BaseAuditableEntity {
     public void setCampaignPublicId(String value) { campaignPublicId = value; }
     public String getPromotionPublicId() { return promotionPublicId; }
     public void setPromotionPublicId(String value) { promotionPublicId = value; }
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
     public String getConfigJson() { return configJson; }
     public void setConfigJson(String value) { configJson = value; }
     public String getScopeJson() { return scopeJson; }

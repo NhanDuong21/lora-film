@@ -16,6 +16,10 @@ public class PromotionAutomationRun extends BaseAuditableEntity {
     private String campaignPublicId;
     @Column(name = "promotion_public_id", nullable = false, length = 36)
     private String promotionPublicId;
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
     @Column(name = "playbook_code", nullable = false, length = 80)
     private String playbookCode;
     @Column(name = "playbook_version", nullable = false)
@@ -66,6 +70,10 @@ public class PromotionAutomationRun extends BaseAuditableEntity {
     public void setCampaignPublicId(String value) { campaignPublicId = value; }
     public String getPromotionPublicId() { return promotionPublicId; }
     public void setPromotionPublicId(String value) { promotionPublicId = value; }
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
     public String getPlaybookCode() { return playbookCode; }
     public void setPlaybookCode(String value) { playbookCode = value; }
     public Integer getPlaybookVersion() { return playbookVersion; }

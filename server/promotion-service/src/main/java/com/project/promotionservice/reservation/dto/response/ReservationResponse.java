@@ -18,6 +18,8 @@ public class ReservationResponse {
     private String orderPublicId;
     private String paymentPublicId;
     private String userPublicId;
+    private Boolean testData;
+    private String environmentTag;
     private BigDecimal originalAmount;
     private BigDecimal discountAmount;
     private BigDecimal finalAmount;
@@ -91,6 +93,11 @@ public class ReservationResponse {
     public void setUserPublicId(String userPublicId) {
         this.userPublicId = userPublicId;
     }
+
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
 
     public BigDecimal getOriginalAmount() {
         return originalAmount;

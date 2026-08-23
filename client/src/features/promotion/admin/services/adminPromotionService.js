@@ -42,11 +42,11 @@ const adminPromotionService = {
     `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment, legalNotificationRef }
   )),
 
-  getPromotionOpportunities: async () => unwrap(await apiClient.get(
-    '/api/admin/promotion-opportunities'
+  getPromotionOpportunities: async (includeTestData = false) => unwrap(await apiClient.get(
+    '/api/admin/promotion-opportunities', { params: { includeTestData } }
   )),
-  getPromotionPlaybooks: async () => unwrap(await apiClient.get(
-    '/api/admin/promotion-playbooks'
+  getPromotionPlaybooks: async (includeTestData = false) => unwrap(await apiClient.get(
+    '/api/admin/promotion-playbooks', { params: { includeTestData } }
   )),
   updatePromotionPlaybook: async (id, payload) => unwrap(await apiClient.put(
     `/api/admin/promotion-playbooks/${id}`, payload
@@ -63,11 +63,11 @@ const adminPromotionService = {
   runPromotionPlaybook: async id => unwrap(await apiClient.post(
     `/api/admin/promotion-playbooks/${id}/run`
   )),
-  getPromotionRuns: async () => unwrap(await apiClient.get(
-    '/api/admin/promotion-runs'
+  getPromotionRuns: async (includeTestData = false) => unwrap(await apiClient.get(
+    '/api/admin/promotion-runs', { params: { includeTestData } }
   )),
-  getPromotionRun: async id => unwrap(await apiClient.get(
-    `/api/admin/promotion-runs/${id}`
+  getPromotionRun: async (id, includeTestData = false) => unwrap(await apiClient.get(
+    `/api/admin/promotion-runs/${id}`, { params: { includeTestData } }
   )),
   createPromotionIssueJob: async (id, batchSize = 200) => unwrap(await apiClient.post(
     `/api/admin/promotion-runs/${id}/issue-jobs`, { batchSize }
@@ -89,10 +89,21 @@ const adminPromotionService = {
 
   searchReservations: async (params = {}) =>
     unwrap(await apiClient.get('/api/admin/reservations', { params: cleanParams(params) })),
-  getPromotionMonitoring: async () =>
-    unwrap(await apiClient.get('/api/admin/promotion-monitoring/summary')),
+  getPromotionMonitoring: async (includeTestData = false) =>
+    unwrap(await apiClient.get('/api/admin/promotion-monitoring/summary', {
+      params: { includeTestData },
+    })),
   searchPromotionOperations: async (params = {}) =>
     unwrap(await apiClient.get('/api/admin/promotion-operations/search', { params: cleanParams(params) })),
+  getPromotionAnomalyCases: async (includeTestData = false) => unwrap(await apiClient.get(
+    '/api/admin/promotion-anomaly-cases', { params: { includeTestData } }
+  )),
+  assignPromotionAnomaly: async id => unwrap(await apiClient.post(
+    `/api/admin/promotion-anomaly-cases/${id}/assign`
+  )),
+  resolvePromotionAnomaly: async (id, resolution, resolutionNote) => unwrap(await apiClient.post(
+    `/api/admin/promotion-anomaly-cases/${id}/resolve`, { resolution, resolutionNote }
+  )),
   getBookingMonitoring: async () =>
     unwrap(await apiClient.get('/api/admin/monitoring/summary')),
 };

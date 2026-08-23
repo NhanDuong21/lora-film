@@ -20,6 +20,10 @@ public class PromotionAudienceMember extends BaseAuditableEntity {
     private String runPublicId;
     @Column(name = "customer_public_id", nullable = false, length = 36)
     private String customerPublicId;
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
     @Column(name = "issuance_key", nullable = false, length = 180)
     private String issuanceKey;
     @Enumerated(EnumType.STRING)
@@ -42,6 +46,10 @@ public class PromotionAudienceMember extends BaseAuditableEntity {
     public void setRunPublicId(String value) { runPublicId = value; }
     public String getCustomerPublicId() { return customerPublicId; }
     public void setCustomerPublicId(String value) { customerPublicId = value; }
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
     public String getIssuanceKey() { return issuanceKey; }
     public void setIssuanceKey(String value) { issuanceKey = value; }
     public AudienceMemberStatus getStatus() { return status; }

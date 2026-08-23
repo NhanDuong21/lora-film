@@ -26,6 +26,7 @@ public final class AutomationDtos {
             String publicId, Integer version, String code, String name,
             String description, PlaybookStatus status, Integer playbookVersion,
             String triggerType, String campaignPublicId, String promotionPublicId,
+            Boolean testData, String environmentTag,
             String configJson, String scopeJson, BigDecimal budgetLimit,
             Integer quotaLimit, String submittedBy, Instant submittedAt,
             String approvedBy, Instant approvedAt, String configHash,
@@ -63,6 +64,7 @@ public final class AutomationDtos {
             String runActor,
             String runActorDisplayName, String authorizedBy,
             String authorizedByDisplayName, String idempotencyKey,
+            Boolean testData, String environmentTag,
             AutomationRunStatus status,
             Integer audienceCount, Integer issuedCount, Integer skippedCount,
             Integer failedCount, Instant startedAt, Instant completedAt,
@@ -70,14 +72,30 @@ public final class AutomationDtos {
             String configSnapshotJson, String snapshotPublicId,
             Integer eligibleCount, Integer excludedCount, Integer retryingCount,
             BigDecimal committedCost, List<ReasonCount> exclusionReasons,
-            List<AudienceMemberView> members, List<IssueJobView> jobs) { }
+            Long openAnomalyCount, List<AudienceMemberView> members,
+            List<IssueJobView> jobs) { }
 
     public record ReasonCount(String reasonCode, Long count) { }
 
     public record AudienceMemberView(
             String publicId, String customerPublicId, AudienceMemberStatus status,
             String reasonCode, Integer attemptCount, String walletPublicId,
-            String issuanceKey, BigDecimal committedAmount) { }
+            String issuanceKey, BigDecimal committedAmount,
+            Boolean testData, String environmentTag) { }
+
+    public record AnomalyCaseView(
+            String publicId, String runPublicId, String audienceMemberPublicId,
+            String playbookCode, String businessName, String customerPublicId,
+            String sourceReference, String summary, String technicalReasonCode,
+            BigDecimal costAmount, Boolean testData, String environmentTag,
+            AnomalyCaseStatus status, String assignedTo,
+            String assignedToDisplayName, AnomalyResolution resolution,
+            String resolutionNote, String resolvedBy,
+            String resolvedByDisplayName, Instant resolvedAt, Instant createdAt) { }
+
+    public record ResolveAnomalyRequest(
+            @NotNull AnomalyResolution resolution,
+            @NotBlank @Size(max = 1000) String resolutionNote) { }
 
     public record CampaignAutomationView(
             List<PlaybookView> playbooks, RunView latestRun,

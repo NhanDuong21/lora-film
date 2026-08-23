@@ -59,5 +59,17 @@ public interface PromotionReservationService {
             int size,
             Set<String> allowedCampaignPublicIds);
 
+    PagedResponse<ReservationResponse> history(
+            ReservationStatus status,
+            String userPublicId,
+            String bookingPublicId,
+            String orderPublicId,
+            Instant from,
+            Instant to,
+            int page,
+            int size,
+            Set<String> allowedCampaignPublicIds,
+            boolean includeTestData);
+
     int expireDueReservations(String actor);
 }

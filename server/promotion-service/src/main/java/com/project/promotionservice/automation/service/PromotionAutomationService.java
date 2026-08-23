@@ -53,6 +53,7 @@ public class PromotionAutomationService {
     private final PromotionCatalogService catalogService;
     private final PromotionAutomationBudgetService budgetService;
     private final AuditTrailService auditTrailService;
+    private final PromotionAnomalyCaseService anomalyCaseService;
 
     public PromotionAutomationService(
             PromotionPlaybookRepository playbookRepository,
@@ -70,7 +71,8 @@ public class PromotionAutomationService {
             ObjectMapper objectMapper,
             PromotionCatalogService catalogService,
             PromotionAutomationBudgetService budgetService,
-            AuditTrailService auditTrailService) {
+            AuditTrailService auditTrailService,
+            PromotionAnomalyCaseService anomalyCaseService) {
         this.playbookRepository = playbookRepository;
         this.runRepository = runRepository;
         this.snapshotRepository = snapshotRepository;
@@ -87,12 +89,20 @@ public class PromotionAutomationService {
         this.catalogService = catalogService;
         this.budgetService = budgetService;
         this.auditTrailService = auditTrailService;
+        this.anomalyCaseService = anomalyCaseService;
     }
 
     @Transactional(readOnly = true)
     public List<PlaybookView> playbooks() {
+        return playbooks(true);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlaybookView> playbooks(boolean includeTestData) {
         return playbookRepository.findAllByDeletedAtIsNullOrderByCodeAsc()
-                .stream().map(this::view).toList();
+                .stream().filter(item -> includeTestData
+                        || !Boolean.TRUE.equals(item.getTestData()))
+                .map(this::view).toList();
     }
 
     @Transactional
@@ -123,6 +133,7 @@ public class PromotionAutomationService {
         playbook.setTriggerType(request.triggerType().toUpperCase(Locale.ROOT));
         playbook.setCampaignPublicId(blankToNull(request.campaignPublicId()));
         playbook.setPromotionPublicId(blankToNull(request.promotionPublicId()));
+        applyEnvironmentMarker(playbook);
         playbook.setConfigJson(request.configJson());
         playbook.setScopeJson(request.scopeJson());
         playbook.setBudgetLimit(request.budgetLimit());
@@ -260,13 +271,30 @@ public class PromotionAutomationService {
 
     @Transactional(readOnly = true)
     public List<RunView> recentRuns() {
+        return recentRuns(true);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RunView> recentRuns(boolean includeTestData) {
         return runRepository.findTop20ByOrderByCreatedAtDesc()
-                .stream().map(this::view).toList();
+                .stream().filter(item -> includeTestData
+                        || !Boolean.TRUE.equals(item.getTestData()))
+                .map(this::view).toList();
     }
 
     @Transactional(readOnly = true)
     public RunView run(String publicId) {
-        return view(requireRun(publicId));
+        return run(publicId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public RunView run(String publicId, boolean includeTestData) {
+        PromotionAutomationRun run = requireRun(publicId);
+        if (!includeTestData && Boolean.TRUE.equals(run.getTestData())) {
+            throw new BusinessException("AUTOMATION_RUN_NOT_FOUND",
+                    "Automation run was not found", HttpStatus.NOT_FOUND);
+        }
+        return view(run);
     }
 
     @Transactional(readOnly = true)
@@ -362,6 +390,10 @@ public class PromotionAutomationService {
             }
             member.setUpdatedBy("SYSTEM");
             memberRepository.save(member);
+            if (outcome
+                    == PromotionCatalogService.AutomationCompensationOutcome.ANOMALY_REVIEW_REQUIRED) {
+                anomalyCaseService.open(run, member);
+            }
             run.setStatus(outcome
                     == PromotionCatalogService.AutomationCompensationOutcome.ANOMALY_REVIEW_REQUIRED
                     ? AutomationRunStatus.REVIEW_REQUIRED
@@ -403,6 +435,11 @@ public class PromotionAutomationService {
 
     @Transactional(readOnly = true)
     public List<OpportunityView> opportunities() {
+        return opportunities(true);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OpportunityView> opportunities(boolean includeTestData) {
         List<OpportunityView> result = new ArrayList<>();
         PromotionPlaybook birthday = playbookRepository.findByCodeAndDeletedAtIsNull(BIRTHDAY)
                 .orElse(null);
@@ -422,6 +459,7 @@ public class PromotionAutomationService {
         }
         int recipients = count == null ? 0 : Math.max(0, count - value(excluded));
         if (birthday != null && birthday.getStatus() == PlaybookStatus.ACTIVE
+                && (includeTestData || !Boolean.TRUE.equals(birthday.getTestData()))
                 && recipients > 0) {
             Promotion promotion = promotionRepository
                     .findByPublicIdAndDeletedAtIsNull(birthday.getPromotionPublicId())
@@ -453,6 +491,9 @@ public class PromotionAutomationService {
         run.setPlaybookPublicId(playbook.getPublicId());
         run.setCampaignPublicId(playbook.getCampaignPublicId());
         run.setPromotionPublicId(playbook.getPromotionPublicId());
+        run.setTestData(Boolean.TRUE.equals(references.campaign().getTestData()));
+        run.setEnvironmentTag(normalizeEnvironment(
+                references.campaign().getEnvironmentTag(), run.getTestData()));
         run.setPlaybookCode(playbook.getCode());
         run.setPlaybookVersion(playbook.getPlaybookVersion());
         run.setApprovedConfigHash(playbook.getApprovedConfigHash());
@@ -475,6 +516,8 @@ public class PromotionAutomationService {
         LinkedHashSet<String> uniqueCustomers = new LinkedHashSet<>(customerIds);
         PromotionAudienceSnapshot snapshot = new PromotionAudienceSnapshot();
         snapshot.setRunPublicId(run.getPublicId());
+        snapshot.setTestData(run.getTestData());
+        snapshot.setEnvironmentTag(run.getEnvironmentTag());
         snapshot.setAudienceRuleSnapshotJson(playbook.getConfigJson());
         snapshot.setTotalCount(uniqueCustomers.size());
         snapshot.setCapturedAt(Instant.now());
@@ -491,6 +534,8 @@ public class PromotionAutomationService {
             member.setSnapshotPublicId(snapshot.getPublicId());
             member.setRunPublicId(run.getPublicId());
             member.setCustomerPublicId(customer);
+            member.setTestData(run.getTestData());
+            member.setEnvironmentTag(run.getEnvironmentTag());
             member.setIssuanceKey(issuanceKey);
             if (walletRepository.findByIssuanceKey(issuanceKey).isPresent()) {
                 member.setStatus(AudienceMemberStatus.SKIPPED_ALREADY_GRANTED);
@@ -554,6 +599,21 @@ public class PromotionAutomationService {
         return new ConfiguredReferences(campaign, promotion);
     }
 
+    private void applyEnvironmentMarker(PromotionPlaybook playbook) {
+        PromotionCampaign campaign = playbook.getCampaignPublicId() == null
+                ? null : campaignRepository.findByPublicIdAndDeletedAtIsNull(
+                        playbook.getCampaignPublicId()).orElse(null);
+        boolean testData = campaign != null && Boolean.TRUE.equals(campaign.getTestData());
+        playbook.setTestData(testData);
+        playbook.setEnvironmentTag(normalizeEnvironment(
+                campaign == null ? null : campaign.getEnvironmentTag(), testData));
+    }
+
+    private String normalizeEnvironment(String value, Boolean testData) {
+        if (value != null && !value.isBlank()) return value.trim().toUpperCase(Locale.ROOT);
+        return Boolean.TRUE.equals(testData) ? "UAT" : "BUSINESS";
+    }
+
     private PromotionPlaybook activeByCode(String code) {
         PromotionPlaybook playbook = playbookRepository.findByCodeAndStatusAndDeletedAtIsNull(
                         code, PlaybookStatus.ACTIVE)
@@ -590,6 +650,7 @@ public class PromotionAutomationService {
                 item.getName(), item.getDescription(), item.getStatus(),
                 item.getPlaybookVersion(), item.getTriggerType(),
                 item.getCampaignPublicId(), item.getPromotionPublicId(),
+                item.getTestData(), item.getEnvironmentTag(),
                 item.getConfigJson(), item.getScopeJson(), item.getBudgetLimit(),
                 item.getQuotaLimit(), item.getSubmittedBy(), item.getSubmittedAt(),
                 item.getApprovedBy(), item.getApprovedAt(), item.getConfigHash(),
@@ -626,6 +687,7 @@ public class PromotionAutomationService {
                 item.getTriggerReference(), item.getTriggerSource(), item.getRunActor(),
                 actorDirectory.displayName(item.getRunActor()), item.getAuthorizedBy(),
                 actorDirectory.displayName(item.getAuthorizedBy()), item.getIdempotencyKey(),
+                item.getTestData(), item.getEnvironmentTag(),
                 item.getStatus(), item.getAudienceCount(),
                 item.getIssuedCount(), item.getSkippedCount(), item.getFailedCount(),
                 item.getStartedAt(), item.getCompletedAt(), item.getApprovedConfigHash(),
@@ -637,11 +699,13 @@ public class PromotionAutomationService {
                 reasons.entrySet().stream()
                         .map(entry -> new ReasonCount(entry.getKey(), entry.getValue()))
                         .toList(),
+                anomalyCaseService.countOpen(item.getPublicId()),
                 members.stream().map(member -> new AudienceMemberView(
                         member.getPublicId(), member.getCustomerPublicId(), member.getStatus(),
                         member.getReasonCode(), member.getAttemptCount(),
                         member.getWalletPublicId(), member.getIssuanceKey(),
-                        money(member.getBudgetReservedAmount()))).toList(),
+                        money(member.getBudgetReservedAmount()),
+                        member.getTestData(), member.getEnvironmentTag())).toList(),
                 jobs);
     }
 
@@ -823,6 +887,8 @@ public class PromotionAutomationService {
                 targetCampaign.put("maxRedemptions", campaign.getMaxRedemptions());
                 targetCampaign.put("maxRedemptionsPerUser",
                         campaign.getMaxRedemptionsPerUser());
+                targetCampaign.put("testData", Boolean.TRUE.equals(campaign.getTestData()));
+                targetCampaign.put("environmentTag", campaign.getEnvironmentTag());
                 document.put("campaign", targetCampaign);
             }
             if (promotion != null) {
@@ -948,6 +1014,8 @@ public class PromotionAutomationService {
         value.put("playbookVersion", playbook.getPlaybookVersion());
         value.put("campaignPublicId", playbook.getCampaignPublicId());
         value.put("promotionPublicId", playbook.getPromotionPublicId());
+        value.put("testData", Boolean.TRUE.equals(playbook.getTestData()));
+        value.put("environmentTag", playbook.getEnvironmentTag());
         value.put("configHash", playbook.getConfigHash());
         value.put("submittedPlaybookVersion", playbook.getSubmittedPlaybookVersion());
         value.put("submittedConfigHash", playbook.getSubmittedConfigHash());

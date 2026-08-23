@@ -66,11 +66,13 @@ public class AdminReservationController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(defaultValue = "false") boolean includeTestData,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(reservationService.history(
                 status, userPublicId, bookingPublicId, orderPublicId,
                 from, to, page, size,
                 resourceScope.isManager(principal)
-                        ? resourceScope.accessibleCampaignIds(principal) : null)));
+                        ? resourceScope.accessibleCampaignIds(principal) : null,
+                includeTestData)));
     }
 }

@@ -28,6 +28,8 @@ public record PromotionOperationsSearchResponse(
             String reasonDetail,
             String sourceReference,
             BigDecimal discountAmount,
-            Instant occurredAt) {
+            Instant occurredAt,
+            Boolean testData,
+            String environmentTag) {
     }
 }

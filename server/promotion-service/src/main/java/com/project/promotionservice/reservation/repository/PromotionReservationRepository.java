@@ -113,6 +113,18 @@ public interface PromotionReservationRepository extends
             @Param("now") Instant now);
 
     @Query("""
+            select count(reservation) from PromotionReservation reservation
+            where reservation.status = :status
+              and reservation.reservationExpiredAt <= :now
+              and reservation.testData = :testData
+              and reservation.deletedAt is null
+            """)
+    long countExpirationBacklogByTestData(
+            @Param("status") ReservationStatus status,
+            @Param("now") Instant now,
+            @Param("testData") Boolean testData);
+
+    @Query("""
             select min(reservation.reservationExpiredAt)
             from PromotionReservation reservation
             where reservation.status = :status
@@ -122,4 +134,17 @@ public interface PromotionReservationRepository extends
     Optional<Instant> findOldestExpiredAt(
             @Param("status") ReservationStatus status,
             @Param("now") Instant now);
+
+    @Query("""
+            select min(reservation.reservationExpiredAt)
+            from PromotionReservation reservation
+            where reservation.status = :status
+              and reservation.reservationExpiredAt <= :now
+              and reservation.testData = :testData
+              and reservation.deletedAt is null
+            """)
+    Optional<Instant> findOldestExpiredAtByTestData(
+            @Param("status") ReservationStatus status,
+            @Param("now") Instant now,
+            @Param("testData") Boolean testData);
 }

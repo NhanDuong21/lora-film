@@ -9,6 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/admin/promotion-monitoring")
@@ -26,9 +27,10 @@ public class AdminPromotionMonitoringController {
 
     @GetMapping("/summary")
     @Operation(summary = "Get promotion operations dashboard summary")
-    public ResponseEntity<ApiResponse<PromotionOperationsSummary>> summary() {
+    public ResponseEntity<ApiResponse<PromotionOperationsSummary>> summary(
+            @RequestParam(defaultValue = "false") boolean includeTestData) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Promotion monitoring summary retrieved successfully",
-                monitoringService.getSummary()));
+                monitoringService.getSummary(includeTestData)));
     }
 }

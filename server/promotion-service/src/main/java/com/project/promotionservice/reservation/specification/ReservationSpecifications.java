@@ -47,6 +47,12 @@ public final class ReservationSpecifications {
         };
     }
 
+    public static Specification<PromotionReservation> excludeTestData(
+            boolean includeTestData) {
+        return includeTestData ? null : (root, query, builder) ->
+                builder.isFalse(root.get("testData"));
+    }
+
     private static Specification<PromotionReservation> notDeleted() {
         return (root, query, builder) -> builder.isNull(root.get("deletedAt"));
     }

@@ -17,6 +17,10 @@ public class PromotionRedemptionAdjustment extends BaseAuditableEntity {
 
     @Column(name = "reservation_public_id", length = 36, nullable = false)
     private String reservationPublicId;
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
 
     @Column(name = "adjustment_type", length = 30, nullable = false)
     private String adjustmentType;
@@ -37,6 +41,10 @@ public class PromotionRedemptionAdjustment extends BaseAuditableEntity {
     public void setRedemptionPublicId(String value) { this.redemptionPublicId = value; }
     public String getReservationPublicId() { return reservationPublicId; }
     public void setReservationPublicId(String value) { this.reservationPublicId = value; }
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
     public String getAdjustmentType() { return adjustmentType; }
     public void setAdjustmentType(String value) { this.adjustmentType = value; }
     public BigDecimal getDiscountAmount() { return discountAmount; }

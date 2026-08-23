@@ -45,21 +45,24 @@ class PromotionOperationsMonitoringServiceTest {
     void summaryPublishesPersistentOperationalCountsAndActiveAlerts() {
         Instant now = Instant.parse("2026-08-01T10:00:00Z");
         when(databaseTimeProvider.now()).thenReturn(now);
-        when(reservationRepository.countExpirationBacklog(
-                ReservationStatus.ACTIVE, now)).thenReturn(120L);
-        when(reservationRepository.findOldestExpiredAt(
-                ReservationStatus.ACTIVE, now))
+        when(reservationRepository.countExpirationBacklogByTestData(
+                ReservationStatus.ACTIVE, now, false)).thenReturn(120L);
+        when(reservationRepository.findOldestExpiredAtByTestData(
+                ReservationStatus.ACTIVE, now, false))
                 .thenReturn(Optional.of(now.minusSeconds(180)));
-        when(adjustmentRepository.countDistinctReservationsByType("REVERSE"))
+        when(adjustmentRepository.countDistinctReservationsByTypeAndTestData(
+                "REVERSE", false))
                 .thenReturn(42L);
-        when(adjustmentRepository.countDistinctReservationsByTypeSince(
-                "REVERSE", now.minusSeconds(3600))).thenReturn(11L);
-        when(campaignRepository.sumBudgetReservedByStatus(CampaignStatus.ACTIVE))
+        when(adjustmentRepository.countDistinctReservationsByTypeSinceAndTestData(
+                "REVERSE", now.minusSeconds(3600), false)).thenReturn(11L);
+        when(campaignRepository.sumBudgetReservedByStatusAndTestData(
+                CampaignStatus.ACTIVE, false))
                 .thenReturn(new BigDecimal("150000.00"));
-        when(campaignRepository.sumBudgetExposureByStatus(CampaignStatus.ACTIVE))
+        when(campaignRepository.sumBudgetExposureByStatusAndTestData(
+                CampaignStatus.ACTIVE, false))
                 .thenReturn(new BigDecimal("900000.00"));
-        when(campaignRepository.countCampaignsAtExposureThreshold(
-                CampaignStatus.ACTIVE, new BigDecimal("0.98")))
+        when(campaignRepository.countCampaignsAtExposureThresholdAndTestData(
+                CampaignStatus.ACTIVE, new BigDecimal("0.98"), false))
                 .thenReturn(2L);
 
         PromotionOperationsSummary summary = service.getSummary();

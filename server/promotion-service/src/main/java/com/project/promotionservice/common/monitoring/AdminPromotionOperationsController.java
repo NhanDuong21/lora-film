@@ -50,6 +50,7 @@ public class AdminPromotionOperationsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @RequestParam(defaultValue = "30") @Min(1) @Max(100) int limit,
+            @RequestParam(defaultValue = "false") boolean includeTestData,
             @AuthenticationPrincipal UserPrincipal principal) {
         if (campaignPublicId != null && !campaignPublicId.isBlank()) {
             resourceScope.requireCampaignAccess(campaignPublicId, principal);
@@ -64,6 +65,6 @@ public class AdminPromotionOperationsController {
                 query, campaignPublicId, promotionPublicId, reservationPublicId,
                 bookingPublicId, paymentPublicId, customerReference,
                 releaseReasonType, status, from, to, limit,
-                accessibleCampaignIds)));
+                accessibleCampaignIds, includeTestData)));
     }
 }

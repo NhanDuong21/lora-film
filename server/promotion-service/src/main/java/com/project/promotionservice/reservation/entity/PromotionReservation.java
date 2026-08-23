@@ -30,6 +30,10 @@ public class PromotionReservation extends BaseAuditableEntity {
 
     @Column(name = "user_public_id", length = 36, nullable = false)
     private String userPublicId;
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
 
     @Column(name = "customer_phone", length = 20)
     private String customerPhone;
@@ -141,6 +145,11 @@ public class PromotionReservation extends BaseAuditableEntity {
     public void setUserPublicId(String userPublicId) {
         this.userPublicId = userPublicId;
     }
+
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
 
     public String getCustomerPhone() {
         return customerPhone;

@@ -47,6 +47,10 @@ public class UserPromotion extends BaseAuditableEntity {
 
     @Column(name = "issuance_key", length = 180, unique = true)
     private String issuanceKey;
+    @Column(name = "test_data", nullable = false)
+    private Boolean testData = false;
+    @Column(name = "environment_tag", nullable = false, length = 30)
+    private String environmentTag = "BUSINESS";
     @Column(name = "revocation_pending", nullable = false)
     private Boolean revocationPending = false;
     @Column(name = "revocation_reason", length = 100)
@@ -122,6 +126,10 @@ public class UserPromotion extends BaseAuditableEntity {
     public void setAudienceMemberPublicId(String value) { audienceMemberPublicId = value; }
     public String getIssuanceKey() { return issuanceKey; }
     public void setIssuanceKey(String value) { issuanceKey = value; }
+    public Boolean getTestData() { return testData; }
+    public void setTestData(Boolean value) { testData = value; }
+    public String getEnvironmentTag() { return environmentTag; }
+    public void setEnvironmentTag(String value) { environmentTag = value; }
     public Boolean getRevocationPending() { return revocationPending; }
     public void setRevocationPending(Boolean value) { revocationPending = value; }
     public String getRevocationReason() { return revocationReason; }

@@ -40,6 +40,12 @@ vi.mock("../services/adminPromotionService", () => ({
     getPromotionPlaybooks: vi.fn(),
     getPromotionRuns: vi.fn(),
     getPromotionRun: vi.fn(),
+    getPromotionMonitoring: vi.fn(),
+    getBookingMonitoring: vi.fn(),
+    searchPromotionOperations: vi.fn(),
+    getPromotionAnomalyCases: vi.fn(),
+    assignPromotionAnomaly: vi.fn(),
+    resolvePromotionAnomaly: vi.fn(),
   },
 }));
 
@@ -108,6 +114,26 @@ describe("AdminPromotionCenterPage", () => {
     adminPromotionService.getPromotionPlaybooks.mockResolvedValue([]);
     adminPromotionService.getPromotionRuns.mockResolvedValue([]);
     adminPromotionService.getPromotionRun.mockResolvedValue({});
+    adminPromotionService.getPromotionMonitoring.mockResolvedValue({
+      expirationBacklog: 0,
+      oldestExpiredAgeSeconds: 0,
+      reversalCount: 0,
+      reversalsLastHour: 0,
+      activeBudgetReserved: 0,
+      activeBudgetExposure: 0,
+      campaignsAtExposureThreshold: 0,
+      activeAlerts: [],
+    });
+    adminPromotionService.getBookingMonitoring.mockResolvedValue({
+      promotionReconciliationMismatch: 0,
+    });
+    adminPromotionService.searchPromotionOperations.mockResolvedValue({
+      reservations: [], redemptions: [], adjustments: [],
+      reservationTotal: 0, redemptionTotal: 0, adjustmentTotal: 0,
+    });
+    adminPromotionService.getPromotionAnomalyCases.mockResolvedValue([]);
+    adminPromotionService.assignPromotionAnomaly.mockResolvedValue({});
+    adminPromotionService.resolvePromotionAnomaly.mockResolvedValue({});
     adminCinemaService.getCinemas.mockResolvedValue(emptyPage);
   });
 
@@ -259,6 +285,113 @@ describe("AdminPromotionCenterPage", () => {
     expect(screen.getByText("100.000đ")).toBeInTheDocument();
     expect(screen.getByText("wallet-1")).toBeInTheDocument();
     expect(screen.getByText(/Đã nhận quyền lợi trong kỳ/)).toBeInTheDocument();
+  });
+
+  it("keeps UAT playbooks and runs out of operational read models until explicitly included", async () => {
+    const playbook = {
+      publicId: "playbook-uat",
+      code: "SECOND_BOOKING_INCENTIVE",
+      name: "Ưu đãi cho lần đặt vé thứ hai",
+      status: "ACTIVE",
+      testData: true,
+      environmentTag: "UAT",
+    };
+    const run = {
+      publicId: "run-uat",
+      playbookCode: "SECOND_BOOKING_INCENTIVE",
+      status: "REVIEW_REQUIRED",
+      openAnomalyCount: 1,
+      testData: true,
+      environmentTag: "UAT",
+    };
+    adminPromotionService.getPromotionPlaybooks.mockImplementation(
+      (includeTestData) => Promise.resolve(includeTestData ? [playbook] : []),
+    );
+    adminPromotionService.getPromotionRuns.mockImplementation(
+      (includeTestData) => Promise.resolve(includeTestData ? [run] : []),
+    );
+
+    render(<AdminPromotionCenterPage />);
+
+    await waitFor(() => {
+      expect(adminPromotionService.getPromotionPlaybooks).toHaveBeenCalledWith(false);
+      expect(adminPromotionService.getPromotionRuns).toHaveBeenCalledWith(false);
+    });
+    expect(screen.queryByText("Ưu đãi cho lần đặt vé thứ hai")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Hiển thị dữ liệu UAT/kiểm thử" }));
+    fireEvent.click(screen.getByRole("button", { name: "Luồng tự động" }));
+
+    expect((await screen.findAllByText("Ưu đãi cho lần đặt vé thứ hai")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("UAT · Không ảnh hưởng khách thật").length).toBeGreaterThan(0);
+    expect(adminPromotionService.getPromotionPlaybooks).toHaveBeenCalledWith(true);
+    expect(adminPromotionService.getPromotionRuns).toHaveBeenCalledWith(true);
+  });
+
+  it("closes a UAT anomaly with a persisted business conclusion and no rollback action", async () => {
+    const anomaly = {
+      publicId: "case-uat",
+      businessName: "Ưu đãi cho lần đặt vé thứ hai",
+      summary: "Booking đầu tiên đã được hoàn tiền sau khi ưu đãi cho lần đặt vé thứ hai được sử dụng.",
+      technicalReasonCode: "SOURCE_BOOKING_REFUNDED_AFTER_BENEFIT_USED",
+      customerPublicId: "customer-0009",
+      costAmount: 30000,
+      status: "OPEN",
+      testData: true,
+      environmentTag: "UAT",
+      createdAt: "2026-08-23T12:00:00Z",
+    };
+    adminPromotionService.getPromotionAnomalyCases.mockResolvedValue([anomaly]);
+
+    render(<AdminPromotionCenterPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Sự cố & đối soát" }));
+
+    expect(await screen.findByText(anomaly.summary)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /rollback|xóa ledger/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ghi kết luận & đóng" }));
+    fireEvent.click(screen.getByText("Đóng vì là dữ liệu kiểm thử"));
+    fireEvent.change(screen.getByPlaceholderText(/Ghi căn cứ và kết luận/), {
+      target: { value: "Đã hoàn tất walkthrough UAT" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu kết luận & đóng" }));
+
+    await waitFor(() => expect(
+      adminPromotionService.resolvePromotionAnomaly,
+    ).toHaveBeenCalledWith("case-uat", "TEST_DATA", "Đã hoàn tất walkthrough UAT"));
+  });
+
+  it("presents operational status and reversal reasons as business language", async () => {
+    adminPromotionService.searchPromotionOperations.mockResolvedValue({
+      reservations: [],
+      redemptions: [{
+        entryType: "REDEMPTION",
+        publicId: "redemption-1",
+        status: "ROLLBACKED",
+        reasonDetail: "PAYMENT_REVERSED: Authoritative full Payment refund result",
+        discountAmount: 6000,
+        occurredAt: "2026-08-23T12:00:00Z",
+      }],
+      adjustments: [{
+        entryType: "ADJUSTMENT",
+        publicId: "adjustment-1",
+        status: "REVERSE",
+        releaseReasonType: "PAYMENT_REVERSED",
+        discountAmount: 6000,
+        occurredAt: "2026-08-23T12:00:00Z",
+      }],
+      reservationTotal: 0,
+      redemptionTotal: 1,
+      adjustmentTotal: 1,
+    });
+
+    render(<AdminPromotionCenterPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Sự cố & đối soát" }));
+
+    expect(await screen.findByRole("heading", { name: "Bất thường cần kiểm tra" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Thanh toán đã được hoàn")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Hoàn lại")).toBeInTheDocument();
+    expect(screen.queryByText(/Authoritative full Payment refund result/)).not.toBeInTheDocument();
+    expect(screen.queryByText("REVERSE")).not.toBeInTheDocument();
   });
 
   it("starts authoring from four customer delivery choices without technical fields", async () => {

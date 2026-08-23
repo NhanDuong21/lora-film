@@ -33,15 +33,42 @@ public class UserRecipientValidationClient {
 
     public void requireAllActive(
             List<String> userPublicIds, boolean testAccountsOnly) {
-        List<Long> requested;
+        List<Long> requested = accountIds(userPublicIds);
+        Set<Long> found = activeAccountIds(requested, testAccountsOnly);
+        List<Long> missing = requested.stream()
+                .filter(id -> !found.contains(id))
+                .distinct()
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new BusinessException(
+                    testAccountsOnly
+                            ? "PROMOTION_TEST_RECIPIENT_REQUIRED"
+                            : "PROMOTION_RECIPIENT_NOT_FOUND",
+                    testAccountsOnly
+                            ? "UAT benefits can only be issued to active test accounts: " + missing
+                            : "Promotion recipients are missing or inactive: " + missing,
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    public boolean isActiveTestAccount(String userPublicId) {
+        List<Long> requested = accountIds(List.of(userPublicId));
+        return activeAccountIds(requested, true).contains(requested.getFirst());
+    }
+
+    private List<Long> accountIds(List<String> userPublicIds) {
         try {
-            requested = userPublicIds.stream().map(Long::valueOf).toList();
+            return userPublicIds.stream().map(Long::valueOf).toList();
         } catch (NumberFormatException exception) {
             throw new BusinessException(
                     "PROMOTION_RECIPIENT_INVALID",
                     "Promotion recipients must be numeric account IDs",
                     HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private Set<Long> activeAccountIds(
+            List<Long> requested, boolean testAccountsOnly) {
         try {
             JsonNode response = restClient.post()
                     .uri("/api/v1/internal/users/validate-active")
@@ -55,20 +82,7 @@ public class UserRecipientValidationClient {
             if (data != null && data.isArray()) {
                 data.forEach(item -> found.add(item.longValue()));
             }
-            List<Long> missing = requested.stream()
-                    .filter(id -> !found.contains(id))
-                    .distinct()
-                    .toList();
-            if (!missing.isEmpty()) {
-                throw new BusinessException(
-                        testAccountsOnly
-                                ? "PROMOTION_TEST_RECIPIENT_REQUIRED"
-                                : "PROMOTION_RECIPIENT_NOT_FOUND",
-                        testAccountsOnly
-                                ? "UAT benefits can only be issued to active test accounts: " + missing
-                                : "Promotion recipients are missing or inactive: " + missing,
-                        HttpStatus.BAD_REQUEST);
-            }
+            return found;
         } catch (BusinessException exception) {
             throw exception;
         } catch (RestClientException exception) {

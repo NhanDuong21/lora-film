@@ -80,8 +80,34 @@ describe('adminPromotionService', () => {
     await adminPromotionService.getBookingMonitoring();
 
     expect(apiClient.get).toHaveBeenCalledWith(
-      '/api/admin/promotion-monitoring/summary'
+      '/api/admin/promotion-monitoring/summary',
+      { params: { includeTestData: false } }
     );
     expect(apiClient.get).toHaveBeenCalledWith('/api/admin/monitoring/summary');
+  });
+
+  it('carries the UAT scope through automation, monitoring and anomaly contracts', async () => {
+    await adminPromotionService.getPromotionPlaybooks(true);
+    await adminPromotionService.getPromotionRuns(true);
+    await adminPromotionService.getPromotionRun('run-1', true);
+    await adminPromotionService.getPromotionAnomalyCases(true);
+    await adminPromotionService.resolvePromotionAnomaly('case-1', 'TEST_DATA', 'UAT walkthrough complete');
+
+    expect(apiClient.get).toHaveBeenCalledWith('/api/admin/promotion-playbooks', {
+      params: { includeTestData: true },
+    });
+    expect(apiClient.get).toHaveBeenCalledWith('/api/admin/promotion-runs', {
+      params: { includeTestData: true },
+    });
+    expect(apiClient.get).toHaveBeenCalledWith('/api/admin/promotion-runs/run-1', {
+      params: { includeTestData: true },
+    });
+    expect(apiClient.get).toHaveBeenCalledWith('/api/admin/promotion-anomaly-cases', {
+      params: { includeTestData: true },
+    });
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/admin/promotion-anomaly-cases/case-1/resolve',
+      { resolution: 'TEST_DATA', resolutionNote: 'UAT walkthrough complete' }
+    );
   });
 });

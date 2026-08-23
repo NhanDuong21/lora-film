@@ -24,10 +24,33 @@ public interface PromotionRedemptionAdjustmentRepository
             select count(distinct adjustment.reservationPublicId)
             from PromotionRedemptionAdjustment adjustment
             where adjustment.adjustmentType = :type
+              and adjustment.testData = :testData
+              and adjustment.deletedAt is null
+            """)
+    long countDistinctReservationsByTypeAndTestData(
+            @Param("type") String type, @Param("testData") Boolean testData);
+
+    @Query("""
+            select count(distinct adjustment.reservationPublicId)
+            from PromotionRedemptionAdjustment adjustment
+            where adjustment.adjustmentType = :type
               and adjustment.occurredAt >= :from
               and adjustment.deletedAt is null
             """)
     long countDistinctReservationsByTypeSince(
             @Param("type") String type,
             @Param("from") Instant from);
+
+    @Query("""
+            select count(distinct adjustment.reservationPublicId)
+            from PromotionRedemptionAdjustment adjustment
+            where adjustment.adjustmentType = :type
+              and adjustment.occurredAt >= :from
+              and adjustment.testData = :testData
+              and adjustment.deletedAt is null
+            """)
+    long countDistinctReservationsByTypeSinceAndTestData(
+            @Param("type") String type,
+            @Param("from") Instant from,
+            @Param("testData") Boolean testData);
 }

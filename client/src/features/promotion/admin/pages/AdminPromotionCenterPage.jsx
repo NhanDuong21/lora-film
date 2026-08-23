@@ -77,6 +77,7 @@ const labels = {
   CAMPAIGN_BLOCKED: "Đã chặn áp dụng mới",
   CONFIRMED: "Đã xác nhận",
   RELEASED: "Đã giải phóng",
+  REVERSE: "Hoàn lại",
   REVERSED: "Đã hoàn lại",
   RESERVED: "Đang giữ",
   ROLLBACKED: "Đã thu hồi",
@@ -85,9 +86,9 @@ const labels = {
   COMPLETED_NO_AUDIENCE: "Hoàn tất · Không có khách phù hợp",
   ISSUING: "Đang cấp ưu đãi",
   PARTIAL_SUCCESS: "Hoàn tất một phần",
-  REVIEW_REQUIRED: "Cần kiểm tra bất thường",
   NOT_REQUIRED: "Không yêu cầu",
   REVIEW_REQUIRED: "Cần kiểm tra",
+  ANOMALY_REVIEW_REQUIRED: "Cần kiểm tra thủ công",
   VERIFIED: "Đã xác minh",
   BLOCKED: "Bị chặn",
   AUTO: "Ưu đãi tự động",
@@ -207,6 +208,24 @@ const releaseReasonLabels = {
   CAMPAIGN_PAUSED: "Chiến dịch tạm dừng",
   CAMPAIGN_KILL_SWITCH: "Chiến dịch dừng khẩn cấp",
   SYSTEM_COMPENSATION: "Hệ thống bù trừ",
+  PAYMENT_REVERSED: "Thanh toán đã được hoàn",
+};
+
+const operationReasonLabels = {
+  "Reservation expired": "Lượt giữ ưu đãi đã hết thời gian",
+  RESERVATION_EXPIRED: "Lượt giữ ưu đãi đã hết thời gian",
+  PAYMENT_REVERSED: "Thanh toán đã được hoàn",
+};
+
+const operationReasonText = (item) => {
+  if (releaseReasonLabels[item.releaseReasonType]) {
+    return releaseReasonLabels[item.releaseReasonType];
+  }
+  const detail = String(item.reasonDetail || "").trim();
+  if (!detail) return "-";
+  if (operationReasonLabels[detail]) return operationReasonLabels[detail];
+  const reasonCode = detail.split(":", 1)[0].trim().toUpperCase();
+  return releaseReasonLabels[reasonCode] || operationReasonLabels[reasonCode] || detail;
 };
 
 const compactReference = (value) => {
@@ -461,6 +480,7 @@ export default function AdminPromotionCenterPage() {
   const [operations, setOperations] = useState({
     promotion: null,
     booking: null,
+    anomalyCases: [],
   });
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
@@ -489,6 +509,7 @@ export default function AdminPromotionCenterPage() {
         page: 0,
         size: 100,
         sort: "name,asc",
+        testData: showTestData ? undefined : false,
       }),
     );
     setCampaignOptions(
@@ -498,27 +519,29 @@ export default function AdminPromotionCenterPage() {
         item,
       })),
     );
-  }, []);
+  }, [showTestData]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       if (view === "operations") {
-        const [promotion, booking] = await Promise.all([
-          adminPromotionService.getPromotionMonitoring(),
+        const [promotion, booking, anomalyCases] = await Promise.all([
+          adminPromotionService.getPromotionMonitoring(showTestData),
           adminPromotionService.getBookingMonitoring(),
+          adminPromotionService.getPromotionAnomalyCases(showTestData),
         ]);
-        setOperations({ promotion, booking });
+        setOperations({ promotion, booking, anomalyCases });
       } else if (view === "tasks") {
         const [campaignResult, opportunityResult, playbookResult, runResult] = await Promise.allSettled([
           adminPromotionService.searchCampaigns({
               page: 0,
               size: 100,
               sort: "createdAt,desc",
+              testData: showTestData ? undefined : false,
           }),
-          adminPromotionService.getPromotionOpportunities?.() ?? Promise.resolve([]),
-          adminPromotionService.getPromotionPlaybooks?.() ?? Promise.resolve([]),
-          adminPromotionService.getPromotionRuns?.() ?? Promise.resolve([]),
+          adminPromotionService.getPromotionOpportunities?.(showTestData) ?? Promise.resolve([]),
+          adminPromotionService.getPromotionPlaybooks?.(showTestData) ?? Promise.resolve([]),
+          adminPromotionService.getPromotionRuns?.(showTestData) ?? Promise.resolve([]),
         ]);
         if (campaignResult.status === "fulfilled") {
           setCampaigns(pageData(campaignResult.value));
@@ -540,8 +563,8 @@ export default function AdminPromotionCenterPage() {
         if (!campaignOptions.length) await loadCampaignOptions();
       } else if (view === "automations") {
         const [playbookResult, runResult] = await Promise.all([
-          adminPromotionService.getPromotionPlaybooks(),
-          adminPromotionService.getPromotionRuns(),
+          adminPromotionService.getPromotionPlaybooks(showTestData),
+          adminPromotionService.getPromotionRuns(showTestData),
         ]);
         setAutomationPlaybooks(Array.isArray(playbookResult) ? playbookResult : []);
         setAutomationRuns(Array.isArray(runResult) ? runResult : []);
@@ -555,6 +578,7 @@ export default function AdminPromotionCenterPage() {
               page,
               size: 12,
               sort,
+              testData: showTestData ? undefined : false,
             }),
           ),
         );
@@ -886,7 +910,7 @@ export default function AdminPromotionCenterPage() {
           </div>
         )}
 
-        {["tasks", "campaigns", "promotions"].includes(view) && (
+        {["tasks", "automations", "campaigns", "promotions", "operations"].includes(view) && (
           <label className="mb-4 inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-zinc-400">
             <input
               type="checkbox"
@@ -1030,7 +1054,17 @@ export default function AdminPromotionCenterPage() {
             onOpenRun={(runItem) => setModal({ type: "automation-run", record: runItem })}
           />
         ) : view === "operations" ? (
-          <OperationsDashboard data={operations} loading={loading} />
+          <OperationsDashboard
+            data={operations}
+            loading={loading}
+            includeTestData={showTestData}
+            busy={busy}
+            onAssignAnomaly={(item) => run(
+              () => adminPromotionService.assignPromotionAnomaly(item.publicId),
+              "Đã nhận xử lý vụ việc.",
+            )}
+            onResolveAnomaly={(item) => setModal({ type: "anomaly-resolution", record: item })}
+          />
         ) : (
           <>
             <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950/20">
@@ -1324,6 +1358,19 @@ export default function AdminPromotionCenterPage() {
           onIssue={(ids) => issueToUsers(modal.record, ids)}
         />
       )}
+      {modal?.type === "anomaly-resolution" && (
+        <AnomalyResolutionModal
+          item={modal.record}
+          busy={busy}
+          onClose={() => setModal(null)}
+          onResolve={(resolution, resolutionNote) => run(
+            () => adminPromotionService.resolvePromotionAnomaly(
+              modal.record.publicId, resolution, resolutionNote,
+            ),
+            "Đã lưu kết luận và đóng vụ việc.",
+          )}
+        />
+      )}
       {modal?.type === "confirm" && (
         <ConfirmModal
           {...modal}
@@ -1352,6 +1399,14 @@ function EmptyPromotions({ type }) {
           : "Voucher cấp riêng sẽ xuất hiện ở đây sau khi được tạo trong một chương trình."}
       </p>
     </div>
+  );
+}
+
+function UatBadge({ environmentTag }) {
+  return (
+    <span className="inline-flex rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-black text-violet-300">
+      {environmentTag || "UAT"} · Không ảnh hưởng khách thật
+    </span>
   );
 }
 
@@ -1405,7 +1460,8 @@ function TaskBoard({
     (item) => item.status === "PAUSED",
   ).length;
   const reviewRuns = automationRuns.filter((item) =>
-    ["FAILED", "PARTIAL_SUCCESS", "REVIEW_REQUIRED"].includes(item.status),
+    ["FAILED", "PARTIAL_SUCCESS", "REVIEW_REQUIRED"].includes(item.status)
+      && (item.status !== "REVIEW_REQUIRED" || Number(item.openAnomalyCount || 0) > 0),
   );
   const totalWork = workItems.length + pendingPlaybooks.length + reviewRuns.length;
   const activeBirthday = playbooks.find(
@@ -1440,7 +1496,8 @@ function TaskBoard({
                   <div className="flex flex-wrap items-center gap-2">
                     <Workflow className="h-4 w-4 text-amber-300" />
                     <h3 className="font-black text-white">{playbook.name}</h3>
-                    <StatusBadge value={playbook.status} />
+                    <StatusBadge value={playbook.status} text={playbook.testData && playbook.status === "ACTIVE" ? "Đang chạy thử" : undefined} />
+                    {playbook.testData && <UatBadge environmentTag={playbook.environmentTag} />}
                   </div>
                   <p className="mt-2 text-sm text-zinc-300">
                     {playbook.status === "PENDING_APPROVAL"
@@ -1460,7 +1517,8 @@ function TaskBoard({
               <article key={runItem.publicId} className="grid gap-4 rounded-xl border border-red-500/30 bg-red-500/[0.06] p-4 md:grid-cols-[minmax(0,1fr)_230px] md:items-center">
                 <div>
                   <h3 className="font-black text-white">Có bất thường cần đối soát</h3>
-                  <p className="mt-2 text-sm text-zinc-300">{runItem.playbookCode === "SECOND_BOOKING_INCENTIVE" ? "Ưu đãi booking lần hai có trường hợp hoàn booking nguồn sau khi quyền lợi đã được dùng." : "Một lần cấp ưu đãi chưa hoàn tất trọn vẹn."}</p>
+                  <p className="mt-2 text-sm text-zinc-300">{runItem.playbookCode === "SECOND_BOOKING_INCENTIVE" ? "Ưu đãi cho lần đặt vé thứ hai có trường hợp booking đầu tiên được hoàn sau khi quyền lợi đã sử dụng." : "Một lần cấp ưu đãi chưa hoàn tất trọn vẹn."}</p>
+                  {runItem.testData && <span className="mt-2 inline-flex"><UatBadge environmentTag={runItem.environmentTag} /></span>}
                 </div>
                 <button type="button" onClick={onOpenOperations} className={`${buttonClass} h-10 bg-red-500 text-white hover:bg-red-400`}>
                   Mở đối soát <ChevronRight className="h-4 w-4" />
@@ -1570,8 +1628,8 @@ function AutomationHub({ playbooks = [], runs = [], loading, onOpen, onOpenRun }
             <tbody className="divide-y divide-zinc-800">
               {rows.map((item) => (
                 <tr key={item.publicId} className="bg-zinc-950/30">
-                  <td className="px-4 py-4"><p className="font-black text-white">{item.name}</p><p className="mt-1 max-w-xs text-zinc-600">{item.description}</p></td>
-                  <td className="px-4 py-4"><StatusBadge value={item.status} text={item.status === "UNAVAILABLE" ? "Chưa khả dụng" : undefined} /></td>
+                  <td className="px-4 py-4"><p className="font-black text-white">{item.name}</p><p className="mt-1 max-w-xs text-zinc-600">{item.description}</p>{item.testData && <span className="mt-2 inline-flex"><UatBadge environmentTag={item.environmentTag} /></span>}</td>
+                  <td className="px-4 py-4"><StatusBadge value={item.status} text={item.status === "UNAVAILABLE" ? "Chưa khả dụng" : item.testData && item.status === "ACTIVE" ? "Đang chạy thử" : undefined} /></td>
                   <td className="px-4 py-4 text-zinc-400">{item.last ? dateTime(item.last.completedAt || item.last.startedAt) : "Chưa chạy"}</td>
                   <td className="px-4 py-4 text-zinc-400">{item.next}</td>
                   <td className="px-4 py-4 text-zinc-300">{item.last ? `${item.last.issuedCount || 0} đã cấp · ${item.last.skippedCount || 0} không cấp` : "—"}</td>
@@ -1589,9 +1647,10 @@ function AutomationHub({ playbooks = [], runs = [], loading, onOpen, onOpenRun }
             {runs.slice(0, 8).map((runItem) => (
               <article key={runItem.publicId} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4 last:border-b-0">
                 <div>
-                  <p className="font-bold text-white">{runItem.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p>
+                  <p className="font-bold text-white">{runItem.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Ưu đãi cho lần đặt vé thứ hai"}</p>
                   <p className="mt-1 text-xs text-zinc-500">{dateTime(runItem.completedAt || runItem.startedAt)} · {automationTriggerSourceLabels[runItem.triggerSource] || runItem.triggerSource || "Chưa rõ nguồn"} · phiên bản {runItem.playbookVersion} · phê duyệt bởi {runItem.authorizedByDisplayName || "Chưa xác định"}</p>
                   <p className="mt-1 text-xs text-zinc-400">{runItem.audienceCount || 0} khách được xét · {runItem.issuedCount || 0} đã cấp · {runItem.excludedCount ?? runItem.skippedCount ?? 0} bị loại · {runItem.failedCount || 0} lỗi</p>
+                  {runItem.testData && <span className="mt-2 inline-flex"><UatBadge environmentTag={runItem.environmentTag} /></span>}
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge value={runItem.status} />
@@ -1620,7 +1679,14 @@ const durationText = (seconds) => {
   return `${Math.floor(value / 3600)} giờ`;
 };
 
-function OperationsDashboard({ data, loading }) {
+function OperationsDashboard({
+  data,
+  loading,
+  includeTestData,
+  busy,
+  onAssignAnomaly,
+  onResolveAnomaly,
+}) {
   const [filters, setFilters] = useState({
     query: "",
     status: "",
@@ -1637,6 +1703,7 @@ function OperationsDashboard({ data, loading }) {
       setLedgerState({ loading: true, error: "" });
       adminPromotionService.searchPromotionOperations({
         ...filters,
+        includeTestData,
         from: filters.from ? new Date(filters.from).toISOString() : undefined,
         to: filters.to ? new Date(filters.to).toISOString() : undefined,
       }).then((result) => {
@@ -1649,7 +1716,7 @@ function OperationsDashboard({ data, loading }) {
       });
     }, 250);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [filters]);
+  }, [filters, includeTestData]);
 
   const updateFilter = (key, value) => setFilters((current) => ({
     ...current,
@@ -1664,19 +1731,20 @@ function OperationsDashboard({ data, loading }) {
     );
   }
   const promotion = data.promotion;
+  const anomalyCases = Array.isArray(data.anomalyCases) ? data.anomalyCases : [];
   const mismatch = Number(data.booking.promotionReconciliationMismatch || 0);
   const alerts = [...(promotion.activeAlerts || [])];
   if (mismatch > 0) alerts.push("RECONCILIATION_MISMATCH");
   const metrics = [
     {
-      label: "Reservation quá hạn",
+      label: "Lượt giữ quá hạn",
       value: Number(promotion.expirationBacklog || 0).toLocaleString("vi-VN"),
       detail: `Lâu nhất ${durationText(promotion.oldestExpiredAgeSeconds)}`,
       icon: Clock3,
       tone: "text-amber-300 border-amber-500/30",
     },
     {
-      label: "Reversal",
+      label: "Lượt hoàn lại",
       value: Number(promotion.reversalCount || 0).toLocaleString("vi-VN"),
       detail: `${Number(promotion.reversalsLastHour || 0).toLocaleString("vi-VN")} trong 1 giờ`,
       icon: RotateCw,
@@ -1709,6 +1777,47 @@ function OperationsDashboard({ data, loading }) {
 
   return (
     <section aria-label="Giám sát vận hành khuyến mãi">
+      <section className="mb-6 rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-red-300">Vụ việc cần xử lý</p>
+            <h2 className="mt-1 text-lg font-black text-white">Bất thường cần kiểm tra</h2>
+            <p className="mt-1 text-xs text-zinc-500">Mỗi vụ việc có người phụ trách, kết luận và dấu thời gian đóng; không thay đổi ledger đã sử dụng.</p>
+          </div>
+          <span className="text-xs font-bold text-zinc-500">{anomalyCases.length} đang mở</span>
+        </div>
+        {anomalyCases.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-4 text-sm text-emerald-200">
+            Không có vụ việc bất thường đang mở trong phạm vi dữ liệu hiện tại.
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-3">
+            {anomalyCases.map((item) => (
+              <article key={item.publicId} className="rounded-lg border border-red-500/25 bg-red-500/[0.05] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-black text-white">{item.businessName}</h3>
+                      <StatusBadge value={item.status} text={item.status === "OPEN" ? "Chưa nhận xử lý" : "Đang xử lý"} />
+                      {item.testData && <UatBadge environmentTag={item.environmentTag} />}
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-zinc-300">{item.summary}</p>
+                    <p className="mt-2 text-xs text-zinc-500">Chi phí đã sử dụng: <b className="text-white">{money(item.costAmount)}</b> · Khách •••{String(item.customerPublicId || "").slice(-4)} · Mở lúc {dateTime(item.createdAt)}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Người xử lý: {item.assignedToDisplayName || "Chưa có"}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {item.status === "OPEN" && (
+                      <button type="button" disabled={busy} onClick={() => onAssignAnomaly?.(item)} className={`${buttonClass} border border-zinc-700 text-zinc-200 hover:bg-zinc-800`}>Nhận xử lý</button>
+                    )}
+                    <button type="button" disabled={busy} onClick={() => onResolveAnomaly?.(item)} className={`${buttonClass} bg-red-500 text-white hover:bg-red-400`}>Ghi kết luận & đóng</button>
+                  </div>
+                </div>
+                <details className="mt-3 text-xs text-zinc-500"><summary className="cursor-pointer font-bold">Xem trạng thái kỹ thuật</summary><div className="mt-2 break-all font-mono">Case {item.publicId} · {item.technicalReasonCode}</div></details>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
       {alerts.length > 0 && (
         <div className="mb-4 border-l-2 border-red-500 bg-red-500/[0.07] px-4 py-3 text-sm text-red-200">
           <div className="flex items-center gap-2 font-bold">
@@ -2642,7 +2751,10 @@ function PlaybookModal({
               <p className="text-[10px] font-black uppercase tracking-wide text-emerald-300">Phiên bản {record.playbookVersion}</p>
               <p className="mt-2 text-sm leading-6 text-zinc-200">{record.description}</p>
             </div>
-            <StatusBadge value={record.status} />
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge value={record.status} text={record.testData && record.status === "ACTIVE" ? "Đang chạy thử" : undefined} />
+              {record.testData && <UatBadge environmentTag={record.environmentTag} />}
+            </div>
           </div>
           <p className="mt-3 text-xs text-zinc-500">
             Cách chạy: <b className="text-zinc-300">{record.triggerType === "DAILY_SCHEDULE" ? "Mỗi ngày lúc 00:05" : "Ngay sau booking đầu tiên hợp lệ"}</b>
@@ -2761,6 +2873,8 @@ const automationReasonLabels = {
   ISSUANCE_RETRY: "Đang chờ thử cấp lại",
   ISSUANCE_FAILED_FINAL: "Cấp quyền lợi thất bại",
   SOURCE_BOOKING_REFUNDED_REVOKED: "Đã thu hồi vì booking nguồn được hoàn",
+  SOURCE_BOOKING_REFUNDED_WAITING_FOR_RESERVATION: "Chờ kết thúc lượt giữ trước khi thu hồi",
+  SOURCE_BOOKING_REFUNDED_AFTER_BENEFIT_USED: "Booking đầu tiên được hoàn sau khi quyền lợi đã sử dụng",
 };
 
 const automationTriggerSourceLabels = {
@@ -2778,7 +2892,7 @@ function AutomationRunModal({ record, onClose }) {
 
   useEffect(() => {
     let active = true;
-    adminPromotionService.getPromotionRun(record.publicId)
+    adminPromotionService.getPromotionRun(record.publicId, Boolean(record.testData))
       .then((result) => {
         if (active) {
           setDetail(result);
@@ -2789,7 +2903,15 @@ function AutomationRunModal({ record, onClose }) {
         if (active) setState({ loading: false, error: errorText(error) });
       });
     return () => { active = false; };
-  }, [record.publicId]);
+  }, [record.publicId, record.testData]);
+
+  const anomalyReasons = (detail.exclusionReasons || []).filter(
+    (item) => item.reasonCode === "SOURCE_BOOKING_REFUNDED_AFTER_BENEFIT_USED",
+  );
+  const exclusionReasons = (detail.exclusionReasons || []).filter(
+    (item) => item.reasonCode !== "SOURCE_BOOKING_REFUNDED_AFTER_BENEFIT_USED",
+  );
+  const hasAnomaly = anomalyReasons.length > 0;
 
   return (
     <ModalShell title="Chi tiết lần cấp quyền lợi" icon={Workflow} onClose={onClose}>
@@ -2802,10 +2924,11 @@ function AutomationRunModal({ record, onClose }) {
           <>
             <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.05] p-4">
               <div>
-                <p className="font-black text-white">{detail.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Khuyến khích booking lần hai"}</p>
+                <p className="font-black text-white">{detail.playbookCode === "BIRTHDAY_REWARD" ? "Quà sinh nhật" : "Ưu đãi cho lần đặt vé thứ hai"}</p>
                 <p className="mt-1 text-xs text-zinc-400">{dateTime(detail.completedAt || detail.startedAt)} · thực hiện bởi {detail.runActorDisplayName || "Hệ thống tự động"}</p>
                 <p className="mt-1 text-xs text-zinc-500">Nguồn khởi chạy: {automationTriggerSourceLabels[detail.triggerSource] || detail.triggerSource || "Chưa rõ"}</p>
                 <p className="mt-1 text-xs text-zinc-500">Phê duyệt bởi {detail.authorizedByDisplayName || "Chưa xác định"}</p>
+                {detail.testData && <span className="mt-2 inline-flex"><UatBadge environmentTag={detail.environmentTag} /></span>}
               </div>
               <StatusBadge value={detail.status} />
             </div>
@@ -2815,13 +2938,23 @@ function AutomationRunModal({ record, onClose }) {
               <DetailCard label="Bị loại" value={detail.excludedCount ?? detail.skippedCount ?? 0} />
               <DetailCard label="Đang thử lại" value={detail.retryingCount || 0} />
               <DetailCard label="Lỗi cuối" value={detail.failedCount || 0} />
-              <DetailCard label="Chi phí đã cam kết" value={money(detail.committedCost)} />
+              <DetailCard label={hasAnomaly ? "Chi phí đã sử dụng" : "Chi phí đã cam kết"} value={money(detail.committedCost)} />
             </div>
-            {!!detail.exclusionReasons?.length && (
+            {anomalyReasons.length > 0 && (
+              <div className="rounded-lg border border-red-500/25 bg-red-500/[0.05] p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-red-300">Bất thường cần kiểm tra</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {anomalyReasons.map((item) => (
+                    <span key={item.reasonCode} className="rounded-full bg-red-500/10 px-3 py-1 text-xs text-red-200">{automationReasonLabels[item.reasonCode]}: {item.count}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {exclusionReasons.length > 0 && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
                 <p className="text-xs font-black uppercase tracking-wide text-zinc-500">Lý do không cấp</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {detail.exclusionReasons.map((item) => (
+                  {exclusionReasons.map((item) => (
                     <span key={item.reasonCode} className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">{automationReasonLabels[item.reasonCode] || item.reasonCode}: {item.count}</span>
                   ))}
                 </div>
@@ -2839,7 +2972,7 @@ function AutomationRunModal({ record, onClose }) {
                   {(detail.members || []).map((member) => (
                     <tr key={member.publicId}>
                       <td className="px-3 py-3 font-bold text-white">Khách #{member.customerPublicId}</td>
-                      <td className="px-3 py-3 text-zinc-300">{member.status === "ISSUED" ? "Đã cấp" : member.status === "FAILED_RETRYABLE" ? "Đang thử lại" : member.status?.startsWith("SKIPPED") ? "Không cấp" : labels[member.status] || member.status}</td>
+                      <td className="px-3 py-3 text-zinc-300">{member.status === "ISSUED" ? "Đã cấp" : member.status === "FAILED_RETRYABLE" ? "Đang thử lại" : member.status === "ANOMALY_REVIEW_REQUIRED" ? "Cần kiểm tra thủ công" : member.status?.startsWith("SKIPPED") ? "Không cấp" : labels[member.status] || member.status}</td>
                       <td className="px-3 py-3 text-zinc-400">{automationReasonLabels[member.reasonCode] || member.reasonCode || "—"}</td>
                       <td className="px-3 py-3 text-sky-300">{member.walletPublicId || "Không phát sinh"}</td>
                       <td className="px-3 py-3 text-right text-zinc-300">{money(member.committedAmount)}</td>
@@ -2855,6 +2988,8 @@ function AutomationRunModal({ record, onClose }) {
                 <DetailCard label="Playbook version" value={detail.playbookVersion} />
                 <DetailCard label="Config hash" value={detail.approvedConfigHash || "—"} />
                 <DetailCard label="Run ID" value={detail.publicId} />
+                <DetailCard label="Trạng thái gốc" value={detail.status} />
+                <DetailCard label="Mã lý do gốc" value={(detail.exclusionReasons || []).map((item) => item.reasonCode).join(", ") || "—"} />
               </div>
             </details>
           </>
@@ -3054,6 +3189,61 @@ function CampaignDangerModal({ campaign, action, busy, onClose, onSubmit }) {
   );
 }
 
+function AnomalyResolutionModal({ item, busy, onClose, onResolve }) {
+  const [resolution, setResolution] = useState(item.testData ? "TEST_DATA" : "ACCEPTED_COST");
+  const [resolutionNote, setResolutionNote] = useState("");
+  const choices = [
+    {
+      value: "ACCEPTED_COST",
+      title: "Ghi nhận chi phí ưu đãi",
+      description: `Chấp nhận ${money(item.costAmount)} đã sử dụng và đóng vụ việc.`,
+    },
+    {
+      value: "CUSTOMER_ABUSE",
+      title: "Chuyển kiểm tra hành vi khách hàng",
+      description: "Giữ nguyên ledger và lưu dấu hiệu để CSKH/Risk xem xét.",
+    },
+    ...(item.testData ? [{
+      value: "TEST_DATA",
+      title: "Đóng vì là dữ liệu kiểm thử",
+      description: "Loại vụ việc khỏi KPI và cảnh báo production; vẫn giữ audit đầy đủ.",
+    }] : []),
+  ];
+  return (
+    <ModalShell title="Kết luận vụ việc bất thường" icon={AlertTriangle} onClose={onClose}>
+      <div className="space-y-4 p-5">
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-black text-white">{item.businessName}</p>
+            {item.testData && <UatBadge environmentTag={item.environmentTag} />}
+          </div>
+          <p className="mt-2 text-sm leading-6 text-zinc-300">{item.summary}</p>
+          <p className="mt-2 text-xs text-zinc-500">Chi phí đã sử dụng: {money(item.costAmount)}. Không có lựa chọn rollback hoặc xóa ledger đã redeem.</p>
+        </div>
+        <div className="grid gap-2">
+          {choices.map((choice) => (
+            <label key={choice.value} className={`cursor-pointer rounded-lg border p-3 ${resolution === choice.value ? "border-orange-500/50 bg-orange-500/[0.07]" : "border-zinc-800 bg-zinc-950/30"}`}>
+              <span className="flex items-start gap-3">
+                <input type="radio" name="anomaly-resolution" checked={resolution === choice.value} onChange={() => setResolution(choice.value)} className="mt-1 accent-orange-500" />
+                <span><b className="block text-sm text-white">{choice.title}</b><span className="mt-1 block text-xs leading-5 text-zinc-500">{choice.description}</span></span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <Field label="Kết luận xử lý" required wide>
+          <textarea value={resolutionNote} onChange={(event) => setResolutionNote(event.target.value)} maxLength={1000} rows={4} placeholder="Ghi căn cứ và kết luận để người kiểm tra sau có thể hiểu quyết định." className={`${fieldClass} h-auto py-3`} />
+        </Field>
+        <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4">
+          <button type="button" disabled={busy} onClick={onClose} className={`${buttonClass} border border-zinc-700 text-zinc-300`}>Quay lại</button>
+          <button type="button" disabled={busy || !resolutionNote.trim()} onClick={() => onResolve(resolution, resolutionNote.trim())} className={`${buttonClass} bg-orange-500 text-white hover:bg-orange-400`}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Lưu kết luận & đóng
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 function ConfirmModal({
   title,
   description,
@@ -3108,10 +3298,10 @@ function LedgerTable({ title, total, rows }) {
                   <span className="font-mono font-bold" title={item.businessReference || undefined}>{compactReference(item.businessReference || "Chưa có mã")}</span>
                   <details className="mt-1 text-[10px] text-zinc-600"><summary className="cursor-pointer">Thông tin kỹ thuật</summary><span className="break-all font-mono">{item.publicId}</span></details>
                 </td>
-                <td className="px-3 py-2"><StatusBadge value={item.status} text={item.entryType === "RESERVATION" && item.status === "ACTIVE" ? "Đang giữ" : undefined} /></td>
+                <td className="px-3 py-2"><StatusBadge value={item.status} text={item.entryType === "RESERVATION" && item.status === "ACTIVE" ? "Đang giữ" : item.entryType === "RESERVATION" && item.status === "EXPIRED" ? "Hết thời gian giữ ưu đãi" : undefined} />{item.testData && <span className="mt-1 block"><UatBadge environmentTag={item.environmentTag} /></span>}</td>
                 <td className="px-3 py-2 text-zinc-400" title={item.sourceReference || item.businessReference || undefined}>{compactReference(item.sourceReference || item.businessReference)}<br />{item.paymentPublicId ? "Có liên kết thanh toán" : "Chưa có thanh toán"}</td>
                 <td className="px-3 py-2 text-zinc-400">{item.customerReference ? `Khách •••${String(item.customerReference).slice(-4)}` : "-"}</td>
-                <td className="max-w-xs px-3 py-2 text-zinc-400">{releaseReasonLabels[item.releaseReasonType] || item.reasonDetail || "-"}</td>
+                <td className="max-w-xs px-3 py-2 text-zinc-400">{operationReasonText(item)}</td>
                 <td className="px-3 py-2 font-bold text-white">{money(item.discountAmount)}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-zinc-500">{dateTime(item.occurredAt)}</td>
               </tr>

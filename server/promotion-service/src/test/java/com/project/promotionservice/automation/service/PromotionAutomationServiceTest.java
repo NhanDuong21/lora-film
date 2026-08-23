@@ -50,6 +50,7 @@ class PromotionAutomationServiceTest {
     @Mock PromotionCatalogService catalogService;
     @Mock PromotionAutomationBudgetService budgetService;
     @Mock AuditTrailService auditTrailService;
+    @Mock PromotionAnomalyCaseService anomalyCaseService;
     PromotionAutomationService service;
 
     @BeforeEach
@@ -58,7 +59,7 @@ class PromotionAutomationServiceTest {
                 playbooks, runs, snapshots, members, jobs, suppressions, campaigns,
                 promotions, wallets, redemptions, birthdayClient, actorDirectory,
                 new ObjectMapper(), catalogService,
-                budgetService, auditTrailService);
+                budgetService, auditTrailService, anomalyCaseService);
     }
 
     @Test

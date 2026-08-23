@@ -3,6 +3,7 @@ package com.project.promotionservice.automation.controller;
 import com.project.promotionservice.automation.dto.AutomationDtos.*;
 import com.project.promotionservice.automation.entity.PromotionAutomationRun;
 import com.project.promotionservice.automation.service.PromotionAutomationService;
+import com.project.promotionservice.automation.service.PromotionAnomalyCaseService;
 import com.project.promotionservice.common.response.ApiResponse;
 import com.project.promotionservice.common.web.SecurityActor;
 import jakarta.validation.Valid;
@@ -25,15 +26,20 @@ import static com.project.promotionservice.common.constant.ValidationConstants.U
 @RequestMapping("/api/admin")
 public class AdminPromotionAutomationController {
     private final PromotionAutomationService service;
+    private final PromotionAnomalyCaseService anomalyCaseService;
 
-    public AdminPromotionAutomationController(PromotionAutomationService service) {
+    public AdminPromotionAutomationController(
+            PromotionAutomationService service,
+            PromotionAnomalyCaseService anomalyCaseService) {
         this.service = service;
+        this.anomalyCaseService = anomalyCaseService;
     }
 
     @GetMapping("/promotion-playbooks")
     @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
-    public ResponseEntity<ApiResponse<List<PlaybookView>>> playbooks() {
-        return ResponseEntity.ok(ApiResponse.success(service.playbooks()));
+    public ResponseEntity<ApiResponse<List<PlaybookView>>> playbooks(
+            @RequestParam(defaultValue = "false") boolean includeTestData) {
+        return ResponseEntity.ok(ApiResponse.success(service.playbooks(includeTestData)));
     }
 
     @PostMapping("/promotion-playbooks")
@@ -99,15 +105,18 @@ public class AdminPromotionAutomationController {
 
     @GetMapping("/promotion-runs")
     @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
-    public ResponseEntity<ApiResponse<List<RunView>>> runs() {
-        return ResponseEntity.ok(ApiResponse.success(service.recentRuns()));
+    public ResponseEntity<ApiResponse<List<RunView>>> runs(
+            @RequestParam(defaultValue = "false") boolean includeTestData) {
+        return ResponseEntity.ok(ApiResponse.success(service.recentRuns(includeTestData)));
     }
 
     @GetMapping("/promotion-runs/{id}")
     @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
     public ResponseEntity<ApiResponse<RunView>> run(
-            @PathVariable @Pattern(regexp = UUID_PATTERN) String id) {
-        return ResponseEntity.ok(ApiResponse.success(service.run(id)));
+            @PathVariable @Pattern(regexp = UUID_PATTERN) String id,
+            @RequestParam(defaultValue = "false") boolean includeTestData) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.run(id, includeTestData)));
     }
 
     @PostMapping("/promotion-runs/{id}/issue-jobs")
@@ -123,8 +132,35 @@ public class AdminPromotionAutomationController {
 
     @GetMapping("/promotion-opportunities")
     @PreAuthorize("hasAuthority('PROMOTION_VIEW')")
-    public ResponseEntity<ApiResponse<List<OpportunityView>>> opportunities() {
-        return ResponseEntity.ok(ApiResponse.success(service.opportunities()));
+    public ResponseEntity<ApiResponse<List<OpportunityView>>> opportunities(
+            @RequestParam(defaultValue = "false") boolean includeTestData) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.opportunities(includeTestData)));
+    }
+
+    @GetMapping("/promotion-anomaly-cases")
+    @PreAuthorize("hasAuthority('PROMOTION_AUDIT_VIEW')")
+    public ResponseEntity<ApiResponse<List<AnomalyCaseView>>> anomalyCases(
+            @RequestParam(defaultValue = "false") boolean includeTestData) {
+        return ResponseEntity.ok(ApiResponse.success(
+                anomalyCaseService.openCases(includeTestData)));
+    }
+
+    @PostMapping("/promotion-anomaly-cases/{id}/assign")
+    @PreAuthorize("hasAuthority('PROMOTION_OPERATE')")
+    public ResponseEntity<ApiResponse<AnomalyCaseView>> assignAnomaly(
+            @PathVariable @Pattern(regexp = UUID_PATTERN) String id) {
+        return ResponseEntity.ok(ApiResponse.success("Đã nhận xử lý vụ việc",
+                anomalyCaseService.assign(id, SecurityActor.current())));
+    }
+
+    @PostMapping("/promotion-anomaly-cases/{id}/resolve")
+    @PreAuthorize("hasAuthority('PROMOTION_OPERATE')")
+    public ResponseEntity<ApiResponse<AnomalyCaseView>> resolveAnomaly(
+            @PathVariable @Pattern(regexp = UUID_PATTERN) String id,
+            @Valid @RequestBody ResolveAnomalyRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Đã đóng vụ việc",
+                anomalyCaseService.resolve(id, request, SecurityActor.current())));
     }
 
     public record IssueJobRequest(@Min(200) @Max(500) Integer batchSize) { }

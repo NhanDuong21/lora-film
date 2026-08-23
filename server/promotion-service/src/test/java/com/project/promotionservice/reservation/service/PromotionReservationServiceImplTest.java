@@ -5,11 +5,14 @@ import com.project.promotionservice.automation.service.PromotionAutomationBudget
 import com.project.promotionservice.common.monitoring.PromotionMetricsManager;
 import com.project.promotionservice.common.time.DatabaseTimeProvider;
 import com.project.promotionservice.configuration.domain.ConfigurationService;
+import com.project.promotionservice.integration.client.UserRecipientValidationClient;
 import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
 import com.project.promotionservice.promotion.entity.PromotionRedemption;
 import com.project.promotionservice.promotion.entity.PromotionRedemptionAdjustment;
 import com.project.promotionservice.promotion.entity.UserPromotion;
+import com.project.promotionservice.promotion.dto.response.AppliedPromotionResponse;
+import com.project.promotionservice.promotion.dto.response.PromotionCheckoutResponse;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
 import com.project.promotionservice.promotion.enums.CampaignStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
@@ -66,6 +69,7 @@ class PromotionReservationServiceImplTest {
     @Mock private PromotionMetricsManager metricsManager;
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private PromotionAutomationBudgetService automationBudgetService;
+    @Mock private UserRecipientValidationClient recipientValidationClient;
 
     private PromotionReservationServiceImpl service;
 
@@ -76,7 +80,8 @@ class PromotionReservationServiceImplTest {
                 promotionRepository,
                 walletRepository, campaignRepository, engineService, lockManager,
                 configurationService, databaseTimeProvider, eventService,
-                metricsManager, automationBudgetService, new ObjectMapper(), transactionManager);
+                metricsManager, automationBudgetService, recipientValidationClient,
+                new ObjectMapper(), transactionManager);
     }
 
     @Test
@@ -313,6 +318,69 @@ class PromotionReservationServiceImplTest {
         verify(redemptionRepository, never()).save(any());
         verify(campaignRepository, never()).save(any());
         verify(walletRepository, never()).save(any());
+    }
+
+    @Test
+    void reserveMarksTestAccountLedgerAsUatEvenForProductionCampaign() {
+        Instant now = Instant.parse("2026-08-23T12:00:00Z");
+        String bookingId = "22222222-2222-4222-8222-222222222220";
+        String promotionId = "44444444-4444-4444-8444-444444444440";
+        String campaignId = "55555555-5555-4555-8555-555555555550";
+        ReserveRequest request = new ReserveRequest(
+                "13", new BigDecimal("100000.00"), List.of(), List.of(),
+                null, null, bookingId, null, "VND", null, 300,
+                List.of(), List.of());
+        AppliedPromotionResponse applied = new AppliedPromotionResponse(
+                promotionId, null, campaignId, PromotionType.AUTO, null,
+                "Production benefit", new BigDecimal("6000.00"), 10, true);
+        PromotionCheckoutResponse checkout = new PromotionCheckoutResponse(
+                true, new BigDecimal("100000.00"), new BigDecimal("6000.00"),
+                new BigDecimal("94000.00"), "VND", List.of(applied), List.of());
+
+        Promotion promotion = new Promotion();
+        promotion.setPublicId(promotionId);
+        promotion.setCampaignPublicId(campaignId);
+        promotion.setConditionsJson("{}");
+        promotion.setActionsJson("{}");
+        PromotionCampaign campaign = new PromotionCampaign();
+        campaign.setPublicId(campaignId);
+        campaign.setTestData(false);
+        campaign.setEnvironmentTag("BUSINESS");
+        campaign.setBudgetAmount(new BigDecimal("1000000.00"));
+        campaign.setBudgetRemaining(new BigDecimal("1000000.00"));
+        campaign.setBudgetReserved(BigDecimal.ZERO);
+        campaign.setBudgetUsed(BigDecimal.ZERO);
+
+        when(databaseTimeProvider.now()).thenReturn(now);
+        when(recipientValidationClient.isActiveTestAccount("13")).thenReturn(true);
+        when(reservationRepository.findByReservationCodeAndDeletedAtIsNull(any()))
+                .thenReturn(Optional.empty());
+        when(reservationRepository.findByReservationScopeKeyAndDeletedAtIsNull(
+                "BOOKING:" + bookingId)).thenReturn(Optional.empty());
+        when(engineService.preview(any())).thenReturn(checkout);
+        when(promotionRepository.findByPublicIdForUpdate(promotionId))
+                .thenReturn(Optional.of(promotion));
+        when(campaignRepository.findByPublicIdForUpdate(campaignId))
+                .thenReturn(Optional.of(campaign));
+        when(reservationRepository.save(any())).thenAnswer(invocation -> {
+            PromotionReservation saved = invocation.getArgument(0);
+            saved.setPublicId("11111111-1111-4111-8111-111111111110");
+            return saved;
+        });
+        when(redemptionRepository.save(any())).thenAnswer(
+                invocation -> invocation.getArgument(0));
+        when(redemptionRepository.findByReservationPublicIdAndDeletedAtIsNull(any()))
+                .thenReturn(List.of());
+
+        var response = service.reserve(request, "uat-account-reserve", "BOOKING_SERVICE");
+
+        assertThat(response.getTestData()).isTrue();
+        assertThat(response.getEnvironmentTag()).isEqualTo("UAT");
+        ArgumentCaptor<PromotionRedemption> redemptionCaptor =
+                ArgumentCaptor.forClass(PromotionRedemption.class);
+        verify(redemptionRepository).save(redemptionCaptor.capture());
+        assertThat(redemptionCaptor.getValue().getTestData()).isTrue();
+        assertThat(redemptionCaptor.getValue().getEnvironmentTag()).isEqualTo("UAT");
     }
 
     private PromotionRedemption reservedRedemption(

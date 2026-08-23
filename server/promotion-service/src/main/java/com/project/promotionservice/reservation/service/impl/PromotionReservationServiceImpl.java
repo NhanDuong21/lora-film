@@ -11,6 +11,7 @@ import com.project.promotionservice.common.monitoring.PromotionMetricsManager;
 import com.project.promotionservice.common.response.PagedResponse;
 import com.project.promotionservice.common.time.DatabaseTimeProvider;
 import com.project.promotionservice.configuration.domain.ConfigurationService;
+import com.project.promotionservice.integration.client.UserRecipientValidationClient;
 import com.project.promotionservice.promotion.dto.request.PromotionCheckoutRequest;
 import com.project.promotionservice.promotion.dto.response.AppliedPromotionResponse;
 import com.project.promotionservice.promotion.dto.response.PromotionCheckoutResponse;
@@ -94,6 +95,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
     private final PromotionCatalogEventService eventService;
     private final PromotionMetricsManager metricsManager;
     private final PromotionAutomationBudgetService automationBudgetService;
+    private final UserRecipientValidationClient recipientValidationClient;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate requiresNewTransaction;
 
@@ -111,6 +113,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             PromotionCatalogEventService eventService,
             PromotionMetricsManager metricsManager,
             PromotionAutomationBudgetService automationBudgetService,
+            UserRecipientValidationClient recipientValidationClient,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager) {
         this.reservationRepository = reservationRepository;
@@ -126,6 +129,7 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         this.eventService = eventService;
         this.metricsManager = metricsManager;
         this.automationBudgetService = automationBudgetService;
+        this.recipientValidationClient = recipientValidationClient;
         this.objectMapper = objectMapper;
         this.requiresNewTransaction = new TransactionTemplate(transactionManager);
         this.requiresNewTransaction.setPropagationBehaviorName("PROPAGATION_REQUIRES_NEW");
@@ -178,11 +182,13 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
                     "No eligible promotion can be reserved for this checkout",
                     HttpStatus.BAD_REQUEST);
         }
-        lockSelection(advisory, request.userPublicId(), actor);
+        boolean testAccount = recipientValidationClient
+                .isActiveTestAccount(request.userPublicId());
+        lockSelection(advisory, request.userPublicId(), actor, testAccount);
         PromotionCheckoutResponse authoritative =
                 engineService.preview(request.checkoutRequest());
         if (!samePromotionSet(advisory, authoritative)) {
-            lockSelection(authoritative, request.userPublicId(), actor);
+            lockSelection(authoritative, request.userPublicId(), actor, testAccount);
             authoritative = engineService.preview(request.checkoutRequest());
         }
         if (!authoritative.eligible() || authoritative.appliedPromotions().isEmpty()) {
@@ -190,12 +196,20 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         }
 
         reserveCampaignBudgets(authoritative.appliedPromotions(), actor);
+        Map<String, PromotionCampaign> campaignMarkers = new LinkedHashMap<>();
+        authoritative.appliedPromotions().forEach(applied -> campaignMarkers
+                .computeIfAbsent(applied.campaignPublicId(), this::requireCampaignForUpdate));
+        boolean testData = testAccount || (!campaignMarkers.isEmpty()
+                && campaignMarkers.values().stream()
+                .allMatch(campaign -> Boolean.TRUE.equals(campaign.getTestData())));
         int holdSeconds = effectiveHoldDurationSeconds(request.holdDurationSeconds());
         PromotionReservation reservation = new PromotionReservation();
         reservation.setReservationCode(code);
         reservation.setBookingPublicId(blankToNull(request.bookingPublicId()));
         reservation.setOrderPublicId(blankToNull(request.orderPublicId()));
         reservation.setUserPublicId(request.userPublicId());
+        reservation.setTestData(testData);
+        reservation.setEnvironmentTag(environmentTag(campaignMarkers, testData));
         reservation.setCustomerPhone(blankToNull(request.customerPhone()));
         reservation.setReservationScopeKey(scopeKey);
         reservation.setStatus(ReservationStatus.ACTIVE);
@@ -220,6 +234,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             redemption.setCustomerPhone(saved.getCustomerPhone());
             redemption.setPromotionPublicId(applied.promotionPublicId());
             redemption.setCampaignPublicId(applied.campaignPublicId());
+            redemption.setTestData(Boolean.TRUE.equals(saved.getTestData()));
+            redemption.setEnvironmentTag(saved.getEnvironmentTag());
             redemption.setPromotionType(applied.promotionType());
             redemption.setPromotionCode(applied.code());
             redemption.setPromotionName(applied.name());
@@ -417,6 +433,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
                     new PromotionRedemptionAdjustment();
             adjustment.setRedemptionPublicId(redemption.getPublicId());
             adjustment.setReservationPublicId(reservationPublicId);
+            adjustment.setTestData(Boolean.TRUE.equals(redemption.getTestData()));
+            adjustment.setEnvironmentTag(redemption.getEnvironmentTag());
             adjustment.setAdjustmentType("REVERSE");
             adjustment.setDiscountAmount(redemption.getDiscountAmount());
             adjustment.setReasonCode(request.reasonCode());
@@ -518,9 +536,26 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             int page,
             int size,
             java.util.Set<String> allowedCampaignPublicIds) {
+        return history(status, userPublicId, bookingPublicId, orderPublicId,
+                from, to, page, size, allowedCampaignPublicIds, true);
+    }
+
+    @Override
+    public PagedResponse<ReservationResponse> history(
+            ReservationStatus status,
+            String userPublicId,
+            String bookingPublicId,
+            String orderPublicId,
+            Instant from,
+            Instant to,
+            int page,
+            int size,
+            java.util.Set<String> allowedCampaignPublicIds,
+            boolean includeTestData) {
         Page<PromotionReservation> result = reservationRepository.findAll(
                 ReservationSpecifications.filter(
                         status, userPublicId, bookingPublicId, orderPublicId, from, to)
+                        .and(ReservationSpecifications.excludeTestData(includeTestData))
                         .and(ReservationSpecifications.allowedCampaigns(
                                 allowedCampaignPublicIds)),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -574,7 +609,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
     }
 
     private void lockSelection(
-            PromotionCheckoutResponse checkout, String userPublicId, String actor) {
+            PromotionCheckoutResponse checkout, String userPublicId, String actor,
+            boolean testAccount) {
         List<AppliedPromotionResponse> applied = checkout.appliedPromotions().stream()
                 .sorted(Comparator.comparing(AppliedPromotionResponse::promotionPublicId))
                 .toList();
@@ -589,13 +625,15 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             if (item.userPromotionPublicId() != null) {
                 requireWalletForUpdate(item.userPromotionPublicId(), userPublicId);
             } else if (item.promotionType() == PromotionType.COUPON) {
-                ensureCouponWallet(item.promotionPublicId(), userPublicId, actor);
+                ensureCouponWallet(
+                        item.promotionPublicId(), userPublicId, actor, testAccount);
             }
         }
     }
 
     private UserPromotion ensureCouponWallet(
-            String promotionPublicId, String userPublicId, String actor) {
+            String promotionPublicId, String userPublicId, String actor,
+            boolean testAccount) {
         UserPromotion existing = walletRepository
                 .findFirstByUserPublicIdAndPromotionPublicIdAndDeletedAtIsNullOrderByIdDesc(
                         userPublicId, promotionPublicId)
@@ -604,6 +642,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
             return requireWalletForUpdate(existing.getPublicId(), userPublicId);
         }
         Promotion promotion = requirePromotionForUpdate(promotionPublicId);
+        PromotionCampaign campaign = requireCampaignForUpdate(
+                promotion.getCampaignPublicId());
         UserPromotion wallet = new UserPromotion();
         wallet.setUserPublicId(userPublicId);
         wallet.setPromotionPublicId(promotionPublicId);
@@ -612,6 +652,9 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         wallet.setValidFrom(promotion.getValidFrom());
         wallet.setValidTo(promotion.getValidTo());
         wallet.setMaxUsage(promotion.getMaxRedemptionsPerUser());
+        boolean testData = testAccount || Boolean.TRUE.equals(campaign.getTestData());
+        wallet.setTestData(testData);
+        wallet.setEnvironmentTag(testData ? "UAT" : environmentTag(campaign));
         wallet.setCreatedBy(actor);
         wallet.setUpdatedBy(actor);
         return walletRepository.save(wallet);
@@ -861,6 +904,8 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         response.setOrderPublicId(reservation.getOrderPublicId());
         response.setPaymentPublicId(reservation.getPaymentPublicId());
         response.setUserPublicId(reservation.getUserPublicId());
+        response.setTestData(Boolean.TRUE.equals(reservation.getTestData()));
+        response.setEnvironmentTag(reservation.getEnvironmentTag());
         response.setOriginalAmount(reservation.getOriginalAmount());
         response.setDiscountAmount(reservation.getDiscountAmount());
         response.setFinalAmount(reservation.getFinalAmount());
@@ -960,6 +1005,25 @@ public class PromotionReservationServiceImpl implements PromotionReservationServ
         return request.orderPublicId() != null && !request.orderPublicId().isBlank()
                 ? "ORDER:" + request.orderPublicId().trim()
                 : "BOOKING:" + request.bookingPublicId().trim();
+    }
+
+    private String environmentTag(
+            Map<String, PromotionCampaign> campaigns, boolean testData) {
+        if (testData) {
+            return "UAT";
+        }
+        List<String> tags = campaigns.values().stream()
+                .map(this::environmentTag).distinct().toList();
+        return tags.size() == 1 ? tags.getFirst() : "BUSINESS";
+    }
+
+    private String environmentTag(PromotionCampaign campaign) {
+        if (campaign != null && campaign.getEnvironmentTag() != null
+                && !campaign.getEnvironmentTag().isBlank()) {
+            return campaign.getEnvironmentTag().trim().toUpperCase(Locale.ROOT);
+        }
+        return campaign != null && Boolean.TRUE.equals(campaign.getTestData())
+                ? "UAT" : "BUSINESS";
     }
 
     private boolean hasFinalizedBusinessKey(ReserveRequest request) {
