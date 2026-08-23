@@ -5,7 +5,7 @@ const footerLinks = {
   discover: [
     { label: 'Danh sách phim', to: '/movies' },
     { label: 'Chọn suất chiếu', to: '/booking' },
-    { label: 'Hệ thống rạp', to: '/#rap' },
+    { label: 'Về LoraFilm', to: '/#gioi-thieu' },
     { label: 'Ưu đãi thành viên', to: '/promotions' },
     { label: 'Vé & đơn hàng', to: '/account/tickets' },
   ],
