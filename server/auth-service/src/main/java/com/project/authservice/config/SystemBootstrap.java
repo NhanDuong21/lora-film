@@ -84,6 +84,8 @@ public class SystemBootstrap {
             new PermissionData("PROMOTION_LEGAL_REVIEW", "Review promotion legal compliance", "Promotion Governance"),
             new PermissionData("PROMOTION_PUBLISH", "Publish approved promotion campaigns", "Promotion Governance"),
             new PermissionData("PROMOTION_OPERATE", "Pause, resume and cancel campaigns", "Promotion Governance"),
+            new PermissionData("PROMOTION_DISTRIBUTE_LOCAL", "Distribute approved benefits inside assigned cinema quota", "Promotion Governance"),
+            new PermissionData("PROMOTION_LAUNCH_APPROVED_TEMPLATE", "Launch an approved local promotion template", "Promotion Governance"),
             new PermissionData("PROMOTION_EMERGENCY_STOP", "Trigger campaign emergency stop", "Promotion Governance"),
             new PermissionData("PROMOTION_FORCE_RELEASE", "Release campaign holds after coordinated impact review", "Promotion Governance"),
             new PermissionData("PROMOTION_AUDIT_VIEW", "View promotion audit and ledgers", "Promotion Governance"),

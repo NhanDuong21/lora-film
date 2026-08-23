@@ -711,6 +711,19 @@ items make the recently added runtime APIs explicit:
 | Automation playbook | POST | `/api/admin/promotion-playbooks/{id}/approve` | `PROMOTION_APPROVE_*`; checker must differ from maker |
 | Automation run | GET | `/api/admin/promotion-runs[/{id}]` | `PROMOTION_VIEW` |
 | Automation issue job | POST | `/api/admin/promotion-runs/{id}/issue-jobs` | `PROMOTION_OPERATE`; returns `202 Accepted` |
+| Manager cinema workspace | GET | `/api/manager/promotions/workspace?cinemaPublicId=...` | `ROLE_MANAGER` + `PROMOTION_VIEW`; cinema must be in JWT assignment |
+| Manager cinema campaigns | GET | `/api/manager/promotions/campaigns?cinemaPublicId=...` | `ROLE_MANAGER` + `PROMOTION_VIEW`; central campaigns are read-only |
+| Manager cinema automations | GET | `/api/manager/promotions/automations?cinemaPublicId=...` | `ROLE_MANAGER` + `PROMOTION_VIEW`; sanitized read-only model |
+| Manager local benefits | GET | `/api/manager/promotions/distribution-options?cinemaPublicId=...` | `ROLE_MANAGER` + `PROMOTION_VIEW`; excludes `AUTOMATION_ONLY` |
+| Manager local benefit issue | POST | `/api/manager/promotions/distribution-options/{id}/issue?cinemaPublicId=...` | additionally requires `PROMOTION_DISTRIBUTE_LOCAL`; server rechecks scope/quota |
+| Manager local incidents | GET | `/api/manager/promotions/incidents?cinemaPublicId=...` | additionally requires `PROMOTION_AUDIT_VIEW`; no chain-wide reconciliation data |
+
+Manager endpoints derive the allowed cinema set from the authenticated JWT
+`cinemaPublicIds` claim. `cinemaPublicId` selects one cinema from that set and
+never expands it. A request for another cinema returns `403`. Manager responses
+exclude UAT data, legal/compliance fields, chain-wide budget details and Admin
+actions. Local issuance audit records both `managerAccountId` and
+`cinemaPublicId`.
 
 Admin authorization is method-level and role-specific. The broad `/api/admin/**`
 matcher only requires authentication so that `MARKETING_*`, `FINANCE_*`,

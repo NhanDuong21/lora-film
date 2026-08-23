@@ -13,11 +13,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import com.project.promotionservice.promotion.entity.PromotionCampaign;
+import com.project.promotionservice.promotion.entity.Promotion;
 import com.project.promotionservice.promotion.entity.PromotionRedemption;
 import com.project.promotionservice.promotion.enums.CampaignScopeType;
+import com.project.promotionservice.promotion.enums.PromotionDistributionMode;
 import com.project.promotionservice.promotion.enums.PromotionRedemptionStatus;
+import com.project.promotionservice.promotion.enums.PromotionStatus;
 import com.project.promotionservice.promotion.enums.PromotionType;
 import com.project.promotionservice.promotion.repository.PromotionCampaignRepository;
+import com.project.promotionservice.promotion.repository.PromotionRepository;
 import com.project.promotionservice.promotion.repository.PromotionRedemptionRepository;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -29,6 +33,8 @@ import java.time.Instant;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -48,6 +54,7 @@ class PromotionSecurityIntegrationTest {
     @Qualifier("requestMappingHandlerMapping")
     private RequestMappingHandlerMapping handlerMapping;
     @Autowired private PromotionCampaignRepository campaignRepository;
+    @Autowired private PromotionRepository promotionRepository;
     @Autowired private PromotionRedemptionRepository redemptionRepository;
 
     @Test
@@ -163,6 +170,67 @@ class PromotionSecurityIntegrationTest {
                         .param("expectedVersion", String.valueOf(global.getVersion()))
                         .header("Authorization", "Bearer " + tokenWithClaims(
                                 "MANAGER", List.of("PROMOTION_OPERATE"), List.of("cinema-a"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerWorkspaceShowsCentralAndAssignedCampaignsButNotAnotherCinema() throws Exception {
+        PromotionCampaign global = campaign(
+                "MANAGER-CENTRAL", CampaignScopeType.GLOBAL, null);
+        PromotionCampaign own = campaign(
+                "MANAGER-OWN", CampaignScopeType.ASSIGNED_CINEMAS, "[\"cinema-a\"]");
+        PromotionCampaign other = campaign(
+                "MANAGER-OTHER", CampaignScopeType.ASSIGNED_CINEMAS, "[\"cinema-b\"]");
+        campaignRepository.saveAllAndFlush(List.of(global, own, other));
+
+        mockMvc.perform(get("/api/manager/promotions/campaigns")
+                        .param("cinemaPublicId", "cinema-a")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_VIEW"), List.of("cinema-a"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].publicId", hasItem(global.getPublicId())))
+                .andExpect(jsonPath("$.data[*].publicId", hasItem(own.getPublicId())))
+                .andExpect(jsonPath("$.data[*].publicId", not(hasItem(other.getPublicId()))))
+                .andExpect(jsonPath("$.data[?(@.publicId == '%s')].readOnly"
+                        .formatted(global.getPublicId()), hasItem(true)));
+    }
+
+    @Test
+    void managerWorkspaceRejectsClientSelectedCinemaOutsideJwtAssignment() throws Exception {
+        mockMvc.perform(get("/api/manager/promotions/workspace")
+                        .param("cinemaPublicId", "cinema-b")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_VIEW"), List.of("cinema-a"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerDistributionOptionsNeverExposeAutomationOnlyBenefits() throws Exception {
+        PromotionCampaign own = campaign(
+                "MANAGER-DISTRIBUTION", CampaignScopeType.ASSIGNED_CINEMAS,
+                "[\"cinema-a\"]");
+        campaignRepository.saveAndFlush(own);
+        Promotion local = promotion(own, "Local recovery",
+                PromotionDistributionMode.ASSIGNED_WALLET, "cinema-a");
+        Promotion automation = promotion(own, "Automation owned",
+                PromotionDistributionMode.AUTOMATION_ONLY, "cinema-a");
+        promotionRepository.saveAllAndFlush(List.of(local, automation));
+
+        mockMvc.perform(get("/api/manager/promotions/distribution-options")
+                        .param("cinemaPublicId", "cinema-a")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_VIEW"), List.of("cinema-a"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].publicId", hasItem(local.getPublicId())))
+                .andExpect(jsonPath("$.data[*].publicId", not(hasItem(automation.getPublicId()))));
+    }
+
+    @Test
+    void managerIncidentReadNeedsLocalAuditCapability() throws Exception {
+        mockMvc.perform(get("/api/manager/promotions/incidents")
+                        .param("cinemaPublicId", "cinema-a")
+                        .header("Authorization", "Bearer " + tokenWithClaims(
+                                "MANAGER", List.of("PROMOTION_VIEW"), List.of("cinema-a"))))
                 .andExpect(status().isForbidden());
     }
 
@@ -336,5 +404,23 @@ class PromotionSecurityIntegrationTest {
         redemption.setDiscountAmount(new BigDecimal("10000.00"));
         redemption.setFinalAmount(new BigDecimal("90000.00"));
         return redemption;
+    }
+
+    private Promotion promotion(
+            PromotionCampaign campaign, String name,
+            PromotionDistributionMode distributionMode, String cinemaPublicId) {
+        Promotion promotion = new Promotion();
+        promotion.setCampaignPublicId(campaign.getPublicId());
+        promotion.setPromotionType(PromotionType.VOUCHER);
+        promotion.setName(name);
+        promotion.setDescription(name);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setPublicVisible(false);
+        promotion.setDistributionMode(distributionMode);
+        promotion.setConditionsJson("{\"cinemaPublicIds\":[\"" + cinemaPublicId + "\"]}");
+        promotion.setActionsJson("[{\"discountType\":\"FIXED_AMOUNT\",\"value\":10000}]");
+        promotion.setValidFrom(Instant.now().minusSeconds(3600));
+        promotion.setValidTo(Instant.now().plusSeconds(3600));
+        return promotion;
     }
 }

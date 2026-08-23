@@ -131,20 +131,28 @@ export default function ManagerLayout() {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-orange">Không gian làm việc</p>
             <p className="mt-1 text-sm font-bold text-zinc-300">Quản lý rạp được phân công</p>
           </div>
-          <label className="relative block w-full md:w-96">
-            <span className="sr-only">Chọn rạp đang vận hành</span>
-            <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-orange" />
-            <select
-              value={selectedCinemaId}
-              disabled={cinemaState.loading || !cinemas.length}
-              onChange={event => changeCinema(event.target.value)}
-              className="min-h-11 w-full appearance-none rounded-xl border border-white/10 bg-zinc-900 py-2 pl-10 pr-10 text-sm font-bold text-white outline-none focus:border-brand-orange/50 disabled:text-zinc-600"
-            >
-              <option value="">{cinemaState.loading ? 'Đang tải rạp được phân công…' : 'Chưa có rạp được phân công'}</option>
-              {cinemas.map(cinema => <option key={cinema.publicId} value={cinema.publicId}>{cinema.name}</option>)}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-          </label>
+          {cinemas.length === 1 && !cinemaState.loading ? (
+            <div className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-white/10 bg-zinc-900 px-3 text-sm font-bold text-white md:w-96">
+              <MapPin className="h-4 w-4 shrink-0 text-brand-orange" />
+              <span className="truncate">{cinemas[0].name}</span>
+              <span className="ml-auto rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] font-black uppercase text-emerald-300">Rạp được phân công</span>
+            </div>
+          ) : (
+            <label className="relative block w-full md:w-96">
+              <span className="sr-only">Chọn rạp đang vận hành</span>
+              <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-orange" />
+              <select
+                value={selectedCinemaId}
+                disabled={cinemaState.loading || !cinemas.length}
+                onChange={event => changeCinema(event.target.value)}
+                className="min-h-11 w-full appearance-none rounded-xl border border-white/10 bg-zinc-900 py-2 pl-10 pr-10 text-sm font-bold text-white outline-none focus:border-brand-orange/50 disabled:text-zinc-600"
+              >
+                <option value="">{cinemaState.loading ? 'Đang tải rạp được phân công…' : 'Chưa có rạp được phân công'}</option>
+                {cinemas.map(cinema => <option key={cinema.publicId} value={cinema.publicId}>{cinema.name}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            </label>
+          )}
         </header>
 
         <main className="p-4 md:p-8">

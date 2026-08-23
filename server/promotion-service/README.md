@@ -51,6 +51,7 @@ Hibernate dùng `ddl-auto=validate` và không tự cập nhật schema.
 | Nhóm | Prefix tiêu biểu |
 |---|---|
 | Customer promotion và wallet | `/api/promotions/**`, `/api/customers/me/promotions/**`, `/api/customers/me/promotion-history` |
+| Manager promotion theo rạp | `/api/manager/promotions/workspace`, `/campaigns`, `/automations`, `/distribution-options`, `/incidents` |
 | Admin campaign/promotion | `/api/admin/promotion-campaigns/**`, `/api/admin/promotions/**` |
 | Smart orchestration | `/api/admin/promotion-opportunities`, `/api/admin/promotion-playbooks/**`, `/api/admin/promotion-runs/**` |
 | Admin reservation/config/event/monitoring | `/api/admin/reservations/**`, `/api/admin/configurations/**`, `/api/admin/events/**`, `/api/admin/promotion-monitoring/**`, `/api/admin/promotion-operations/**` |

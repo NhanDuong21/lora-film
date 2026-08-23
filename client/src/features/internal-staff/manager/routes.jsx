@@ -14,7 +14,7 @@ const ManagerPaymentsPage = lazy(() => import('./pages/ManagerPaymentsPage'));
 const ManagerBookingDetailPage = lazy(() => import('./pages/ManagerBookingDetailPage'));
 const ManagerPaymentDetailPage = lazy(() => import('./pages/ManagerPaymentDetailPage'));
 const ManagerTicketControlPage = lazy(() => import('./pages/ManagerTicketControlPage'));
-const PromotionCenterPage = lazy(() => import('@/features/promotion/admin/pages/AdminPromotionCenterPage'));
+const PromotionCenterPage = lazy(() => import('@/features/promotion/manager/pages/ManagerPromotionCenterPage'));
 
 const lazyPage = element => <Suspense fallback={<PageLoader />}>{element}</Suspense>;
 
