@@ -100,6 +100,19 @@
 | BR-VOU-04 | Voucher **không được quy đổi thành tiền mặt** dưới bất kỳ hình thức nào (không hoàn tiền chênh lệch nếu giá trị voucher lớn hơn giá vé). |
 | BR-VOU-05 | Engine luôn bảo vệ mức giá tốt nhất: so sánh voucher/coupon customer chọn với AUTO tốt nhất, chỉ cộng dồn khi BR-VOU-03 cho phép và chọn tổ hợp có tổng giảm cao nhất. Nếu AUTO tốt hơn lựa chọn thủ công thì không reserve/consume voucher hoặc coupon đó; checkout phải thông báo rõ cho customer. |
 | BR-VOU-06 | Voucher chính sách thành viên **không áp dụng cho giao dịch vé nhóm/vé đoàn B2B** (Co-Sales) — Eligibility Engine phải kiểm tra `orderType != GROUP_BOOKING` trước khi cho áp dụng voucher cá nhân. |
+
+### Public campaign presentation
+
+| ID | Business rule |
+|---|---|
+| BR-PUB-01 | Nội dung quảng bá công khai thuộc về `CampaignPresentation`, không thuộc promotion template và không được lưu trong `promotion.metadata_json`. Một campaign có tối đa một presentation đang tồn tại. |
+| BR-PUB-02 | Campaign DRAFT, voucher cấp riêng, coupon riêng, AUTO chỉ dùng ở checkout và dữ liệu CSKH/test không bắt buộc có presentation hoặc ảnh. |
+| BR-PUB-03 | Presentation chỉ được `PUBLISHED` khi campaign ở `SCHEDULED` hoặc `ACTIVE`, approval là `APPROVED`, legal là `PASSED`, không phải test data, không bật kill switch, có ít nhất một customer placement, cover image và alt text. |
+| BR-PUB-04 | `Promotion.publicVisible` chỉ biểu diễn VOUCHER được customer claim công khai; không được dùng thay cho trạng thái/placement của nội dung marketing. |
+| BR-PUB-05 | Homepage và Promotion Center hiển thị một card theo campaign. `primaryPromotionPublicId` xác định benefit cho CTA; nếu không cấu hình, hệ thống ưu tiên public VOUCHER đang active rồi đến benefit active có priority cao nhất. |
+| BR-PUB-06 | Thay headline, summary, placement hoặc primary benefit của presentation đang published đưa presentation về DRAFT để review/publish lại, nhưng không làm đổi financial/legal configuration hash của campaign/promotion. Thay cover asset không sửa discount engine hoặc wallet template. |
+| BR-PUB-07 | File ảnh được lưu ở object/file storage; MySQL chỉ lưu URL, storage key/provider, MIME type, kích thước và audit metadata. Không lưu binary image trong MySQL. |
+| BR-PUB-08 | Fallback visual chỉ là bảo vệ kỹ thuật khi tải ảnh lỗi. Presentation không có ảnh/alt text không được publish ra customer placement. |
 | BR-VOU-07 | Voucher rách/hỏng/quá hạn tại quầy: nhân viên quét mã không hợp lệ → hệ thống trả lỗi rõ ràng `VOUCHER_EXPIRED`/`VOUCHER_INVALID`, không cho override thủ công trừ khi có quyền `CSKH_AGENT` + lý do ghi nhận vào audit log. |
 
 ## B4. Discount Rule (tự động)

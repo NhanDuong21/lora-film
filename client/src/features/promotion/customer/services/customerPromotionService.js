@@ -55,6 +55,23 @@ const normalizeSystemPage = (response) => {
     : { ...page, content: content.map(normalizeSystemItem) };
 };
 
+const normalizeOffer = (item) => ({
+  ...item,
+  primaryPromotion: item?.primaryPromotion
+    ? item.primaryPromotion.promotionType === "AUTO"
+      ? normalizeSystemItem(item.primaryPromotion)
+      : normalizePublicItem(item.primaryPromotion)
+    : null,
+});
+
+const normalizeOfferPage = (response) => {
+  const page = unwrap(response) || {};
+  const content = Array.isArray(page) ? page : page.content || [];
+  return Array.isArray(page)
+    ? content.map(normalizeOffer)
+    : { ...page, content: content.map(normalizeOffer) };
+};
+
 const walletParams = (params = {}) => {
   const resolved = { status: "AVAILABLE", ...params };
   if (resolved.status === "ALL" || resolved.status === null) {
@@ -93,6 +110,11 @@ const customerPromotionService = {
   getPublicPromotions: async (params = {}) =>
     normalizePublicPage(
       await apiClient.get("/api/promotions/public", { params }),
+    ),
+
+  getPublicOffers: async (params = {}) =>
+    normalizeOfferPage(
+      await apiClient.get("/api/promotions/offers", { params }),
     ),
 
   getSystemPromotions: async (params = {}) =>

@@ -86,6 +86,25 @@ describe('adminPromotionService', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/api/admin/monitoring/summary');
   });
 
+  it('uses a dedicated campaign presentation lifecycle', async () => {
+    await adminPromotionService.getCampaignPresentation('campaign-1');
+    await adminPromotionService.updateCampaignPresentation('campaign-1', {
+      headline: 'Monday Deal',
+    });
+    await adminPromotionService.publishCampaignPresentation('campaign-1');
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/api/admin/promotion-campaigns/campaign-1/presentation'
+    );
+    expect(apiClient.put).toHaveBeenCalledWith(
+      '/api/admin/promotion-campaigns/campaign-1/presentation',
+      { headline: 'Monday Deal' }
+    );
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/admin/promotion-campaigns/campaign-1/presentation/publish'
+    );
+  });
+
   it('carries the UAT scope through automation, monitoring and anomaly contracts', async () => {
     await adminPromotionService.getPromotionPlaybooks(true);
     await adminPromotionService.getPromotionRuns(true);

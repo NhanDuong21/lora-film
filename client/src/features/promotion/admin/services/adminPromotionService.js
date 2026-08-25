@@ -41,6 +41,30 @@ const adminPromotionService = {
   reviewCampaignLegal: async (id, status, comment, legalNotificationRef) => unwrap(await apiClient.post(
     `/api/admin/promotion-campaigns/${id}/legal-review`, { status, comment, legalNotificationRef }
   )),
+  getCampaignPresentation: async id => unwrap(await apiClient.get(
+    `/api/admin/promotion-campaigns/${id}/presentation`
+  )),
+  updateCampaignPresentation: async (id, payload) => unwrap(await apiClient.put(
+    `/api/admin/promotion-campaigns/${id}/presentation`, payload
+  )),
+  uploadCampaignCover: async (id, file) => {
+    const formData = new FormData();
+    formData.append('file', file, file?.name || 'campaign-cover.jpg');
+    return unwrap(await apiClient.post(
+      `/api/admin/promotion-campaigns/${id}/presentation/cover`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    ));
+  },
+  removeCampaignCover: async id => unwrap(await apiClient.delete(
+    `/api/admin/promotion-campaigns/${id}/presentation/cover`
+  )),
+  publishCampaignPresentation: async id => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/presentation/publish`
+  )),
+  unpublishCampaignPresentation: async id => unwrap(await apiClient.post(
+    `/api/admin/promotion-campaigns/${id}/presentation/unpublish`
+  )),
 
   getPromotionOpportunities: async (includeTestData = false) => unwrap(await apiClient.get(
     '/api/admin/promotion-opportunities', { params: { includeTestData } }

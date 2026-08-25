@@ -167,4 +167,36 @@ describe("customerPromotionService", () => {
       walletPublicId: null,
     });
   });
+
+  it("loads campaign presentations and normalizes the primary benefit", async () => {
+    apiClient.get.mockResolvedValue({
+      data: {
+        data: {
+          content: [{
+            campaignPublicId: "campaign-1",
+            headline: "Monday Deal",
+            primaryPromotion: {
+              publicId: "promotion-1",
+              promotionType: "VOUCHER",
+            },
+          }],
+        },
+      },
+    });
+
+    const result = await customerPromotionService.getPublicOffers({
+      placement: "HOME",
+      page: 0,
+      size: 3,
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith("/api/promotions/offers", {
+      params: { placement: "HOME", page: 0, size: 3 },
+    });
+    expect(result.content[0].primaryPromotion).toMatchObject({
+      promotionPublicId: "promotion-1",
+      source: "PUBLIC_EVENT",
+      ownershipType: "CLAIMABLE",
+    });
+  });
 });

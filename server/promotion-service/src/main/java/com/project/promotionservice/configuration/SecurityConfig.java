@@ -59,7 +59,10 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
                         .requestMatchers("/internal/**").hasRole("INTERNAL")
-                        .requestMatchers(HttpMethod.GET, "/api/promotions/public").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/promotions/public",
+                                "/api/promotions/offers",
+                                "/api/promotions/assets/**").permitAll()
                         // Fine-grained business roles are enforced by @PreAuthorize
                         // on every admin controller. Requiring ADMIN here would make
                         // MARKETING, LEGAL, FINANCE, CSKH and OPERATIONS unreachable.

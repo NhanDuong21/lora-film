@@ -58,6 +58,9 @@ class RouteValidatorTest {
         assertThat(isSecured(HttpMethod.GET, "/api/membership-tiers")).isFalse();
         assertThat(isSecured(HttpMethod.GET, "/api/promotions/public")).isFalse();
         assertThat(isSecured(HttpMethod.GET, "/api/promotions/public?size=6")).isFalse();
+        assertThat(isSecured(HttpMethod.GET, "/api/promotions/offers?placement=HOME")).isFalse();
+        assertThat(isSecured(HttpMethod.GET, "/api/promotions/assets/cover.webp")).isFalse();
+        assertThat(isSecured(HttpMethod.POST, "/api/promotions/offers")).isTrue();
     }
 
     @Test

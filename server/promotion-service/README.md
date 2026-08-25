@@ -4,6 +4,9 @@ Promotion Service quản lý campaign, promotion/voucher, claim của khách hà
 reservation trong luồng booking, lifecycle scheduler, outbox event và monitoring.
 Lớp smart orchestration bổ sung playbook đã duyệt, run bất biến, audience
 snapshot/member và issue job bất đồng bộ mà không thay transaction core.
+Nội dung quảng bá ra homepage/Promotion Center được quản lý độc lập qua
+`CampaignPresentation`. Promotion template tiếp tục chỉ sở hữu luật ưu đãi;
+ảnh được lưu ngoài MySQL và database chỉ giữ URL/storage key cùng metadata.
 Service chạy tại cổng `8087` và sở hữu database `promotion_db`.
 
 ## Chạy local
@@ -23,6 +26,8 @@ Trước khi chạy, cần:
 - Áp dụng `docs/database/mysql/promotion-service-schema.sql` từ thư mục gốc.
 - Với database đang có dữ liệu, áp migration
   `docs/database/mysql/migrations/20260820_promotion_smart_orchestration.sql`.
+- Để bật campaign presentation, áp migration
+  `docs/database/mysql/migrations/20260825_promotion_campaign_presentations.sql`.
 - Dữ liệu demo là tùy chọn: `20260820_promotion_checker_demo_data.sql`
   gán một checker độc lập không có quyền author; còn
   `20260820_promotion_birthday_uat_demo_data.sql` tạo audience sinh nhật 3 người

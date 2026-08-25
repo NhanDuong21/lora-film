@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -18,16 +18,21 @@ import {
   Film,
   Gift,
   Globe2,
+  Image as ImageIcon,
   Loader2,
+  Megaphone,
   Plus,
   RefreshCw,
   RotateCw,
   Search,
+  Save,
   Send,
   Tag,
   Users,
+  UploadCloud,
   Workflow,
   X,
+  Trash2,
 } from "lucide-react";
 import adminPromotionService from "../services/adminPromotionService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -455,6 +460,7 @@ export default function AdminPromotionCenterPage() {
   const permissions = user?.permissions || [];
   const canViewOperations = permissions.includes("PROMOTION_AUDIT_VIEW");
   const canAuthor = permissions.includes("PROMOTION_AUTHOR");
+  const canPublish = permissions.includes("PROMOTION_PUBLISH");
   const normalizedRole = String(user?.role || "")
     .replace(/^ROLE_/, "")
     .toUpperCase();
@@ -1243,6 +1249,8 @@ export default function AdminPromotionCenterPage() {
         <CampaignDetailModal
           record={modal.record}
           isAdmin={isAdmin}
+          canAuthor={canAuthor}
+          canPublish={canPublish}
           onClose={() => setModal(null)}
           onPrimaryAction={(campaign, action) => {
             setModal(null);
@@ -3317,6 +3325,7 @@ function LedgerTable({ title, total, rows }) {
 const campaignDetailTabs = [
   "Tổng quan",
   "Ưu đãi",
+  "Hiển thị khách hàng",
   "Đối tượng nhận",
   "Ngân sách & hạn mức",
   "Duyệt & pháp lý",
@@ -3337,6 +3346,8 @@ const blockedReasonLabel = {
 function CampaignDetailModal({
   record,
   isAdmin,
+  canAuthor,
+  canPublish,
   onClose,
   onPrimaryAction,
   onAddBenefit,
@@ -3345,23 +3356,40 @@ function CampaignDetailModal({
   const [activeTab, setActiveTab] = useState("Tổng quan");
   const [detail, setDetail] = useState(record);
   const [history, setHistory] = useState([]);
+  const [presentation, setPresentation] = useState(null);
   const [state, setState] = useState({ loading: true, error: "" });
+  const [presentationState, setPresentationState] = useState({ busy: false, error: "", message: "" });
 
   useEffect(() => {
     let active = true;
     Promise.all([
       adminPromotionService.getCampaign(record.publicId),
       adminPromotionService.getApprovalHistory(record.publicId).catch(() => []),
-    ]).then(([campaign, approvalHistory]) => {
+      adminPromotionService.getCampaignPresentation(record.publicId),
+    ]).then(([campaign, approvalHistory, campaignPresentation]) => {
       if (!active) return;
       setDetail(campaign);
       setHistory(Array.isArray(approvalHistory) ? approvalHistory : []);
+      setPresentation(campaignPresentation);
       setState({ loading: false, error: "" });
     }).catch((error) => {
       if (active) setState({ loading: false, error: errorText(error) });
     });
     return () => { active = false; };
   }, [record.publicId]);
+
+  const changePresentation = async (action, message) => {
+    setPresentationState({ busy: true, error: "", message: "" });
+    try {
+      const result = await action();
+      setPresentation(result);
+      setPresentationState({ busy: false, error: "", message });
+      return result;
+    } catch (error) {
+      setPresentationState({ busy: false, error: errorText(error), message: "" });
+      return null;
+    }
+  };
 
   const journey = campaignJourney(detail, isAdmin);
   const customerOutcome = campaignCustomerOutcome(detail);
@@ -3551,6 +3579,36 @@ function CampaignDetailModal({
               </div>
             )}
           </div>
+        ) : activeTab === "Hiển thị khách hàng" ? (
+          <CampaignPresentationPanel
+            campaign={detail}
+            presentation={presentation}
+            busy={presentationState.busy}
+            error={presentationState.error}
+            message={presentationState.message}
+            canAuthor={canAuthor}
+            canPublish={canPublish}
+            onSave={(payload) => changePresentation(
+              () => adminPromotionService.updateCampaignPresentation(detail.publicId, payload),
+              "Đã lưu bản nháp nội dung hiển thị.",
+            )}
+            onUpload={(file) => changePresentation(
+              () => adminPromotionService.uploadCampaignCover(detail.publicId, file),
+              "Đã tải ảnh bìa lên.",
+            )}
+            onRemoveCover={() => changePresentation(
+              () => adminPromotionService.removeCampaignCover(detail.publicId),
+              "Đã gỡ ảnh bìa.",
+            )}
+            onPublish={() => changePresentation(
+              () => adminPromotionService.publishCampaignPresentation(detail.publicId),
+              "Nội dung đã được phát hành cho khách hàng.",
+            )}
+            onUnpublish={() => changePresentation(
+              () => adminPromotionService.unpublishCampaignPresentation(detail.publicId),
+              "Đã ẩn nội dung khỏi các kênh khách hàng.",
+            )}
+          />
         ) : activeTab === "Đối tượng nhận" ? (
           <div className="space-y-3 text-sm leading-6 text-zinc-300">
             {(detail.promotions || []).map((promotion) => (
@@ -3613,6 +3671,239 @@ function CampaignDetailModal({
         )}
       </div>
     </ModalShell>
+  );
+}
+
+function CampaignPresentationPanel({
+  campaign,
+  presentation,
+  busy,
+  error,
+  message,
+  canAuthor,
+  canPublish,
+  onSave,
+  onUpload,
+  onRemoveCover,
+  onPublish,
+  onUnpublish,
+}) {
+  const fileInputRef = useRef(null);
+  const [form, setForm] = useState({
+    headline: "",
+    summary: "",
+    imageAltText: "",
+    featured: false,
+    displayOrder: 100,
+    showOnHome: false,
+    showInPromotionCenter: false,
+    showInWallet: false,
+    primaryPromotionPublicId: "",
+  });
+
+  useEffect(() => {
+    if (!presentation) return;
+    setForm({
+      headline: presentation.headline || campaign.name || "",
+      summary: presentation.summary || campaign.description || "",
+      imageAltText: presentation.imageAltText || "",
+      featured: Boolean(presentation.featured),
+      displayOrder: presentation.displayOrder ?? 100,
+      showOnHome: Boolean(presentation.showOnHome),
+      showInPromotionCenter: Boolean(presentation.showInPromotionCenter),
+      showInWallet: Boolean(presentation.showInWallet),
+      primaryPromotionPublicId: presentation.primaryPromotionPublicId || "",
+    });
+  }, [campaign.description, campaign.name, presentation]);
+
+  if (!presentation) {
+    return <div className="flex min-h-40 items-center justify-center text-sm text-zinc-500">Chưa tải được nội dung hiển thị.</div>;
+  }
+
+  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const savedShape = {
+    headline: presentation.headline || "",
+    summary: presentation.summary || "",
+    imageAltText: presentation.imageAltText || "",
+    featured: Boolean(presentation.featured),
+    displayOrder: presentation.displayOrder ?? 100,
+    showOnHome: Boolean(presentation.showOnHome),
+    showInPromotionCenter: Boolean(presentation.showInPromotionCenter),
+    showInWallet: Boolean(presentation.showInWallet),
+    primaryPromotionPublicId: presentation.primaryPromotionPublicId || "",
+  };
+  const dirty = JSON.stringify(form) !== JSON.stringify(savedShape);
+  const placementsSelected = form.showOnHome || form.showInPromotionCenter || form.showInWallet;
+  const campaignPublishable = ["SCHEDULED", "ACTIVE"].includes(campaign.status)
+    && campaign.approvalStatus === "APPROVED"
+    && campaign.legalStatus === "PASSED"
+    && !campaign.testData
+    && !campaign.killSwitch;
+  const presentationReady = Boolean(
+    presentation.coverImageUrl
+    && form.imageAltText.trim()
+    && placementsSelected
+    && !dirty,
+  );
+
+  const blockers = [
+    !presentation.coverImageUrl && "Tải ít nhất một ảnh bìa",
+    !form.imageAltText.trim() && "Nhập mô tả ảnh cho accessibility",
+    !placementsSelected && "Chọn ít nhất một vị trí hiển thị",
+    dirty && "Lưu thay đổi nội dung trước khi phát hành",
+    !["SCHEDULED", "ACTIVE"].includes(campaign.status) && "Campaign phải được lên lịch hoặc đang chạy",
+    campaign.approvalStatus !== "APPROVED" && "Campaign chưa được phê duyệt",
+    campaign.legalStatus !== "PASSED" && "Campaign chưa đạt kiểm tra pháp lý",
+    campaign.testData && "Dữ liệu test không được hiển thị công khai",
+    campaign.killSwitch && "Campaign đang bị dừng khẩn cấp",
+  ].filter(Boolean);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    await onSave({
+      ...form,
+      headline: form.headline.trim(),
+      summary: form.summary.trim(),
+      imageAltText: form.imageAltText.trim() || null,
+      displayOrder: Number(form.displayOrder) || 0,
+      primaryPromotionPublicId: form.primaryPromotionPublicId || null,
+    });
+  };
+
+  const chooseFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) return;
+    await onUpload(file);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/45 p-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-black text-white">Nội dung quảng bá của campaign</p>
+            <StatusBadge value={presentation.status} text={presentation.status === "PUBLISHED" ? "Đang hiển thị" : "Bản nháp"} />
+          </div>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-500">
+            Ảnh và nội dung này dùng chung cho homepage, trang ưu đãi và ví. Thay đổi tại đây không sửa luật giảm giá hoặc voucher đã cấp.
+          </p>
+        </div>
+        {presentation.status === "PUBLISHED" ? (
+          <button type="button" disabled={busy || !canPublish} onClick={onUnpublish} className={`${buttonClass} border border-zinc-700 text-zinc-300`}>
+            Ẩn khỏi khách hàng
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy || !canPublish || !presentationReady || !campaignPublishable}
+            onClick={onPublish}
+            className={`${buttonClass} bg-emerald-500 text-emerald-950`}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
+            Phát hành
+          </button>
+        )}
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,.75fr)]">
+        <form onSubmit={submit} className="space-y-4 rounded-xl border border-zinc-800 p-4">
+          <Field label="Tiêu đề khách hàng nhìn thấy" required>
+            <input required maxLength={180} disabled={!canAuthor} value={form.headline} onChange={(event) => update("headline", event.target.value)} className={fieldClass} />
+          </Field>
+          <Field label="Mô tả ngắn" required>
+            <textarea required maxLength={500} disabled={!canAuthor} value={form.summary} onChange={(event) => update("summary", event.target.value)} className={`${fieldClass} h-24 py-2 leading-6`} />
+          </Field>
+          <Field label="Ưu đãi chính khi khách bấm CTA">
+            <select disabled={!canAuthor} value={form.primaryPromotionPublicId} onChange={(event) => update("primaryPromotionPublicId", event.target.value)} className={fieldClass}>
+              <option value="">Hệ thống tự chọn ưu đãi phù hợp</option>
+              {(campaign.promotions || []).map((promotion) => (
+                <option key={promotion.publicId} value={promotion.publicId}>
+                  {promotion.name} · {labels[promotion.promotionType] || promotion.promotionType}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Thứ tự hiển thị">
+              <input min="0" max="10000" type="number" disabled={!canAuthor} value={form.displayOrder} onChange={(event) => update("displayOrder", event.target.value)} className={fieldClass} />
+            </Field>
+            <label className="flex items-center gap-3 rounded-lg border border-zinc-800 px-3 py-2 text-xs font-bold text-zinc-300">
+              <input type="checkbox" disabled={!canAuthor} checked={form.featured} onChange={(event) => update("featured", event.target.checked)} className="h-4 w-4 accent-orange-500" />
+              Ưu tiên làm banner lớn
+            </label>
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vị trí hiển thị</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {[
+                ["showOnHome", "Homepage"],
+                ["showInPromotionCenter", "Trang ưu đãi"],
+                ["showInWallet", "Ví khách hàng"],
+              ].map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-xs font-bold text-zinc-300">
+                  <input type="checkbox" disabled={!canAuthor} checked={form[key]} onChange={(event) => update(key, event.target.checked)} className="h-4 w-4 accent-orange-500" />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <Field label="Mô tả ảnh (alt text)" required>
+            <input maxLength={240} disabled={!canAuthor} value={form.imageAltText} onChange={(event) => update("imageAltText", event.target.value)} placeholder="Ví dụ: Khán phòng rực sáng trong chương trình đồng giá vé" className={fieldClass} />
+          </Field>
+          <div className="flex justify-end border-t border-zinc-800 pt-4">
+            <button disabled={busy || !canAuthor || !dirty} className={`${buttonClass} bg-orange-500 text-white`}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Lưu bản nháp
+            </button>
+          </div>
+        </form>
+
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/50">
+            <div className="relative aspect-[16/9] bg-zinc-900">
+              {presentation.coverImageUrl ? (
+                <img src={presentation.coverImageUrl} alt={form.imageAltText || "Ảnh bìa campaign"} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-600">
+                  <ImageIcon className="h-9 w-9" />
+                  <span className="text-xs font-bold">Chưa có ảnh bìa</span>
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent p-4 pt-12">
+                <p className="line-clamp-2 text-sm font-black text-white">{form.headline || campaign.name}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 p-3">
+              <button type="button" disabled={busy || !canAuthor} onClick={() => fileInputRef.current?.click()} className={`${buttonClass} flex-1 bg-zinc-800 text-white`}>
+                <UploadCloud className="h-4 w-4" /> {presentation.coverImageUrl ? "Thay ảnh" : "Tải ảnh"}
+              </button>
+              {presentation.coverImageUrl && (
+                <button type="button" disabled={busy || !canAuthor} onClick={onRemoveCover} aria-label="Gỡ ảnh bìa" className={`${buttonClass} border border-red-500/25 text-red-300`}>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseFile} className="hidden" />
+            </div>
+            <p className="px-3 pb-3 text-[10px] leading-4 text-zinc-600">JPEG, PNG hoặc WebP · tối đa 8 MB · khuyên dùng ảnh ngang 16:9 có vùng an toàn ở giữa.</p>
+          </div>
+
+          <div className={`rounded-xl border p-4 ${blockers.length ? "border-amber-500/25 bg-amber-500/[0.05]" : "border-emerald-500/25 bg-emerald-500/[0.05]"}`}>
+            <p className={`text-xs font-black ${blockers.length ? "text-amber-300" : "text-emerald-300"}`}>
+              {blockers.length ? "Cần hoàn tất trước khi phát hành" : "Sẵn sàng phát hành"}
+            </p>
+            {blockers.length > 0 && (
+              <ul className="mt-2 space-y-1 text-[11px] leading-5 text-zinc-400">
+                {blockers.map((item) => <li key={item}>• {item}</li>)}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {error && <p role="alert" className="rounded-lg border border-red-500/25 bg-red-500/[0.06] px-3 py-2 text-xs text-red-300">{error}</p>}
+      {message && <p className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-300">{message}</p>}
+    </div>
   );
 }
 

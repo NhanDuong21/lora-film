@@ -280,6 +280,8 @@ function PromotionCard({
           0,
           Number(promotion.maxUsage) - Number(promotion.usageCount || 0),
         );
+  const campaignPresentation = promotion.campaignPresentation;
+  const coverImageUrl = campaignPresentation?.coverImageUrl;
 
   return (
     <article
@@ -293,12 +295,22 @@ function PromotionCard({
           onOpenDetail();
         }
       }}
-      className={`grid gap-4 border-b border-zinc-800 py-5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
+      className={`grid gap-4 border-b border-zinc-800 py-5 last:border-b-0 sm:items-center ${coverImageUrl ? "sm:grid-cols-[112px_minmax(0,1fr)_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"} ${
         onOpenDetail
           ? "cursor-pointer rounded-lg px-3 transition-colors hover:bg-zinc-900/70 focus:outline-none focus:ring-2 focus:ring-brand-orange/60"
           : ""
       }`}
     >
+      {coverImageUrl && (
+        <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-zinc-900 sm:aspect-square">
+          <img
+            src={coverImageUrl}
+            alt={campaignPresentation.imageAltText || campaignPresentation.headline || customerPromotionTitle(promotion)}
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+        </div>
+      )}
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <TicketPercent className="h-4 w-4 text-brand-orange" />
@@ -637,6 +649,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState(embedded ? "wallet" : "event");
   const [publicPromotions, setPublicPromotions] = useState([]);
+  const [promotionCenterOffers, setPromotionCenterOffers] = useState([]);
   const [systemPromotions, setSystemPromotions] = useState([]);
   const [wallet, setWallet] = useState([]);
   const [history, setHistory] = useState([]);
@@ -652,7 +665,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [publicPage, walletPage, systemPage, historyItems] = await Promise.all([
+      const [publicPage, walletPage, systemPage, historyItems, offerPage, walletOfferPage] = await Promise.all([
         customerPromotionService.getPublicPromotions({
           page: 0,
           size: 100,
@@ -670,9 +683,31 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
           sort: "priority,asc",
         }),
         customerPromotionService.getMyPromotionHistory(),
+        customerPromotionService.getPublicOffers({
+          placement: "PROMOTION_CENTER",
+          page: 0,
+          size: 100,
+        }).catch(() => ({ content: [] })),
+        customerPromotionService.getPublicOffers({
+          placement: "WALLET",
+          page: 0,
+          size: 100,
+        }).catch(() => ({ content: [] })),
       ]);
-      const walletItems = contentOf(walletPage);
-      setPublicPromotions(contentOf(publicPage));
+      const centerOffers = contentOf(offerPage);
+      const centerOfferByCampaign = new Map(
+        centerOffers.map((item) => [item.campaignPublicId, item]),
+      );
+      const walletOfferByCampaign = new Map(
+        contentOf(walletOfferPage).map((item) => [item.campaignPublicId, item]),
+      );
+      const decorateWith = (offerMap) => (item) => ({
+        ...item,
+        campaignPresentation: offerMap.get(item.campaignPublicId) || null,
+      });
+      const walletItems = contentOf(walletPage).map(decorateWith(walletOfferByCampaign));
+      setPromotionCenterOffers(centerOffers);
+      setPublicPromotions(contentOf(publicPage).map(decorateWith(centerOfferByCampaign)));
       setWallet(walletItems.filter((item) => isWalletPromotionUsable(item)));
       setWalletOwnershipIds(
         new Set(
@@ -681,7 +716,7 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
             .filter(Boolean),
         ),
       );
-      setSystemPromotions(contentOf(systemPage));
+      setSystemPromotions(contentOf(systemPage).map(decorateWith(centerOfferByCampaign)));
       setHistory(Array.isArray(historyItems) ? historyItems : []);
       setMessage(null);
     } catch (error) {
@@ -697,13 +732,24 @@ export default function CustomerPromotionCenterPage({ embedded = false }) {
   }, [load]);
 
   const eventPromotions = useMemo(
-    () =>
-      publicPromotions.filter(
-        (item) =>
-          item.promotionType === "VOUCHER" &&
-          !walletOwnershipIds.has(item.promotionPublicId || item.publicId),
-      ),
-    [publicPromotions, walletOwnershipIds],
+    () => {
+      const advertised = promotionCenterOffers
+        .map((offer) => offer.primaryPromotion
+          ? { ...offer.primaryPromotion, campaignPresentation: offer }
+          : null)
+        .filter(Boolean);
+      const candidates = advertised.length ? advertised : publicPromotions;
+      const seenCampaigns = new Set();
+      return candidates.filter((item) => {
+        if (item.promotionType !== "VOUCHER") return false;
+        if (walletOwnershipIds.has(item.promotionPublicId || item.publicId)) return false;
+        if (!item.campaignPublicId) return true;
+        if (seenCampaigns.has(item.campaignPublicId)) return false;
+        seenCampaigns.add(item.campaignPublicId);
+        return true;
+      });
+    },
+    [promotionCenterOffers, publicPromotions, walletOwnershipIds],
   );
   const personalVouchers = useMemo(
     () =>

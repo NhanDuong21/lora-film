@@ -633,6 +633,14 @@ Hệ thống áp dụng các quy tắc nghiệp vụ nghiêm ngặt nhằm trán
 | | PUT | `/api/admin/promotion-campaigns/{id}` | Admin/Marketing | Cập nhật thông tin chiến dịch |
 | | PATCH | `/api/admin/promotion-campaigns/{id}/status` | Admin/Marketing | Thay đổi trạng thái hoạt động |
 | | POST | `/api/admin/promotion-campaigns/{id}/legal-review` | Admin/Legal Compliance | Ghi quyết định `PASSED/FAILED` và mã hồ sơ pháp lý trước publish |
+| **Campaign Presentation** | GET | `/api/admin/promotion-campaigns/{id}/presentation` | Promotion Viewer | Lấy bản nháp/nội dung hiển thị của campaign |
+| | PUT | `/api/admin/promotion-campaigns/{id}/presentation` | Promotion Author | Lưu headline, summary, placements, CTA và alt text; nội dung đang published trở về draft |
+| | POST | `/api/admin/promotion-campaigns/{id}/presentation/cover` | Promotion Author | Upload JPEG/PNG/WebP tối đa 8 MB; file nằm ngoài MySQL |
+| | DELETE | `/api/admin/promotion-campaigns/{id}/presentation/cover` | Promotion Author | Gỡ cover và đưa presentation published về draft |
+| | POST | `/api/admin/promotion-campaigns/{id}/presentation/publish` | Promotion Publisher | Publish sau khi campaign/asset/placement hợp lệ |
+| | POST | `/api/admin/promotion-campaigns/{id}/presentation/unpublish` | Promotion Publisher | Ẩn nội dung khỏi customer placements |
+| **Public Offers** | GET | `/api/promotions/offers?placement=HOME` | Public | Trả một offer/card theo campaign cùng primary benefit |
+| | GET | `/api/promotions/assets/{storageKey}` | Public | Phục vụ campaign cover từ local asset storage |
 | **Coupon Admin** | POST | `/api/admin/coupons` | Admin/Marketing | Tạo coupon mới |
 | | POST | `/api/admin/coupons/generate` | Admin/Marketing | Phát sinh coupon hàng loạt theo lô |
 | | POST | `/api/admin/coupons/import` | Admin/Marketing | Nhập mã coupon từ file CSV/Excel |
