@@ -320,11 +320,3 @@ docker compose down -v
   ảnh hưởng.
 
 Chi tiết nằm trong [GitLab workflow](docs/gitlab-workflow.md).
-
-## Thành viên
-
-- Phan Tuấn Thành — Team Leader / Developer
-- Dương Thiện Nhân — Developer
-- Trần Hiển Vinh — Developer
-- Trương Hoàng Khang — Developer
-- Trần Lương Thiện Hoàn — Developer
