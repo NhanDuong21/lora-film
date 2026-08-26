@@ -44,19 +44,17 @@ describe('EventSection homepage promotions', () => {
     });
   });
 
-  it('uses Vietnamese marketing copy and the guest promotion link', async () => {
+  it('does not fall back to active public vouchers without a published home presentation', async () => {
     render(
       <MemoryRouter>
         <EventSection />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Chào thành viên mới – giảm 10%')).toBeInTheDocument();
-    expect(screen.getByText('Giảm ngay 50.000đ')).toBeInTheDocument();
-    expect(screen.getByText('Combo tối – giảm 20%')).toBeInTheDocument();
+    expect(await screen.findByText('Chưa có chương trình đang mở')).toBeInTheDocument();
     expect(screen.queryByText(/Welcome to|instant discount|Combo night/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Xem tất cả ưu đãi' })).toHaveAttribute('href', '/promotions');
-    expect(screen.getAllByRole('button', { name: 'Đăng nhập để nhận' })).toHaveLength(3);
+    expect(customerPromotionService.getPublicPromotions).not.toHaveBeenCalled();
   });
 
   it('renders one campaign presentation instead of duplicating its benefit template', async () => {

@@ -3745,6 +3745,18 @@ function CampaignPresentationPanel({
     && placementsSelected
     && !dirty,
   );
+  const publicVoucher = (campaign.promotions || []).find((promotion) =>
+    promotion.promotionType === "VOUCHER"
+    && promotion.publicVisible
+    && ["ACTIVE", "SCHEDULED"].includes(promotion.status));
+  const publishedPlacements = [
+    presentation.showOnHome && "Homepage",
+    presentation.showInPromotionCenter && "Trang ưu đãi",
+    presentation.showInWallet && "Ví khách hàng",
+  ].filter(Boolean);
+  const customerPresentationStatus = presentation.status === "PUBLISHED"
+    ? `Đã phát hành${publishedPlacements.length ? ` · ${publishedPlacements.join(", ")}` : ""}`
+    : "Bản nháp · Chưa hiển thị trên các kênh khách hàng";
 
   const blockers = [
     !presentation.coverImageUrl && "Tải ít nhất một ảnh bìa",
@@ -3805,6 +3817,25 @@ function CampaignPresentationPanel({
             Phát hành
           </button>
         )}
+      </div>
+
+      <div aria-label="Phân biệt trạng thái campaign, voucher và nội dung quảng bá" className="space-y-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.04] p-4">
+        <div>
+          <p className="text-xs font-black text-sky-200">Ba trạng thái độc lập</p>
+          <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+            Campaign quyết định luật ưu đãi; voucher public quyết định khách có thể nhận; chỉ nội dung quảng bá đã phát hành mới xuất hiện trên homepage và các kênh marketing.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <DetailCard label="Campaign vận hành" value={labels[campaign.status] || campaign.status} />
+          <DetailCard
+            label="Voucher khách có thể nhận"
+            value={publicVoucher
+              ? `${publicVoucher.status === "ACTIVE" ? "Có thể nhận" : "Đã lên lịch"} · ${publicVoucher.name}`
+              : "Không có voucher public đang mở"}
+          />
+          <DetailCard label="Nội dung quảng bá" value={customerPresentationStatus} />
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,.75fr)]">

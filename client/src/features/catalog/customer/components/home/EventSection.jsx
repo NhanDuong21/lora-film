@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowRight,
   BadgeCheck,
@@ -13,46 +13,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import customerPromotionService from '@/features/promotion/customer/services/customerPromotionService';
 import {
-  conditionSummary,
   formatDateTime,
   friendlyPromotionError,
   voucherDiscountSummary,
 } from '@/features/promotion/shared/promotionPresentation';
 
 const contentOf = payload => (Array.isArray(payload) ? payload : payload?.content || []);
-
-const promotionMarketingName = promotion => {
-  const name = String(promotion?.name || '').trim();
-  const normalized = name.toLocaleLowerCase('vi');
-  if (normalized.includes('welcome') || normalized.includes('new member')) {
-    return 'Chào thành viên mới – giảm 10%';
-  }
-  if (normalized.includes('50k') || normalized.includes('50.000')) {
-    return 'Giảm ngay 50.000đ';
-  }
-  if (normalized.includes('combo night')) {
-    return 'Combo tối – giảm 20%';
-  }
-  return name || `Ưu đãi ${voucherDiscountSummary(promotion)}`;
-};
-
-const promotionConditionText = promotion => {
-  const summary = conditionSummary(promotion?.conditionsJson);
-  return summary === 'Không có điều kiện bổ sung.'
-    ? 'Áp dụng cho đơn hàng đủ điều kiện trong thời gian diễn ra chương trình.'
-    : summary;
-};
-
-const legacyOffer = promotion => ({
-  campaignPublicId: promotion.campaignPublicId || promotion.publicId,
-  headline: promotionMarketingName(promotion),
-  summary: promotionConditionText(promotion),
-  coverImageUrl: null,
-  imageAltText: '',
-  validTo: promotion.validTo,
-  primaryPromotion: promotion,
-  legacy: true,
-});
 
 function OfferAction({ offer, ownedIds, busyId, isAuthenticated, onClaim, compact = false }) {
   const promotion = offer.primaryPromotion;
@@ -119,7 +85,6 @@ export default function EventSection() {
   const navigate = useNavigate();
   const location = useLocation();
   const [offers, setOffers] = useState([]);
-  const [promotions, setPromotions] = useState([]);
   const [ownedIds, setOwnedIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
@@ -130,17 +95,8 @@ export default function EventSection() {
     setLoading(true);
     setError('');
     try {
-      const offersRequest = customerPromotionService.getPublicOffers
-        ? customerPromotionService.getPublicOffers({ placement: 'HOME', page: 0, size: 3 })
-            .catch(() => ({ content: [] }))
-        : Promise.resolve({ content: [] });
-      const [offerPage, publicPage, walletPage] = await Promise.all([
-        offersRequest,
-        customerPromotionService.getPublicPromotions({
-          page: 0,
-          size: 6,
-          sort: 'priority,asc',
-        }),
+      const [offerPage, walletPage] = await Promise.all([
+        customerPromotionService.getPublicOffers({ placement: 'HOME', page: 0, size: 3 }),
         isAuthenticated
           ? customerPromotionService.getMyPromotions({
               page: 0,
@@ -150,7 +106,6 @@ export default function EventSection() {
           : Promise.resolve({ content: [] }),
       ]);
       setOffers(contentOf(offerPage));
-      setPromotions(contentOf(publicPage).filter(item => item.promotionType === 'VOUCHER'));
       setOwnedIds(new Set(
         contentOf(walletPage).map(item => item.promotionPublicId).filter(Boolean),
       ));
@@ -166,12 +121,7 @@ export default function EventSection() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const visible = useMemo(
-    () => offers.length
-      ? offers.slice(0, 3)
-      : promotions.slice(0, 3).map(legacyOffer),
-    [offers, promotions],
-  );
+  const visible = offers.slice(0, 3);
 
   const claim = async promotion => {
     if (!isAuthenticated) {
