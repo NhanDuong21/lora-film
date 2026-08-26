@@ -1033,8 +1033,8 @@ Checklist MR:
 [ ] Đã kiểm tra CORS với Frontend local
 [ ] Đã cập nhật docs/api/api-gateway-routes.md
 [ ] Đã cập nhật docs/api/user-service-api.md nếu cần
-[ ] Đã cập nhật docs/frontend/auth-integration.md nếu cần
-[ ] Đã cập nhật docs/test/auth-flow-test-cases.md nếu cần
+[ ] Đã cập nhật luồng auth phía client nếu cần
+[ ] Đã cập nhật test auth/gateway nếu cần
 [ ] MR target vào develop
 ```
 

@@ -33,7 +33,7 @@ Node.js tương thích với Vite 8 và npm.
 ├── api-gateway/     # Gateway tại cổng 8080
 ├── eureka-server/   # Service discovery tại cổng 8761
 ├── docker/          # MySQL init cho môi trường local
-├── docs/            # API, kiến trúc, schema, runbook và test matrix
+├── docs/            # API, canonical schema, ERD và quy trình GitLab
 └── retrospective/   # Báo cáo retrospective theo sprint
 ```
 
@@ -101,9 +101,9 @@ promotion-service-schema.sql    score-service-schema.sql
 user-service-schema.sql
 ```
 
-Đọc file trước khi chạy: một số schema có câu lệnh tạo lại database. Với môi
-trường đã có dữ liệu, sao lưu trước và dùng các file phù hợp trong
-`docs/database/mysql/migrations/` thay vì chạy lại schema một cách máy móc. Xem
+Đọc file trước khi chạy: một số schema có câu lệnh tạo lại database. Repository
+này chỉ hỗ trợ khởi tạo database mới từ canonical schema, không hỗ trợ nâng cấp
+in-place một database thuộc revision cũ. Xem
 [hướng dẫn database](docs/database/README.md).
 
 ### 4. Khởi động backend

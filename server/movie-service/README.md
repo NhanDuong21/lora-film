@@ -68,8 +68,8 @@ Bên trong mỗi package feature (ngoại trừ common), mã nguồn sẽ đư�
 
 ## 4. Quản Lý Cơ Sở Dữ Liệu (Database)
 
-- Service này **KHÔNG** tự quản lý schema migration (như Flyway/Liquibase) trong thư mục nội bộ của nó.
-- Toàn bộ các script tạo bảng và chỉnh sửa bảng (Migrations) đều được quản lý tập trung ở thư mục gốc của workspace chung.
-- Các bạn chỉ viết code Java Entity tại đây. Mọi sự thay đổi về mặt vật lý ở Database cần được thực hiện qua các file SQL ở thư mục DB chung.
+- Service này **KHÔNG** dùng Flyway/Liquibase hoặc migration lịch sử.
+- Database mới được dựng từ canonical schema tập trung tại `docs/database/mysql/movie-service-schema.sql`.
+- Mọi thay đổi Entity phải được phản ánh trực tiếp vào canonical schema trong cùng thay đổi mã nguồn.
 
 Chúc các bạn phát triển mã nguồn hiệu quả và chất lượng!

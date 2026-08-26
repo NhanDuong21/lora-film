@@ -30,14 +30,9 @@ Trước khi chạy, cần:
 
 - MySQL, Redis, Kafka và Eureka đang hoạt động.
 - Áp dụng `docs/database/mysql/promotion-service-schema.sql` từ thư mục gốc.
-- Với database đang có dữ liệu, áp migration
-  `docs/database/mysql/migrations/20260820_promotion_smart_orchestration.sql`.
-- Để bật campaign presentation, áp migration
-  `docs/database/mysql/migrations/20260825_promotion_campaign_presentations.sql`.
-- Dữ liệu demo là tùy chọn: `20260820_promotion_checker_demo_data.sql`
-  gán một checker độc lập không có quyền author; còn
-  `20260820_promotion_birthday_uat_demo_data.sql` tạo audience sinh nhật 3 người
-  từ các CUSTOMER có sẵn. Không chạy hai file demo ở production.
+- Schema canonical đã bao gồm smart orchestration, campaign presentation và mọi
+  cấu trúc hiện hành. Repository không nạp dữ liệu demo và không hỗ trợ nâng cấp
+  in-place database cũ.
 - Giữ token nội bộ giữa Booking/Payment và Promotion đồng bộ qua biến môi
   trường; không dùng giá trị local mặc định ở môi trường chia sẻ.
 
@@ -75,8 +70,7 @@ Hibernate dùng `ddl-auto=validate` và không tự cập nhật schema.
 
 Contract đầy đủ nằm tại
 [`docs/api/promotion-service-api.md`](../../docs/api/promotion-service-api.md).
-Các business rule và quyết định thiết kế nằm trong
-[`docs/design/promotion-service/`](../../docs/design/promotion-service/).
+Code runtime và test tương ứng là nguồn hiện hành cho business rule.
 
 ## Cấu trúc code
 
@@ -92,5 +86,4 @@ com.project.promotionservice/
 
 Business logic nằm trong domain/application service; controller chỉ xử lý HTTP,
 validation và authorization. Repository không được chứa policy nghiệp vụ. Mọi
-thay đổi schema phải cập nhật canonical schema và migration phù hợp trong cùng
-Merge Request.
+thay đổi schema phải cập nhật canonical schema trong cùng Merge Request.

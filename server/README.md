@@ -72,6 +72,6 @@ chỉ bổ sung chi tiết đặc thù của service đó.
 - Giao tiếp đồng bộ qua API công khai/nội bộ đã xác thực; giao tiếp bất đồng bộ
   qua event contract đã được tài liệu hóa.
 - Thay đổi endpoint, event, schema hoặc biến môi trường phải cập nhật contract,
-  migration và file cấu hình mẫu trong cùng Merge Request.
+  canonical schema và file cấu hình mẫu trong cùng Merge Request.
 - Không commit `application.properties`, secret, output trong `target/` hay log
   runtime.

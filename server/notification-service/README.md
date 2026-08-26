@@ -65,4 +65,5 @@ automatically.
 
 Template content is never seeded into MySQL, packaged under `src/main/resources`, or embedded in a Docker image.
 
-Detailed design and runbooks are under [`docs/notification`](../../docs/notification/architecture.md).
+The maintained HTTP contract is documented in
+[`docs/api/notification-service-api.md`](../../docs/api/notification-service-api.md).

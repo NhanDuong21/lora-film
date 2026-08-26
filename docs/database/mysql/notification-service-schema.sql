@@ -299,13 +299,5 @@ CREATE TABLE notification_dead_letters (
         CHECK (reprocess_count >= 0)
 ) ENGINE=InnoDB;
 
--- Operational development data only; no template bodies, subjects, schemas, or samples.
-INSERT INTO notification_preferences (
-    user_public_id, channel, category, enabled, updated_at
-) VALUES
-    ('dev-customer-marketing-opt-out', 'EMAIL', 'MARKETING', b'0', UTC_TIMESTAMP(6)),
-    ('dev-customer-marketing-opt-out', 'IN_APP', 'MARKETING', b'0', UTC_TIMESTAMP(6)),
-    ('dev-customer-transactional', 'EMAIL', 'MARKETING', b'1', UTC_TIMESTAMP(6));
-
 -- Database users and credentials are provisioned by Docker Compose or the
 -- local database operator, never by this schema file.
