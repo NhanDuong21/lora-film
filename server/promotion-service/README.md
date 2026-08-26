@@ -9,6 +9,12 @@ Nội dung quảng bá ra homepage/Promotion Center được quản lý độc l
 ảnh được lưu ngoài MySQL và database chỉ giữ URL/storage key cùng metadata.
 Service chạy tại cổng `8087` và sở hữu database `promotion_db`.
 
+Cloudinary là provider ảnh mặc định và dùng chung các biến môi trường
+`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` của
+project. Ảnh promotion nằm trong folder `lorafilm/promotions/campaigns`; MySQL
+chỉ lưu secure URL và Cloudinary public ID. Chỉ đặt
+`PROMOTION_ASSET_PROVIDER=local` khi cần chạy offline.
+
 ## Chạy local
 
 Từ thư mục này:
