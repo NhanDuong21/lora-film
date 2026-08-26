@@ -265,8 +265,6 @@ CREATE TABLE departments
 
     description VARCHAR(255) NULL,
 
-    department_id BIGINT NOT NULL,
-
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at TIMESTAMP NOT NULL
@@ -306,6 +304,8 @@ CREATE TABLE positions
     title VARCHAR(100) NOT NULL,
 
     description VARCHAR(255) NULL,
+
+    department_id BIGINT NOT NULL,
 
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 
