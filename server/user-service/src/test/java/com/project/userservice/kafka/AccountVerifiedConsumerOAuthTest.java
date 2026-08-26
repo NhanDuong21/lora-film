@@ -5,6 +5,8 @@ import com.project.userservice.dto.AccountVerifiedEvent;
 import com.project.userservice.dto.AccountVerifiedPayload;
 import com.project.userservice.entity.User;
 import com.project.userservice.entity.CustomerProfile;
+import com.project.userservice.enumtype.AccountType;
+import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.repository.CustomerProfileRepository;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.service.UserAuditService;
@@ -103,6 +105,7 @@ class AccountVerifiedConsumerOAuthTest {
         AccountVerifiedConsumer consumer = dependencies.consumer();
         AccountVerifiedEvent event = oauthEvent();
         event.getData().setRole("EMPLOYEE");
+        event.getData().setAccountStatus("INACTIVE");
         Acknowledgment acknowledgment = mock(Acknowledgment.class);
 
         when(dependencies.objectMapper.readValue("event", AccountVerifiedEvent.class))
@@ -111,6 +114,10 @@ class AccountVerifiedConsumerOAuthTest {
 
         consumer.consume("event", acknowledgment);
 
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(dependencies.userRepository).save(userCaptor.capture());
+        assertEquals(AccountType.WORKFORCE, userCaptor.getValue().getAccountType());
+        assertEquals(UserStatus.INACTIVE, userCaptor.getValue().getStatus());
         verify(dependencies.customerProfileRepository, never()).save(any(CustomerProfile.class));
         verify(dependencies.customerProfileRepository, never()).existsByAccountId(31L);
         verify(acknowledgment).acknowledge();

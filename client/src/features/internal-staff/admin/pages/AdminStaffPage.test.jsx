@@ -13,6 +13,7 @@ import {
   getPositions,
 } from '../services/userAdminService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
+import { getAccessProfiles } from '../services/authAdminService';
 
 const access = vi.hoisted(() => () => true);
 const triggerToast = vi.hoisted(() => vi.fn());
@@ -35,7 +36,12 @@ vi.mock('../services/userAdminService', () => ({
   getEmploymentActions: vi.fn(),
   getPositions: vi.fn(),
 }));
-vi.mock('../services/authAdminService', () => ({ createEmployeeAccount: vi.fn() }));
+vi.mock('../services/authAdminService', () => ({
+  createEmployeeAccount: vi.fn(),
+  getAccessProfiles: vi.fn(),
+  resendEmployeeInvitation: vi.fn(),
+  updateAccountAccessProfile: vi.fn(),
+}));
 vi.mock('@/features/facilities/admin/services/adminCinemaService', () => ({
   default: { getCinemas: vi.fn() },
 }));
@@ -69,6 +75,9 @@ describe('AdminStaffPage phân công rạp', () => {
     getDashboard.mockResolvedValue({ totalEmployees: 1, employeesByStatus: { ACTIVE: 1 } });
     getEmployee.mockResolvedValue(employee);
     getEmploymentActions.mockResolvedValue({ content: [] });
+    getAccessProfiles.mockResolvedValue([
+      { id: 7, code: 'BOX_OFFICE', name: 'Nhân viên bán vé', active: true, permissions: ['BOOKING_CREATE'] },
+    ]);
     adminCinemaService.getCinemas.mockResolvedValue({
       data: {
         data: [
@@ -116,5 +125,26 @@ describe('AdminStaffPage phân công rạp', () => {
 
     await waitFor(() => expect(assignEmployeeCinema).toHaveBeenCalledWith(3, crescentId));
     expect(triggerToast).toHaveBeenCalledWith('Đã cập nhật rạp làm việc cho nhân viên.');
+  });
+
+  it('hướng dẫn tiếp nhận nhân viên mới bằng tiếng Việt và không yêu cầu mật khẩu', async () => {
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận nhân viên mới' }));
+    expect(screen.getByText('Bước 1 · Xác nhận nhân viên')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo tài khoản mới' }));
+
+    expect(screen.getByText(/Không cần nhập mật khẩu/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/mật khẩu/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Thị Lan'), {
+      target: { value: 'Trần Minh Anh' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('lan.nguyen@lorafilm.local'), {
+      target: { value: 'minh.anh@lorafilm.local' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+
+    expect(await screen.findByText('Bước 2 · Công việc & quyền')).toBeInTheDocument();
+    expect(screen.getByText(/Chỉ sau khi nhân viên tự đặt mật khẩu/)).toBeInTheDocument();
   });
 });

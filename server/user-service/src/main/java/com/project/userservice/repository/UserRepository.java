@@ -111,7 +111,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("""
             select u from User u
             where u.isDeleted = false
-              and u.status = com.project.userservice.enumtype.UserStatus.ACTIVE
+              and u.status <> com.project.userservice.enumtype.UserStatus.BLOCKED
               and u.accountType = com.project.userservice.enumtype.AccountType.WORKFORCE
               and not exists (
                   select 1 from Employee e

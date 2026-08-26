@@ -30,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.CacheEvict;
 
 import java.util.Map;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -84,7 +86,7 @@ public class EmployeeService {
     public EmployeeResponse get(Long accountId) {
         Employee employee = find(accountId);
         User user = userRepository.findById(accountId)
-                .orElseThrow(() -> new BusinessException("User not found", "USER_001"));
+                .orElseThrow(() -> new BusinessException("Không tìm thấy người dùng", "USER_001"));
         return employeeMapper.toResponse(employee, user);
     }
 
@@ -129,11 +131,18 @@ public class EmployeeService {
     public EmployeeResponse applyAction(Long accountId, EmploymentActionRequest request) {
         Employee employee = find(accountId);
         if (request.expectedVersion() != null && !request.expectedVersion().equals(employee.getVersion())) {
-            throw new BusinessException("Employee record was changed by another operator", "USER_VERSION_CONFLICT");
+            throw new BusinessException("Hồ sơ vừa được người khác cập nhật. Vui lòng tải lại trước khi tiếp tục",
+                    "USER_VERSION_CONFLICT");
+        }
+        if (!allowedActions(employee.getStatus()).contains(request.type())) {
+            throw new BusinessException("Hành động nhân sự này không phù hợp với trạng thái hiện tại",
+                    "USER_EMPLOYMENT_ACTION_INVALID");
         }
 
         EmploymentAction action = snapshotAction(employee, request);
         switch (request.type()) {
+            case CANCEL_ONBOARDING -> cancelOnboarding(employee);
+            case REOPEN_ONBOARDING -> reopenOnboarding(employee);
             case ACTIVATE, END_LEAVE -> changeStatusForAction(employee, EmployeeStatus.ACTIVE);
             case START_LEAVE -> changeStatusForAction(employee, EmployeeStatus.ON_LEAVE);
             case SUSPEND -> changeStatusForAction(employee, EmployeeStatus.SUSPENDED);
@@ -146,8 +155,12 @@ public class EmployeeService {
         completeActionSnapshot(action, employee);
         employmentActionRepository.save(action);
 
-        String eventType = request.type() == EmploymentActionType.RESIGN
-                ? "EMPLOYEE_RESIGNED" : "EMPLOYEE_UPDATED";
+        String eventType = switch (request.type()) {
+            case RESIGN -> "EMPLOYEE_RESIGNED";
+            case CANCEL_ONBOARDING -> "EMPLOYEE_ONBOARDING_CANCELLED";
+            case REOPEN_ONBOARDING -> "EMPLOYEE_ONBOARDING_REOPENED";
+            default -> "EMPLOYEE_UPDATED";
+        };
         String details = "action=" + request.type()
                 + "; effectiveDate=" + request.effectiveDate()
                 + "; reason=" + request.reason().trim();
@@ -160,22 +173,24 @@ public class EmployeeService {
     @CacheEvict(value = "userDashboard", allEntries = true)
     public EmployeeResponse create(EmployeeRequest request) {
         if (employeeRepository.existsById(request.accountId())) {
-            throw new BusinessException("Employee already exists", "USER_EMPLOYEE_DUPLICATE");
+            throw new BusinessException("Hồ sơ nhân viên đã tồn tại", "USER_EMPLOYEE_DUPLICATE");
         }
         User user = userRepository.findById(request.accountId())
-                .orElseThrow(() -> new BusinessException("User not found", "USER_001"));
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new BusinessException("Account must be active", "USER_ACCOUNT_INACTIVE");
+                .orElseThrow(() -> new BusinessException("Không tìm thấy người dùng", "USER_001"));
+        if (user.getStatus() == UserStatus.BLOCKED) {
+            throw new BusinessException("Tài khoản đang bị khóa nên không thể bắt đầu tiếp nhận nhân viên",
+                    "USER_ACCOUNT_BLOCKED");
         }
         if (user.getAccountType() != AccountType.WORKFORCE) {
-            throw new BusinessException("A customer account cannot be used as a workforce profile",
+            throw new BusinessException("Không thể dùng tài khoản khách hàng để tạo hồ sơ nhân viên",
                     "USER_EMPLOYEE_ACCOUNT_TYPE_INVALID");
         }
         Employee employee = new Employee();
         employee.setAccountId(request.accountId());
         employee.setEmployeeCode("EMP" + String.format("%08d", request.accountId()));
         apply(employee, request);
-        employee.setStatus(EmployeeStatus.ACTIVE);
+        employee.setStatus(user.getStatus() == UserStatus.ACTIVE
+                ? EmployeeStatus.ACTIVE : EmployeeStatus.ONBOARDING);
         employeeRepository.save(employee);
         auditService.log("EMPLOYEE_CREATED", "EMPLOYEE", employee.getAccountId(), null);
         eventService.record("EMPLOYEE_CREATED", "EMPLOYEE", employee.getAccountId(),
@@ -188,7 +203,7 @@ public class EmployeeService {
     public EmployeeResponse update(Long accountId, EmployeeRequest request) {
         Employee employee = find(accountId);
         if (!accountId.equals(request.accountId())) {
-            throw new BusinessException("Employee account cannot be changed", "USER_010");
+            throw new BusinessException("Không thể thay đổi tài khoản của hồ sơ nhân viên", "USER_010");
         }
         apply(employee, request);
         employeeRepository.save(employee);
@@ -202,7 +217,7 @@ public class EmployeeService {
     public EmployeeResponse changeStatus(Long accountId, EmployeeStatus status) {
         Employee employee = find(accountId);
         if (employee.getStatus() == EmployeeStatus.RESIGNED && status != EmployeeStatus.RESIGNED) {
-            throw new BusinessException("A resigned employee cannot be reactivated", "USER_010");
+            throw new BusinessException("Không thể kích hoạt lại nhân viên đã nghỉ việc", "USER_010");
         }
         if (employee.getStatus() == status) {
             return get(accountId);
@@ -219,7 +234,7 @@ public class EmployeeService {
     @CacheEvict(value = "userDashboard", allEntries = true)
     public EmployeeResponse transfer(Long accountId, Long departmentId, Long positionId) {
         if (departmentId == null && positionId == null) {
-            throw new BusinessException("Department or position is required", "USER_008");
+            throw new BusinessException("Cần chọn phòng ban hoặc vị trí", "USER_008");
         }
         Employee employee = find(accountId);
         Department department = departmentId == null ? employee.getDepartment() : findDepartment(departmentId);
@@ -253,32 +268,66 @@ public class EmployeeService {
 
     private Department findDepartment(Long id) {
         Department value = departmentRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("Department not found", "USER_004"));
+                .orElseThrow(() -> new BusinessException("Không tìm thấy phòng ban", "USER_004"));
         if (value.isDeleted()) {
-            throw new BusinessException("Department not found", "USER_004");
+            throw new BusinessException("Không tìm thấy phòng ban", "USER_004");
         }
         return value;
     }
 
     private Position findPosition(Long id) {
         Position value = positionRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("Position not found", "USER_005"));
+                .orElseThrow(() -> new BusinessException("Không tìm thấy vị trí", "USER_005"));
         if (value.isDeleted()) {
-            throw new BusinessException("Position not found", "USER_005");
+            throw new BusinessException("Không tìm thấy vị trí", "USER_005");
         }
         return value;
     }
 
     private void changeStatusForAction(Employee employee, EmployeeStatus status) {
         if (employee.getStatus() == EmployeeStatus.RESIGNED && status != EmployeeStatus.RESIGNED) {
-            throw new BusinessException("A resigned employee cannot be reactivated", "USER_010");
+            throw new BusinessException("Không thể kích hoạt lại nhân viên đã nghỉ việc", "USER_010");
+        }
+        if (employee.getStatus() == EmployeeStatus.CANCELLED) {
+            throw new BusinessException("Hồ sơ đã hủy cần được mở lại tiếp nhận trước",
+                    "USER_ONBOARDING_CANCELLED");
         }
         employee.setStatus(status);
     }
 
+    private Set<EmploymentActionType> allowedActions(EmployeeStatus status) {
+        return switch (status) {
+            case ONBOARDING -> EnumSet.of(EmploymentActionType.CANCEL_ONBOARDING);
+            case CANCELLED -> EnumSet.of(EmploymentActionType.REOPEN_ONBOARDING);
+            case ACTIVE -> EnumSet.of(EmploymentActionType.START_LEAVE, EmploymentActionType.SUSPEND,
+                    EmploymentActionType.RESIGN, EmploymentActionType.TRANSFER,
+                    EmploymentActionType.COMPENSATION_CHANGE);
+            case ON_LEAVE -> EnumSet.of(EmploymentActionType.END_LEAVE, EmploymentActionType.SUSPEND,
+                    EmploymentActionType.RESIGN, EmploymentActionType.TRANSFER);
+            case SUSPENDED -> EnumSet.of(EmploymentActionType.ACTIVATE, EmploymentActionType.RESIGN);
+            case RESIGNED -> EnumSet.noneOf(EmploymentActionType.class);
+        };
+    }
+
+    private void cancelOnboarding(Employee employee) {
+        if (employee.getStatus() != EmployeeStatus.ONBOARDING) {
+            throw new BusinessException("Chỉ có thể hủy hồ sơ đang trong quá trình tiếp nhận",
+                    "USER_ONBOARDING_NOT_ACTIVE");
+        }
+        employee.setStatus(EmployeeStatus.CANCELLED);
+    }
+
+    private void reopenOnboarding(Employee employee) {
+        if (employee.getStatus() != EmployeeStatus.CANCELLED) {
+            throw new BusinessException("Chỉ có thể mở lại hồ sơ đã hủy tiếp nhận",
+                    "USER_ONBOARDING_NOT_CANCELLED");
+        }
+        employee.setStatus(EmployeeStatus.ONBOARDING);
+    }
+
     private void applyTransferAction(Employee employee, EmploymentActionRequest request) {
         if (request.departmentId() == null && request.positionId() == null) {
-            throw new BusinessException("A transfer requires a department or position", "USER_008");
+            throw new BusinessException("Điều chuyển cần có phòng ban hoặc vị trí mới", "USER_008");
         }
         Department department = request.departmentId() == null
                 ? employee.getDepartment() : findDepartment(request.departmentId());
@@ -292,14 +341,14 @@ public class EmployeeService {
     private void validatePositionDepartment(Position position, Department department) {
         if (position.getDepartment() == null
                 || !position.getDepartment().getId().equals(department.getId())) {
-            throw new BusinessException("Position does not belong to the selected department",
+            throw new BusinessException("Vị trí không thuộc phòng ban đã chọn",
                     "USER_POSITION_DEPARTMENT_MISMATCH");
         }
     }
 
     private void applyCompensationAction(Employee employee, EmploymentActionRequest request) {
         if (request.baseSalary() == null || request.baseSalary().signum() <= 0) {
-            throw new BusinessException("A compensation change requires a positive base salary", "USER_008");
+            throw new BusinessException("Lương cơ bản mới phải lớn hơn 0", "USER_008");
         }
         employee.setBaseSalary(request.baseSalary());
     }
@@ -345,9 +394,9 @@ public class EmployeeService {
 
     private Employee find(Long accountId) {
         Employee employee = employeeRepository.findById(accountId)
-                .orElseThrow(() -> new BusinessException("Employee not found", "USER_003"));
+                .orElseThrow(() -> new BusinessException("Không tìm thấy hồ sơ nhân viên", "USER_003"));
         if (employee.isDeleted()) {
-            throw new BusinessException("Employee not found", "USER_003");
+            throw new BusinessException("Không tìm thấy hồ sơ nhân viên", "USER_003");
         }
         return employee;
     }

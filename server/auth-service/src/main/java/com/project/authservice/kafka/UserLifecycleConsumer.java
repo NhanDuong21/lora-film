@@ -7,6 +7,7 @@ import com.project.authservice.enums.AccountStatus;
 import com.project.authservice.repository.AccountRepository;
 import com.project.authservice.repository.RoleRepository;
 import com.project.authservice.service.CredentialRevocationService;
+import com.project.authservice.service.EmployeeInvitationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -21,15 +22,18 @@ public class UserLifecycleConsumer {
     private final AccountRepository accountRepository;
     private final CredentialRevocationService revocationService;
     private final RoleRepository roleRepository;
+    private final EmployeeInvitationService invitationService;
 
     public UserLifecycleConsumer(ObjectMapper objectMapper,
                                  AccountRepository accountRepository,
                                  CredentialRevocationService revocationService,
-                                 RoleRepository roleRepository) {
+                                 RoleRepository roleRepository,
+                                 EmployeeInvitationService invitationService) {
         this.objectMapper = objectMapper;
         this.accountRepository = accountRepository;
         this.revocationService = revocationService;
         this.roleRepository = roleRepository;
+        this.invitationService = invitationService;
     }
 
     @KafkaListener(topics = "${app.kafka.topic.user-domain-events:user.domain.events.v1}",
@@ -57,6 +61,24 @@ public class UserLifecycleConsumer {
             log.info("Assigned EMPLOYEE role to accountId={} from employee lifecycle event", accountId);
             return;
         }
+        if ("EMPLOYEE_ONBOARDING_CANCELLED".equals(eventType)) {
+            account.setAccountStatus(AccountStatus.INACTIVE);
+            account.setIsEnabled(false);
+            accountRepository.save(account);
+            invitationService.invalidate(accountId);
+            revocationService.revokeAll(accountId);
+            log.info("Cancelled employee invitation for accountId={}", accountId);
+            return;
+        }
+        if ("EMPLOYEE_ONBOARDING_REOPENED".equals(eventType)) {
+            account.setAccountStatus(AccountStatus.INACTIVE);
+            account.setIsEnabled(false);
+            accountRepository.save(account);
+            revocationService.revokeAll(accountId);
+            invitationService.issue(account, null);
+            log.info("Reopened employee invitation for accountId={}", accountId);
+            return;
+        }
         AccountStatus target = targetStatus(eventType, data.path("status").asText(), account.getAccountStatus());
         if (target == null || target == account.getAccountStatus()) {
             return;
@@ -74,6 +96,8 @@ public class UserLifecycleConsumer {
         return "CUSTOMER_BLOCKED".equals(eventType)
                 || "CUSTOMER_UNBLOCKED".equals(eventType)
                 || "EMPLOYEE_CREATED".equals(eventType)
+                || "EMPLOYEE_ONBOARDING_CANCELLED".equals(eventType)
+                || "EMPLOYEE_ONBOARDING_REOPENED".equals(eventType)
                 || "EMPLOYEE_RESIGNED".equals(eventType)
                 || "EMPLOYEE_UPDATED".equals(eventType);
     }

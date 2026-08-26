@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   applyEmploymentAction,
   assignEmployeeCinema,
@@ -12,7 +12,12 @@ import {
   getEmploymentActions,
   getPositions
 } from '../services/userAdminService';
-import { createEmployeeAccount } from '../services/authAdminService';
+import {
+  createEmployeeAccount,
+  getAccessProfiles,
+  resendEmployeeInvitation,
+  updateAccountAccessProfile,
+} from '../services/authAdminService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import { AsyncState, StatusBadge } from '@/components/common/ui/uiKit';
 import SearchableSelect from '@/components/common/SearchableSelect';
@@ -24,41 +29,56 @@ import {
   DetailDrawer,
   DetailGrid,
 } from '../components/OperationsConsole';
-import { Building2, CalendarDays, FileText, KeyRound, Mail, Phone, Search, UserPlus, UserRoundCheck } from 'lucide-react';
+import { AlertTriangle, Building2, CalendarDays, CheckCircle2, FileText, Mail, Phone, RotateCcw, Search, Send, UserPlus, UserRoundCheck } from 'lucide-react';
 import { HrHero, PersonAvatar, UatGuide } from '../components/HrWorkspace';
 import { getEmployeeAvatarRole } from '../components/avatarUtils';
 import { useAuth } from '@/contexts/AuthContext';
 
 const EMPTY_PAGE = { content: [], totalPages: 0, totalElements: 0 };
 const TODAY = new Date().toISOString().slice(0, 10);
-const STATUS_LABELS = { ACTIVE: 'Đang làm việc', ON_LEAVE: 'Nghỉ phép', SUSPENDED: 'Tạm ngưng', RESIGNED: 'Đã nghỉ việc' };
+const STATUS_LABELS = {
+  ONBOARDING: 'Đang tiếp nhận', ACTIVE: 'Đang làm việc', ON_LEAVE: 'Nghỉ phép',
+  SUSPENDED: 'Tạm ngưng', RESIGNED: 'Đã nghỉ việc', CANCELLED: 'Đã hủy tiếp nhận'
+};
 const ACTION_LABELS = {
+  CANCEL_ONBOARDING: 'Hủy tiếp nhận nhân viên', REOPEN_ONBOARDING: 'Mở lại tiếp nhận',
   ACTIVATE: 'Kích hoạt lại', START_LEAVE: 'Bắt đầu nghỉ phép', END_LEAVE: 'Kết thúc nghỉ phép',
   SUSPEND: 'Tạm ngưng công việc', RESIGN: 'Ghi nhận nghỉ việc', TRANSFER: 'Điều chuyển',
   COMPENSATION_CHANGE: 'Điều chỉnh lương'
 };
 
 const initialHireForm = () => ({ accountId: '', departmentId: '', positionId: '', cinemaPublicId: '', hireDate: TODAY, baseSalary: '' });
-const initialAccountForm = () => ({ fullName: '', email: '', password: '' });
-const initialActionForm = () => ({ type: 'TRANSFER', departmentId: '', positionId: '', baseSalary: '', effectiveDate: TODAY, reason: '' });
+const initialAccountForm = () => ({ fullName: '', email: '', accessProfileId: '' });
+const initialActionForm = (type = 'TRANSFER') => ({ type, departmentId: '', positionId: '', baseSalary: '', effectiveDate: TODAY, reason: '' });
+
+const actionsForStatus = status => ({
+  ONBOARDING: ['CANCEL_ONBOARDING'],
+  CANCELLED: ['REOPEN_ONBOARDING'],
+  ACTIVE: ['START_LEAVE', 'SUSPEND', 'RESIGN', 'TRANSFER', 'COMPENSATION_CHANGE'],
+  ON_LEAVE: ['END_LEAVE', 'SUSPEND', 'RESIGN', 'TRANSFER'],
+  SUSPENDED: ['ACTIVATE', 'RESIGN'],
+  RESIGNED: [],
+}[status] || []);
 
 export default function AdminStaffPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const can = useAdminAccess();
   const { accountId: currentAccountId } = useAuth();
   const canCreate = can('EMPLOYEE_CREATE');
   const canUpdate = can('EMPLOYEE_UPDATE');
   const outlet = useOutletContext();
+  const confirmAction = outlet?.triggerConfirm || (() => Promise.resolve(true));
   const notify = outlet?.triggerToast || (() => undefined);
   const [filters, setFilters] = useState({ keyword: '', status: '', departmentId: '', positionId: '', cinemaPublicId: '', page: 0, size: 15 });
   const deferredKeyword = useDeferredValue(filters.keyword);
   const [result, setResult] = useState(EMPTY_PAGE);
   const [dashboard, setDashboard] = useState(null);
-  const [options, setOptions] = useState({ departments: [], positions: [], accounts: [], cinemas: [] });
+  const [options, setOptions] = useState({ departments: [], positions: [], accounts: [], cinemas: [], accessProfiles: [] });
   const [state, setState] = useState({ loading: true, error: '' });
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [hireOpen, setHireOpen] = useState(false);
+  const [hireOpen, setHireOpen] = useState(() => canCreate && searchParams.get('onboarding') === 'new');
   const [hireForm, setHireForm] = useState(initialHireForm);
   const [hireStep, setHireStep] = useState(1);
   const [accountMode, setAccountMode] = useState('existing');
@@ -83,7 +103,7 @@ export default function AdminStaffPage() {
   const load = useCallback(async () => {
     setState({ loading: true, error: '' });
     try {
-      const [employees, departments, positions, accounts, summary, cinemaEnvelope] = await Promise.all([
+      const [employees, departments, positions, accounts, summary, cinemaEnvelope, accessProfiles] = await Promise.all([
         getEmployees(query),
         getDepartments(),
         getPositions(),
@@ -92,14 +112,16 @@ export default function AdminStaffPage() {
           ? getDashboard({ excludeCurrentAccount: Boolean(currentAccountId) })
           : Promise.resolve(null),
         adminCinemaService.getCinemas({ page: 0, size: 100, showDeleted: false, sort: 'name,asc' })
-          .catch(() => null)
+          .catch(() => null),
+        canCreate ? getAccessProfiles() : Promise.resolve([])
       ]);
       setResult(employees || EMPTY_PAGE);
       setOptions({
         departments: departments || [],
         positions: positions || [],
         accounts: accounts?.content || [],
-        cinemas: cinemaEnvelope?.data?.data || []
+        cinemas: cinemaEnvelope?.data?.data || [],
+        accessProfiles: (accessProfiles || []).filter(profile => profile.active !== false && profile.code !== 'GENERAL_STAFF')
       });
       setDashboard(summary);
       setState({ loading: false, error: '' });
@@ -143,14 +165,20 @@ export default function AdminStaffPage() {
     setHireOpen(false);
     setHireStep(1);
     setAccountMode('existing');
+    setHireForm(initialHireForm());
     setAccountForm(initialAccountForm());
+    if (searchParams.has('onboarding')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('onboarding');
+      setSearchParams(nextParams, { replace: true });
+    }
   };
 
   const createAndResolveAccount = async () => {
     const created = await createEmployeeAccount({
       fullName: accountForm.fullName.trim(),
       email: accountForm.email.trim(),
-      password: accountForm.password
+      accessProfileId: Number(accountForm.accessProfileId)
     });
     let eligibleAccount = null;
     for (let attempt = 0; attempt < 8 && !eligibleAccount; attempt += 1) {
@@ -181,26 +209,55 @@ export default function AdminStaffPage() {
             return;
           }
         } else {
-          const account = await createAndResolveAccount();
-          setOptions(value => ({
-            ...value,
-            accounts: [account, ...value.accounts.filter(item => item.accountId !== account.accountId)]
-          }));
-          setHireForm(value => ({ ...value, accountId: String(account.accountId) }));
-          setAccountMode('existing');
-          notify(account.syncing
-            ? 'Đã tạo tài khoản. Hệ thống đang đồng bộ hồ sơ, bạn có thể tiếp tục nhập thông tin công việc.'
-            : 'Đã tạo tài khoản đăng nhập. Tiếp tục khai báo thông tin công việc.');
+          const email = accountForm.email.trim().toLowerCase();
+          if (!accountForm.fullName.trim() || !email) {
+            notify('Vui lòng nhập họ tên và email công việc.', 'error');
+            return;
+          }
+          const existingEmployeePage = await getEmployees({ keyword: email, page: 0, size: 20 });
+          const existingEmployee = existingEmployeePage?.content?.find(item => item.email?.trim().toLowerCase() === email);
+          if (existingEmployee) {
+            closeHire();
+            await openEmployee(existingEmployee);
+            notify(existingEmployee.status === 'CANCELLED'
+              ? 'Email này thuộc một hồ sơ đã hủy. Hãy chọn “Mở lại tiếp nhận” trong hồ sơ.'
+              : 'Email này đã có hồ sơ nhân viên. Hệ thống đã mở đúng hồ sơ để bạn kiểm tra.', 'error');
+            return;
+          }
+          const reusableAccount = options.accounts.find(item => item.email?.trim().toLowerCase() === email);
+          if (reusableAccount) {
+            setHireForm(value => ({ ...value, accountId: String(reusableAccount.accountId) }));
+            setAccountMode('existing');
+            notify('Email đã có tài khoản nhưng chưa có hồ sơ. Hệ thống sẽ liên kết tài khoản này thay vì tạo trùng.');
+          }
         }
         setHireStep(2);
         return;
       }
-      if (!hireForm.departmentId || !hireForm.positionId || !hireForm.cinemaPublicId || !hireForm.baseSalary) {
-        notify('Vui lòng chọn đủ rạp làm việc, phòng ban, vị trí và nhập lương cơ bản.', 'error');
+      if (hireStep === 2) {
+        if (!hireForm.departmentId || !hireForm.positionId || !hireForm.cinemaPublicId
+            || !hireForm.baseSalary || !accountForm.accessProfileId) {
+          notify('Vui lòng chọn đủ nhóm nghiệp vụ, rạp, phòng ban, vị trí và nhập lương cơ bản.', 'error');
+          return;
+        }
+        setHireStep(3);
         return;
       }
+      let accountId = hireForm.accountId;
+      if (accountMode === 'new') {
+        const account = await createAndResolveAccount();
+        accountId = String(account.accountId);
+        setOptions(value => ({
+          ...value,
+          accounts: [account, ...value.accounts.filter(item => item.accountId !== account.accountId)]
+        }));
+        setHireForm(value => ({ ...value, accountId }));
+        setAccountMode('existing');
+      } else {
+        await updateAccountAccessProfile(Number(accountId), Number(accountForm.accessProfileId));
+      }
       await createEmployee({
-        accountId: Number(hireForm.accountId),
+        accountId: Number(accountId),
         departmentId: Number(hireForm.departmentId),
         positionId: Number(hireForm.positionId),
         hireDate: hireForm.hireDate,
@@ -210,9 +267,11 @@ export default function AdminStaffPage() {
       closeHire();
       setHireForm(initialHireForm());
       await load();
-      notify('Đã tạo nhân viên và phân công rạp làm việc.');
+      notify(accountMode === 'new'
+        ? 'Đã tạo hồ sơ tiếp nhận và gửi lời mời đặt mật khẩu cho nhân viên.'
+        : 'Đã liên kết tài khoản và tạo hồ sơ tiếp nhận nhân viên.');
     } catch (error) {
-      notify(error?.message || (hireStep === 1 ? 'Không thể tạo tài khoản đăng nhập.' : 'Không thể tạo hồ sơ nhân viên.'), 'error');
+      notify(error?.message || 'Không thể hoàn tất tiếp nhận nhân viên. Bạn có thể thử lại mà không bị tạo trùng.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -242,6 +301,31 @@ export default function AdminStaffPage() {
     }
   };
 
+  const openEmploymentAction = type => {
+    setActionForm(initialActionForm(type || actionsForStatus(selected?.status)[0] || 'TRANSFER'));
+    setActionOpen(true);
+  };
+
+  const resendInvitation = async () => {
+    if (!selected) return;
+    const approved = await confirmAction({
+      title: 'Gửi lại lời mời đặt mật khẩu?',
+      message: `Hệ thống sẽ vô hiệu hóa mã cũ và gửi mã mới có hiệu lực 48 giờ đến ${selected.email}.`,
+      confirmLabel: 'Gửi lời mời mới',
+      tone: 'warning',
+    });
+    if (!approved) return;
+    setSubmitting(true);
+    try {
+      await resendEmployeeInvitation(selected.accountId);
+      notify('Đã gửi lại lời mời. Nhân viên có 48 giờ để tự đặt mật khẩu.');
+    } catch (error) {
+      notify(error?.message || 'Không thể gửi lại lời mời.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submitAction = async event => {
     event.preventDefault();
     if (!selected) return;
@@ -265,7 +349,11 @@ export default function AdminStaffPage() {
       const actions = await getEmploymentActions(selected.accountId, { page: 0, size: 20 });
       setHistory(actions?.content || []);
       await load();
-      notify('Đã ghi nhận hành động nhân sự và lưu lịch sử thay đổi.');
+      notify(actionForm.type === 'CANCEL_ONBOARDING'
+        ? 'Đã hủy tiếp nhận và vô hiệu hóa lời mời cũ.'
+        : actionForm.type === 'REOPEN_ONBOARDING'
+          ? 'Đã mở lại tiếp nhận. Hệ thống đang gửi lời mời mới cho nhân viên.'
+          : 'Đã ghi nhận hành động nhân sự và lưu lịch sử thay đổi.');
     } catch (error) {
       notify(error?.message || 'Không thể ghi nhận hành động nhân sự.', 'error');
     } finally {
@@ -275,6 +363,8 @@ export default function AdminStaffPage() {
 
   const statusCounts = dashboard?.employeesByStatus || {};
   const selectedHireAccount = options.accounts.find(item => String(item.accountId) === String(hireForm.accountId));
+  const selectedAccessProfile = options.accessProfiles.find(item => String(item.id) === String(accountForm.accessProfileId));
+  const availableActionCodes = actionsForStatus(selected?.status);
   const accountOptions = options.accounts.map(account => ({
     value: String(account.accountId),
     label: account.fullName,
@@ -307,16 +397,16 @@ export default function AdminStaffPage() {
       <HrHero
         context="Hồ sơ thay cho danh sách tài khoản"
         title="Hồ sơ nhân viên"
-        description="Mỗi nhân viên có một hồ sơ công việc, thông tin liên hệ và dòng thời gian thay đổi. Mở một thẻ để xem toàn bộ hành trình thay vì sửa trực tiếp trên bảng."
-        actions={<><UatGuide compact />{canCreate ? <button type="button" onClick={openHire} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black hover:bg-orange-400"><UserPlus size={18} /> Thêm nhân viên</button> : null}</>}
+        description="Tạo hồ sơ, phân công công việc và gửi lời mời đăng nhập trong một quy trình. Nhân viên tự đặt mật khẩu; người vận hành không cần quản lý mật khẩu ban đầu."
+        actions={<><UatGuide compact />{canCreate ? <button type="button" onClick={openHire} className="flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-black hover:bg-orange-400"><UserPlus size={18} /> Tiếp nhận nhân viên mới</button> : null}</>}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ['Tất cả hồ sơ', dashboard?.totalEmployees ?? result.totalElements, 'text-blue-300'],
+          ['Đang tiếp nhận', statusCounts.ONBOARDING ?? '—', 'text-orange-300'],
           ['Đang làm việc', statusCounts.ACTIVE ?? '—', 'text-emerald-300'],
-          ['Đang nghỉ / tạm ngưng', dashboard ? (statusCounts.ON_LEAVE || 0) + (statusCounts.SUSPENDED || 0) : '—', 'text-amber-300'],
-          ['Đã nghỉ việc', statusCounts.RESIGNED ?? '—', 'text-red-300']
+          ['Đã kết thúc', dashboard ? (statusCounts.RESIGNED || 0) + (statusCounts.CANCELLED || 0) : '—', 'text-red-300']
         ].map(item => <div key={item[0]} className="rounded-2xl border border-white/10 bg-[#0b0b0e] p-4"><p className="text-xs font-bold text-zinc-500">{item[0]}</p><p className={'mt-2 text-2xl font-black ' + item[2]}>{item[1]}</p></div>)}
       </div>
 
@@ -375,21 +465,26 @@ export default function AdminStaffPage() {
         title={selected?.fullName || 'Hồ sơ nhân viên'}
         subtitle={selected?.employeeCode}
         footer={selected ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Link to={`/admin/staff/${selected.accountId}/documents`} className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-zinc-200 hover:bg-white/5"><FileText size={17} /> Tài liệu</Link>
-            {canUpdate ? <button type="button" onClick={() => { setActionForm(initialActionForm()); setActionOpen(true); }} className="rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black hover:bg-orange-500">Ghi nhận hành động</button> : null}
+            {selected.status === 'ONBOARDING' && canCreate ? <button type="button" disabled={submitting} onClick={resendInvitation} className="flex items-center justify-center gap-2 rounded-xl border border-sky-500/30 px-4 py-3 text-sm font-black text-sky-300 hover:bg-sky-500/10 disabled:opacity-40"><Send size={17} /> Gửi lại lời mời</button> : null}
+            {selected.status === 'ONBOARDING' && canUpdate ? <button type="button" onClick={() => openEmploymentAction('CANCEL_ONBOARDING')} className="flex items-center justify-center gap-2 rounded-xl border border-red-500/30 px-4 py-3 text-sm font-black text-red-300 hover:bg-red-500/10"><AlertTriangle size={17} /> Hủy tiếp nhận</button> : null}
+            {selected.status === 'CANCELLED' && canUpdate ? <button type="button" onClick={() => openEmploymentAction('REOPEN_ONBOARDING')} className="flex items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black hover:bg-orange-500"><RotateCcw size={17} /> Mở lại tiếp nhận</button> : null}
+            {canUpdate && !['ONBOARDING', 'CANCELLED', 'RESIGNED'].includes(selected.status) && availableActionCodes.length ? <button type="button" onClick={() => openEmploymentAction(availableActionCodes[0])} className="rounded-xl bg-brand-orange px-4 py-3 text-sm font-black text-black hover:bg-orange-500">Ghi nhận hành động</button> : null}
           </div>
         ) : null}
       >
         {detailLoading ? <p className="text-sm text-zinc-500">Đang tải hồ sơ…</p> : selected ? (
           <div className="space-y-7">
             <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 to-transparent p-5">
-              <div className="flex items-center gap-4"><PersonAvatar name={selected.fullName} avatarUrl={selected.avatarUrl} role={getEmployeeAvatarRole(selected)} size="lg" /><div><p className="text-lg font-black">{selected.fullName}</p><p className="mt-1 text-xs text-zinc-500">{selected.employeeCode} · {STATUS_LABELS[selected.status]}</p></div></div>
+              <div className="flex items-center gap-4"><PersonAvatar name={selected.fullName} avatarUrl={selected.avatarUrl} role={getEmployeeAvatarRole(selected)} size="lg" /><div><p className="text-lg font-black">{selected.fullName}</p><p className="mt-1 text-xs text-zinc-500">{selected.employeeCode} · {STATUS_LABELS[selected.status] || selected.status}</p></div></div>
               <div className="mt-5 grid gap-2 text-sm">
                 <div className="flex items-center gap-3 rounded-xl bg-black/20 p-3 text-zinc-300"><Mail size={16} className="text-zinc-600" /> {selected.email || 'Chưa có email'}</div>
                 <div className="flex items-center gap-3 rounded-xl bg-black/20 p-3 text-zinc-300"><Phone size={16} className="text-zinc-600" /> {selected.phoneNumber || 'Thông tin được ẩn theo quyền'}</div>
               </div>
             </div>
+            {selected.status === 'ONBOARDING' ? <div className="flex items-start gap-3 rounded-2xl border border-orange-500/25 bg-orange-500/[0.07] p-4 text-sm leading-6 text-orange-100"><Mail size={18} className="mt-0.5 shrink-0" /><p><strong>Đang chờ nhân viên kích hoạt tài khoản.</strong><br />Bạn có thể gửi lại lời mời hoặc hủy tiếp nhận nếu kế hoạch tuyển dụng thay đổi.</p></div> : null}
+            {selected.status === 'CANCELLED' ? <div className="flex items-start gap-3 rounded-2xl border border-zinc-700 bg-zinc-900/70 p-4 text-sm leading-6 text-zinc-300"><RotateCcw size={18} className="mt-0.5 shrink-0 text-zinc-500" /><p><strong>Hồ sơ được giữ lại để tránh trùng dữ liệu.</strong><br />Khi tiếp nhận lại cùng người, hãy mở lại hồ sơ này thay vì tạo mới.</p></div> : null}
             <DetailGrid items={[
               { label: 'Email', value: selected.email }, { label: 'Số điện thoại', value: selected.phoneNumber },
               { label: 'Phòng ban', value: selected.departmentName }, { label: 'Vị trí', value: selected.positionName },
@@ -425,25 +520,28 @@ export default function AdminStaffPage() {
       <ActionModal
         open={hireOpen}
         onClose={closeHire}
-        title={hireStep === 1 ? 'Bước 1 · Chọn tài khoản đăng nhập' : 'Bước 2 · Khai báo hồ sơ công việc'}
+        title={hireStep === 1 ? 'Bước 1 · Xác nhận nhân viên' : hireStep === 2 ? 'Bước 2 · Công việc & quyền' : 'Bước 3 · Kiểm tra và gửi lời mời'}
         description={hireStep === 1
-          ? 'Chọn một tài khoản có sẵn hoặc tạo mới ngay tại đây.'
-          : 'Bổ sung thông tin để người này xuất hiện trong ca làm, chấm công và bảng lương.'}
+          ? 'Nhập người mới hoặc liên kết một tài khoản nội bộ chưa có hồ sơ.'
+          : hireStep === 2
+            ? 'Khai báo nơi làm việc và nhóm nghiệp vụ trước khi gửi lời mời.'
+            : 'Kiểm tra lần cuối. Nhân viên sẽ tự đặt mật khẩu qua email.'}
         onSubmit={submitHire}
-        submitLabel={hireStep === 1 ? (accountMode === 'new' ? 'Tạo tài khoản & tiếp tục' : 'Tiếp tục') : 'Tạo nhân viên'}
+        submitLabel={hireStep === 1 ? 'Tiếp tục' : hireStep === 2 ? 'Kiểm tra thông tin' : 'Tạo hồ sơ & gửi lời mời'}
         submitting={submitting}
+        wide
       >
-        <div className="grid grid-cols-2 gap-2" aria-label={'Tiến độ: bước ' + hireStep + ' trên 2'}>
-          {[1, 2].map(step => (
-            <div key={step} className={'h-1.5 rounded-full ' + (step <= hireStep ? 'bg-orange-500' : 'bg-white/10')} />
+        <div className="grid grid-cols-3 gap-2" aria-label={'Tiến độ: bước ' + hireStep + ' trên 3'}>
+          {['Nhân viên', 'Công việc', 'Xác nhận'].map((label, index) => (
+            <div key={label} className={'rounded-lg border px-2 py-2 text-center text-[10px] font-black ' + (index + 1 === hireStep ? 'border-orange-500/50 bg-orange-500/10 text-orange-300' : index + 1 < hireStep ? 'border-emerald-500/20 text-emerald-400' : 'border-white/10 text-zinc-600')}>{index + 1}. {label}</div>
           ))}
         </div>
 
         {hireStep === 1 ? (
           <>
             <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4 text-sm leading-6 text-zinc-300">
-              <p className="font-black text-blue-200">Tài khoản và nhân viên khác nhau thế nào?</p>
-              <p className="mt-1 text-zinc-400"><strong className="text-zinc-200">Tài khoản</strong> dùng để đăng nhập. <strong className="text-zinc-200">Hồ sơ nhân viên</strong> lưu phòng ban, vị trí, ngày vào làm và lương. Hệ thống sẽ liên kết hai phần này với nhau.</p>
+              <p className="font-black text-blue-200">Một quy trình, không tạo trùng</p>
+              <p className="mt-1 text-zinc-400">Hệ thống kiểm tra email trước khi tạo. Nếu đã có hồ sơ bị hủy hoặc tài khoản chưa được liên kết, bạn sẽ được đưa về đúng dữ liệu cũ.</p>
             </div>
 
             <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-black/30 p-1">
@@ -463,7 +561,7 @@ export default function AdminStaffPage() {
                     ariaLabel="Chọn tài khoản đăng nhập"
                   />
                 </div>
-                <p className="text-xs leading-5 text-zinc-500">Có {options.accounts.length} tài khoản đang hoạt động nhưng chưa có hồ sơ nhân viên.</p>
+                <p className="text-xs leading-5 text-zinc-500">Có {options.accounts.length} tài khoản nội bộ chưa có hồ sơ nhân viên.</p>
                 {!options.accounts.length ? (
                   <button type="button" onClick={() => setAccountMode('new')} className="w-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-left text-xs font-bold leading-5 text-amber-300 hover:bg-amber-500/10">Chưa có tài khoản phù hợp. Bấm vào đây để tạo tài khoản mới ngay trong quy trình.</button>
                 ) : null}
@@ -472,18 +570,18 @@ export default function AdminStaffPage() {
               <div className="space-y-3">
                 <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Họ và tên *</label><input value={accountForm.fullName} onChange={event => setAccountForm(value => ({ ...value, fullName: event.target.value }))} required placeholder="Ví dụ: Nguyễn Thị Lan" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
                 <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Email đăng nhập *</label><input type="email" value={accountForm.email} onChange={event => setAccountForm(value => ({ ...value, email: event.target.value }))} required placeholder="lan.nguyen@lorafilm.local" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
-                <div><label className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-500"><KeyRound size={14} /> Mật khẩu ban đầu *</label><input type="password" minLength={6} value={accountForm.password} onChange={event => setAccountForm(value => ({ ...value, password: event.target.value }))} required placeholder="Tối thiểu 6 ký tự" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
-                <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs leading-5 text-zinc-500">Tài khoản mới được cấp quyền nhân viên cơ bản. Bạn có thể đổi vai trò sau tại mục “Tài khoản đăng nhập”.</p>
+                <p className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-xs leading-5 text-emerald-200"><CheckCircle2 size={16} className="mt-0.5 shrink-0" />Không cần nhập mật khẩu. Nhân viên sẽ nhận email và tự đặt mật khẩu an toàn.</p>
               </div>
             )}
           </>
-        ) : (
+        ) : hireStep === 2 ? (
           <>
             <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-300"><UserRoundCheck size={20} /></span>
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-zinc-100">{selectedHireAccount?.fullName || 'Tài khoản đã chọn'}</p><p className="mt-1 truncate text-xs text-zinc-500">{selectedHireAccount?.email}</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-black text-zinc-100">{selectedHireAccount?.fullName || accountForm.fullName || 'Nhân viên mới'}</p><p className="mt-1 truncate text-xs text-zinc-500">{selectedHireAccount?.email || accountForm.email}</p></div>
               <button type="button" onClick={() => setHireStep(1)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-zinc-400 hover:bg-white/5 hover:text-white">Đổi</button>
             </div>
+            <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Nhóm nghiệp vụ *</label><SearchableSelect value={accountForm.accessProfileId} onChange={accessProfileId => setAccountForm(value => ({ ...value, accessProfileId }))} options={options.accessProfiles.map(profile => ({ value: String(profile.id), label: profile.name, subtitle: profile.description || 'Quyền thao tác trong ca', badge: `${profile.permissions?.length || profile.permissionIds?.length || 0} quyền` }))} placeholder="Chọn công việc nhân viên sẽ thực hiện" ariaLabel="Chọn nhóm nghiệp vụ" /></div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2"><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Rạp làm việc *</label><SearchableSelect value={hireForm.cinemaPublicId} onChange={cinemaPublicId => setHireForm(value => ({ ...value, cinemaPublicId }))} options={cinemaOptions} placeholder="Chọn rạp nhân viên sẽ làm việc" ariaLabel="Chọn rạp làm việc" /></div>
               <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Phòng ban *</label><SearchableSelect value={hireForm.departmentId} onChange={departmentId => setHireForm(value => ({ ...value, departmentId, positionId: '' }))} options={departmentOptions} placeholder="Chọn phòng ban" ariaLabel="Chọn phòng ban" /></div>
@@ -491,7 +589,23 @@ export default function AdminStaffPage() {
               <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Ngày vào làm *</label><input type="date" max={TODAY} value={hireForm.hireDate} onChange={event => setHireForm(value => ({ ...value, hireDate: event.target.value }))} required className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
               <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lương cơ bản *</label><input type="number" min="1" value={hireForm.baseSalary} onChange={event => setHireForm(value => ({ ...value, baseSalary: event.target.value }))} required placeholder="Ví dụ: 12000000" className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm outline-none focus:border-brand-orange" /></div>
             </div>
-            <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs leading-5 text-zinc-500">Sau khi hoàn tất, nhân viên sẽ xuất hiện trong danh sách của đúng quản lý rạp và có thể được phân ca, chấm công, xin nghỉ và tính lương.</p>
+            <p className="rounded-xl border border-orange-500/20 bg-orange-500/[0.05] p-3 text-xs leading-5 text-orange-100">Hồ sơ sẽ ở trạng thái <strong>Đang tiếp nhận</strong>. Chỉ sau khi nhân viên tự đặt mật khẩu, trạng thái mới chuyển thành <strong>Đang làm việc</strong>.</p>
+            <button type="button" onClick={() => setHireStep(1)} className="text-xs font-black text-zinc-400 hover:text-white">← Quay lại thông tin nhân viên</button>
+          </>
+        ) : (
+          <>
+            <DetailGrid items={[
+              { label: 'Nhân viên', value: selectedHireAccount?.fullName || accountForm.fullName },
+              { label: 'Email nhận lời mời', value: selectedHireAccount?.email || accountForm.email },
+              { label: 'Nhóm nghiệp vụ', value: selectedAccessProfile?.name || 'Chưa chọn' },
+              { label: 'Rạp làm việc', value: cinemaName(hireForm.cinemaPublicId) },
+              { label: 'Phòng ban', value: options.departments.find(item => String(item.id) === String(hireForm.departmentId))?.name || 'Chưa chọn' },
+              { label: 'Vị trí', value: options.positions.find(item => String(item.id) === String(hireForm.positionId))?.name || 'Chưa chọn' },
+              { label: 'Ngày vào làm', value: hireForm.hireDate },
+              { label: 'Lương cơ bản', value: new Intl.NumberFormat('vi-VN').format(Number(hireForm.baseSalary) || 0) + ' ₫' },
+            ]} />
+            <div className="flex items-start gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/[0.07] p-4 text-sm leading-6 text-sky-100"><Mail size={18} className="mt-0.5 shrink-0" /><p>Hệ thống sẽ tạo hồ sơ tiếp nhận, cấp đúng nhóm quyền và gửi lời mời có hiệu lực <strong>48 giờ</strong>. Không gửi mật khẩu qua email.</p></div>
+            <button type="button" onClick={() => setHireStep(2)} className="text-xs font-black text-zinc-400 hover:text-white">← Quay lại công việc & quyền</button>
           </>
         )}
       </ActionModal>
@@ -501,13 +615,13 @@ export default function AdminStaffPage() {
         <button type="button" onClick={() => setCinemaAssignmentId('')} className={'w-full rounded-xl border p-3 text-left text-sm transition ' + (!cinemaAssignmentId ? 'border-amber-500/30 bg-amber-500/[0.08] text-amber-200' : 'border-white/10 bg-white/[0.025] text-zinc-400 hover:bg-white/5')}><span className="font-black">Chưa phân công rạp</span><span className="mt-1 block text-xs leading-5 text-zinc-500">Dùng khi nhân viên đang chờ điều chuyển. Người này sẽ không xuất hiện trong danh sách của quản lý rạp.</span></button>
       </ActionModal>
 
-      <ActionModal open={actionOpen} onClose={() => setActionOpen(false)} title="Ghi nhận hành động nhân sự" description="Mọi hành động yêu cầu ngày hiệu lực và lý do. Hệ thống lưu snapshot trước/sau để audit." onSubmit={submitAction} submitLabel="Ghi nhận hành động" submitting={submitting} tone={['SUSPEND', 'RESIGN'].includes(actionForm.type) ? 'danger' : 'orange'}>
+      <ActionModal open={actionOpen} onClose={() => setActionOpen(false)} title={actionForm.type === 'CANCEL_ONBOARDING' ? 'Hủy tiếp nhận nhân viên' : actionForm.type === 'REOPEN_ONBOARDING' ? 'Mở lại hồ sơ tiếp nhận' : 'Ghi nhận hành động nhân sự'} description={actionForm.type === 'CANCEL_ONBOARDING' ? 'Lời mời hiện tại sẽ bị vô hiệu hóa. Hồ sơ vẫn được giữ để có thể mở lại mà không tạo trùng.' : actionForm.type === 'REOPEN_ONBOARDING' ? 'Hệ thống sẽ đưa hồ sơ về trạng thái đang tiếp nhận và gửi một lời mời mới có hiệu lực 48 giờ.' : 'Mọi hành động yêu cầu ngày hiệu lực và lý do. Hệ thống lưu snapshot trước/sau để audit.'} onSubmit={submitAction} submitLabel={actionForm.type === 'CANCEL_ONBOARDING' ? 'Xác nhận hủy tiếp nhận' : actionForm.type === 'REOPEN_ONBOARDING' ? 'Mở lại & gửi lời mời' : 'Ghi nhận hành động'} submitting={submitting} tone={['SUSPEND', 'RESIGN', 'CANCEL_ONBOARDING'].includes(actionForm.type) ? 'danger' : 'orange'}>
         <label className="block text-xs font-black uppercase tracking-wider text-zinc-500">Loại hành động *</label>
-        <select value={actionForm.type} onChange={event => setActionForm(value => ({ ...value, type: event.target.value }))} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange">{Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select value={actionForm.type} onChange={event => setActionForm(value => ({ ...value, type: event.target.value }))} disabled={['ONBOARDING', 'CANCELLED'].includes(selected?.status)} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange disabled:opacity-60">{availableActionCodes.map(value => <option key={value} value={value}>{ACTION_LABELS[value]}</option>)}</select>
         {actionForm.type === 'TRANSFER' ? <div className="grid gap-3 sm:grid-cols-2"><select value={actionForm.departmentId} onChange={event => setActionForm(value => ({ ...value, departmentId: event.target.value, positionId: '' }))} className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange"><option value="">Giữ phòng ban hiện tại</option>{options.departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select value={actionForm.positionId} onChange={event => setActionForm(value => ({ ...value, positionId: event.target.value }))} className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange"><option value="">Giữ vị trí hiện tại</option>{options.positions.filter(item => String(item.departmentId) === String(actionForm.departmentId || selected?.departmentId)).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div> : null}
         {actionForm.type === 'COMPENSATION_CHANGE' ? <input type="number" min="1" value={actionForm.baseSalary} onChange={event => setActionForm(value => ({ ...value, baseSalary: event.target.value }))} required placeholder="Lương cơ bản mới" className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /> : null}
         <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Ngày hiệu lực *</label><input type="date" max={TODAY} value={actionForm.effectiveDate} onChange={event => setActionForm(value => ({ ...value, effectiveDate: event.target.value }))} required className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none focus:border-brand-orange" /></div>
-        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lý do *</label><textarea value={actionForm.reason} onChange={event => setActionForm(value => ({ ...value, reason: event.target.value }))} minLength={5} maxLength={500} required rows={4} placeholder="Căn cứ và ghi chú bàn giao…" className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm leading-6 outline-none focus:border-brand-orange" /></div>
+        <div><label className="mb-2 block text-xs font-black uppercase tracking-wider text-zinc-500">Lý do *</label><textarea value={actionForm.reason} onChange={event => setActionForm(value => ({ ...value, reason: event.target.value }))} minLength={5} maxLength={500} required rows={4} placeholder={actionForm.type === 'CANCEL_ONBOARDING' ? 'Ví dụ: Ứng viên chưa thể nhận việc theo kế hoạch…' : actionForm.type === 'REOPEN_ONBOARDING' ? 'Ví dụ: Nhân viên xác nhận tiếp tục nhận việc…' : 'Căn cứ và ghi chú bàn giao…'} className="w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm leading-6 outline-none focus:border-brand-orange" /></div>
       </ActionModal>
     </section>
   );

@@ -55,6 +55,8 @@ class AccountServiceImplTest {
     private com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository;
     @Mock
     private com.project.authservice.client.NotificationClient notificationClient;
+    @Mock
+    private EmployeeInvitationService employeeInvitationService;
 
     private AccountServiceImpl service;
 
@@ -62,7 +64,8 @@ class AccountServiceImplTest {
     void setUp() {
         service = new AccountServiceImpl(accountRepository, roleRepository, auditLogService,
                 request, credentialRevocationService, authOutboxService, passwordEncoder, eventPublisher,
-                accessProfileRepository, passwordResetTokenRepository, notificationClient);
+                accessProfileRepository, passwordResetTokenRepository, notificationClient,
+                employeeInvitationService);
     }
 
     @AfterEach
@@ -284,10 +287,6 @@ class AccountServiceImplTest {
         when(roleRepository.findByCode("EMPLOYEE")).thenReturn(Optional.of(employee));
         when(accessProfileRepository.findById(7L)).thenReturn(Optional.of(accessProfile));
         when(passwordEncoder.encode(org.mockito.ArgumentMatchers.anyString())).thenReturn("encoded");
-        when(passwordResetTokenRepository.findByAccountIdAndIsUsedFalse(20L))
-                .thenReturn(java.util.List.of());
-        when(passwordResetTokenRepository.findFirstByAccountIdAndIsUsedFalseOrderByCreatedAtDesc(20L))
-                .thenReturn(java.util.Optional.empty());
         when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
             Account saved = invocation.getArgument(0);
             saved.setId(20L);
@@ -303,11 +302,9 @@ class AccountServiceImplTest {
                         && account.getAccountStatus() == AccountStatus.INACTIVE
                         && !Boolean.TRUE.equals(account.getIsEnabled())));
         verify(eventPublisher).publishEmployeeAccountCreated(any(Account.class), eq("New Staff"));
-        verify(passwordResetTokenRepository).save(argThat(token ->
-                "EMPLOYEE_INVITATION".equals(token.getPurpose())
-                        && token.getExpiredAt().isAfter(java.time.LocalDateTime.now().plusHours(47))));
-        verify(notificationClient).sendEmployeeInvitation(eq(20L), eq("new.staff@lorafilm.local"),
-                eq("New Staff"), org.mockito.ArgumentMatchers.anyString());
+        verify(employeeInvitationService).issue(argThat(account ->
+                Long.valueOf(20L).equals(account.getId())
+                        && "new.staff@lorafilm.local".equals(account.getEmail())), eq("New Staff"));
     }
 
     private Account account(Long id, Role role, AccountStatus status) {

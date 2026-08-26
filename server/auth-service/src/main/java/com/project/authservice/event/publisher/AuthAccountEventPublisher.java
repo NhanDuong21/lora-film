@@ -80,7 +80,8 @@ public class AuthAccountEventPublisher {
                 .requestId(UUID.randomUUID().toString())
                 .accountId(accountId)
                 .email(email)
-                .role(savedAccount.getRole().getRoleName())
+                .role(savedAccount.getRole().getCode())
+                .accountStatus(savedAccount.getAccountStatus().name())
                 .fullName(request.getFullName())
                 .phoneNumber(request.getPhoneNumber())
                 .cccd(request.getCccd())
@@ -119,7 +120,8 @@ public class AuthAccountEventPublisher {
                 .requestId(UUID.randomUUID().toString())
                 .accountId(accountId)
                 .email(email)
-                .role(savedAccount.getRole().getRoleName())
+                .role(savedAccount.getRole().getCode())
+                .accountStatus(savedAccount.getAccountStatus().name())
                 .fullName(fullName)
                 .build();
 
@@ -148,7 +150,8 @@ public class AuthAccountEventPublisher {
                 .requestId(requestId)
                 .accountId(accountId)
                 .email(account.getEmail())
-                .role(account.getRole().getRoleName())
+                .role(account.getRole().getCode())
+                .accountStatus(account.getAccountStatus().name())
                 .fullName(fullName)
                 .avatarUrl(avatarUrl)
                 .build();

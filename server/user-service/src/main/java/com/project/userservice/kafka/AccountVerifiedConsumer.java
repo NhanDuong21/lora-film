@@ -162,7 +162,7 @@ public class AccountVerifiedConsumer {
             if (event.getData().getBirthYear() != null) {
                 user.setBirthYear(event.getData().getBirthYear());
             }
-            user.setStatus(UserStatus.ACTIVE);
+            user.setStatus(initialStatus(payload));
             user.setAccountType(accountType(payload.getRole()));
 
             userRepository.save(user);
@@ -212,6 +212,14 @@ public class AccountVerifiedConsumer {
 
     private AccountType accountType(String role) {
         return isCustomerRole(role) ? AccountType.CUSTOMER : AccountType.WORKFORCE;
+    }
+
+    private UserStatus initialStatus(AccountVerifiedPayload payload) {
+        if (accountType(payload.getRole()) == AccountType.WORKFORCE
+                && "INACTIVE".equalsIgnoreCase(payload.getAccountStatus())) {
+            return UserStatus.INACTIVE;
+        }
+        return UserStatus.ACTIVE;
     }
 
     private String resolveFullName(AccountVerifiedPayload payload) {

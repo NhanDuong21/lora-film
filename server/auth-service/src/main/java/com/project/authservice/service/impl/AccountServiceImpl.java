@@ -12,6 +12,7 @@ import com.project.authservice.service.AccountService;
 import com.project.authservice.service.AuditLogService;
 import com.project.authservice.service.AuthOutboxService;
 import com.project.authservice.service.CredentialRevocationService;
+import com.project.authservice.service.EmployeeInvitationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +36,7 @@ public class AccountServiceImpl implements AccountService {
     private final AccessProfileRepository accessProfileRepository;
     private final com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository;
     private final com.project.authservice.client.NotificationClient notificationClient;
+    private final EmployeeInvitationService employeeInvitationService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
@@ -270,7 +272,8 @@ public class AccountServiceImpl implements AccountService {
                 .enabled(account.getIsEnabled())
                 .status(account.getAccountStatus())
                 .lastLoginAt(account.getLastLoginAt())
-                .invitationExpiresAt(invitationExpiry(account))
+                .invitationExpiresAt(account.getAccountStatus() == AccountStatus.INACTIVE
+                        ? employeeInvitationService.expiry(account) : null)
                 .createdAt(account.getCreatedAt())
                 .updatedAt(account.getUpdatedAt())
                 .build();
@@ -322,9 +325,9 @@ public class AccountServiceImpl implements AccountService {
 
         eventPublisher.publishEmployeeAccountCreated(account, request.getFullName());
 
-        createAndSendInvitation(account, request.getFullName());
+        LocalDateTime invitationExpiresAt = employeeInvitationService.issue(account, request.getFullName());
         auditLogService.log(account.getId(), "CREATE_EMPLOYEE_INVITATION", servletRequest,
-                account.getId().toString(), "after=Chờ kích hoạt,invitationExpiresAt=" + invitationExpiry(account));
+                account.getId().toString(), "after=Chờ kích hoạt,invitationExpiresAt=" + invitationExpiresAt);
 
         return mapToDto(account);
     }
@@ -341,9 +344,9 @@ public class AccountServiceImpl implements AccountService {
             throw new com.project.authservice.exception.BusinessException(
                     "Chỉ có thể gửi lại lời mời cho tài khoản nhân viên đang chờ kích hoạt");
         }
-        createAndSendInvitation(account, null);
+        LocalDateTime invitationExpiresAt = employeeInvitationService.issue(account, null);
         auditLogService.log(account.getId(), "RESEND_EMPLOYEE_INVITATION", servletRequest,
-                account.getId().toString(), "invitationExpiresAt=" + invitationExpiry(account));
+                account.getId().toString(), "invitationExpiresAt=" + invitationExpiresAt);
         return mapToDto(account);
     }
 
@@ -356,7 +359,7 @@ public class AccountServiceImpl implements AccountService {
             throw new com.project.authservice.exception.BusinessException(
                     "Chỉ có thể gửi email đặt lại mật khẩu cho tài khoản đang hoạt động");
         }
-        invalidateUnusedResetTokens(account.getId());
+        employeeInvitationService.invalidate(account.getId());
         String otp = sixDigitOtp();
         passwordResetTokenRepository.save(com.project.authservice.entity.PasswordResetToken.builder()
                 .account(account)
@@ -412,35 +415,6 @@ public class AccountServiceImpl implements AccountService {
         return null;
     }
 
-    private void createAndSendInvitation(Account account, String fullName) {
-        invalidateUnusedResetTokens(account.getId());
-        String otp = sixDigitOtp();
-        passwordResetTokenRepository.save(com.project.authservice.entity.PasswordResetToken.builder()
-                .account(account)
-                .otpCode(otp)
-                .expiredAt(LocalDateTime.now().plusHours(48))
-                .isUsed(false)
-                .purpose("EMPLOYEE_INVITATION")
-                .attempts(0)
-                .build());
-        notificationClient.sendEmployeeInvitation(account.getId(), account.getEmail(), fullName, otp);
-    }
-
-    private void invalidateUnusedResetTokens(Long accountId) {
-        passwordResetTokenRepository.findByAccountIdAndIsUsedFalse(accountId).forEach(token -> {
-            token.setIsUsed(true);
-            token.setUsedAt(LocalDateTime.now());
-        });
-    }
-
-    private LocalDateTime invitationExpiry(Account account) {
-        if (account.getAccountStatus() != AccountStatus.INACTIVE) return null;
-        return passwordResetTokenRepository
-                .findFirstByAccountIdAndIsUsedFalseOrderByCreatedAtDesc(account.getId())
-                .map(com.project.authservice.entity.PasswordResetToken::getExpiredAt)
-                .orElse(null);
-    }
-
     private String randomUnavailablePassword() {
         byte[] bytes = new byte[48];
         secureRandom.nextBytes(bytes);
@@ -471,10 +445,11 @@ public class AccountServiceImpl implements AccountService {
                               CredentialRevocationService credentialRevocationService,
                               AuthOutboxService authOutboxService,
                               org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
-                              com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher,
-                              AccessProfileRepository accessProfileRepository,
-                              com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository,
-                              com.project.authservice.client.NotificationClient notificationClient) {
+                                com.project.authservice.event.publisher.AuthAccountEventPublisher eventPublisher,
+                                AccessProfileRepository accessProfileRepository,
+                                com.project.authservice.repository.PasswordResetTokenRepository passwordResetTokenRepository,
+                                com.project.authservice.client.NotificationClient notificationClient,
+                                EmployeeInvitationService employeeInvitationService) {
         this.accountRepository = accountRepository;
         this.roleRepository = roleRepository;
         this.auditLogService = auditLogService;
@@ -486,5 +461,6 @@ public class AccountServiceImpl implements AccountService {
         this.accessProfileRepository = accessProfileRepository;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.notificationClient = notificationClient;
+        this.employeeInvitationService = employeeInvitationService;
     }
 }

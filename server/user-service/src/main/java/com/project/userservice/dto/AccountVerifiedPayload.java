@@ -5,6 +5,7 @@ public class AccountVerifiedPayload {
     private Long accountId;
     private String email;
     private String role;
+    private String accountStatus;
     private String fullName;
     private String avatarUrl;
     private String phoneNumber;
@@ -46,6 +47,14 @@ public class AccountVerifiedPayload {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public String getAccountStatus() {
+        return accountStatus;
+    }
+
+    public void setAccountStatus(String accountStatus) {
+        this.accountStatus = accountStatus;
     }
 
     public String getFullName() {

@@ -1276,6 +1276,8 @@ Thông tin nhân sự.
 ## Trạng thái
 
 ```text
+ONBOARDING
+
 ACTIVE
 
 ON_LEAVE
@@ -1283,7 +1285,14 @@ ON_LEAVE
 SUSPENDED
 
 RESIGNED
+
+CANCELLED
 ```
+
+`ONBOARDING` bắt đầu khi quản trị viên hoàn tất hồ sơ và gửi lời mời. Hồ sơ chỉ chuyển sang
+`ACTIVE` sau khi nhân viên tự đặt mật khẩu và kích hoạt tài khoản. Lời mời hết hạn không làm
+mất hồ sơ. Khi hủy tiếp nhận, hồ sơ chuyển sang `CANCELLED`; thao tác mở lại tái sử dụng cùng
+tài khoản và hồ sơ, đồng thời phát hành lời mời mới.
 
 ---
 

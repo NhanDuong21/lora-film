@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,19 +12,16 @@ import {
   Settings2,
   ShieldCheck,
   ShieldAlert,
-  UserPlus,
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  createEmployeeAccount,
   getAccount,
   getAccessProfiles,
   getAccounts,
   getAuthAudits,
   getPermissions,
   getRoles,
-  resendEmployeeInvitation,
   revokeAccountSessions,
   sendAccountPasswordReset,
   updateAccessProfile,
@@ -36,7 +33,6 @@ import {
 import { getEmployees, getUserProfiles, searchUserProfiles } from '../services/userAdminService';
 import adminCinemaService from '@/features/facilities/admin/services/adminCinemaService';
 import {
-  ActionModal,
   ConsolePagination,
   ConsolePanel,
   DetailDrawer,
@@ -56,7 +52,6 @@ import {
   normalizeRoleCode,
 } from '../utils/systemPresentation';
 
-const EMPTY_FORM = { fullName: '', email: '', accessProfileId: '' };
 const COMMON_EMPLOYEE_PERMISSION_CODES = new Set([
   'EMPLOYEE_DASHBOARD_VIEW',
   'EMPLOYEE_SCHEDULE_VIEW',
@@ -177,11 +172,6 @@ export default function AdminAccountPage() {
   const [accountState, setAccountState] = useState({ loading: true, error: '' });
   const [accessState, setAccessState] = useState({ loading: true, error: '' });
   const [updatingId, setUpdatingId] = useState(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [createStep, setCreateStep] = useState(1);
-  const [createResult, setCreateResult] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [drawerTab, setDrawerTab] = useState('overview');
   const [accountHistory, setAccountHistory] = useState([]);
@@ -373,36 +363,6 @@ export default function AdminAccountPage() {
       .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
   }, [permissionSearch, permissions]);
 
-  const handleCreate = async event => {
-    event.preventDefault();
-    if (createResult) {
-      setCreateOpen(false);
-      openAccount({ ...createResult, person: { fullName: createResult.fullName } });
-      setCreateResult(null);
-      setCreateStep(1);
-      return;
-    }
-    if (createStep < 3) {
-      setCreateStep(step => step + 1);
-      return;
-    }
-    setCreating(true);
-    try {
-      const created = await createEmployeeAccount({
-        fullName: form.fullName.trim(),
-        email: form.email.trim(),
-        accessProfileId: Number(form.accessProfileId),
-      });
-      setCreateResult({ ...created, fullName: form.fullName.trim() });
-      await loadAccounts();
-      notify('Đã gửi lời mời sử dụng hệ thống cho nhân viên.');
-    } catch (error) {
-      notify(error?.message || 'Không thể cấp tài khoản nhân viên.', 'error');
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const isCurrentAccount = account => {
     if (!account) return false;
     const knownIds = [user?.id, user?.accountId].filter(value => value !== undefined && value !== null).map(Number);
@@ -428,13 +388,6 @@ export default function AdminAccountPage() {
 
   const runSecurityAction = async (account, action) => {
     const config = {
-      invitation: {
-        title: 'Gửi lại lời mời kích hoạt?',
-        message: `Một lời mời mới có hiệu lực 48 giờ sẽ được gửi đến ${account.email}.`,
-        confirmLabel: 'Gửi lại lời mời',
-        call: () => resendEmployeeInvitation(account.id),
-        success: 'Đã gửi lại lời mời kích hoạt.',
-      },
       password: {
         title: 'Gửi email đặt lại mật khẩu?',
         message: `${account.email} sẽ nhận mã đặt lại mật khẩu có hiệu lực 15 phút. Admin không thể xem mật khẩu mới.`,
@@ -719,11 +672,11 @@ export default function AdminAccountPage() {
       <OperationsHeader
         eyebrow="Hệ thống · Tài khoản và truy cập"
         title="Tài khoản & quyền truy cập"
-        description="Theo dõi trạng thái truy cập của từng người, xử lý lời mời và kiểm soát đúng phạm vi công việc."
+        description="Theo dõi trạng thái truy cập và kiểm soát đúng phạm vi công việc. Tiếp nhận hoặc gửi lại lời mời được thực hiện tại Hồ sơ nhân viên."
         actions={activeTab === 'accounts' && accountScope === 'INTERNAL' ? (
-          <button type="button" onClick={() => { setCreateOpen(true); setCreateStep(1); setCreateResult(null); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-black text-black hover:bg-orange-500">
-            <UserPlus size={17} /> Tạo hồ sơ & mời nhân viên
-          </button>
+          <Link to="/admin/staff?onboarding=new" className="inline-flex items-center gap-2 rounded-xl border border-brand-orange/30 bg-brand-orange/10 px-4 py-2.5 text-sm font-black text-brand-orange hover:bg-brand-orange/15">
+            <Users size={17} /> Tiếp nhận nhân viên tại Hồ sơ nhân viên
+          </Link>
         ) : null}
       />
 
@@ -1000,7 +953,7 @@ export default function AdminAccountPage() {
             {drawerTab === 'security' ? (
               <div className="space-y-3">
                 {selectedSecurityProtectionReason ? <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100"><ShieldAlert size={18} className="mt-0.5 shrink-0" /><p>{selectedSecurityProtectionReason}</p></div> : null}
-                {accountScope === 'INTERNAL' && selectedAccount.status === 'INACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'invitation')} className="flex w-full items-start gap-3 rounded-xl border border-brand-orange/25 bg-brand-orange/10 p-4 text-left"><Mail size={19} className="mt-0.5 text-brand-orange" /><span><strong className="block text-white">Gửi lại lời mời kích hoạt</strong><span className="mt-1 block text-xs leading-5 text-zinc-400">Lời mời mới có hiệu lực 48 giờ; lời mời cũ sẽ hết hiệu lực.</span></span></button> : null}
+                {accountScope === 'INTERNAL' && selectedAccount.status === 'INACTIVE' ? <Link to="/admin/staff" className="flex w-full items-start gap-3 rounded-xl border border-brand-orange/25 bg-brand-orange/10 p-4 text-left"><Mail size={19} className="mt-0.5 text-brand-orange" /><span><strong className="block text-white">Quản lý lời mời tại Hồ sơ nhân viên</strong><span className="mt-1 block text-xs leading-5 text-zinc-400">Mở đúng hồ sơ để gửi lại hoặc hủy tiếp nhận, tránh thao tác sai vòng đời.</span></span></Link> : null}
                 {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id} onClick={() => runSecurityAction(selectedAccount, 'password')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20"><KeyRound size={19} className="mt-0.5 text-sky-400" /><span><strong className="block text-white">Gửi email đặt lại mật khẩu</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Chủ tài khoản tự đặt mật khẩu mới; admin không thể xem mật khẩu.</span></span></button> : null}
                 {selectedAccount.status === 'ACTIVE' ? <button type="button" disabled={updatingId === selectedAccount.id || Boolean(selectedSecurityProtectionReason)} onClick={() => runSecurityAction(selectedAccount, 'sessions')} className="flex w-full items-start gap-3 rounded-xl border border-white/10 p-4 text-left hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-40"><LogOut size={19} className="mt-0.5 text-amber-400" /><span><strong className="block text-white">Đăng xuất khỏi tất cả thiết bị</strong><span className="mt-1 block text-xs leading-5 text-zinc-500">Thu hồi ngay mọi phiên đăng nhập đang hoạt động.</span></span></button> : null}
                 {selectedAccount.status === 'LOCKED' ? <button type="button" onClick={() => handleStatusChange(selectedAccount, 'ACTIVE')} className="w-full rounded-xl border border-emerald-500/30 p-4 text-left font-bold text-emerald-300">Mở khóa tài khoản</button> : selectedAccount.status !== 'DELETED' ? <button type="button" disabled={Boolean(selectedSecurityProtectionReason)} onClick={() => handleStatusChange(selectedAccount, 'LOCKED')} className="w-full rounded-xl border border-red-500/30 p-4 text-left font-bold text-red-300 disabled:cursor-not-allowed disabled:opacity-40">Tạm khóa tài khoản</button> : <p className="rounded-xl border border-white/10 p-4 text-sm text-zinc-500">Quyền truy cập đã được thu hồi. Lịch sử vẫn được giữ nguyên.</p>}
@@ -1017,29 +970,6 @@ export default function AdminAccountPage() {
         ) : null}
       </DetailDrawer>
 
-      <ActionModal open={createOpen} onClose={() => { setCreateOpen(false); setCreateResult(null); setCreateStep(1); setForm(EMPTY_FORM); }} title={createResult ? 'Đã tạo hồ sơ và gửi lời mời' : 'Tạo hồ sơ & mời nhân viên'} description={createResult ? `Lời mời đặt mật khẩu đã được gửi đến ${createResult.email}.` : `Bước ${createStep}/3 · Hệ thống sẽ đồng thời tạo hồ sơ nhân viên và gửi lời mời kích hoạt tài khoản. Nhân viên tự đặt mật khẩu qua email.`} onSubmit={handleCreate} submitLabel={createResult ? 'Xem tài khoản' : createStep < 3 ? 'Tiếp tục' : 'Tạo hồ sơ và gửi lời mời'} submitting={creating} wide>
-        {!createResult ? <div className="grid grid-cols-3 gap-2">{['Xác nhận nhân viên', 'Công việc & phạm vi', 'Gửi lời mời'].map((label, index) => <div key={label} className={`rounded-lg border px-2 py-2 text-center text-[10px] font-bold ${createStep === index + 1 ? 'border-brand-orange/50 bg-brand-orange/10 text-brand-orange' : createStep > index + 1 ? 'border-emerald-500/20 text-emerald-400' : 'border-white/10 text-zinc-600'}`}>{index + 1}. {label}</div>)}</div> : null}
-        {!createResult && createStep === 1 ? <>
-          <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 text-xs leading-5 text-sky-100"><Info size={17} className="mt-0.5 shrink-0" /><span>Hệ thống sẽ đồng thời tạo hồ sơ nhân viên và tài khoản chờ kích hoạt. Email không được trùng với hồ sơ hoặc tài khoản đã có.</span></div>
-          <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Họ và tên nhân viên<Input className="mt-2" value={form.fullName} onChange={event => setForm(value => ({ ...value, fullName: event.target.value }))} required minLength={2} autoComplete="name" placeholder="Ví dụ: Nguyễn Văn An" /></label>
-          <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Email công việc<Input className="mt-2" type="email" value={form.email} onChange={event => setForm(value => ({ ...value, email: event.target.value }))} required autoComplete="email" placeholder="ten.nhanvien@gmail.com" /></label>
-        </> : null}
-        {!createResult && createStep === 2 ? <>
-          <label className="block text-xs font-black uppercase tracking-wide text-zinc-500">Nhóm nghiệp vụ<Select className="mt-2" value={form.accessProfileId} onChange={event => setForm(value => ({ ...value, accessProfileId: event.target.value }))} required><option value="">Chọn công việc của nhân viên</option>{accessProfiles.filter(profile => profile.code !== 'GENERAL_STAFF').map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.permissions?.length || 0} quyền công việc</option>)}</Select></label>
-          <div className="rounded-xl border border-white/10 p-4"><p className="text-sm font-bold text-white">Quyền sẽ được cấp</p><p className="mt-2 text-xs leading-5 text-zinc-500">Quyền cá nhân dùng chung cộng với quyền công việc của nhóm đã chọn. Phạm vi rạp sẽ lấy theo hồ sơ nhân sự.</p></div>
-          <button type="button" onClick={() => setCreateStep(1)} className="text-xs font-bold text-zinc-400 hover:text-white">← Quay lại xác nhận nhân viên</button>
-        </> : null}
-        {!createResult && createStep === 3 ? <>
-          <DetailGrid items={[
-            { label: 'Nhân viên', value: form.fullName }, { label: 'Email đăng nhập', value: form.email },
-            { label: 'Nhóm nghiệp vụ', value: accessProfiles.find(profile => String(profile.id) === String(form.accessProfileId))?.name || 'Chưa chọn' },
-            { label: 'Hiệu lực lời mời', value: '48 giờ' },
-          ]} />
-          <div className="flex items-start gap-3 rounded-xl border border-brand-orange/20 bg-brand-orange/10 p-4 text-sm leading-6 text-orange-100"><Mail size={18} className="mt-0.5 shrink-0" /><p>Hệ thống tạo tài khoản ở trạng thái <strong>Chờ kích hoạt</strong>. Nhân viên tự đặt mật khẩu bằng mã gửi qua email.</p></div>
-          <button type="button" onClick={() => setCreateStep(2)} className="text-xs font-bold text-zinc-400 hover:text-white">← Quay lại công việc & phạm vi</button>
-        </> : null}
-        {createResult ? <div className="space-y-4"><div className="flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4"><CheckCircle2 size={24} className="text-emerald-400" /><div><p className="font-black text-white">Đã mời {createResult.fullName}</p><p className="mt-1 text-xs text-emerald-200">Trạng thái: Chờ kích hoạt</p></div></div><DetailGrid items={[{ label: 'Email nhận lời mời', value: createResult.email }, { label: 'Hết hạn', value: formatDateTime(createResult.invitationExpiresAt) }]} /></div> : null}
-      </ActionModal>
     </section>
   );
 }

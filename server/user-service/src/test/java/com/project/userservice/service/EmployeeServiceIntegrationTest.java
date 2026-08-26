@@ -10,6 +10,7 @@ import com.project.userservice.entity.User;
 import com.project.userservice.enumtype.EmployeeStatus;
 import com.project.userservice.enumtype.AccountType;
 import com.project.userservice.enumtype.EmploymentActionType;
+import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.exception.BusinessException;
 import com.project.userservice.repository.DepartmentRepository;
 import com.project.userservice.repository.PositionRepository;
@@ -57,6 +58,7 @@ class EmployeeServiceIntegrationTest {
         user.setEmail("workforce@example.com");
         user.setAvatarUrl("/uploads/workforce-test-avatar.jpg");
         user.setAccountType(AccountType.WORKFORCE);
+        user.setStatus(UserStatus.INACTIVE);
         userRepository.save(user);
 
         operations = department("TEST_OPS", "Test Operations");
@@ -77,7 +79,7 @@ class EmployeeServiceIntegrationTest {
     void rejectsPositionFromAnotherDepartment() {
         assertThatThrownBy(() -> employeeService.create(request(finance.getId(), boxOffice.getId())))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("does not belong");
+                .hasMessageContaining("không thuộc phòng ban");
     }
 
     @Test
@@ -93,7 +95,7 @@ class EmployeeServiceIntegrationTest {
 
         assertThatThrownBy(() -> employeeService.create(request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("customer account");
+                .hasMessageContaining("tài khoản khách hàng");
     }
 
     @Test
@@ -102,15 +104,54 @@ class EmployeeServiceIntegrationTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(88L, null, List.of()));
 
-        EmployeeResponse suspended = employeeService.applyAction(created.accountId(),
-                new EmploymentActionRequest(EmploymentActionType.SUSPEND, null, null, null,
-                        LocalDate.now(), "Pending workplace investigation", created.version()));
+        EmployeeResponse cancelled = employeeService.applyAction(created.accountId(),
+                new EmploymentActionRequest(EmploymentActionType.CANCEL_ONBOARDING, null, null, null,
+                        LocalDate.now(), "Candidate declined the invitation", created.version()));
 
-        assertThat(suspended.status()).isEqualTo(EmployeeStatus.SUSPENDED);
+        assertThat(cancelled.status()).isEqualTo(EmployeeStatus.CANCELLED);
         var history = employeeService.actionHistory(created.accountId(), PageRequest.of(0, 10));
         assertThat(history.getTotalElements()).isEqualTo(1);
-        assertThat(history.getContent().getFirst().type()).isEqualTo(EmploymentActionType.SUSPEND);
+        assertThat(history.getContent().getFirst().type()).isEqualTo(EmploymentActionType.CANCEL_ONBOARDING);
         assertThat(history.getContent().getFirst().performedBy()).isEqualTo(88L);
+    }
+
+    @Test
+    void cancelledOnboardingCanBeReopenedWithoutCreatingADuplicateEmployee() {
+        EmployeeResponse created = employeeService.create(request(operations.getId(), boxOffice.getId()));
+        assertThat(created.status()).isEqualTo(EmployeeStatus.ONBOARDING);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(88L, null, List.of()));
+
+        EmployeeResponse cancelled = employeeService.applyAction(created.accountId(),
+                new EmploymentActionRequest(EmploymentActionType.CANCEL_ONBOARDING, null, null, null,
+                        LocalDate.now(), "Candidate is not ready to start", created.version()));
+        EmployeeResponse reopened = employeeService.applyAction(created.accountId(),
+                new EmploymentActionRequest(EmploymentActionType.REOPEN_ONBOARDING, null, null, null,
+                        LocalDate.now(), "Candidate confirmed a new start date", cancelled.version()));
+
+        assertThat(reopened.status()).isEqualTo(EmployeeStatus.ONBOARDING);
+        assertThat(employeeService.actionHistory(created.accountId(), PageRequest.of(0, 10)).getTotalElements())
+                .isEqualTo(2);
+        assertThatThrownBy(() -> employeeService.create(request(operations.getId(), boxOffice.getId())))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("đã tồn tại");
+    }
+
+    @Test
+    void alreadyActivatedWorkforceAccountCreatesAnActiveEmployeeProfile() {
+        User activeWorkforce = new User();
+        activeWorkforce.setAccountId(9103L);
+        activeWorkforce.setFullName("Existing Active Workforce");
+        activeWorkforce.setEmail("active-workforce@example.com");
+        activeWorkforce.setAccountType(AccountType.WORKFORCE);
+        activeWorkforce.setStatus(UserStatus.ACTIVE);
+        userRepository.save(activeWorkforce);
+
+        EmployeeResponse created = employeeService.create(new EmployeeRequest(
+                9103L, operations.getId(), boxOffice.getId(), LocalDate.of(2026, 1, 1),
+                new BigDecimal("12000000"), CINEMA_ID));
+
+        assertThat(created.status()).isEqualTo(EmployeeStatus.ACTIVE);
     }
 
     @Test
@@ -119,6 +160,7 @@ class EmployeeServiceIntegrationTest {
 
         assertThat(created.cinemaPublicId()).isEqualTo(CINEMA_ID);
         assertThat(created.avatarUrl()).isEqualTo("/uploads/workforce-test-avatar.jpg");
+        assertThat(created.status()).isEqualTo(EmployeeStatus.ONBOARDING);
 
         String nextCinema = "b1576780-9081-11f1-bf65-0ebab02bf6f5";
         EmployeeResponse reassigned = employeeService.assignCinema(created.accountId(), nextCinema.toUpperCase());

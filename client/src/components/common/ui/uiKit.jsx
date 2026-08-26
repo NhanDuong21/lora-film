@@ -164,6 +164,8 @@ export const StatusBadge = ({ status, label }) => {
       case 'PENDING':
       case 'DRAFT':
       case 'WAITING':
+      case 'ONBOARDING':
+      case 'ON_LEAVE':
         return 'bg-amber-500/10 border-amber-500/30 text-amber-500';
       case 'CONFIRMED':
       case 'COMPLETED':

@@ -7,6 +7,8 @@ import com.project.userservice.entity.CustomerProfile;
 import com.project.userservice.enumtype.UserStatus;
 import com.project.userservice.repository.UserRepository;
 import com.project.userservice.repository.CustomerProfileRepository;
+import com.project.userservice.repository.EmployeeRepository;
+import com.project.userservice.enumtype.EmployeeStatus;
 import com.project.userservice.service.UserAuditService;
 import com.project.userservice.service.UserDomainEventService;
 import org.slf4j.Logger;
@@ -28,17 +30,20 @@ public class AccountLifecycleConsumer {
     private final UserAuditService auditService;
     private final UserDomainEventService domainEventService;
     private final CustomerProfileRepository customerProfileRepository;
+    private final EmployeeRepository employeeRepository;
 
     public AccountLifecycleConsumer(ObjectMapper objectMapper,
                                     UserRepository userRepository,
                                     UserAuditService auditService,
                                     UserDomainEventService domainEventService,
-                                    CustomerProfileRepository customerProfileRepository) {
+                                    CustomerProfileRepository customerProfileRepository,
+                                    EmployeeRepository employeeRepository) {
         this.objectMapper = objectMapper;
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.domainEventService = domainEventService;
         this.customerProfileRepository = customerProfileRepository;
+        this.employeeRepository = employeeRepository;
     }
 
     @KafkaListener(topics = "${app.kafka.topic.account-lifecycle:auth.account.lifecycle.v1}",
@@ -79,16 +84,21 @@ public class AccountLifecycleConsumer {
         }
 
         UserStatus status = mapStatus(eventType, data.path("status").asText());
-        if (status == null || user.getStatus() == status) {
+        if (status == null) {
             return;
         }
-        user.setStatus(status);
-        if ("ACCOUNT_DELETED".equals(eventType)) {
-            user.setIsDeleted(true);
+        if (user.getStatus() != status) {
+            user.setStatus(status);
+            if ("ACCOUNT_DELETED".equals(eventType)) {
+                user.setIsDeleted(true);
+            }
+            auditService.log(eventType, "USER", accountId, "Synchronized from auth-service");
+            domainEventService.record("USER_STATUS_CHANGED", "USER", accountId,
+                    Map.of("accountId", accountId, "status", status.name()));
         }
-        auditService.log(eventType, "USER", accountId, "Synchronized from auth-service");
-        domainEventService.record("USER_STATUS_CHANGED", "USER", accountId,
-                Map.of("accountId", accountId, "status", status.name()));
+        if (status == UserStatus.ACTIVE) {
+            completeEmployeeOnboarding(accountId);
+        }
     }
 
     private void createOAuthCustomer(long accountId, JsonNode data) {
@@ -132,5 +142,19 @@ public class AccountLifecycleConsumer {
             };
             default -> null;
         };
+    }
+
+    private void completeEmployeeOnboarding(long accountId) {
+        employeeRepository.findByAccountIdAndIsDeletedFalse(accountId)
+                .filter(employee -> employee.getStatus() == EmployeeStatus.ONBOARDING)
+                .ifPresent(employee -> {
+                    employee.setStatus(EmployeeStatus.ACTIVE);
+                    employeeRepository.save(employee);
+                    auditService.log("EMPLOYEE_ONBOARDING_COMPLETED", "EMPLOYEE", accountId,
+                            "Nhân viên đã chấp nhận lời mời và kích hoạt tài khoản");
+                    domainEventService.record("EMPLOYEE_UPDATED", "EMPLOYEE", accountId,
+                            Map.of("accountId", accountId, "employeeId", accountId,
+                                    "status", EmployeeStatus.ACTIVE.name()));
+                });
     }
 }

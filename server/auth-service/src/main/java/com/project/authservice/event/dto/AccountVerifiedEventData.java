@@ -21,8 +21,11 @@ public class AccountVerifiedEventData {
     /** Registered e-mail address (lower-cased). */
     private final String email;
 
-    /** Assigned role name (e.g. {@code CUSTOMER}). */
+    /** Stable assigned role code (e.g. {@code CUSTOMER} or {@code EMPLOYEE}). */
     private final String role;
+
+    /** Credential lifecycle state at the time the profile is provisioned. */
+    private final String accountStatus;
 
     /** Full name as supplied during registration. */
     private final String fullName;
@@ -67,6 +70,7 @@ public class AccountVerifiedEventData {
                                    Long accountId,
                                    String email,
                                    String role,
+                                   String accountStatus,
                                    String fullName,
                                    String avatarUrl,
                                    String phoneNumber,
@@ -81,6 +85,7 @@ public class AccountVerifiedEventData {
         this.accountId    = accountId;
         this.email        = email;
         this.role         = role;
+        this.accountStatus = accountStatus;
         this.fullName     = fullName;
         this.avatarUrl    = avatarUrl;
         this.phoneNumber  = phoneNumber;
@@ -99,6 +104,7 @@ public class AccountVerifiedEventData {
     public Long    getAccountId()   { return accountId; }
     public String  getEmail()       { return email; }
     public String  getRole()        { return role; }
+    public String  getAccountStatus(){ return accountStatus; }
     public String  getFullName()    { return fullName; }
     public String  getAvatarUrl()   { return avatarUrl; }
     public String  getPhoneNumber() { return phoneNumber; }
@@ -121,6 +127,7 @@ public class AccountVerifiedEventData {
         private Long     accountId;
         private String   email;
         private String   role;
+        private String   accountStatus;
         private String   fullName;
         private String   avatarUrl;
         private String   phoneNumber;
@@ -138,6 +145,7 @@ public class AccountVerifiedEventData {
         public Builder accountId(Long accountId)       { this.accountId = accountId;       return this; }
         public Builder email(String email)             { this.email = email;               return this; }
         public Builder role(String role)               { this.role = role;                 return this; }
+        public Builder accountStatus(String status)    { this.accountStatus = status;      return this; }
         public Builder fullName(String fullName)       { this.fullName = fullName;         return this; }
         public Builder avatarUrl(String avatarUrl)     { this.avatarUrl = avatarUrl;       return this; }
         public Builder phoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber;   return this; }
@@ -151,7 +159,7 @@ public class AccountVerifiedEventData {
 
         public AccountVerifiedEventData build() {
             return new AccountVerifiedEventData(
-                    requestId, accountId, email, role, fullName, avatarUrl, phoneNumber,
+                    requestId, accountId, email, role, accountStatus, fullName, avatarUrl, phoneNumber,
                     cccd, cccdMasked, provinceCode, provinceName,
                     gender, birthday, birthYear);
         }
