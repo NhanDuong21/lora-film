@@ -91,7 +91,7 @@ và Kafka (`9092`). Java service không chạy trong Compose.
 
 Các service dùng `spring.jpa.hibernate.ddl-auto=validate`; Hibernate không tự
 tạo bảng. Với database mới, chạy 9 file canonical trong
-`docs/database/mysql/` bằng MySQL Workbench hoặc MySQL client:
+`docs/database/mysql/schema/` bằng MySQL Workbench hoặc MySQL client:
 
 ```text
 analytics-service-schema.sql    auth-service-schema.sql
@@ -104,7 +104,7 @@ user-service-schema.sql
 Đọc file trước khi chạy: một số schema có câu lệnh tạo lại database. Repository
 này chỉ hỗ trợ khởi tạo database mới từ canonical schema, không hỗ trợ nâng cấp
 in-place một database thuộc revision cũ. Xem
-[hướng dẫn database](docs/database/README.md).
+[hướng dẫn database](docs/database/mysql/README.md).
 
 ### 4. Khởi động backend
 

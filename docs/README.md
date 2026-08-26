@@ -10,12 +10,12 @@ hoàn thành.
 - [Frontend](../client/README.md)
 - [Backend microservices](../server/README.md)
 - [Quy trình GitLab](gitlab-workflow.md)
-- [Canonical schema MySQL](database/README.md)
+- [Canonical schema MySQL](database/mysql/README.md)
 
 ## Dữ liệu và sơ đồ
 
-- [Canonical schema MySQL](database/README.md) dùng để khởi tạo database sạch.
-- [Physical ERD theo service](erd/README.md) minh họa cấu trúc hiện tại.
+- [Canonical schema MySQL](database/mysql/README.md) dùng để khởi tạo database sạch.
+- [Physical ERD theo service](database/erd/README.md) minh họa cấu trúc hiện tại.
 
 ## API
 
@@ -41,8 +41,8 @@ thay đổi endpoint.
 | Nội dung | Nguồn ưu tiên |
 |---|---|
 | Cấu hình local | `*.example.properties`, `.env.example`, `docker-compose.yml` |
-| Schema hiện tại | `database/mysql/*-service-schema.sql` |
-| Khởi tạo database mới | `database/mysql/*-service-schema.sql` |
+| Schema hiện tại | `database/mysql/schema/*-service-schema.sql` |
+| Khởi tạo database mới | `database/mysql/schema/*-service-schema.sql` |
 | HTTP runtime | Controller và OpenAPI sinh từ service đang chạy |
 | Route frontend | `client/src/routes/` và `client/src/features/**/routes.jsx` |
 | Quy tắc nghiệp vụ | Code runtime và test tương ứng |

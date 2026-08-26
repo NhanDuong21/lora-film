@@ -129,7 +129,7 @@
                 <directory>src/test/resources</directory>
             </testResource>
             <testResource>
-                <directory>../../docs/database/mysql</directory>
+                <directory>../../docs/database/mysql/schema</directory>
                 <includes>
                     <include>payment-service-schema.sql</include>
                 </includes>

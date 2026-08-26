@@ -127,10 +127,10 @@ mvn test
 mvn spring-boot:run
 ```
 
-Start MySQL, Kafka, and Eureka first, then apply
-`docs/database/mysql/analytics-service-schema.sql` manually. This service does
-not use Flyway. Hibernate runs with `ddl-auto=validate`, so the application
-validates the manually managed schema and never silently changes tables.
+Khởi động MySQL, Kafka và Eureka trước, sau đó chạy thủ công
+`docs/database/mysql/schema/analytics-service-schema.sql`. Service không dùng
+Flyway. Hibernate chạy với `ddl-auto=validate`, chỉ kiểm tra schema và không
+âm thầm thay đổi bảng.
 
 ## Frontend
 

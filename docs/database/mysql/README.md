@@ -1,6 +1,6 @@
 # Quản lý schema MySQL
 
-`docs/database/mysql/` là nguồn canonical cho database-per-service của LoraFilm.
+`docs/database/mysql/schema/` là nguồn canonical cho database-per-service của LoraFilm.
 Mỗi microservice sở hữu một schema; Hibernate chỉ kiểm tra mapping bằng
 `spring.jpa.hibernate.ddl-auto=validate` và không tự tạo hay sửa bảng.
 
@@ -37,7 +37,7 @@ schema cần thiết.
 Ví dụ:
 
 ```powershell
-Get-Content docs/database/mysql/movie-service-schema.sql -Raw |
+Get-Content docs/database/mysql/schema/movie-service-schema.sql -Raw |
   mysql.exe -h 127.0.0.1 -P 3307 -u root -p
 ```
 

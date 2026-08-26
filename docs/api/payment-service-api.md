@@ -1,212 +1,209 @@
-# Payment Service API — Release 1
+# API dịch vụ Thanh toán và hoàn tiền
 
-Tài liệu này mô tả hợp đồng đang được triển khai cho VNPay Sandbox, MoMo
-Sandbox, tiền mặt tại quầy và MOCK dành riêng cho local/test.
+> Đã đồng bộ với controller và cấu hình bảo mật hiện tại ngày 26/08/2026. Tài liệu chỉ liệt kê chức năng đã có trong mã nguồn, không giữ kế hoạch sprint hoặc endpoint dự kiến.
 
-## Nguyên tắc
+## 1. Thông tin nhanh
 
-- Booking Service sở hữu số tiền, tiền tệ, chủ đơn và thời hạn thanh toán.
-- Payment Service không nhận `amount`, `currency` hoặc thời hạn từ trình duyệt.
-- Public UUID là định danh API. Numeric ID chỉ còn là compatibility adapter trong
-  một release.
-- Mọi thời điểm được lưu và trao đổi bằng ISO-8601 UTC.
-- Browser Return chỉ điều hướng. IPN/callback đã xác minh mới có thẩm quyền ghi
-  nhận kết quả tài chính.
-- Payment SUCCESS chỉ phát doanh thu sau khi Booking Service chấp nhận kết quả.
-- Refund được Payment Service điều phối theo số tiền thực thu; Booking chỉ nhận kết
-  quả hoàn tiền đã xác nhận để cập nhật projection nghiệp vụ.
-- Không hỗ trợ hoàn riêng từng vé. Ghế `BOOKED` không được mở bán lại chỉ vì có
-  một khoản hoàn tiền.
+| Nội dung | Giá trị |
+|---|---|
+| Mục đích | Khởi tạo thanh toán, nhận callback nhà cung cấp, thu tiền mặt, hoàn tiền, đối soát và nghiệp vụ kế toán. |
+| Cổng chạy trực tiếp | `http://localhost:8084` |
+| Gọi từ frontend | `http://localhost:8080` qua API Gateway |
+| OpenAPI JSON | `http://localhost:8084/v3/api-docs` |
+| Swagger UI | `http://localhost:8084/swagger-ui.html` |
+| Route được Gateway chuyển tiếp | `/api/payments/**`<br>`/api/employee/payments/**`<br>`/api/admin/payments/**`<br>`/api/manager/payments/**`<br>`/api/vnpay/**` |
+| Quy mô hiện tại | 10 controller, 68 endpoint (đã tính các đường dẫn bí danh) |
 
-Response thông thường dùng wrapper:
+Nguồn kiểm chứng là controller dưới `server/payment-service/src/main/java/`, SecurityConfig của service và cấu hình route của API Gateway.
+
+## 2. Cách đọc và gọi API
+
+- Frontend chỉ gọi qua API Gateway. Đường dẫn trong bảng được giữ nguyên khi Gateway chuyển tiếp.
+- Endpoint ghi **Công khai** không cần Bearer token. Endpoint còn lại phải gửi `Authorization: Bearer <access-token>` trừ nhóm nội bộ.
+- Endpoint **Nội bộ** không được Gateway công khai; service khác gọi thẳng cổng đích và gửi header token đã cấu hình.
+- Tên hàm xử lý được giữ nguyên như trong code để có thể tìm kiếm nhanh. Request body, query parameter, validation và schema response xem tại Swagger UI/OpenAPI đang chạy.
+- `publicId`, `id` hoặc `accountId` phải dùng đúng loại định danh endpoint yêu cầu; không tự thay UUID bằng ID số nội bộ.
+
+## 3. Quy tắc bảo mật hiện tại
+
+- Callback và return của nhà cung cấp là công khai; API thanh toán của khách hàng yêu cầu đăng nhập.
+- Nhóm quản trị, quản lý, nhân viên và kế toán được kiểm tra bằng vai trò hoặc quyền trong SecurityConfig.
+- API /internal/payments/** gọi trực tiếp service và yêu cầu X-Internal-Token.
+- MockCallbackController chỉ hoạt động khi payment.providers.mock.enabled=true.
+
+Gateway xóa các header nhận dạng do client tự gửi và tự gắn thông tin người dùng sau khi xác minh JWT. Client không được tự tạo `loggedInUser`, `loggedInUserId`, `loggedInRole` hoặc các header `X-Authenticated-*`.
+
+## 4. Dạng phản hồi
+
+Phần lớn endpoint trả về lớp bọc `ApiResponse`. Một phản hồi thành công thường có dạng:
 
 ```json
 {
   "success": true,
-  "message": "Thành công",
-  "errorCode": null,
-  "data": {},
-  "errors": null
+  "message": "Thao tác thành công",
+  "data": {}
 }
 ```
 
-## Customer API
+Khi lỗi, response có thể bổ sung `errorCode`, `errors` hoặc `timestamp` tùy service. Các mã HTTP thường gặp:
 
-Tất cả API dưới đây yêu cầu JWT CUSTOMER và kiểm tra `accountId` của Booking:
-
-| Method | Endpoint | Ghi chú |
-|---|---|---|
-| POST | `/api/payments` | Tạo attempt VNPay hoặc MoMo; yêu cầu `Idempotency-Key` |
-| GET | `/api/payments/{paymentPublicId}` | Chi tiết giao dịch thuộc khách hàng |
-| GET | `/api/payments/{paymentPublicId}/status` | Trạng thái dùng cho polling |
-| GET | `/api/payments/booking/{bookingPublicId}` | Các attempt của một Booking |
-| POST | `/api/payments/{paymentPublicId}/cancel` | Chỉ hủy khi chưa có provider session hoạt động |
-
-Request tạo giao dịch:
-
-```json
-{
-  "bookingPublicId": "74bbbca7-b513-482b-851e-e7cc7a8cf66a",
-  "paymentMethod": "VNPAY"
-}
-```
-
-`paymentMethod` dành cho customer nhận `VNPAY` hoặc `MOMO`. Khi chạy local/test
-và `payment.providers.mock.enabled=true`, `MOCK` được phép để kiểm thử. Request
-compatibility có thể gửi `bookingId` thay `bookingPublicId`, nhưng không được gửi
-cả hai.
-
-Response tạo giao dịch chứa:
-
-```json
-{
-  "paymentPublicId": "d14bd538-83b8-4778-8200-5a49de7af0df",
-  "bookingPublicId": "74bbbca7-b513-482b-851e-e7cc7a8cf66a",
-  "status": "PROCESSING",
-  "provider": "VNPAY",
-  "amount": 150000,
-  "currency": "VND",
-  "paymentUrl": "https://sandbox.vnpayment.vn/...",
-  "expiresAt": "2026-07-27T12:00:00Z"
-}
-```
-
-Cùng actor, endpoint, `Idempotency-Key` và payload trả lại đúng Payment cũ. Cùng
-key nhưng payload khác trả `409 IDEMPOTENCY_KEY_REUSED`.
-
-## Provider API
-
-| Method | Endpoint | Tính chất |
-|---|---|---|
-| GET | `/api/payments/callback/vnpay` | IPN có thẩm quyền, HMAC-SHA512 |
-| POST | `/api/payments/callback/momo` | IPN có thẩm quyền, HMAC-SHA256 |
-| GET | `/api/payments/return/vnpay` | Xác minh chữ ký và redirect |
-| GET | `/api/payments/return/momo` | Xác minh chữ ký và redirect |
-| POST | `/api/payments/mock/{paymentPublicId}/complete` | Local/test, owner-only |
-
-Return URL không cập nhật Payment hoặc Booking. Frontend nhận
-`paymentPublicId`, sau đó polling API trạng thái. Callback trùng hoàn toàn được
-ACK idempotent; cùng deduplication key nhưng payload khác tạo đối soát.
-
-## CASH tại quầy
-
-Quyền: `EMPLOYEE`, `SUPERVISOR`, `ADMIN`.
-
-| Method | Endpoint |
+| Mã | Ý nghĩa |
 |---|---|
-| GET | `/api/employee/payments/booking?reference={uuid-or-code}` |
-| POST | `/api/employee/payments/cash` |
-| GET | `/api/employee/payments/{paymentPublicId}` |
-| POST | `/api/employee/payments/{paymentPublicId}/cash/collect` |
-| POST | `/api/employee/payments/{paymentPublicId}/cash/cancel` |
+| 200 | Thành công |
+| 201 | Đã tạo dữ liệu |
+| 202 | Đã tiếp nhận và xử lý bất đồng bộ |
+| 204 | Thành công, không có nội dung trả về |
+| 400 | Dữ liệu gửi lên không hợp lệ |
+| 401 | Thiếu hoặc sai thông tin đăng nhập/token nội bộ |
+| 403 | Đã đăng nhập nhưng không đủ quyền |
+| 404 | Không tìm thấy dữ liệu |
+| 409 | Xung đột trạng thái hoặc trùng yêu cầu |
+| 500 | Lỗi không mong đợi ở server |
 
-Request tạo CASH nhận đúng một trong `bookingPublicId` hoặc `bookingCode`.
-Collect nhận `{ "receivedAmount": 200000 }`; server kiểm tra deadline/payable,
-đối chiếu số phải thu và tự tính tiền thừa.
+## 5. Danh mục endpoint hiện hành
 
-## Admin và Accountant
+Mỗi nhóm tương ứng một controller thực tế. Quyền chi tiết lấy từ `@PreAuthorize`; nếu controller không khai báo riêng, bảng ghi theo nhóm đường dẫn và SecurityConfig.
 
-Base path: `/api/admin/payments`.
+### Nhóm `AccountingOperationsController`
 
-- `GET /api/admin/payments`: danh sách và lọc.
-- `GET /api/admin/payments/export`: xuất CSV.
-- `GET /api/admin/payments/{paymentPublicId}`: chi tiết.
-- `GET /api/admin/payments/webhooks|outbox|reconciliations`: hàng đợi vận hành.
-- `POST /api/admin/payments/webhooks/{id}/replay`: replay webhook hợp lệ.
-- `POST /api/admin/payments/outbox/{eventId}/replay`: replay cùng event ID.
-- `POST /api/admin/payments/reconciliations/{publicId}/assign`.
-- `POST /api/admin/payments/reconciliations/{publicId}/resolve`.
-- `GET /api/admin/payments/refunds`: danh sách yêu cầu hoàn tiền.
-- `GET /api/admin/payments/refunds/{refundPublicId}`: chi tiết hoàn tiền.
-- `POST /api/admin/payments/{paymentPublicId}/refunds`: tạo hoàn toàn phần hoặc
-  hoàn một phần; yêu cầu header `Idempotency-Key`.
-- `POST /api/admin/payments/refunds/{refundPublicId}/retry`: thử lại khoản hoàn
-  provider ở trạng thái cho phép.
-- `POST /api/admin/payments/refunds/{refundPublicId}/cash/complete`: xác nhận nhân
-  viên đã hoàn tiền mặt với mã biên nhận và ghi chú bắt buộc.
+Đường dẫn gốc: `/api/admin/payments/accounting`.
 
-`ADMIN` được đọc/export và thực hiện toàn bộ mutation. `ACCOUNTANT`,
-`PERM_VIEW_FINANCE`, `PAYMENT_VIEW` hoặc `PAYMENT_RECONCILE` được GET/export.
-Riêng `PAYMENT_RECONCILE` được tiếp nhận và đóng hồ sơ đối soát, nhưng không được hoàn tiền,
-replay webhook/outbox hoặc thực hiện mutation kỹ thuật khác. Resolve bắt buộc có mã xử lý và
-ghi chú.
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/admin/payments/accounting/audit-events` | `auditEvents` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/accounting/cash-sessions` | `cashSessions` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/cash-sessions/{publicId}/verify` | `verifyCashSession` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/accounting/overview` | `overview` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/accounting/periods` | `periods` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/periods` | `createPeriod` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/periods/{publicId}/actions` | `periodAction` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/refunds/{paymentPublicId}/requests` | `requestRefund` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/refunds/{refundPublicId}/approve` | `approveRefund` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/refunds/{refundPublicId}/reject` | `rejectRefund` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/accounting/settlements` | `settlements` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/settlements` | `importSettlement` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/accounting/settlements/{publicId}` | `settlement` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/accounting/settlements/{publicId}/lock` | `lockSettlement` | Quản trị (theo cấu hình bảo mật) |
 
-Request hoàn tiền do Admin tạo:
+### Nhóm `AdminPaymentController`
 
-```json
-{
-  "refundType": "PARTIAL",
-  "refundComponent": "CONCESSION",
-  "amount": 50000,
-  "reasonCode": "CONCESSION_UNAVAILABLE",
-  "note": "Quầy hết sản phẩm đã mua"
-}
-```
+Đường dẫn gốc: `/api/admin/payments`.
 
-Quy tắc authoritative:
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/admin/payments` | `search` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/{paymentPublicId}` | `detail` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/{paymentPublicId}/refunds` | `createRefund` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/export` | `export` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/outbox` | `outbox` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/outbox/{eventId}/replay` | `replayOutbox` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/reconciliations` | `reconciliations` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/reconciliations/{publicId}/assign` | `assign` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/reconciliations/{publicId}/resolve` | `resolve` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/refunds` | `refunds` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/refunds/{refundPublicId}` | `refundDetail` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/refunds/{refundPublicId}/cash/complete` | `completeCashRefund` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/refunds/{refundPublicId}/retry` | `retryRefund` | Quản trị (theo cấu hình bảo mật) |
+| GET | `/api/admin/payments/webhooks` | `webhooks` | Quản trị (theo cấu hình bảo mật) |
+| POST | `/api/admin/payments/webhooks/{webhookId}/replay` | `replayWebhook` | Quản trị (theo cấu hình bảo mật) |
 
-- `FULL + FULL_ORDER`: server tự lấy toàn bộ số tiền còn có thể hoàn.
-- `PARTIAL`: chỉ nhận `CONCESSION`, `PRICE_DIFFERENCE` hoặc
-  `OPERATIONAL_ADJUSTMENT`.
-- Khoản `CONCESSION` không được vượt tiền bắp nước trong snapshot bất biến.
-- Tổng các khoản đang chờ, đang xử lý, cần can thiệp và đã thành công không được
-  vượt số tiền đã thu.
-- `PARTIAL + FULL_ORDER` bị từ chối bằng `TICKET_REFUND_NOT_SUPPORTED`.
-- Nếu trước đó đã hoàn một phần, yêu cầu hoàn toàn bộ phần còn lại được gửi tới
-  provider dưới dạng partial refund an toàn.
+### Nhóm `EmployeePaymentController`
 
-Các trường hợp tự động hoàn toàn bộ phần còn lại:
+Đường dẫn gốc: `/api/employee/payments`.
 
-- Provider báo SUCCESS sau deadline gốc (`LATE_PROVIDER_SUCCESS`).
-- Booking không chấp nhận kết quả thanh toán thành công
-  (`BOOKING_CONFIRMATION_FAILED`).
-- Có giao dịch thu tiền thành công thứ hai cho cùng Booking
-  (`DUPLICATE_CAPTURE`).
-- Movie Service chuyển Showtime sang `CANCELLED` (`SHOWTIME_CANCELLED`).
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| POST | `/api/employee/payments/{paymentId:\\d+}/cash/cancel` | `cancelCompat` | Nhân viên |
+| POST | `/api/employee/payments/{paymentId:\\d+}/cash/collect` | `collectCompat` | Nhân viên |
+| GET | `/api/employee/payments/{paymentPublicId:[a-fA-F0-9-]{36}}` | `getPayment` | Nhân viên |
+| POST | `/api/employee/payments/{paymentPublicId:[a-fA-F0-9-]{36}}/cash/cancel` | `cancelCash` | Nhân viên |
+| POST | `/api/employee/payments/{paymentPublicId:[a-fA-F0-9-]{36}}/cash/collect` | `collectCash` | Nhân viên |
+| POST | `/api/employee/payments/{paymentPublicId:[a-fA-F0-9-]{36}}/refund-requests` | `createRefundRequest` | Nhân viên |
+| GET | `/api/employee/payments/booking` | `lookupBooking` | Nhân viên |
+| POST | `/api/employee/payments/cash` | `createCash` | Nhân viên |
+| POST | `/api/employee/payments/counter-sessions` | `openCounterSession` | Nhân viên |
+| POST | `/api/employee/payments/counter-sessions/{sessionPublicId:[a-fA-F0-9-]{36}}/close` | `closeCounterSession` | Nhân viên |
+| GET | `/api/employee/payments/counter-sessions/current` | `currentCounterSession` | Nhân viên |
+| GET | `/api/employee/payments/counter-sessions/history` | `counterSessionHistory` | Nhân viên |
+| GET | `/api/employee/payments/refund-candidate` | `refundCandidate` | Nhân viên |
+| POST | `/api/employee/payments/refund-requests/{refundPublicId}/cash/complete` | `completeCashRefund` | Nhân viên |
+| GET | `/api/employee/payments/refund-requests/cash-pending` | `cashRefundsPendingAtCounter` | Nhân viên |
 
-Route nội bộ của Movie Service:
+### Nhóm `HealthController`
 
-- `POST /internal/payments/refunds/showtimes/{showtimePublicId}`
+Đường dẫn gốc: `/`.
 
-Route này yêu cầu internal token, không đi qua Gateway và dùng `eventId` để chống
-tạo trùng khi outbox Movie retry.
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/health` | `health` | Công khai |
 
-## Booking internal contract
+### Nhóm `InternalEmergencyPaymentController`
 
-Payment gọi trực tiếp Booking Service bằng internal token; các route này không
-đi qua Gateway:
+Đường dẫn gốc: `/internal/payments/emergency`.
 
-- `GET /internal/bookings/{bookingPublicId}/payment-context`
-- `GET /internal/bookings/code/{bookingCode}/payment-context`
-- `POST /internal/bookings/{bookingPublicId}/payment-results`
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| POST | `/internal/payments/emergency/assess` | `assessPayments` | Nội bộ (token service) |
+| POST | `/internal/payments/emergency/stop` | `stopPendingPayments` | Nội bộ (token service) |
 
-Context authoritative gồm owner, `amountLockedAt`, deadline, amount/currency và
-snapshot analytics (`moviePublicId`, `movieTitle`, `showtimePublicId`,
-`cinemaPublicId`, số lượng/tiền vé, bắp nước, giảm giá, tổng tiền).
+### Nhóm `InternalRefundController`
 
-Payment gửi refund đã xác nhận về cùng `payment-results` với kết quả
-`REFUND_SUCCESS`. Booking cộng dồn các khoản refund thành công:
+Đường dẫn gốc: `/internal/payments/refunds`.
 
-- Chưa đủ tổng tiền đơn: Booking vẫn `CONFIRMED`, vé và ghế vẫn `BOOKED`.
-- Bằng đúng tổng tiền đơn: Booking chuyển `REFUNDED`.
-- Không trường hợp nào giải phóng ghế đã `BOOKED`.
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| POST | `/internal/payments/refunds/showtimes/{showtimePublicId}` | `refundCancelledShowtime` | Nội bộ (token service) |
 
-## Mã lỗi vận hành chính
+### Nhóm `ManagerPaymentController`
 
-| Code | HTTP | Ý nghĩa |
-|---|---:|---|
-| `IDEMPOTENCY_KEY_REQUIRED` | 400 | Thiếu idempotency key |
-| `IDEMPOTENCY_KEY_REUSED` | 409 | Cùng key nhưng payload khác |
-| `PAYMENT_ATTEMPT_ACTIVE` | 409 | Booking đang có attempt hoạt động |
-| `PAYMENT_PROVIDER_SESSION_ACTIVE` | 409 | Không thể hủy session provider đang hoạt động |
-| `BOOKING_NOT_PAYABLE` | 409 | Booking chưa finalization, hết hạn hoặc không payable |
-| `PAYMENT_AMOUNT_MISMATCH` | 409 | Callback không khớp số tiền |
-| `PROVIDER_EVENT_CONFLICT` | 409 | Callback trùng khóa nhưng khác payload |
-| `PAYMENT_RECONCILIATION_REQUIRED` | 409 | Cần xử lý đối soát |
-| `BOOKING_SERVICE_UNAVAILABLE` | 503 | Chưa đọc được context authoritative |
-| `REFUND_IDEMPOTENCY_KEY_REQUIRED` | 400 | Thiếu khóa chống tạo hoàn tiền trùng |
-| `REFUND_IDEMPOTENCY_CONFLICT` | 409 | Cùng khóa nhưng nội dung hoàn tiền khác |
-| `PAYMENT_NOT_REFUNDABLE` | 409 | Giao dịch chưa thanh toán thành công |
-| `REFUND_AMOUNT_EXCEEDS_AVAILABLE` | 409 | Vượt số tiền còn có thể hoàn |
-| `TICKET_REFUND_NOT_SUPPORTED` | 409 | Chưa hỗ trợ hoàn riêng từng vé |
-| `CASH_REFUND_REQUIRES_MANUAL_SETTLEMENT` | 409 | Hoàn tiền mặt cần xử lý tại quầy |
+Đường dẫn gốc: `/api/manager/payments`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/manager/payments` | `search` | Vai trò `MANAGER` |
+| GET | `/api/manager/payments/{paymentPublicId}` | `detail` | Vai trò `MANAGER` |
+| GET | `/api/manager/payments/refund-requests` | `refundRequests` | Vai trò `MANAGER` |
+| POST | `/api/manager/payments/refund-requests/{refundPublicId}/approve` | `approve` | Vai trò `MANAGER` |
+| POST | `/api/manager/payments/refund-requests/{refundPublicId}/reject` | `reject` | Vai trò `MANAGER` |
+| GET | `/api/manager/payments/summary` | `summary` | Vai trò `MANAGER` |
+
+### Nhóm `MockCallbackController`
+
+Đường dẫn gốc: `/api/payments/mock`.
+
+> Nhóm này chỉ hoạt động khi `payment.providers.mock.enabled=true`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| POST | `/api/payments/mock/{paymentPublicId}/complete` | `complete` | Đã đăng nhập |
+
+### Nhóm `PaymentController`
+
+Đường dẫn gốc: `/api/payments`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| POST | `/api/payments` | `createPayment` | Đã đăng nhập |
+| GET | `/api/payments/{paymentId:\\d+}` | `getPaymentCompat` | Đã đăng nhập |
+| POST | `/api/payments/{paymentId:\\d+}/cancel` | `cancelCompat` | Đã đăng nhập |
+| GET | `/api/payments/{paymentId:\\d+}/status` | `getPaymentStatusCompat` | Đã đăng nhập |
+| GET | `/api/payments/{paymentPublicId:[a-fA-F0-9-]{36}}` | `getPayment` | Đã đăng nhập |
+| POST | `/api/payments/{paymentPublicId:[a-fA-F0-9-]{36}}/cancel` | `cancelPayment` | Đã đăng nhập |
+| GET | `/api/payments/{paymentPublicId:[a-fA-F0-9-]{36}}/status` | `getPaymentStatus` | Đã đăng nhập |
+| GET | `/api/payments/booking/{bookingId:\\d+}` | `getByBookingCompat` | Đã đăng nhập |
+| GET | `/api/payments/booking/{bookingPublicId:[a-fA-F0-9-]{36}}` | `getPaymentsByBooking` | Đã đăng nhập |
+
+### Nhóm `ProviderPaymentController`
+
+Đường dẫn gốc: `/api/payments`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| POST | `/api/payments/callback/momo` | `momoIpn` | Công khai |
+| GET | `/api/payments/callback/vnpay` | `vnpayIpn` | Công khai |
+| GET | `/api/payments/return/momo` | `momoReturn` | Công khai |
+| GET | `/api/payments/return/vnpay` | `vnpayReturn` | Công khai |
+
+## 6. Quy tắc cập nhật tài liệu
+
+Khi thêm, xóa hoặc đổi endpoint, cần cập nhật đồng thời controller, SecurityConfig, route Gateway (nếu frontend cần gọi) và file này. OpenAPI runtime là nguồn chuẩn cho field request/response; tài liệu Markdown là mục lục dễ đọc và bản kiểm tra phạm vi.

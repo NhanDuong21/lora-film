@@ -69,7 +69,7 @@ Bên trong mỗi package feature (ngoại trừ common), mã nguồn sẽ đư�
 ## 4. Quản Lý Cơ Sở Dữ Liệu (Database)
 
 - Service này **KHÔNG** dùng Flyway/Liquibase hoặc migration lịch sử.
-- Database mới được dựng từ canonical schema tập trung tại `docs/database/mysql/movie-service-schema.sql`.
+- Database mới được dựng từ canonical schema tại `docs/database/mysql/schema/movie-service-schema.sql`.
 - Mọi thay đổi Entity phải được phản ánh trực tiếp vào canonical schema trong cùng thay đổi mã nguồn.
 
 Chúc các bạn phát triển mã nguồn hiệu quả và chất lượng!

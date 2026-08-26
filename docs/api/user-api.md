@@ -1,317 +1,253 @@
-# User Service API Specification
+# API dịch vụ Người dùng và nhân sự
 
-> **Bổ sung vận hành Booking Admin (27/07/2026):** User Service lưu bản chụp
-> email nhận từ sự kiện `ACCOUNT_VERIFIED` để hiển thị/tra cứu hồ sơ; Auth
-> Service vẫn là nguồn sở hữu tài khoản đăng nhập. Profile trả thêm
-> `customerCode` dạng `KH` + `accountId` đủ sáu chữ số (ví dụ `KH000005`).
-> `accountId` vẫn là khóa liên kết nội bộ, không được trình bày trên UI như mã
-> khách hàng. Admin/Staff có thể dùng:
->
-> - `GET /api/users/admin/batch?accountIds=5,8`
-> - `GET /api/users/admin/search?query=Minh%20Duy&limit=20`
->
-> Tìm kiếm hỗ trợ họ tên, email, số điện thoại, `accountId` và `customerCode`.
+> Đã đồng bộ với controller và cấu hình bảo mật hiện tại ngày 26/08/2026. Tài liệu chỉ liệt kê chức năng đã có trong mã nguồn, không giữ kế hoạch sprint hoặc endpoint dự kiến.
 
-## 1. Thông Tin Chung
+## 1. Thông tin nhanh
 
-| Mục                | Nội dung                               |
-| ------------------ | -------------------------------------- |
-| Service            | `user-service`                         |
-| Feature            | User Profile Management                |
-| API liên quan      | Create Profile, Get Profile            |
-| Người phụ trách BE | Phan Tuấn Thành                    |
-| Người phụ trách FE | Dương Thiện Nhân                   |
-| Trạng thái         | Updated (Event-Driven Architecture)    |
-| Ngày cập nhật      | 23/06/2026                             |
+| Nội dung | Giá trị |
+|---|---|
+| Mục đích | Quản lý hồ sơ người dùng, khách hàng, nhân viên, phòng ban, chức vụ, chấm công, lương và kiểm soát dữ liệu cá nhân. |
+| Cổng chạy trực tiếp | `http://localhost:8086` |
+| Gọi từ frontend | `http://localhost:8080` qua API Gateway |
+| OpenAPI JSON | `http://localhost:8086/v3/api-docs` |
+| Swagger UI | `http://localhost:8086/swagger-ui.html` |
+| Route được Gateway chuyển tiếp | `/api/users/**`<br>`/api/admin/user-audits` |
+| Quy mô hiện tại | 15 controller, 80 endpoint (đã tính các đường dẫn bí danh) |
 
----
+Nguồn kiểm chứng là controller dưới `server/user-service/src/main/java/`, SecurityConfig của service và cấu hình route của API Gateway.
 
-## Lịch Sử Chỉnh Sửa
-- **27/07/2026**: Bổ sung email snapshot, mã khách hàng vận hành và API batch/search cho Admin/Staff.
-- **23/06/2026**: Refactor toàn bộ theo kiến trúc Event-Driven. Xóa bỏ Internal HTTP API (`/internal/users`). User Service giờ chỉ giao tiếp qua Kafka Events (`REGISTRATION_VALIDATION_REQUESTED` và `ACCOUNT_VERIFIED`).
-- **17/06/2026**: Đồng bộ các quy tắc validate của internal create profile API (fullName, phoneNumber) với Auth Service và Frontend.
-- **14/06/2026**: Cập nhật Local URL từ port `8082` sang `8086`.
-- **13/06/2026**: Khởi tạo tài liệu đặc tả User Profile APIs.
+## 2. Cách đọc và gọi API
 
----
+- Frontend chỉ gọi qua API Gateway. Đường dẫn trong bảng được giữ nguyên khi Gateway chuyển tiếp.
+- Endpoint ghi **Công khai** không cần Bearer token. Endpoint còn lại phải gửi `Authorization: Bearer <access-token>` trừ nhóm nội bộ.
+- Endpoint **Nội bộ** không được Gateway công khai; service khác gọi thẳng cổng đích và gửi header token đã cấu hình.
+- Tên hàm xử lý được giữ nguyên như trong code để có thể tìm kiếm nhanh. Request body, query parameter, validation và schema response xem tại Swagger UI/OpenAPI đang chạy.
+- `publicId`, `id` hoặc `accountId` phải dùng đúng loại định danh endpoint yêu cầu; không tự thay UUID bằng ID số nội bộ.
 
-## 2. Mục Tiêu Tài Liệu
+## 3. Quy tắc bảo mật hiện tại
 
-Tài liệu này đặc tả các API liên quan đến thông tin cá nhân (Profile) của người dùng thuộc **User Service**.
+- Ảnh đại diện dưới /api/users/profile/avatar/files/** có thể đọc công khai; các API người dùng khác yêu cầu đăng nhập.
+- Quyền quản trị, quản lý nhân sự và quản trị dữ liệu cá nhân được kiểm tra tại controller.
+- API /api/v1/internal/** gọi trực tiếp service và yêu cầu X-Internal-Token.
 
-Mục tiêu chính:
-* Định nghĩa các Kafka Event mà User Service lắng nghe để thực hiện validate và tạo User Profile bất đồng bộ.
-* Định nghĩa API public/protected (`/api/users/{accountId}`) để Frontend có thể truy xuất thông tin hồ sơ của người dùng.
-* Đảm bảo tính thống nhất trong kiểu dữ liệu và field response, đặc biệt với các thông tin nhạy cảm như CCCD.
+Gateway xóa các header nhận dạng do client tự gửi và tự gắn thông tin người dùng sau khi xác minh JWT. Client không được tự tạo `loggedInUser`, `loggedInUserId`, `loggedInRole` hoặc các header `X-Authenticated-*`.
 
-> **Lưu ý kiến trúc:** User Service **không còn** cung cấp Internal HTTP API (`/internal/users`) nữa. Toàn bộ giao tiếp giữa Auth Service và User Service được thực hiện qua Kafka Events.
+## 4. Dạng phản hồi
 
----
-
-## 3. API Gateway Và Service URL
-
-### 3.1. API Gateway URL
-Frontend sử dụng URL này để gọi API public/protected:
-```txt
-http://localhost:8080
-```
-
-### 3.2. User Service Direct URL
-Chỉ dùng cho Backend debug hoặc test trực tiếp service:
-```txt
-http://localhost:8086
-```
-
-> **Lưu ý:** Auth Service không gọi trực tiếp sang User Service qua HTTP. Toàn bộ giao tiếp nội bộ thực hiện qua Kafka.
-
----
-
-# 4. Kafka Event Consumers (Event-Driven Architecture)
-
-> **Quan trọng:** User Service không còn cung cấp REST API nội bộ (`/internal/users`) nữa. Toàn bộ giao tiếp với Auth Service được thực hiện qua Kafka theo mô hình **Request-Reply Pattern**.
-
----
-
-## 4.1. REGISTRATION_VALIDATION_REQUESTED Consumer
-
-### Mô Tả
-User Service lắng nghe sự kiện này từ Auth Service khi có yêu cầu đăng ký mới. User Service sẽ kiểm tra xem `phoneNumber` và `cccd` có bị trùng lặp không (kiểm tra cả DB và Redis reservation), sau đó publish kết quả lại.
-
-### Thông Tin Consumer
-
-| Mục                | Nội dung                                             |
-| ------------------ | ---------------------------------------------------- |
-| **Topic**          | `auth.registration.validation.requested.v1`          |
-| **Consumer Group** | `user-service-validation-group`                      |
-| **Loại Sự Kiện**   | `REGISTRATION_VALIDATION_REQUESTED`                  |
-| **Hành động**      | Kiểm tra phone/CCCD, reserve Redis, publish result   |
-
-### Payload Nhận Vào
-
-```json
-{
-  "eventId": "uuid",
-  "eventType": "REGISTRATION_VALIDATION_REQUESTED",
-  "occurredAt": "2026-06-23T00:00:00Z",
-  "data": {
-    "requestId": "uuid",
-    "email": "user@example.com",
-    "phoneNumber": "0901234567",
-    "cccd": "092205006789"
-  }
-}
-```
-
-### Logic Xử Lý
-1. Kiểm tra `phoneNumber` và `cccd` trong DB → nếu cả hai tồn tại: publish FAILED với reason `PHONE_NUMBER_AND_CCCD_ALREADY_EXIST`. Nếu chỉ 1 cái tồn tại: publish FAILED với reason `PHONE_NUMBER_ALREADY_EXISTS` hoặc `CCCD_ALREADY_EXISTS` tương ứng.
-2. Kiểm tra reserve của `phoneNumber` và `cccd` trong Redis (TTL 15 phút) → nếu cả hai đang được reserve: publish FAILED với reason `PHONE_NUMBER_AND_CCCD_RESERVED`. Nếu chỉ 1 cái đang reserve: publish FAILED với reason `PHONE_NUMBER_RESERVED` hoặc `CCCD_RESERVED` tương ứng kèm theo TTL còn lại.
-3. Nếu tất cả OK → tiến hành lưu thông tin reserve vào Redis (TTL 15 phút) và publish SUCCESS.
-
-### Sự Kiện Publish Lại (REGISTRATION_VALIDATION_RESULT)
-
-| Mục                | Nội dung                                            |
-| ------------------ | --------------------------------------------------- |
-| **Topic**          | `auth.registration.validation.result.v1`            |
-| **Payload**        | `{ requestId, status: "SUCCESS"/"FAILED", errorCode, retryAfterSeconds }` |
-
-```json
-{
-  "eventId": "uuid",
-  "eventType": "REGISTRATION_VALIDATION_RESULT",
-  "occurredAt": "2026-06-23T00:00:00Z",
-  "data": {
-    "requestId": "uuid",
-    "status": "FAILED",
-    "errorCode": "PHONE_NUMBER_RESERVED",
-    "retryAfterSeconds": 472
-  }
-}
-```
-
----
-
-## 4.2. ACCOUNT_VERIFIED Consumer
-
-### Mô Tả
-User Service lắng nghe sự kiện này từ Auth Service sau khi người dùng đã xác thực OTP thành công. User Service sẽ tạo bản ghi User Profile trong database.
-
-### Thông Tin Consumer
-
-| Mục                | Nội dung                                            |
-| ------------------ | --------------------------------------------------- |
-| **Topic**          | `auth.account.verified.v1`                          |
-| **Consumer Group** | `user-service-account-verified-consumer`            |
-| **Loại Sự Kiện**   | `ACCOUNT_VERIFIED`                                  |
-| **Hành động**      | Tạo bản ghi User Profile trong DB, giải phóng Redis reservation |
-
-### Payload Nhận Vào
-
-```json
-{
-  "eventId": "uuid",
-  "eventType": "ACCOUNT_VERIFIED",
-  "occurredAt": "2026-06-23T00:00:00Z",
-  "data": {
-    "accountId": 1,
-    "email": "user@example.com",
-    "role": "CUSTOMER",
-    "fullName": "Nguyen Van A",
-    "phoneNumber": "0901234567",
-    "cccd": "092205006789",
-    "cccdMasked": "092******789",
-    "provinceCode": "092",
-    "provinceName": "Cần Thơ",
-    "gender": "MALE",
-    "birthYear": 2005,
-    "birthday": "2005-06-12"
-  }
-}
-```
-
-### Cơ Chế Xử Lý Lỗi (Error Handling)
-1. **Idempotency (Chống trùng lặp):** Consumer kiểm tra `accountId`, `phoneNumber`, `cccd` trong DB trước khi Insert. Nếu đã tồn tại, ghi log cảnh báo và bỏ qua Message.
-2. **Redis Cleanup:** Sau khi tạo User Profile thành công, giải phóng reservation phone/CCCD trong Redis.
-3. **Retry & DLQ:** Nếu xảy ra lỗi, RuntimeException được throw để Kafka trigger retry và Dead Letter Queue.
-
----
-
-# 5. Get User Profile API
-
-## 5.1. Mục Tiêu API
-Lấy thông tin hồ sơ của một người dùng cụ thể. Frontend có thể gọi API này để hiển thị trang User Profile hoặc ở Header/Navigation.
-
-Lưu ý:
-- Vì lý do bảo mật, API chỉ trả về `cccdMasked` (số CCCD đã che đi), không bao giờ trả về số `cccd` đầy đủ của người dùng.
-
----
-
-## 5.2. Thông Tin Endpoint
-
-| Mục           | Nội dung                                  |
-| ------------- | ----------------------------------------- |
-| Method        | `GET`                                     |
-| Endpoint      | `/api/users/{accountId}`                  |
-| Local URL     | `http://localhost:8086/api/users/1`       |
-| Gateway URL   | `http://localhost:8080/api/users/1`       |
-| Content-Type  | `application/json`                        |
-| Auth Required | Yes (Bearer Token)                        |
-| Role Required | `CUSTOMER`, `STAFF`, `ADMIN`              |
-
-*Lưu ý bảo mật: User thông thường chỉ được xem profile của chính mình.*
-
----
-
-## 5.3. Request Headers
-
-| Header        | Required | Example                     | Mô tả              |
-| ------------- | -------: | --------------------------- | ------------------ |
-| Authorization |      Yes | `Bearer eyJhbGciOiJIUzI1...`| JWT Token          |
-
----
-
-## 5.4. Response Success
-
-Status: `200 OK`
+Phần lớn endpoint trả về lớp bọc `ApiResponse`. Một phản hồi thành công thường có dạng:
 
 ```json
 {
   "success": true,
-  "message": "User profile retrieved successfully",
-  "data": {
-    "accountId": 1,
-    "fullName": "Nguyen Van A",
-    "phoneNumber": "0901234567",
-    "gender": "MALE",
-    "birthday": "2005-06-12",
-    "cccdMasked": "092******789",
-    "provinceName": "Cần Thơ",
-    "birthYear": 2005
-  }
+  "message": "Thao tác thành công",
+  "data": {}
 }
 ```
 
----
+Khi lỗi, response có thể bổ sung `errorCode`, `errors` hoặc `timestamp` tùy service. Các mã HTTP thường gặp:
 
-## 5.5. Giải Thích Field Response
+| Mã | Ý nghĩa |
+|---|---|
+| 200 | Thành công |
+| 201 | Đã tạo dữ liệu |
+| 202 | Đã tiếp nhận và xử lý bất đồng bộ |
+| 204 | Thành công, không có nội dung trả về |
+| 400 | Dữ liệu gửi lên không hợp lệ |
+| 401 | Thiếu hoặc sai thông tin đăng nhập/token nội bộ |
+| 403 | Đã đăng nhập nhưng không đủ quyền |
+| 404 | Không tìm thấy dữ liệu |
+| 409 | Xung đột trạng thái hoặc trùng yêu cầu |
+| 500 | Lỗi không mong đợi ở server |
 
-| Field             | Type    | Mô tả                                       |
-| ----------------- | ------- | ------------------------------------------- |
-| accountId         | number  | ID của account (map với bảng accounts)      |
-| fullName          | string  | Họ và tên người dùng                        |
-| phoneNumber       | string  | Số điện thoại                               |
-| gender            | string  | Giới tính (`MALE`, `FEMALE`, `OTHER`)       |
-| birthday          | string  | Ngày sinh (`YYYY-MM-DD`)                    |
-| cccdMasked        | string  | CCCD đã được che một phần an toàn           |
-| provinceName      | string  | Tỉnh/thành nơi làm thẻ CCCD suy ra từ mã    |
-| birthYear         | number  | Năm sinh suy ra từ CCCD                     |
+## 5. Danh mục endpoint hiện hành
 
----
+Mỗi nhóm tương ứng một controller thực tế. Quyền chi tiết lấy từ `@PreAuthorize`; nếu controller không khai báo riêng, bảng ghi theo nhóm đường dẫn và SecurityConfig.
 
-## 5.6. Response Error
+### Nhóm `CustomerController`
 
-### Case 1: Không tìm thấy User
-Status: `404 Not Found`
-```json
-{
-  "success": false,
-  "message": "User profile not found",
-  "errorCode": "USER_NOT_FOUND",
-  "data": null
-}
-```
+Đường dẫn gốc: `/api/users/customers`.
 
-### Case 2: Unauthorized (Chưa đăng nhập / Sai Token)
-Status: `401 Unauthorized`
-```json
-{
-  "success": false,
-  "message": "Unauthorized access",
-  "data": null
-}
-```
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/customers` | `search` | Một trong các vai trò: `ADMIN`, `MANAGER`, `CUSTOMER_VIEW` |
+| GET | `/api/users/customers/{id}` | `get` | Một trong các vai trò: `ADMIN`, `MANAGER`, `CUSTOMER_VIEW` |
+| POST | `/api/users/customers/{id}/access-actions` | `applyAccessAction` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('CUSTOMER_UPDATE')` |
+| GET | `/api/users/customers/counter-search` | `counterSearch` | Điều kiện trong code: `hasAuthority('BOOKING_MANAGE') or hasAnyRole('ADMIN','MANAGER')` |
 
----
+### Nhóm `DashboardController`
 
-# 6. Tổng Quan Luồng Event-Driven
+Đường dẫn gốc: `/api/users/dashboard`.
 
-## 6.1. Toàn Bộ Luồng Đăng Ký
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/dashboard` | `summary` | Một trong các vai trò: `ADMIN`, `MANAGER`, `DASHBOARD_VIEW` |
+| GET | `/api/users/dashboard/customers` | `domainSummary` | Một trong các vai trò: `ADMIN`, `MANAGER`, `DASHBOARD_VIEW` |
+| GET | `/api/users/dashboard/employees` | `domainSummary` | Một trong các vai trò: `ADMIN`, `MANAGER`, `DASHBOARD_VIEW` |
+| GET | `/api/users/dashboard/payrolls` | `domainSummary` | Một trong các vai trò: `ADMIN`, `MANAGER`, `DASHBOARD_VIEW` |
 
-```txt
-[Client] POST /api/auth/register
-      ↓
-[Auth Service]
-  - Check duplicate email (Auth DB)
-  - Validate CCCD format
-  - Save PendingRegistrationData to Redis
-  - Publish REGISTRATION_VALIDATION_REQUESTED
-      ↓ Kafka
-[User Service]
-  - Check phone/CCCD in DB
-  - Reserve phone/CCCD in Redis (TTL 15 min)
-  - Publish REGISTRATION_VALIDATION_RESULT
-      ↓ Kafka
-[Auth Service]
-  - If FAILED → return 409
-  - If SUCCESS → create Account in DB
-  - Send OTP via email
-  - Return 202 Accepted { requestId, message }
-      ↓
-[Client] POST /api/auth/verify { email, otp }
-      ↓
-[Auth Service]
-  - Verify OTP
-  - Activate Account (account_status='ACTIVE')
-  - Publish ACCOUNT_VERIFIED
-      ↓ Kafka
-[User Service]
-  - Create User Profile in DB
-  - Release Redis reservation
-```
+### Nhóm `DepartmentController`
 
-## 6.2. Danh Sách Kafka Topics
+Đường dẫn gốc: `/api/users/departments`.
 
-| Topic | Publisher | Consumer | Mô tả |
-| ----- | --------- | -------- | ------ |
-| `auth.registration.validation.requested.v1` | Auth Service | User Service | Yêu cầu validate phone/CCCD |
-| `auth.registration.validation.result.v1` | User Service | Auth Service | Kết quả validate |
-| `auth.account.verified.v1` | Auth Service | User Service | Trigger tạo User Profile |
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/departments` | `list` | Một trong các vai trò: `ADMIN`, `MANAGER`, `DEPARTMENT_VIEW`, `EMPLOYEE_VIEW` |
+| POST | `/api/users/departments` | `create` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('DEPARTMENT_CREATE')` |
+| DELETE | `/api/users/departments/{id}` | `delete` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('DEPARTMENT_DELETE')` |
+| PUT | `/api/users/departments/{id}` | `update` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('DEPARTMENT_UPDATE')` |
+| GET | `/api/users/departments/search` | `search` | Một trong các vai trò: `ADMIN`, `MANAGER`, `DEPARTMENT_VIEW`, `EMPLOYEE_VIEW` |
+
+### Nhóm `EmployeeController`
+
+Đường dẫn gốc: `/api/users/employees`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/employees` | `search` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_VIEW`, `PAYROLL_VIEW`, `PAYROLL_CREATE`, `PAYROLL_UPDATE` |
+| POST | `/api/users/employees` | `create` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')` |
+| GET | `/api/users/employees/{accountId}` | `get` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_VIEW` |
+| GET | `/api/users/employees/{accountId}/actions` | `actionHistory` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_VIEW` |
+| POST | `/api/users/employees/{accountId}/actions` | `applyAction` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('EMPLOYEE_UPDATE')` |
+| PUT | `/api/users/employees/{accountId}/cinema-assignment` | `assignCinema` | Vai trò `ADMIN` |
+| GET | `/api/users/employees/eligible-accounts` | `eligibleAccounts` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('EMPLOYEE_CREATE')` |
+| GET | `/api/users/employees/me` | `getMyWorkContext` | Đã đăng nhập |
+
+### Nhóm `EmployeeDocumentController`
+
+Đường dẫn gốc: `/api/users/employees/{accountId}/documents`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/employees/{accountId}/documents` | `list` | Đã đăng nhập |
+| POST | `/api/users/employees/{accountId}/documents` | `upload` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_UPDATE` |
+| DELETE | `/api/users/employees/{accountId}/documents/{documentId}` | `delete` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_UPDATE` |
+| GET | `/api/users/employees/{accountId}/documents/{documentId}/file` | `download` | Đã đăng nhập |
+| GET | `/api/users/employees/{accountId}/documents/history` | `history` | Đã đăng nhập |
+
+### Nhóm `HealthController`
+
+Đường dẫn gốc: `/`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/health` | `health` | Công khai |
+
+### Nhóm `InternalEmployeeScopeController`
+
+Đường dẫn gốc: `/api/v1/internal/employees`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/v1/internal/employees/{accountId}/cinema-scope` | `cinemaScope` | Nội bộ (token service) |
+| POST | `/api/v1/internal/employees/directory` | `directory` | Nội bộ (token service) |
+
+### Nhóm `InternalUserController`
+
+Đường dẫn gốc: `/api/v1/internal/users`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/v1/internal/users/{accountId}/notification-recipient` | `notificationRecipient` | Nội bộ (token service) |
+| GET | `/api/v1/internal/users/birthday-eligible` | `birthdayEligible` | Nội bộ (token service) |
+| POST | `/api/v1/internal/users/validate-active` | `validateActiveUsers` | Nội bộ (token service) |
+
+### Nhóm `ManagerWorkforceController`
+
+Đường dẫn gốc: `/api/users/manager`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/manager/attendance` | `attendance` | Vai trò `MANAGER` |
+| GET | `/api/users/manager/leave-requests` | `leaves` | Vai trò `MANAGER` |
+| POST | `/api/users/manager/leave-requests/{leaveId}/actions` | `leaveAction` | Vai trò `MANAGER` |
+| GET | `/api/users/manager/shifts` | `shifts` | Vai trò `MANAGER` |
+| POST | `/api/users/manager/shifts` | `createShift` | Vai trò `MANAGER` |
+| POST | `/api/users/manager/shifts/{shiftId}/cancel` | `cancelShift` | Vai trò `MANAGER` |
+| GET | `/api/users/manager/staff` | `staff` | Vai trò `MANAGER` |
+
+### Nhóm `PayrollController`
+
+Đường dẫn gốc: `/api/users/payrolls`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/payrolls` | `search` | Một trong các vai trò: `ADMIN`, `MANAGER`, `PAYROLL_VIEW` |
+| POST | `/api/users/payrolls` | `create` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('PAYROLL_CREATE')` |
+| GET | `/api/users/payrolls/{id}` | `get` | Một trong các vai trò: `ADMIN`, `MANAGER`, `PAYROLL_VIEW` |
+| PUT | `/api/users/payrolls/{id}` | `update` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('PAYROLL_UPDATE')` |
+| POST | `/api/users/payrolls/{id}/actions` | `action` | Đã đăng nhập |
+| POST | `/api/users/payrolls/generate` | `generate` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('PAYROLL_CREATE')` |
+| GET | `/api/users/payrolls/me` | `mine` | Điều kiện trong code: `hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_PAYROLL_VIEW'))` |
+| GET | `/api/users/payrolls/summary` | `summary` | Một trong các vai trò: `ADMIN`, `MANAGER`, `PAYROLL_VIEW` |
+
+### Nhóm `PiiGovernanceController`
+
+Đường dẫn gốc: `/api/users/pii-governance`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| POST | `/api/users/pii-governance/erase-due` | `eraseDue` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')` |
+| GET | `/api/users/pii-governance/summary` | `summary` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')` |
+| POST | `/api/users/pii-governance/users/{accountId}/retention` | `scheduleRetention` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('SYSTEM_CONFIGURATION')` |
+
+### Nhóm `PositionController`
+
+Đường dẫn gốc: `/api/users/positions`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/positions` | `list` | Một trong các vai trò: `ADMIN`, `MANAGER`, `POSITION_VIEW`, `EMPLOYEE_VIEW` |
+| POST | `/api/users/positions` | `create` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('POSITION_CREATE')` |
+| DELETE | `/api/users/positions/{id}` | `delete` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('POSITION_DELETE')` |
+| PUT | `/api/users/positions/{id}` | `update` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('POSITION_UPDATE')` |
+| GET | `/api/users/positions/search` | `search` | Một trong các vai trò: `ADMIN`, `MANAGER`, `POSITION_VIEW`, `EMPLOYEE_VIEW` |
+
+### Nhóm `UserAuditController`
+
+Đường dẫn gốc: `/api/admin/user-audits`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/admin/user-audits` | `search` | Quản trị (theo cấu hình bảo mật) |
+| PUT | `/api/admin/user-audits/{id}/review` | `review` | Chỉ gọi trực tiếp; cần `ADMIN` hoặc `SYSTEM_CONFIGURATION` |
+
+### Nhóm `UserController`
+
+Đường dẫn gốc: `/api/users`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/{accountId}` | `getUserProfile` | Đã đăng nhập |
+| GET | `/api/users/admin/batch` | `getUserProfiles` | Đã đăng nhập |
+| GET | `/api/users/admin/search` | `searchUserProfiles` | Đã đăng nhập |
+| GET | `/api/users/directory/display-names` | `getAccountDisplayNames` | Một trong các vai trò: `ADMIN`, `MANAGER` |
+| GET | `/api/users/profile` | `getOwnProfile` | Đã đăng nhập |
+| PUT | `/api/users/profile` | `updateOwnProfile` | Đã đăng nhập |
+| DELETE | `/api/users/profile/avatar` | `deleteAvatar` | Đã đăng nhập |
+| POST | `/api/users/profile/avatar` | `uploadAvatar` | Đã đăng nhập |
+| GET | `/api/users/profile/avatar/files/{fileName:.+}` | `getAvatarFile` | Công khai |
+
+### Nhóm `WorkforceTimeController`
+
+Đường dẫn gốc: `/api/users/workforce`.
+
+| Phương thức | Đường dẫn đầy đủ | Hàm xử lý | Quyền truy cập |
+|---|---|---|---|
+| GET | `/api/users/workforce/attendance` | `attendance` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_VIEW` |
+| POST | `/api/users/workforce/attendance/{shiftId}/correction` | `correct` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('EMPLOYEE_UPDATE')` |
+| POST | `/api/users/workforce/attendance/check-in` | `checkIn` | Điều kiện trong code: `hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_ATTENDANCE_UPDATE'))` |
+| POST | `/api/users/workforce/attendance/check-out` | `checkOut` | Điều kiện trong code: `hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_ATTENDANCE_UPDATE'))` |
+| GET | `/api/users/workforce/attendance/me` | `myAttendance` | Điều kiện trong code: `hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_ATTENDANCE_VIEW'))` |
+| GET | `/api/users/workforce/leave-requests` | `leaves` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_VIEW` |
+| POST | `/api/users/workforce/leave-requests` | `createLeave` | Điều kiện trong code: `hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_LEAVE_CREATE'))` |
+| POST | `/api/users/workforce/leave-requests/{id}/actions` | `leaveAction` | Đã đăng nhập |
+| GET | `/api/users/workforce/leave-requests/me` | `myLeaves` | Điều kiện trong code: `hasRole('ADMIN') or (hasRole('EMPLOYEE') and hasAuthority('EMPLOYEE_SCHEDULE_VIEW'))` |
+| GET | `/api/users/workforce/shifts` | `shifts` | Một trong các vai trò: `ADMIN`, `MANAGER`, `EMPLOYEE_VIEW` |
+| POST | `/api/users/workforce/shifts` | `createShift` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('EMPLOYEE_UPDATE')` |
+| POST | `/api/users/workforce/shifts/{id}/cancel` | `cancelShift` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('EMPLOYEE_UPDATE')` |
+| POST | `/api/users/workforce/shifts/batch` | `createShiftBatch` | Điều kiện trong code: `hasRole('ADMIN') or hasAuthority('EMPLOYEE_UPDATE')` |
+| GET | `/api/users/workforce/shifts/me` | `myShifts` | Đã đăng nhập |
+
+## 6. Quy tắc cập nhật tài liệu
+
+Khi thêm, xóa hoặc đổi endpoint, cần cập nhật đồng thời controller, SecurityConfig, route Gateway (nếu frontend cần gọi) và file này. OpenAPI runtime là nguồn chuẩn cho field request/response; tài liệu Markdown là mục lục dễ đọc và bản kiểm tra phạm vi.

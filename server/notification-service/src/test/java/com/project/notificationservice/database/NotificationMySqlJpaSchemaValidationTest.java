@@ -99,15 +99,15 @@ class NotificationMySqlJpaSchemaValidationTest {
                     .toAbsolutePath()
                     .normalize();
             Path fromRepositoryRoot = workingDirectory.resolve(
-                    "docs/database/mysql/notification-service-schema.sql");
+                    "docs/database/mysql/schema/notification-service-schema.sql");
             if (Files.isRegularFile(fromRepositoryRoot)) return fromRepositoryRoot;
 
             Path fromServiceDirectory = workingDirectory.resolve(
-                    "../../docs/database/mysql/notification-service-schema.sql").normalize();
+                    "../../docs/database/mysql/schema/notification-service-schema.sql").normalize();
             if (Files.isRegularFile(fromServiceDirectory)) return fromServiceDirectory;
 
             throw new IllegalStateException(
-                    "Cannot locate docs/database/mysql/notification-service-schema.sql from "
+                    "Không tìm thấy docs/database/mysql/schema/notification-service-schema.sql từ "
                             + workingDirectory);
         }
     }

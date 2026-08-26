@@ -35,7 +35,7 @@ mvn spring-boot:run
 
 Thay `movie-service` bằng service cần chạy. File `application.properties` là cấu
 hình local đã được Git ignore. Mọi service dùng `ddl-auto=validate`, vì vậy phải
-chạy schema canonical tương ứng trong `../docs/database/mysql/` trước lần khởi
+chạy schema canonical tương ứng trong `../docs/database/mysql/schema/` trước lần khởi
 động đầu tiên.
 
 Thứ tự chạy toàn hệ thống:

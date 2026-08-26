@@ -29,7 +29,7 @@ mvn spring-boot:run
 Trước khi chạy, cần:
 
 - MySQL, Redis, Kafka và Eureka đang hoạt động.
-- Áp dụng `docs/database/mysql/promotion-service-schema.sql` từ thư mục gốc.
+- Áp dụng `docs/database/mysql/schema/promotion-service-schema.sql` từ thư mục gốc.
 - Schema canonical đã bao gồm smart orchestration, campaign presentation và mọi
   cấu trúc hiện hành. Repository không nạp dữ liệu demo và không hỗ trợ nâng cấp
   in-place database cũ.
